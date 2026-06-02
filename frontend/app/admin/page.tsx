@@ -1,0 +1,654 @@
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { createClient } from '@supabase/supabase-js';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw } from 'lucide-react';
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabase = createClient(supabaseUrl, supabaseKey);
+
+export default function AdminDashboard() {
+  const [assessments, setAssessments] = useState<any[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [patientLogs, setPatientLogs] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [activeCall, setActiveCall] = useState<string | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [prescribeLoading, setPrescribeLoading] = useState(false);
+  const [adminTab, setAdminTab] = useState<'patients' | 'payouts'>('patients');
+  const [doctors, setDoctors] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [payoutLoading, setPayoutLoading] = useState(false);
+
+  useEffect(() => { 
+    fetchPatients(); 
+    fetchPayoutsData();
+  }, []);
+
+  const fetchPatients = async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('health_assessments')
+      .select(`
+        id, patient_id, full_name, first_name, last_name, age, phone_number, address, dob_month, dob_day, dob_year, agree_terms,
+        height_cm, weight_kg, goal_weight_kg, tried_weight_program, extra_medical_info, prescription_type,
+        health_conditions_two, glp1_image_url,
+        is_eligible, medical_history, booking_date, booking_time, room_url, local_food, workout_preference, created_at
+      `)
+      .order('created_at', { ascending: false });
+
+    if (!error && data) { 
+      setAssessments(data); 
+    }
+    setLoading(false);
+  };
+
+  const fetchPayoutsData = async () => {
+    setPayoutLoading(true);
+    try {
+      const { data: profiles } = await supabase.from('doctor_profiles').select('*');
+      const { data: wallets } = await supabase.from('doctor_wallet').select('*');
+      const { data: txs } = await supabase.from('doctor_wallet_transactions').select('*').order('created_at', { ascending: false });
+
+      if (profiles && wallets) {
+        const doctorsWithWallets = profiles.map((doc: any) => {
+          const wallet = wallets.find((w: any) => w.doctor_id === doc.doctor_id) || { balance: 0, total_earned: 0, total_withdrawn: 0 };
+          return {
+            ...doc,
+            balance: wallet.balance,
+            total_earned: wallet.total_earned,
+            total_withdrawn: wallet.total_withdrawn,
+          };
+        });
+        setDoctors(doctorsWithWallets);
+      }
+      if (txs) {
+        setTransactions(txs);
+      }
+    } catch (err) {
+      console.error('[Payouts Fetch Error]', err);
+    }
+    setPayoutLoading(false);
+  };
+
+  const handleMarkAsPaid = async (txId: string, doctorName: string, amount: number) => {
+    const confirmed = window.confirm(
+      `Mark this ₹${amount} withdrawal request from ${doctorName || 'the doctor'} as paid?\n\nMake sure you have personally / manually sent the money to the doctor's bank account.`
+    );
+    if (!confirmed) return;
+
+    try {
+      const { error } = await supabase
+        .from('doctor_wallet_transactions')
+        .update({ status: 'paid', updated_at: new Date().toISOString() })
+        .eq('id', txId);
+
+      if (error) {
+        alert('Error updating transaction status: ' + error.message);
+      } else {
+        alert('Withdrawal request successfully marked as paid! ✅');
+        fetchPayoutsData();
+      }
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedPatient?.patient_id) {
+      fetchPatientLogs(selectedPatient.patient_id, selectedPatient.weight_kg);
+    } else { 
+      setPatientLogs([]); 
+    }
+  }, [selectedPatient]);
+
+  const fetchPatientLogs = async (userId: string, startWeight: number) => {
+    const { data, error } = await supabase
+      .from('progress_logs')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: true });
+      
+    const startData = { day: 'Start', weight: parseFloat(startWeight as any) || 0 };
+    
+    if (!error && data && data.length > 0) {
+      const dbData = data.map((log: any) => {
+        const dateObj = new Date(log.created_at);
+        const formattedDate = `${dateObj.getDate()} ${dateObj.toLocaleString('default', { month: 'short' })}`;
+        return { day: formattedDate, weight: parseFloat(log.weight_kg), calories: log.calories };
+      });
+      setPatientLogs([startData, ...dbData]);
+    } else { 
+      setPatientLogs([startData]); 
+    }
+  };
+
+  const handlePrescription = async (type: string) => {
+    setPrescribeLoading(true);
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/prescribe', {
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patient_id: selectedPatient.patient_id, prescription_type: type }),
+      });
+      
+      if (response.ok) {
+        alert(`Prescription for ${type} Medicine placed successfully! ✅`);
+        setSelectedPatient({...selectedPatient, prescription_type: type});
+        fetchPatients();
+      } else {
+        alert("Failed to save prescription. Please try again.");
+      }
+    } catch (error) {
+      alert("Network Error: Could not connect to the backend server.");
+      console.error("[Admin API Error]", error);
+    }
+    setPrescribeLoading(false);
+  };
+
+  const hasLocalFood = selectedPatient?.local_food && selectedPatient.local_food.trim().length > 0;
+  const hasWorkoutPref = selectedPatient?.workout_preference && selectedPatient.workout_preference.trim().length > 0;
+  const hasDietFitnessData = hasLocalFood || hasWorkoutPref;
+
+  if (loading) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+          <div className="w-8 h-8 border-4 border-violet-100 border-t-violet-500 rounded-full animate-spin absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 direction-reverse"></div>
+        </div>
+        <p className="text-lg font-black text-slate-600 mt-6 tracking-wide">Loading Admin System...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans text-slate-900 selection:bg-indigo-100 selection:text-indigo-900 relative">
+      
+      {/* ── BACKGROUND DECORATIONS ── */}
+      <div className="absolute top-[-20%] right-[-10%] w-[50%] h-[50%] bg-indigo-200/40 rounded-full blur-[120px] pointer-events-none z-0"></div>
+      <div className="absolute bottom-[-20%] left-[-10%] w-[50%] h-[50%] bg-violet-200/40 rounded-full blur-[120px] pointer-events-none z-0"></div>
+
+      {/* ── LEFT SIDEBAR ── */}
+      <div className="w-[380px] bg-white/80 backdrop-blur-2xl border-r border-white/60 flex flex-col shadow-[10px_0_30px_rgba(0,0,0,0.03)] z-20">
+        <div className="p-8 bg-slate-900 text-white rounded-br-[3rem] shadow-xl relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
+          <h1 className="text-3xl font-black tracking-tight flex items-center gap-3"><ShieldCheck className="w-8 h-8 text-indigo-400"/> 8liv Admin</h1>
+          <p className="text-slate-400 text-sm mt-2 font-bold tracking-wide uppercase">Control Center</p>
+        </div>
+
+        {/* Navigation tabs */}
+        <div className="px-6 pt-6 pb-2">
+          <div className="bg-slate-100 p-1.5 rounded-2xl flex gap-1">
+            <button 
+              onClick={() => setAdminTab('patients')}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black tracking-wide uppercase transition-all ${adminTab === 'patients' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              Patients
+            </button>
+            <button 
+              onClick={() => setAdminTab('payouts')}
+              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black tracking-wide uppercase transition-all ${adminTab === 'payouts' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              Doctor Payouts
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+          {adminTab === 'patients' ? (
+            <>
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 px-2 flex items-center gap-2"><Users className="w-4 h-4"/> Patient Roster ({assessments.length})</h3>
+              {assessments.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+                  <Users className="w-10 h-10 mb-2 opacity-20"/>
+                  <p className="text-sm font-semibold">No patients found</p>
+                </div>
+              ) : (
+                assessments.map((patient) => (
+                  <div 
+                    key={patient.id} 
+                    onClick={() => setSelectedPatient(patient)} 
+                    className={`p-5 rounded-[1.5rem] cursor-pointer transition-all duration-300 border-2 hover:-translate-y-1 ${selectedPatient?.id === patient.id ? 'border-indigo-500 bg-indigo-50/50 shadow-lg shadow-indigo-500/10 scale-[1.02]' : 'border-transparent bg-white shadow-sm hover:border-slate-200 hover:shadow-md'}`}
+                  >
+                    <div className="flex justify-between items-start mb-3">
+                      <h4 className="font-black text-slate-800 text-lg leading-tight pr-2">{patient.full_name || `Patient #${patient.id?.slice(0, 4)}`}</h4>
+                      <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest flex-shrink-0 shadow-sm ${patient.is_eligible ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-rose-100 text-rose-700 border border-rose-200'}`}>{patient.is_eligible ? 'Eligible' : 'Rejected'}</span>
+                    </div>
+                    <div className="flex gap-5 text-xs font-bold text-slate-500 mb-4 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                      <p className="flex items-center gap-1.5"><Scale className="w-4 h-4 text-slate-400"/> {patient.weight_kg} kg</p>
+                      <p className="flex items-center gap-1.5 text-indigo-600"><Target className="w-4 h-4 text-indigo-400"/> {patient.goal_weight_kg} kg</p>
+                    </div>
+                    {(patient.booking_date || patient.booking_time) && (
+                      <div className="mt-2 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-black px-3 py-2.5 rounded-xl flex items-center justify-between shadow-sm">
+                        <span className="flex items-center gap-2"><Clock className="w-4 h-4 text-amber-500"/> Scheduled</span>
+                        <span>{patient.booking_time}</span>
+                      </div>
+                    )}
+                    {patient.prescription_type && (
+                      <div className="mt-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-black px-3 py-2.5 rounded-xl flex items-center justify-between shadow-sm">
+                        <span className="flex items-center gap-2"><Pill className="w-4 h-4 text-emerald-500"/> Prescribed</span>
+                        <span className="uppercase">{patient.prescription_type}</span>
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </>
+          ) : (
+            <>
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 px-2 flex items-center gap-2"><Stethoscope className="w-4 h-4"/> Doctor Roster ({doctors.length})</h3>
+              {doctors.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+                  <Stethoscope className="w-10 h-10 mb-2 opacity-20"/>
+                  <p className="text-sm font-semibold">No doctors found</p>
+                </div>
+              ) : (
+                doctors.map((doc) => (
+                  <div 
+                    key={doc.doctor_id} 
+                    className="p-5 rounded-[1.5rem] border bg-white shadow-sm hover:shadow-md transition-all duration-300 space-y-3"
+                  >
+                    <h4 className="font-black text-slate-800 text-base leading-tight pr-2">{doc.full_name || 'Dr. Doctor'}</h4>
+                    <div className="space-y-1.5 text-xs font-bold text-slate-500">
+                      <p className="flex justify-between"><span>Wallet Balance:</span> <span className="text-indigo-600 font-extrabold">₹{doc.balance}</span></p>
+                      <p className="flex justify-between"><span>Total Earned:</span> <span className="text-slate-700">₹{doc.total_earned}</span></p>
+                      <p className="flex justify-between"><span>Total Withdrawn:</span> <span className="text-slate-700">₹{doc.total_withdrawn}</span></p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* ── RIGHT MAIN AREA ── */}
+      <div className="flex-1 overflow-y-auto relative z-10 custom-scrollbar">
+        {activeCall && (
+          <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col animate-fade-in">
+            <div className="bg-slate-900 text-white p-6 flex justify-between items-center shadow-2xl border-b border-slate-800">
+              <div className="flex items-center gap-4">
+                <div className="relative flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.8)]"></span>
+                </div>
+                <h2 className="text-xl font-black tracking-wide">Live {activeCall} Session <span className="text-slate-500 font-medium">|</span> {selectedPatient?.full_name || 'Patient'}</h2>
+              </div>
+              <button onClick={() => setActiveCall(null)} className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 px-8 rounded-xl text-sm transition-all flex items-center gap-2 shadow-lg hover:shadow-rose-600/30 active:scale-95"><PhoneOff className="w-5 h-5"/> End Session</button>
+            </div>
+            <div className="flex-1 w-full bg-slate-900 p-6 flex items-center justify-center">
+              <div className="max-w-md w-full bg-slate-900 rounded-[2.5rem] p-10 border border-slate-800 shadow-2xl text-center space-y-6 text-white">
+                <div className="w-16 h-16 bg-gradient-to-tr from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg animate-pulse">
+                  <Video className="w-8 h-8 text-white"/>
+                </div>
+
+                <div>
+                  <h3 className="text-2xl font-black tracking-tight">Google Meet Call Ready</h3>
+                  <p className="text-slate-400 text-sm font-semibold mt-2">Click the button below to join the Google Meet session for the <strong>{activeCall} View</strong>.</p>
+                </div>
+
+                <div className="bg-slate-800/50 p-4 rounded-xl text-left border border-slate-700/50">
+                  <p className="text-xs font-bold text-indigo-300">⚡ Google Meet will open in a new browser tab. Please keep this dashboard window open to manage the patient's record after the meeting.</p>
+                </div>
+
+                <div className="pt-2">
+                  <a
+                    href={selectedPatient?.room_url || "https://meet.google.com/abc-defg-hij"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black py-4 px-6 rounded-2xl transition-all shadow-lg hover:-translate-y-0.5 active:scale-95"
+                  >
+                    <Video className="w-5 h-5"/> Launch Google Meet
+                  </a>
+                </div>
+
+                <div className="border-t border-slate-800 pt-6">
+                  <button
+                    onClick={() => setActiveCall(null)}
+                    className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-xl text-sm transition-all"
+                  >
+                    Close Session Panel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {adminTab === 'payouts' ? (
+          <div className="p-8 md:p-12 max-w-6xl mx-auto animate-fade-in space-y-10">
+            <div className="flex justify-between items-center mb-8">
+              <div>
+                <h2 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                  <Wallet className="w-10 h-10 text-indigo-500 bg-indigo-50 p-2 rounded-2xl"/> Payout Requests
+                </h2>
+                <p className="text-slate-500 font-bold mt-2">Verify and log manual/personal offline transfers sent to doctors.</p>
+              </div>
+              <button 
+                onClick={fetchPayoutsData} 
+                className="bg-white border border-slate-200 hover:border-indigo-200 text-slate-700 hover:text-indigo-600 font-bold px-5 py-3 rounded-2xl text-xs shadow-sm transition-all flex items-center gap-2 hover:-translate-y-0.5 active:scale-95"
+              >
+                <RefreshCw className={`w-4 h-4 ${payoutLoading ? 'animate-spin' : ''}`}/> Refresh Data
+              </button>
+            </div>
+
+            {/* PENDING WITHDRAWAL REQUESTS */}
+            <div className="bg-white rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-10">
+              <h3 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3">
+                <Clock className="w-6 h-6 text-amber-500 bg-amber-50 p-1.5 rounded-xl"/> Pending Withdrawal Requests
+              </h3>
+              {transactions.filter(tx => tx.type === 'withdrawal' && tx.status !== 'paid' && tx.status !== 'approved' && tx.status !== 'completed').length === 0 ? (
+                <div className="text-center py-16 text-slate-400">
+                  <CheckCircle2 className="w-16 h-16 mx-auto mb-4 text-emerald-500/80 animate-bounce"/>
+                  <p className="font-black text-lg text-slate-800">All cleared!</p>
+                  <p className="text-sm font-semibold text-slate-400 mt-1">No pending withdrawal requests from doctors.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {transactions.filter(tx => tx.type === 'withdrawal' && tx.status !== 'paid' && tx.status !== 'approved' && tx.status !== 'completed').map((tx: any) => {
+                    const doc = doctors.find(d => d.doctor_id === tx.doctor_id);
+                    return (
+                      <div key={tx.id} className="flex flex-col md:flex-row md:items-center justify-between p-6 rounded-[2rem] border-2 border-amber-200 bg-amber-50/10 gap-4 transition-all hover:bg-amber-50/20">
+                        <div>
+                          <h4 className="font-black text-slate-800 text-lg leading-tight">{doc?.full_name || 'Dr. Doctor'}</h4>
+                          <p className="text-xs text-slate-400 font-bold mt-1.5 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> Requested: {new Date(tx.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                          <span className="text-[10px] font-black text-amber-700 bg-amber-100 uppercase tracking-widest px-2.5 py-1 rounded-md mt-3 inline-block">Pending Payout</span>
+                        </div>
+                        <div className="flex items-center gap-6 self-end md:self-auto">
+                          <p className="text-3xl font-black text-slate-900">₹{tx.amount.toLocaleString('en-IN')}</p>
+                          <button 
+                            onClick={() => handleMarkAsPaid(tx.id, doc?.full_name, tx.amount)}
+                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 px-6 rounded-2xl text-xs transition-all shadow-md flex items-center gap-2 hover:-translate-y-0.5 active:scale-95"
+                          >
+                            <CheckCircle2 className="w-4 h-4"/> Mark as Paid (Offline)
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* COMPLETED PAYOUTS HISTORY */}
+            <div className="bg-white rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-10">
+              <h3 className="text-xl font-black text-slate-900 mb-8 flex items-center gap-3">
+                <CheckCircle2 className="w-6 h-6 text-emerald-500 bg-emerald-50 p-1.5 rounded-xl"/> Payout History
+              </h3>
+              {transactions.filter(tx => tx.type === 'withdrawal' && (tx.status === 'paid' || tx.status === 'approved' || tx.status === 'completed')).length === 0 ? (
+                <div className="text-center py-16 text-slate-400">
+                  <Wallet className="w-14 h-14 mx-auto mb-3 opacity-20"/>
+                  <p className="font-bold">No completed payouts history found.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {transactions.filter(tx => tx.type === 'withdrawal' && (tx.status === 'paid' || tx.status === 'approved' || tx.status === 'completed')).map((tx: any) => {
+                    const doc = doctors.find(d => d.doctor_id === tx.doctor_id);
+                    return (
+                      <div key={tx.id} className="flex items-center justify-between p-5 rounded-[1.8rem] border border-slate-100 hover:bg-slate-50/50 transition-colors">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-inner">
+                            <ArrowDownToLine className="w-6 h-6"/>
+                          </div>
+                          <div>
+                            <p className="font-black text-slate-800 text-base">Payout to {doc?.full_name || 'Dr. Doctor'}</p>
+                            <p className="text-xs text-slate-400 font-bold mt-1">{new Date(tx.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-black text-xl text-emerald-600">-₹{tx.amount.toLocaleString('en-IN')}</p>
+                          <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 mt-1.5 inline-block">Paid Offline</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            {!selectedPatient && !activeCall ? (
+              <div className="h-full flex flex-col items-center justify-center text-slate-400 p-10 animate-fade-in">
+                <div className="w-32 h-32 bg-white rounded-full shadow-lg flex items-center justify-center mb-6 border border-slate-100"><Users className="w-16 h-16 text-indigo-300" /></div>
+                <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-2">Select a patient</h2>
+                <p className="text-base font-medium text-slate-500">View detailed health profiles and manage sessions.</p>
+              </div>
+            ) : !activeCall && (
+              <div className="p-8 md:p-12 max-w-6xl mx-auto animate-fade-in">
+                
+                {/* ── PATient HEADER CARD ── */}
+                <div className="bg-white/80 backdrop-blur-xl p-10 rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 mb-10 flex justify-between items-center transition-all hover:shadow-[0_8px_30px_rgba(79,70,229,0.06)]">
+                  <div>
+                    <h2 className="text-5xl font-black text-slate-900 mb-4 tracking-tighter flex items-center gap-4"><div className="bg-indigo-100 text-indigo-600 p-3 rounded-[1.5rem]"><User className="w-8 h-8"/></div> {selectedPatient.full_name || 'Anonymous Patient'}</h2>
+                    <div className="flex flex-wrap gap-5 text-slate-600 font-bold text-sm mt-2 bg-slate-50/80 p-4 rounded-2xl border border-slate-100 inline-flex items-center">
+                      <p className="flex items-center gap-2"><span className="text-slate-400">AGE</span> {selectedPatient.age || 'N/A'}</p>
+                      <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
+                      <p className="flex items-center gap-2"><span className="text-slate-400">DOB</span> {selectedPatient.dob_day}/{selectedPatient.dob_month}/{selectedPatient.dob_year}</p>
+                      <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
+                      <p className="flex items-center gap-2"><span className="text-slate-400">TEL</span> {selectedPatient.phone_number || 'N/A'}</p>
+                    </div>
+                    <p className="text-slate-500 font-semibold text-sm mt-5 pl-2 flex items-center gap-2"><HomeIcon className="w-4 h-4 text-slate-400"/> {selectedPatient.address || 'N/A'}</p>
+                  </div>
+                  <div className="flex flex-col gap-4 min-w-[220px]">
+                    <button onClick={() => setActiveCall('Doctor')} className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-indigo-500/30 flex items-center justify-between transition-all hover:-translate-y-1 active:scale-[0.98] group"><span className="flex items-center gap-3"><Video className="w-5 h-5"/> Doctor View</span><ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"/></button>
+                    <button onClick={() => setActiveCall('Dietician')} className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-amber-500/30 flex items-center justify-between transition-all hover:-translate-y-1 active:scale-[0.98] group"><span className="flex items-center gap-3"><Apple className="w-5 h-5"/> Dietician View</span><ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"/></button>
+                    <button onClick={() => setActiveCall('Fitness')} className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-emerald-500/30 flex items-center justify-between transition-all hover:-translate-y-1 active:scale-[0.98] group"><span className="flex items-center gap-3"><Dumbbell className="w-5 h-5"/> Coach View</span><ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"/></button>
+                  </div>
+                </div>
+
+                {/* ── APPOINTMENT ALERT ── */}
+                {(selectedPatient.booking_date || selectedPatient.booking_time) && (
+                  <div className="bg-gradient-to-r from-amber-50 to-white border border-amber-200/60 p-8 rounded-[2.5rem] shadow-sm mb-10 flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
+                    <div className="absolute top-0 left-0 w-3 h-full bg-gradient-to-b from-amber-400 to-orange-500"></div>
+                    <div>
+                      <h3 className="text-amber-950 font-black text-2xl flex items-center gap-3 mb-2"><Clock className="w-7 h-7 text-amber-500"/> Scheduled Consultation</h3>
+                      <p className="text-base font-bold text-amber-700/80">Patient is waiting for this time slot.</p>
+                    </div>
+                    <div className="text-right bg-white px-8 py-5 rounded-3xl shadow-sm border border-amber-100 group-hover:scale-105 transition-transform">
+                      <p className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-600">{selectedPatient.booking_time}</p>
+                      <p className="text-amber-800 font-black mt-1 uppercase tracking-widest text-xs">{selectedPatient.booking_date}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── DOCTOR PRESCRIPTION PANEL ── */}
+                <div className="bg-white/80 backdrop-blur-xl border border-indigo-100 p-10 rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.03)] mb-10">
+                  <h3 className="text-indigo-900 font-black text-2xl flex items-center gap-3 mb-8"><Stethoscope className="w-8 h-8 text-indigo-500 bg-indigo-50 p-1.5 rounded-xl"/> Prescribe Medication</h3>
+                  {selectedPatient.prescription_type ? (
+                    <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 text-emerald-900 p-6 rounded-[2rem] font-black flex items-center gap-4 text-xl shadow-sm">
+                      <div className="bg-emerald-500 text-white p-2 rounded-full"><CheckCircle2 className="w-6 h-6"/></div> Order placed successfully for <span className="underline decoration-emerald-300 underline-offset-4">{selectedPatient.prescription_type.toUpperCase()} MEDICINE</span>
+                    </div>
+                  ) : (
+                    <div className="flex gap-6">
+                      <button onClick={() => handlePrescription('Oral')} disabled={prescribeLoading} className="flex-1 bg-white hover:bg-indigo-50 border-2 border-slate-100 hover:border-indigo-400 text-indigo-900 font-black py-6 rounded-[2rem] transition-all hover:-translate-y-1 hover:shadow-lg flex flex-col items-center justify-center gap-4 group">
+                        <div className="bg-indigo-100 text-indigo-600 p-4 rounded-full group-hover:scale-110 transition-transform"><Pill className="w-8 h-8"/></div>
+                        <span className="text-lg">Oral Medicine</span>
+                      </button>
+                      <button onClick={() => handlePrescription('Injectable')} disabled={prescribeLoading} className="flex-1 bg-white hover:bg-indigo-50 border-2 border-slate-100 hover:border-indigo-400 text-indigo-900 font-black py-6 rounded-[2rem] transition-all hover:-translate-y-1 hover:shadow-lg flex flex-col items-center justify-center gap-4 group">
+                        <div className="bg-indigo-100 text-indigo-600 p-4 rounded-full group-hover:scale-110 transition-transform"><Syringe className="w-8 h-8"/></div>
+                        <span className="text-lg">Injectable Medicine</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* ── STATS GRID ── */}
+                <div className="grid grid-cols-4 gap-6 mb-10">
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100 hover:-translate-y-1 transition-transform">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-2"><Scale className="w-4 h-4"/> Current Weight</p>
+                    <p className="text-4xl font-black text-slate-800">{selectedPatient.weight_kg} <span className="text-xl text-slate-400 font-bold">kg</span></p>
+                  </div>
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100 hover:-translate-y-1 transition-transform relative overflow-hidden">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-indigo-50 rounded-bl-full -z-10"></div>
+                    <p className="text-xs font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2 mb-2"><Target className="w-4 h-4"/> Goal Weight</p>
+                    <p className="text-4xl font-black text-indigo-600">{selectedPatient.goal_weight_kg} <span className="text-xl text-indigo-400/60 font-bold">kg</span></p>
+                  </div>
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100 hover:-translate-y-1 transition-transform">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-2"><Activity className="w-4 h-4"/> Height</p>
+                    <p className="text-4xl font-black text-slate-800">{selectedPatient.height_cm} <span className="text-xl text-slate-400 font-bold">cm</span></p>
+                  </div>
+                  <div className="bg-white p-8 rounded-[2.5rem] shadow-[0_4px_20px_rgb(0,0,0,0.03)] border border-slate-100 hover:-translate-y-1 transition-transform">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-2"><User className="w-4 h-4"/> Gender</p>
+                    <p className="text-3xl font-black text-slate-800 capitalize mt-1">{selectedPatient.medical_history?.gender}</p>
+                  </div>
+                </div>
+
+                {/* ── GRAPH SECTION ── */}
+                <div className="bg-white rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 p-10 mb-10">
+                  <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-3"><Activity className="w-8 h-8 text-indigo-500 bg-indigo-50 p-1.5 rounded-xl"/> Weight Loss Track</h3>
+                  <div className="h-[350px] w-full">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={patientLogs} margin={{ top: 20, right: 20, bottom: 5, left: 0 }}>
+                        <CartesianGrid strokeDasharray="4 4" vertical={false} stroke="#f1f5f9" />
+                        <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 13, fontWeight: 600 }} dy={15} />
+                        <YAxis domain={['dataMin - 5', 'dataMax + 5']} axisLine={false} tickLine={false} tick={{ fill: '#94a3b8', fontSize: 13, fontWeight: 600 }} dx={-15} />
+                        <Tooltip cursor={{ stroke: '#e2e8f0', strokeWidth: 2, strokeDasharray: '4 4' }} contentStyle={{ borderRadius: '20px', border: 'none', boxShadow: '0 20px 40px -10px rgb(0 0 0 / 0.15)', padding: '16px' }} labelStyle={{ fontWeight: '900', color: '#0f172a', marginBottom: '8px' }} />
+                        <Line type="monotone" dataKey="weight" stroke="url(#colorUvAdmin)" strokeWidth={5} dot={{ r: 7, fill: '#4f46e5', strokeWidth: 4, stroke: '#fff' }} activeDot={{ r: 10, strokeWidth: 0, fill: '#4f46e5' }} />
+                        <defs>
+                          <linearGradient id="colorUvAdmin" x1="0" y1="0" x2="1" y2="0">
+                            <stop offset="0%" stopColor="#818cf8" />
+                            <stop offset="100%" stopColor="#4f46e5" />
+                          </linearGradient>
+                        </defs>
+                        {selectedPatient.goal_weight_kg && (
+                          <ReferenceLine 
+                            y={parseFloat(selectedPatient.goal_weight_kg)} 
+                            stroke="#10B981" 
+                            strokeDasharray="8 8" 
+                            strokeWidth={2}
+                            label={{ position: 'top', value: 'Target Goal', fill: '#10B981', fontSize: 13, fontWeight: '900' }} 
+                          />
+                        )}
+                      </LineChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+
+                {/* ── DIET & FITNESS DATA ── */}
+                {hasDietFitnessData && (
+                  <div className="bg-white rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden mb-10">
+                    <div className="bg-slate-900 px-10 py-6 flex items-center justify-between">
+                      <h3 className="text-xl font-black text-white flex items-center gap-3"><Apple className="w-6 h-6 text-amber-400"/> Diet & Fitness Preferences</h3>
+                      <div className="flex gap-2">
+                        <div className="w-3 h-3 rounded-full bg-slate-700"></div>
+                        <div className="w-3 h-3 rounded-full bg-slate-700"></div>
+                        <div className="w-3 h-3 rounded-full bg-slate-700"></div>
+                      </div>
+                    </div>
+                    <div className="p-10 grid grid-cols-2 gap-x-12 gap-y-8">
+                      {hasLocalFood && (
+                        <div className="col-span-1">
+                          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Apple className="w-4 h-4"/> Local Food Consumed</p>
+                          <p className="font-bold text-slate-800 text-lg bg-slate-50 p-6 rounded-3xl border border-slate-100 whitespace-pre-wrap leading-relaxed shadow-inner">{selectedPatient.local_food}</p>
+                        </div>
+                      )}
+                      {hasWorkoutPref && (
+                        <div className="col-span-1">
+                          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-2"><Dumbbell className="w-4 h-4"/> Workout Preference</p>
+                          <div className="font-black text-slate-800 text-xl bg-slate-50 p-6 rounded-3xl border border-slate-100 flex items-center gap-5 shadow-inner">
+                            <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+                              {selectedPatient.workout_preference === 'home' ? <HomeIcon className="w-8 h-8 text-emerald-500"/> : <Dumbbell className="w-8 h-8 text-emerald-500"/>}
+                            </div>
+                            <span className="capitalize">{selectedPatient.workout_preference} Workout</span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── MEDICAL HISTORY ── */}
+                <div className="bg-white rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden mb-10">
+                  <div className="bg-gradient-to-r from-indigo-900 to-slate-900 px-10 py-6">
+                    <h3 className="text-xl font-black text-white flex items-center gap-3"><FileText className="w-6 h-6 text-indigo-400"/> Full Medical Profile</h3>
+                  </div>
+                  <div className="p-10 grid grid-cols-2 gap-x-12 gap-y-10">
+                    
+                    {/* Column 1 */}
+                    <div className="space-y-8">
+                      <div>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Activity className="w-4 h-4"/> Blood Pressure</p>
+                        <p className="font-black text-slate-800 text-lg bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner">{selectedPatient.medical_history?.vitals?.bp || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Activity className="w-4 h-4"/> Resting Heart Rate</p>
+                        <p className="font-black text-slate-800 text-lg bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner">{selectedPatient.medical_history?.vitals?.hr || 'N/A'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Tried Weight Program Before?</p>
+                        <p className="font-black text-slate-800 text-lg bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner">{selectedPatient.tried_weight_program ? 'Yes' : 'No'}</p>
+                      </div>
+                      {selectedPatient.extra_medical_info && (
+                        <div>
+                          <p className="text-xs font-black text-rose-400 uppercase tracking-widest mb-2 flex items-center gap-2"><AlertCircle className="w-4 h-4"/> Extra Medical Info</p>
+                          <p className="font-bold text-rose-900 bg-rose-50 p-5 rounded-2xl border border-rose-200 leading-relaxed shadow-sm">{selectedPatient.extra_medical_info}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Column 2 */}
+                    <div className="space-y-8">
+                      <div>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2 flex items-center gap-2"><Pill className="w-4 h-4"/> Prior Medications</p>
+                        <p className="font-black text-slate-800 text-lg bg-slate-50 p-4 rounded-2xl border border-slate-100 shadow-inner capitalize">{selectedPatient.medical_history?.medication_history?.type === 'none' ? 'None' : (selectedPatient.medical_history?.medication_history?.type || 'N/A')}</p>
+                      </div>
+                      {selectedPatient.medical_history?.medication_history?.type !== 'none' && selectedPatient.medical_history?.medication_history?.details && (
+                        <div>
+                          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Medication Details</p>
+                          <p className="font-bold text-indigo-900 bg-indigo-50 p-5 rounded-2xl border border-indigo-200 leading-relaxed shadow-sm">{selectedPatient.medical_history?.medication_history?.details}</p>
+                        </div>
+                      )}
+                      <div>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Takes Prescription Meds?</p>
+                        <p className={`font-black text-lg p-4 rounded-2xl border inline-flex items-center gap-3 shadow-sm ${selectedPatient.medical_history?.takes_prescription_meds ? 'bg-amber-50 border-amber-200 text-amber-800' : 'bg-slate-50 border-slate-100 text-slate-800 shadow-inner'}`}>
+                          {selectedPatient.medical_history?.takes_prescription_meds ? <CheckCircle2 className="w-5 h-5 text-amber-500"/> : null} 
+                          {selectedPatient.medical_history?.takes_prescription_meds ? 'Yes' : 'No'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* ── HEALTH CONDITIONS 2 DISPLAY ── */}
+                    {selectedPatient.health_conditions_two && selectedPatient.health_conditions_two.length > 0 && (
+                      <div className="col-span-2 border-t border-slate-100 pt-8 mt-2">
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2"><Activity className="w-4 h-4"/> Other Health Conditions</p>
+                        <div className="flex flex-wrap gap-3">
+                          {selectedPatient.health_conditions_two.map((condition: string, i: number) => (
+                            <span key={i} className="bg-slate-100 text-slate-700 px-5 py-2.5 rounded-xl text-sm font-bold border border-slate-200 hover:bg-indigo-50 hover:text-indigo-700 hover:border-indigo-200 transition-colors cursor-default shadow-sm">
+                              {condition}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* ── GLP-1 IMAGE UPLOAD DISPLAY ── */}
+                    {selectedPatient.glp1_image_url && (
+                      <div className="col-span-2 border-t border-slate-100 pt-8 mt-2">
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-5 flex items-center gap-2"><FileText className="w-4 h-4"/> GLP-1 Medication Document</p>
+                        <a href={selectedPatient.glp1_image_url} target="_blank" rel="noopener noreferrer" className="inline-block relative group">
+                          <img 
+                            src={selectedPatient.glp1_image_url} 
+                            alt="GLP-1 Medication" 
+                            className="max-w-md rounded-3xl shadow-md border-4 border-slate-100 group-hover:border-indigo-200 transition-all duration-300" 
+                          />
+                          <div className="absolute inset-0 bg-indigo-900/0 group-hover:bg-indigo-900/10 transition-colors rounded-3xl flex items-center justify-center">
+                            <span className="bg-white text-indigo-600 font-bold py-2 px-4 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity shadow-lg transform translate-y-2 group-hover:translate-y-0">View Full Size</span>
+                          </div>
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
