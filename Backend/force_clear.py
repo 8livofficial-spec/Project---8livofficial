@@ -1,5 +1,7 @@
 import os
+# pyrefly: ignore [missing-import]
 from dotenv import load_dotenv
+# pyrefly: ignore [missing-import]
 from supabase import create_client
 
 load_dotenv(dotenv_path="Security/.env")

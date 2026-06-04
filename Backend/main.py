@@ -201,7 +201,7 @@ def assess_patient(data: HealthQuestionnaire):
                 "has_severe_conditions": data.has_severe_conditions,
                 "other_conditions": data.other_conditions,
                 "recent_opiate_use": data.recent_opiate_use,
-                "prior_weight_loss_surgery": data.prior_weight_loss_surgery,
+                "prior_weight_loss_surgery": data.takes_prescription_meds,
                 "takes_prescription_meds": data.takes_prescription_meds,
                 "vitals": {
                     "bp": data.blood_pressure_range,
@@ -676,5 +676,3 @@ async def consultation_scheduler_loop():
 @app.on_event("startup")
 async def startup_event():
     asyncio.create_task(consultation_scheduler_loop())
-
-

@@ -1135,7 +1135,8 @@ export default function Home() {
     setLoading(true);
     const hasSevere = formData.health_conditions_one.length > 0 && !formData.health_conditions_one.includes('None of the above');
     try {
-      const res = await fetch('http://127.0.0.1:8000/api/assess', {
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+      const res = await fetch(`${API_URL}/api/assess`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           patient_id: user?.id,
@@ -1200,7 +1201,8 @@ export default function Home() {
       const mockOrderId = 'order_mock_' + Math.random().toString(36).substring(2, 11);
       const mockPaymentId = 'pay_mock_' + Math.random().toString(36).substring(2, 11);
       
-      const verifyRes = await fetch('http://127.0.0.1:8000/api/verify-payment', {
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+      const verifyRes = await fetch(`${API_URL}/api/verify-payment`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           razorpay_order_id: mockOrderId,
@@ -1232,7 +1234,8 @@ export default function Home() {
       const mockOrderId = 'order_mock_' + Math.random().toString(36).substring(2, 11);
       const mockPaymentId = 'pay_mock_' + Math.random().toString(36).substring(2, 11);
       
-      const verifyRes = await fetch('http://127.0.0.1:8000/api/verify-payment', {
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+      const verifyRes = await fetch(`${API_URL}/api/verify-payment`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           razorpay_order_id: mockOrderId,
@@ -1268,7 +1271,8 @@ export default function Home() {
   const handleStartVideoCall = async () => {
     setVideoLoading(true);
     try {
-      const r = await fetch('http://127.0.0.1:8000/api/create-video-room', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
+      const r = await fetch(`${API_URL}/api/create-video-room`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
       const d = await r.json();
       const roomUrl = d.room_url || 'https://meet.google.com/abc-defg-hij';
       const cur_d = bookingDate || new Date().toLocaleDateString();
@@ -1277,7 +1281,7 @@ export default function Home() {
       const payload: any = { patient_id: user?.id, booking_date: cur_d, booking_time: cur_t, room_url: roomUrl };
       if (localFood?.trim()) payload.local_food = localFood.trim();
       if (workoutPreference?.trim()) payload.workout_preference = workoutPreference.trim();
-      await fetch('http://127.0.0.1:8000/api/update-booking', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      await fetch(`${API_URL}/api/update-booking`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 
       if (step === 11) {
         const matchedSlot = doctorSlots.find(s => s.available_date === bookingDate && s.time_slot === bookingTime);
