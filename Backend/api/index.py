@@ -36,10 +36,7 @@ app = FastAPI(title="8liv API", version="1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    # FIXED: Read allowed origins from env variable for production support.
-    # Set ALLOWED_ORIGINS="https://yourdomain.com,https://www.yourdomain.com" in prod.
-    # Falls back to localhost for local development if not set.
-    allow_origins=os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(","),
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
