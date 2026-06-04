@@ -2,14 +2,16 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import { useRouter } from 'next/navigation';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw } from 'lucide-react';
+import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut } from 'lucide-react';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 export default function AdminDashboard() {
+  const router = useRouter();
   const [assessments, setAssessments] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [patientLogs, setPatientLogs] = useState<any[]>([]);
@@ -71,6 +73,16 @@ export default function AdminDashboard() {
       console.error('[Payouts Fetch Error]', err);
     }
     setPayoutLoading(false);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax';
+      router.push('/');
+    } catch (err) {
+      console.error('[Logout Error]', err);
+    }
   };
 
   const handleMarkAsPaid = async (txId: string, doctorName: string, amount: number) => {
@@ -186,7 +198,7 @@ export default function AdminDashboard() {
               onClick={() => setAdminTab('patients')}
               className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black tracking-wide uppercase transition-all ${adminTab === 'patients' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
             >
-              Patients
+              Members
             </button>
             <button 
               onClick={() => setAdminTab('payouts')}
@@ -200,11 +212,11 @@ export default function AdminDashboard() {
         <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
           {adminTab === 'patients' ? (
             <>
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 px-2 flex items-center gap-2"><Users className="w-4 h-4"/> Patient Roster ({assessments.length})</h3>
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 px-2 flex items-center gap-2"><Users className="w-4 h-4"/> Member Roster ({assessments.length})</h3>
               {assessments.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-40 text-slate-400">
                   <Users className="w-10 h-10 mb-2 opacity-20"/>
-                  <p className="text-sm font-semibold">No patients found</p>
+                  <p className="text-sm font-semibold">No members found</p>
                 </div>
               ) : (
                 assessments.map((patient) => (
@@ -214,7 +226,7 @@ export default function AdminDashboard() {
                     className={`p-5 rounded-[1.5rem] cursor-pointer transition-all duration-300 border-2 hover:-translate-y-1 ${selectedPatient?.id === patient.id ? 'border-indigo-500 bg-indigo-50/50 shadow-lg shadow-indigo-500/10 scale-[1.02]' : 'border-transparent bg-white shadow-sm hover:border-slate-200 hover:shadow-md'}`}
                   >
                     <div className="flex justify-between items-start mb-3">
-                      <h4 className="font-black text-slate-800 text-lg leading-tight pr-2">{patient.full_name || `Patient #${patient.id?.slice(0, 4)}`}</h4>
+                      <h4 className="font-black text-slate-800 text-lg leading-tight pr-2">{patient.full_name || `Member #${patient.id?.slice(0, 4)}`}</h4>
                       <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest flex-shrink-0 shadow-sm ${patient.is_eligible ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-rose-100 text-rose-700 border border-rose-200'}`}>{patient.is_eligible ? 'Eligible' : 'Rejected'}</span>
                     </div>
                     <div className="flex gap-5 text-xs font-bold text-slate-500 mb-4 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
@@ -263,6 +275,16 @@ export default function AdminDashboard() {
             </>
           )}
         </div>
+
+        {/* Logout */}
+        <div className="p-6 border-t border-slate-100/60 bg-white/40">
+          <button 
+            onClick={handleLogout}
+            className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-black text-rose-600 bg-rose-50 hover:bg-rose-100 hover:text-rose-700 transition-all duration-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98]"
+          >
+            <LogOut className="w-5 h-5"/> Logout
+          </button>
+        </div>
       </div>
 
       {/* ── RIGHT MAIN AREA ── */}
@@ -275,7 +297,7 @@ export default function AdminDashboard() {
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-4 w-4 bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.8)]"></span>
                 </div>
-                <h2 className="text-xl font-black tracking-wide">Live {activeCall} Session <span className="text-slate-500 font-medium">|</span> {selectedPatient?.full_name || 'Patient'}</h2>
+                <h2 className="text-xl font-black tracking-wide">Live {activeCall} Session <span className="text-slate-500 font-medium">|</span> {selectedPatient?.full_name || 'Member'}</h2>
               </div>
               <button onClick={() => setActiveCall(null)} className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 px-8 rounded-xl text-sm transition-all flex items-center gap-2 shadow-lg hover:shadow-rose-600/30 active:scale-95"><PhoneOff className="w-5 h-5"/> End Session</button>
             </div>
@@ -414,16 +436,16 @@ export default function AdminDashboard() {
             {!selectedPatient && !activeCall ? (
               <div className="h-full flex flex-col items-center justify-center text-slate-400 p-10 animate-fade-in">
                 <div className="w-32 h-32 bg-white rounded-full shadow-lg flex items-center justify-center mb-6 border border-slate-100"><Users className="w-16 h-16 text-indigo-300" /></div>
-                <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-2">Select a patient</h2>
+                <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-2">Select a member</h2>
                 <p className="text-base font-medium text-slate-500">View detailed health profiles and manage sessions.</p>
               </div>
             ) : !activeCall && (
               <div className="p-8 md:p-12 max-w-6xl mx-auto animate-fade-in">
                 
-                {/* ── PATient HEADER CARD ── */}
+                {/* ── MEMBER HEADER CARD ── */}
                 <div className="bg-white/80 backdrop-blur-xl p-10 rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 mb-10 flex justify-between items-center transition-all hover:shadow-[0_8px_30px_rgba(79,70,229,0.06)]">
                   <div>
-                    <h2 className="text-5xl font-black text-slate-900 mb-4 tracking-tighter flex items-center gap-4"><div className="bg-indigo-100 text-indigo-600 p-3 rounded-[1.5rem]"><User className="w-8 h-8"/></div> {selectedPatient.full_name || 'Anonymous Patient'}</h2>
+                    <h2 className="text-5xl font-black text-slate-900 mb-4 tracking-tighter flex items-center gap-4"><div className="bg-indigo-100 text-indigo-600 p-3 rounded-[1.5rem]"><User className="w-8 h-8"/></div> {selectedPatient.full_name || 'Anonymous Member'}</h2>
                     <div className="flex flex-wrap gap-5 text-slate-600 font-bold text-sm mt-2 bg-slate-50/80 p-4 rounded-2xl border border-slate-100 inline-flex items-center">
                       <p className="flex items-center gap-2"><span className="text-slate-400">AGE</span> {selectedPatient.age || 'N/A'}</p>
                       <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
@@ -446,7 +468,7 @@ export default function AdminDashboard() {
                     <div className="absolute top-0 left-0 w-3 h-full bg-gradient-to-b from-amber-400 to-orange-500"></div>
                     <div>
                       <h3 className="text-amber-950 font-black text-2xl flex items-center gap-3 mb-2"><Clock className="w-7 h-7 text-amber-500"/> Scheduled Consultation</h3>
-                      <p className="text-base font-bold text-amber-700/80">Patient is waiting for this time slot.</p>
+                      <p className="text-base font-bold text-amber-700/80">Member is waiting for this time slot.</p>
                     </div>
                     <div className="text-right bg-white px-8 py-5 rounded-3xl shadow-sm border border-amber-100 group-hover:scale-105 transition-transform">
                       <p className="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-500 to-orange-600">{selectedPatient.booking_time}</p>

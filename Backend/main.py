@@ -92,6 +92,7 @@ class HealthQuestionnaire(BaseModel):
 
     tried_weight_program: Optional[bool] = None
     extra_medical_info: Optional[str] = None
+    shipping_state: Optional[str] = None
 
 
 class BookingRequest(BaseModel):
@@ -187,6 +188,7 @@ def assess_patient(data: HealthQuestionnaire):
             "is_eligible": True,
             "tried_weight_program": data.tried_weight_program,
             "extra_medical_info": data.extra_medical_info,
+            "shipping_state": data.shipping_state,
 
             # ── FEATURE 1 ────────────────────────────────────────────────────
             "health_conditions_two": data.health_conditions_two,

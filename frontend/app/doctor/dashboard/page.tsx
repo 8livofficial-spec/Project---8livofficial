@@ -97,7 +97,7 @@ export default function DoctorDashboard() {
   useEffect(() => {
     const init = async () => {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { router.push('/doctor/login'); return; }
+      if (!session) { router.push('/?role=doctor'); return; }
       setDoctor(session.user);
 
       // Load profile
@@ -181,7 +181,8 @@ export default function DoctorDashboard() {
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push('/doctor/login');
+    document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax';
+    router.push('/');
   };
 
   // ── Scheduling ────────────────────────────────────────────────────────
@@ -243,7 +244,7 @@ export default function DoctorDashboard() {
     setShowLinkModal(false);
 
     setActiveCallUrl(finalLink);
-    setActiveCallPatient(selectedConsultationForCall.patient_name || 'Patient');
+    setActiveCallPatient(selectedConsultationForCall.patient_name || 'Member');
     setActiveCallStatus('calling');
     setActiveCallId(selectedConsultationForCall.id);
 
@@ -481,7 +482,7 @@ export default function DoctorDashboard() {
               <div className="flex justify-center items-center gap-2.5 py-2 px-5 rounded-full bg-slate-800 border border-slate-700/50 w-fit mx-auto animate-pulse">
                 <span className={`w-3.5 h-3.5 rounded-full ${activeCallStatus === 'calling' ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'}`}></span>
                 <span className="text-sm font-black tracking-wide">
-                  {activeCallStatus === 'calling' ? '📞 Ringing Patient...' : '🟢 Patient Connected!'}
+                  {activeCallStatus === 'calling' ? '📞 Ringing Member...' : '🟢 Member Connected!'}
                 </span>
               </div>
 
@@ -512,7 +513,7 @@ export default function DoctorDashboard() {
                     }}
                     className="w-full bg-amber-500 hover:bg-amber-400 text-white font-bold py-3 px-6 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-500/30"
                   >
-                    📞 Ring Patient Again
+                    📞 Ring Member Again
                   </button>
                 )}
                 <button
@@ -561,7 +562,7 @@ export default function DoctorDashboard() {
               <button onClick={() => setShowLinkModal(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-all">Cancel</button>
               <button onClick={handleStartCall} disabled={!tempMeetLink.trim()}
                 className="flex-1 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-all shadow-lg">
-                Call Patient & Launch
+                Call Member & Launch
               </button>
             </div>
           </div>
@@ -805,7 +806,7 @@ export default function DoctorDashboard() {
                     + Add Slot
                   </button>
                 </div>
-                <p className="text-xs text-slate-400 font-semibold mt-4">💡 Patients will be able to select these slots when booking their video consultation.</p>
+                <p className="text-xs text-slate-400 font-semibold mt-4">💡 Members will be able to select these slots when booking their video consultation.</p>
               </div>
 
               {/* Available slots list */}
@@ -851,7 +852,7 @@ export default function DoctorDashboard() {
                   <div className="bg-amber-100 text-amber-600 p-3 rounded-xl"><AlertCircle className="w-6 h-6"/></div>
                   <div>
                     <p className="font-black text-amber-900">{pendingCases} case{pendingCases > 1 ? 's' : ''} awaiting your review</p>
-                    <p className="text-sm text-amber-700 font-semibold mt-0.5">These patients have completed their video call and need a prescription decision.</p>
+                    <p className="text-sm text-amber-700 font-semibold mt-0.5">These members have completed their video call and need a prescription decision.</p>
                   </div>
                 </div>
               )}
@@ -860,7 +861,7 @@ export default function DoctorDashboard() {
                 <div className="bg-white rounded-[2rem] p-16 text-center shadow-sm border border-slate-100">
                   <Users className="w-16 h-16 mx-auto mb-4 text-slate-200"/>
                   <p className="font-black text-slate-600 text-lg">No consultations yet</p>
-                  <p className="text-slate-400 font-semibold mt-2">Patients will appear here once they book a video call</p>
+                  <p className="text-slate-400 font-semibold mt-2">Members will appear here once they book a video call</p>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -879,7 +880,7 @@ export default function DoctorDashboard() {
                         <div className="flex items-start justify-between gap-4 flex-wrap">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 flex-wrap mb-2">
-                              <p className="font-black text-slate-900 text-lg">{c.patient_name || 'Patient'}</p>
+                              <p className="font-black text-slate-900 text-lg">{c.patient_name || 'Member'}</p>
                               <span className={`text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full ${st.color}`}>{st.label}</span>
                             </div>
                             <div className="flex gap-4 text-sm text-slate-500 font-semibold flex-wrap">
@@ -922,11 +923,11 @@ export default function DoctorDashboard() {
                                 <XCircle className="w-4 h-4"/> Cancel Call
                               </button>
                             )}
-                            {/* Call Patient — for scheduled calls with no active URL yet */}
+                            {/* Call Member — for scheduled calls with no active URL yet */}
                             {c.status === 'scheduled' && !c.room_url && (
                               <button onClick={() => joinCall(c)}
                                 className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2 transition-all shadow-md">
-                                📞 Call Patient
+                                📞 Call Member
                               </button>
                             )}
                           </div>

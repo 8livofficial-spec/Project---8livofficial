@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import {
@@ -125,9 +126,9 @@ const STEP_VISUALS: Record<number, { img: string; textColor: string; accentBg: s
   4: { img: IMG.visual7, textColor: 'text-violet-100', accentBg: 'from-violet-900/80 to-indigo-900/90', badge: 'Medication History', fact: 'GLP-1 medications reduce hunger signals', factSub: 'Modern obesity medications work with your biology, not against it.' },
   5: { img: IMG.visual10, textColor: 'text-rose-100', accentBg: 'from-rose-900/70 to-slate-900/90', badge: 'Assessment Result', fact: 'Medical supervision triples weight loss success', factSub: 'Doctor-guided programs outperform solo dieting every time.' },
   6: { img: IMG.visual11, textColor: 'text-amber-100', accentBg: 'from-amber-900/70 to-slate-900/90', badge: 'Your Membership', fact: 'Gold members lose 40% more weight on average', factSub: 'Dietician + Fitness Coach = the ultimate transformation combo.' },
-  9: { img: IMG.visual2, textColor: 'text-sky-100', accentBg: 'from-sky-900/80 to-slate-900/90', badge: 'Doctor Consultation', fact: 'Your endocrinologist will prescribe the right medication', factSub: 'Personalised prescriptions based on your BMI, history & goals.' },
-  10: { img: IMG.visual3, textColor: 'text-amber-100', accentBg: 'from-amber-900/80 to-orange-900/90', badge: 'Dietician Session', fact: 'Local food-based diet plans work 3× better', factSub: "We use your regional cuisine to build a chart you'll actually follow." },
-  11: { img: IMG.visual2, textColor: 'text-emerald-100', accentBg: 'from-emerald-900/80 to-teal-900/90', badge: 'Fitness Coach', fact: '30 min of movement a day accelerates fat loss', factSub: 'Your coach will design a plan matched to your body & environment.' },
+  13: { img: IMG.visual2, textColor: 'text-sky-100', accentBg: 'from-sky-900/80 to-slate-900/90', badge: 'Doctor Consultation', fact: 'Your endocrinologist will prescribe the right medication', factSub: 'Personalised prescriptions based on your BMI, history & goals.' },
+  14: { img: IMG.visual3, textColor: 'text-amber-100', accentBg: 'from-amber-900/80 to-orange-900/90', badge: 'Dietician Session', fact: 'Local food-based diet plans work 3× better', factSub: "We use your regional cuisine to build a chart you'll actually follow." },
+  15: { img: IMG.visual2, textColor: 'text-emerald-100', accentBg: 'from-emerald-900/80 to-teal-900/90', badge: 'Fitness Coach', fact: '30 min of movement a day accelerates fat loss', factSub: 'Your coach will design a plan matched to your body & environment.' },
 };
 
 const SLIDESHOW_IMGS = [IMG.visual8, IMG.visual9, IMG.visual10, IMG.visual11];
@@ -181,6 +182,16 @@ const HEALTH_CONDITIONS_TWO_LIST = [
   'Coronary artery disease/stroke','Allergic to meds','Congestive heart failure','QT prolongation',
   'Hospitalization within 1 year','HIV','Acid reflux','Asthma','Urinary stress incontinence','PCOS',
   'Low testosterone','Osteoarthritis','Constipation','None of the above',
+];
+const INDIAN_STATES = [
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand",
+  "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
+  "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab",
+  "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura",
+  "Uttar Pradesh", "Uttarakhand", "West Bengal",
+  "Andaman and Nicobar Islands", "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu",
+  "Delhi", "Jammu and Kashmir", "Ladakh", "Lakshadweep", "Puducherry"
 ];
 const MAX_FILE_SIZE_MB = 15;
 
@@ -242,13 +253,82 @@ function isSlotInPast(dateStr: string, timeStr: string): boolean {
   return target.getTime() < Date.now();
 }
 
+// Helper component for elegant inputs, declared outside the main render function
+// to prevent unmounting and focus loss on every state change/keystroke.
+const ElegantInput = ({ id, label, type = "text", value, onChange, required = false, theme = "patient" }: any) => (
+  <div className="relative pt-6 mb-6">
+    <input
+      type={type}
+      id={id}
+      value={value}
+      onChange={onChange}
+      required={required}
+      className={`peer w-full bg-transparent border-b py-2 px-1 focus:outline-none transition-colors placeholder-transparent ${
+        theme === 'doctor' 
+          ? 'border-slate-300 text-slate-800 focus:border-emerald-600' 
+          : 'border-slate-300 text-slate-800 focus:border-indigo-600'
+      }`}
+      placeholder=" "
+    />
+    <label 
+      htmlFor={id} 
+      className={`absolute left-1 top-1 text-sm transition-all peer-placeholder-shown:top-7 peer-placeholder-shown:text-base peer-focus:top-1 peer-focus:text-sm pointer-events-none ${
+        theme === 'doctor' 
+          ? 'text-slate-500 peer-focus:text-emerald-600' 
+          : 'text-slate-500 peer-focus:text-indigo-600'
+      }`}
+    >
+      {label}
+    </label>
+  </div>
+);
+
 export default function Home() {
+  const router = useRouter();
+  const [selectedAuthRole, setSelectedAuthRole] = useState<string>('patient');
+  const [showRoleSelection, setShowRoleSelection] = useState(true);
+
+  const redirectBasedOnRole = (role: string) => {
+    // Set a secure cookie that the middleware will read
+    document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`;
+    
+    if (role === 'admin') {
+      router.push('/admin');
+    } else if (role === 'doctor') {
+      router.push('/doctor/dashboard');
+    } else {
+      router.push('/'); // Patient stays on main page
+    }
+  };
+
+  const handleSelectRole = (role: 'patient' | 'doctor') => {
+    setSelectedAuthRole(role);
+    setShowRoleSelection(false);
+    setAuthError('');
+    setAuthSuccessMsg('');
+    setAuthEmail('');
+    setAuthPassword('');
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const role = params.get('role');
+      if (role === 'doctor') {
+        handleSelectRole('doctor');
+      } else if (role === 'patient') {
+        handleSelectRole('patient');
+      }
+    }
+  }, []);
+
   const [user, setUser] = useState<any>(null);
   const [authEmail, setAuthEmail] = useState('');
   const [authPassword, setAuthPassword] = useState('');
   const [isLoginView, setIsLoginView] = useState(false);
   const [authLoading, setAuthLoading] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [authSuccessMsg, setAuthSuccessMsg] = useState('');
   const [step, setStep] = useState(0);
   const [loading, setLoading] = useState(false);
   const [assessmentResult, setAssessmentResult] = useState<{ is_eligible: boolean; message: string; success_probability?: string; bmi?: number } | null>(null);
@@ -267,7 +347,7 @@ export default function Home() {
   const [shippingState, setShippingState] = useState('');
 
   // ── Doctor slots ──────────────────────────────────────────────────────────
-  const [doctorSlots, setDoctorSlots] = useState<{ id: string; available_date: string; time_slot: string; doctor_id: string; doctor_name: string }[]>([]);
+  const [doctorSlots, setDoctorSlots] = useState<{ id: string; available_date: string; time_slot: string; doctor_id: string; doctor_name: string; is_locked_for_user?: boolean }[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   // Derived: unique sorted dates that have available slots and are not fully in the past
   const availableDatesFromDB = [...new Set(
@@ -317,6 +397,26 @@ export default function Home() {
     glp1_image_url: '',
   });
 
+  const [showIneligibleMsg, setShowIneligibleMsg] = useState(false);
+  const [medicationHistoryChoice, setMedicationHistoryChoice] = useState<string>('');
+
+  const [glp1Details, setGlp1Details] = useState('');
+  const [lastDoseTimeframe, setLastDoseTimeframe] = useState('');
+  const [medStartingWeight, setMedStartingWeight] = useState('');
+  const [medicationPhoto, setMedicationPhoto] = useState<File | null>(null);
+
+  const [otherMedDetails, setOtherMedDetails] = useState('');
+  const [otherMedStartingWeight, setOtherMedStartingWeight] = useState('');
+
+  const [stackingConsent, setStackingConsent] = useState('');
+
+  const [triedWeightProgram, setTriedWeightProgram] = useState('');
+  const [hasExtraInfo, setHasExtraInfo] = useState('');
+  const [extraInfoText, setExtraInfoText] = useState('');
+
+  const [summaryFirstName, setSummaryFirstName] = useState('');
+  const [summaryLastName, setSummaryLastName] = useState('');
+
   const [glp1File, setGlp1File] = useState<File | null>(null);
   const [glp1UploadLoading, setGlp1UploadLoading] = useState(false);
   const [glp1UploadError, setGlp1UploadError] = useState('');
@@ -332,6 +432,8 @@ export default function Home() {
   const [videoRoomUrl, setVideoRoomUrl] = useState('');
   const [videoLoading, setVideoLoading] = useState(false);
   const [callActive, setCallActive] = useState(false);
+  const [callDuration, setCallDuration] = useState(0);
+  const [isOnline, setIsOnline] = useState(true);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [localFood, setLocalFood] = useState('');
   const [workoutPreference, setWorkoutPreference] = useState('');
@@ -375,7 +477,7 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (bookingDate && bookingTime && step === 8) startCountdown(bookingDate, bookingTime);
+    if (bookingDate && bookingTime && step === 12) startCountdown(bookingDate, bookingTime);
     return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
   }, [bookingDate, bookingTime, step]);
 
@@ -416,8 +518,7 @@ export default function Home() {
     return () => { reminderTimersRef.current.forEach(t => clearTimeout(t)); };
   }, [bookingDate, bookingTime]);
 
-  // ── Logout ────────────────────────────────────────────────────────────────
-  const handleLogout = async () => { await supabase.auth.signOut(); setUser(null); setStep(0); };
+
 
   // ── Fetch notifications ───────────────────────────────────────────────────
   const fetchNotifications = useCallback(async (userId: string) => {
@@ -484,14 +585,14 @@ export default function Home() {
   }, [step]);
 
   useEffect(() => {
-    if (step !== 8) return;
+    if (step !== 12) return;
     const t = setInterval(() => setDashSlideIdx(i => (i + 1) % DASH_SLIDES.length), 5000);
     return () => clearInterval(t);
   }, [step]);
 
-  // ── Doctor slots when entering step 9 ────────────────────────────────────
+  // ── Doctor slots when entering step 13 ────────────────────────────────────
   useEffect(() => {
-    if (step !== 9) return;
+    if (step !== 13) return;
     const fetchSlots = async () => {
       setSlotsLoading(true);
       const today = new Date().toISOString().split('T')[0];
@@ -513,7 +614,7 @@ export default function Home() {
             .from('doctor_consultations')
             .select('doctor_id')
             .eq('patient_id', user.id)
-            .in('status', ['approved', 'rejected', 'attended'])
+            .in('status', ['approved', 'rejected', 'attended', 'scheduled'])
             .order('created_at', { ascending: false })
             .limit(1);
           if (pastCons && pastCons.length > 0) {
@@ -538,15 +639,8 @@ export default function Home() {
         let mappedSlots = slots.map((s: any) => ({
           ...s,
           doctor_name: profileMap[s.doctor_id] || 'Dr. Expert',
+          is_locked_for_user: primaryDocId ? s.doctor_id !== primaryDocId : false,
         }));
-
-        // Filter slots: patient is assigned to their primary doctor if they have one
-        if (primaryDocId) {
-          const primarySlots = mappedSlots.filter(s => s.doctor_id === primaryDocId);
-          if (primarySlots.length > 0) {
-            mappedSlots = primarySlots;
-          }
-        }
 
         setDoctorSlots(mappedSlots);
         // Auto-select the first available date
@@ -613,7 +707,7 @@ export default function Home() {
 
   // ── Polling for Incoming Calls every 2 seconds on dashboard ──────────────────
   useEffect(() => {
-    if (!user || step !== 8) return;
+    if (!user || step !== 12) return;
     const checkCall = () => checkIncomingCall(user.id);
     checkCall();
     const callInterval = setInterval(checkCall, 2000);
@@ -644,7 +738,7 @@ export default function Home() {
     // Transition patient to active call screen
     setVideoRoomUrl(incomingCall.room_url);
     setCallActive(true);
-    setStep(9);
+    setStep(13);
     setIncomingCall(null);
   };
 
@@ -663,7 +757,7 @@ export default function Home() {
 
   // ── Polling: notifications + prescription every 15 seconds on dashboard ───
   useEffect(() => {
-    if (!user || step !== 8) return;
+    if (!user || step !== 12) return;
     fetchNotifications(user.id);
     fetchPrescription(user.id);
     const poll = setInterval(() => {
@@ -675,7 +769,7 @@ export default function Home() {
 
   // ── Push notifications permission ─────────────────────────────────────────
   useEffect(() => {
-    if (step === 8 && 'Notification' in window) {
+    if (step === 12 && 'Notification' in window) {
       if (Notification.permission === 'default') Notification.requestPermission();
       else if (Notification.permission === 'granted' && !hasLoggedWeightToday)
         new Notification('8liv Reminder 🌅', { body: "Don't forget to log your empty stomach weight!", icon: '/favicon.ico' });
@@ -693,6 +787,21 @@ export default function Home() {
   useEffect(() => {
     const checkExistingProfile = async () => {
       if (!user) return;
+
+      // Check role to avoid flashing the patient dashboard for non-patients
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      const role = user.email === '8livofficial@gmail.com'
+        ? 'admin'
+        : (profile?.role || user.user_metadata?.role || 'patient');
+      if (role !== 'patient') {
+        redirectBasedOnRole(role);
+        return;
+      }
+
       const { data } = await supabase.from('health_assessments').select(`
         id, patient_id, first_name, last_name, full_name, age, phone_number, address,
         dob_month, dob_day, dob_year, agree_terms, height_cm, weight_kg, goal_weight_kg,
@@ -770,13 +879,13 @@ export default function Home() {
         // Secure and logical routing:
         if (data.consultation_fee_paid) {
           if (!data.booking_date) {
-            setStep(9); // Paid but not booked yet — take them to booking screen
+            setStep(13); // Paid but not booked yet — take them to booking screen
           } else {
-            setStep(8); // Paid and booked → dashboard
+            setStep(12); // Paid and booked → dashboard
           }
         } else {
-          // Has assessment record but not paid consultation fee yet -> go to Step 5 to pay
-          setStep(5);
+          // Has assessment record but not paid consultation fee yet -> go to Step 9 to pay
+          setStep(9);
         }
       } else { setStep(0); }
       setIsProfileLoaded(true);
@@ -801,7 +910,7 @@ export default function Home() {
       setWeightData([startData, ...dbData]); setHasLoggedWeightToday(loggedToday);
     }
   };
-  useEffect(() => { if (step === 8 && user) fetchProgressData(); }, [step, user]);
+  useEffect(() => { if (step === 12 && user) fetchProgressData(); }, [step, user]);
 
   // ── Notification helpers ──────────────────────────────────────────────────
   const markNotifRead = async (id: string) => {
@@ -817,11 +926,119 @@ export default function Home() {
 
   // ── Auth handlers ─────────────────────────────────────────────────────────
   const handleAuth = async (e: React.FormEvent) => {
-    e.preventDefault(); setAuthLoading(true); setAuthError('');
+    e.preventDefault();
+    setAuthLoading(true);
+    setAuthError('');
+    setAuthSuccessMsg('');
     try {
-      if (isLoginView) { const { error } = await supabase.auth.signInWithPassword({ email: authEmail, password: authPassword }); if (error) throw error; }
-      else { const { error } = await supabase.auth.signUp({ email: authEmail, password: authPassword }); if (error) throw error; }
-    } catch (err: any) { setAuthError(err.message); } finally { setAuthLoading(false); }
+      if (isLoginView) {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email: authEmail,
+          password: authPassword,
+        });
+        if (error) throw error;
+        
+        // Fetch role from profiles table after login
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', data.user.id)
+          .single();
+        
+        // Overrides role to 'admin' if it is the Master Admin Email
+        const role = data.user.email === '8livofficial@gmail.com'
+          ? 'admin'
+          : (profile?.role || data.user.user_metadata?.role || 'patient');
+
+        // ── ROLE GUARD: Ensure the user logs in through the correct portal ──
+        // Only enforce when role is known (skip for admin who can access everything)
+        if (role !== 'admin') {
+          const expectedRole = selectedAuthRole === 'doctor' ? 'doctor' : 'patient';
+          if (role !== expectedRole) {
+            // Wrong portal — sign them out and show a targeted alert
+            await supabase.auth.signOut();
+            const portalName = expectedRole === 'doctor' ? 'Doctor' : 'Member';
+            const correctPortal = role === 'doctor' ? 'Doctor' : 'Member';
+            setAuthError(
+              `🚫 This is the ${portalName} portal. Your account belongs to the ${correctPortal} portal. Please use the "${correctPortal}" card on this page to log in.`
+            );
+            setAuthLoading(false);
+            return;
+          }
+        }
+
+        redirectBasedOnRole(role);
+
+      } else {
+        const randomHex = Math.floor(Math.random() * 65535).toString(16).toUpperCase().padStart(4, '0');
+        const displayId = selectedAuthRole === 'doctor' ? `DOC-${randomHex}` : `MEM-${randomHex}`;
+
+        const { data: signUpData, error } = await supabase.auth.signUp({
+          email: authEmail,
+          password: authPassword,
+          options: {
+            data: { role: selectedAuthRole, display_id: displayId } // Pass role and ID to Supabase metadata
+          }
+        });
+        if (error) throw error;
+        
+        // Insert the profile row with the correct role while user is still authenticated
+        if (signUpData.user) {
+          const { error: profileError } = await supabase.from('profiles').insert({
+            id: signUpData.user.id,
+            role: selectedAuthRole,
+            display_id: displayId,
+          });
+          if (profileError) {
+            console.warn('Profile insert failed (RLS policy may be missing):', profileError.message);
+          }
+
+          if (selectedAuthRole === 'doctor') {
+            const { error: docProfileError } = await supabase.from('doctor_profiles').insert({
+              doctor_id: signUpData.user.id,
+              full_name: displayId, // Enforce confidentiality
+            });
+            if (docProfileError) {
+              console.warn('Doctor profile insert failed:', docProfileError.message);
+            }
+            const { error: docWalletError } = await supabase.from('doctor_wallet').insert({
+              doctor_id: signUpData.user.id,
+              balance: 0,
+              total_earned: 0,
+              total_withdrawn: 0,
+            });
+            if (docWalletError) {
+              console.warn('Doctor wallet insert failed:', docWalletError.message);
+            }
+          }
+        }
+        
+        // CRITICAL: Supabase auto-signs-in on registration.
+        // We must sign out immediately to force the user to log in manually.
+        await supabase.auth.signOut();
+        
+        // Now switch to login view with success message
+        setAuthPassword('');
+        setIsLoginView(true);
+        setAuthSuccessMsg('Account created successfully! Please log in with your credentials.');
+      }
+    } catch (err: any) {
+      setAuthError(err.message);
+    } finally {
+      setAuthLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setUser(null);
+    setStep(0);
+    setIsProfileLoaded(false);
+    setAuthEmail('');
+    setAuthPassword('');
+    setAuthError('');
+    setAuthSuccessMsg('');
+    setIsLoginView(false);
   };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -886,6 +1103,34 @@ export default function Home() {
     return { minWeeks: Math.ceil(diff / 1.0), maxWeeks: Math.ceil(diff / 0.5) };
   };
 
+  const getProjectionData = () => {
+    const currentWeight = parseFloat(formData.weight_kg) || parseFloat(formData.current_weight) || 0;
+    const goalWeight = parseFloat(formData.goal_weight_kg) || parseFloat(formData.goal_weight) || 0;
+    const weightToLose = currentWeight - goalWeight;
+    
+    if (weightToLose <= 0) return { minWeeks: 0, maxWeeks: 0 };
+    
+    // Assuming standard medical weight loss of 0.5kg to 1kg per week
+    const minWeeks = Math.ceil(weightToLose / 1); 
+    const maxWeeks = Math.ceil(weightToLose / 0.5); 
+    
+    return { minWeeks, maxWeeks };
+  };
+
+  const handleHealthStepNext = () => {
+    const isH1Clear = formData.health_conditions_one.includes('None of the above');
+    const isH2Clear = formData.health_conditions_two.includes('None of the above');
+    const isBpNormal = formData.blood_pressure_range === 'Normal';
+    const isHrNormal = formData.resting_heart_rate === 'Normal';
+
+    if (isH1Clear && isH2Clear && isBpNormal && isHrNormal) {
+      setShowIneligibleMsg(false);
+      setStep(5);
+    } else {
+      setShowIneligibleMsg(true);
+    }
+  };
+
   const submitAssessment = async () => {
     setLoading(true);
     const hasSevere = formData.health_conditions_one.length > 0 && !formData.health_conditions_one.includes('None of the above');
@@ -893,8 +1138,10 @@ export default function Home() {
       const res = await fetch('http://127.0.0.1:8000/api/assess', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          patient_id: user?.id, first_name: formData.first_name, last_name: formData.last_name,
-          full_name: `${formData.first_name} ${formData.last_name}`.trim(),
+          patient_id: user?.id,
+          first_name: summaryFirstName || formData.first_name,
+          last_name: summaryLastName || formData.last_name,
+          full_name: `${summaryFirstName || formData.first_name} ${summaryLastName || formData.last_name}`.trim(),
           age: formData.age, phone_number: formData.phone_number, address: formData.address,
           dob_month: formData.dob_month, dob_day: formData.dob_day, dob_year: formData.dob_year, agree_terms: formData.agree_terms,
           height_cm: parseFloat(formData.height_cm) || 0, weight_kg: parseFloat(formData.weight_kg) || 0,
@@ -907,9 +1154,10 @@ export default function Home() {
           last_dose_timeframe: formData.last_dose_timeframe, starting_weight_kg: parseFloat(formData.starting_weight_kg as string) || null,
           agrees_to_no_stacking: formData.agrees_to_no_stacking, tried_weight_program: formData.tried_weight_program,
           extra_medical_info: formData.extra_medical_info || null, glp1_image_url: formData.glp1_image_url || null,
+          shipping_state: shippingState,
         }),
       });
-      const result = await res.json(); setAssessmentResult(result); setStep(5);
+      const result = await res.json(); setAssessmentResult(result); setStep(9);
     } catch { alert('Failed to connect to backend.'); }
     setLoading(false);
   };
@@ -926,6 +1174,7 @@ export default function Home() {
       goal_weight_kg: parseFloat(formData.goal_weight_kg as any),
       tried_weight_program: formData.tried_weight_program, extra_medical_info: formData.extra_medical_info,
       health_conditions_two: formData.health_conditions_two, glp1_image_url: formData.glp1_image_url || null,
+      shipping_state: shippingState,
       updated_at: new Date().toISOString(),
       medical_history: {
         gender: formData.gender, has_severe_conditions: hasSevere, other_conditions: formData.other_conditions,
@@ -939,7 +1188,7 @@ export default function Home() {
         },
       }
     }).eq('patient_id', user.id);
-    if (!error) { alert('Profile Updated! ✅'); setStep(8); setIsEditing(false); } else { alert('DB error: ' + error.message); }
+    if (!error) { alert('Profile Updated! ✅'); setStep(12); setIsEditing(false); } else { alert('DB error: ' + error.message); }
     setLoading(false);
   };
 
@@ -963,7 +1212,8 @@ export default function Home() {
       });
       const verifyData = await verifyRes.json();
       if (verifyData.status === 'success' && verifyData.verified) {
-        setStep(9);
+        alert("Payment successful! Funds are securely held in the Admin escrow pool until your consultation concludes.");
+        setStep(13);
       } else {
         alert('Payment verification failed. Please contact support.');
       }
@@ -996,7 +1246,7 @@ export default function Home() {
       });
       const verifyData = await verifyRes.json();
       if (verifyData.status === 'success' && verifyData.verified) {
-        setStep(7);
+        setStep(11);
       } else {
         alert('Payment verification failed. Please contact support.');
       }
@@ -1022,16 +1272,16 @@ export default function Home() {
       const d = await r.json();
       const roomUrl = d.room_url || 'https://meet.google.com/abc-defg-hij';
       const cur_d = bookingDate || new Date().toLocaleDateString();
-      const cur_t = bookingTime || (step === 10 ? 'Dietician' : step === 11 ? 'Fitness' : 'Consultation');
+      const cur_t = bookingTime || (step === 12 ? 'Dietician' : step === 13 ? 'Fitness' : 'Consultation');
 
       const payload: any = { patient_id: user?.id, booking_date: cur_d, booking_time: cur_t, room_url: roomUrl };
       if (localFood?.trim()) payload.local_food = localFood.trim();
       if (workoutPreference?.trim()) payload.workout_preference = workoutPreference.trim();
       await fetch('http://127.0.0.1:8000/api/update-booking', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 
-      if (step === 9) {
+      if (step === 11) {
         const matchedSlot = doctorSlots.find(s => s.available_date === bookingDate && s.time_slot === bookingTime);
-        const patientFullName = `${formData.first_name} ${formData.last_name}`.trim() || formData.full_name || 'Patient';
+        const patientFullName = user?.user_metadata?.display_id || `${formData.first_name} ${formData.last_name}`.trim() || formData.full_name || 'Member';
         
         // DEV BYPASS: Use doctor_id from slot, or fallback to patient ID (so it passes UUID constraint in DB)
         const doctorId = matchedSlot?.doctor_id || user?.id;
@@ -1068,12 +1318,12 @@ export default function Home() {
 
   // ── handleJoinCall — called from dashboard "Join Now" button ─────────────
   const handleJoinCall = () => {
-    if (videoRoomUrl) { setCallActive(true); setStep(9); }
+    if (videoRoomUrl) { setCallActive(true); setStep(13); }
   };
 
   // ── handleEndCall ─────────────────────────────────────────────────────────
   const handleEndCall = async () => {
-    if ((step === 9 || callActive) && user) {
+    if ((step === 13 || callActive) && user) {
       // DEV BYPASS: Auto-approve prescription on call end for testing
       await supabase.from('doctor_consultations')
         .update({ 
@@ -1093,8 +1343,39 @@ export default function Home() {
       });
     }
     setCallActive(false); setVideoRoomUrl('');
-    setStep(8);
+    setStep(12);
   };
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!callActive) {
+      setCallDuration(0);
+      return;
+    }
+    const timer = setInterval(() => {
+      if (isOnline) {
+        setCallDuration(prev => {
+          if (prev >= 3599) {
+            handleEndCall();
+            return 3600;
+          }
+          return prev + 1;
+        });
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [callActive, isOnline]);
 
   // ── handleCancelAppointment ──────────────────────────────────────────────
   const handleCancelAppointment = async () => {
@@ -1149,74 +1430,185 @@ export default function Home() {
       setCanJoinCallNow(false);
       setCallCountdown(null);
       if (countdownRef.current) clearInterval(countdownRef.current);
-      setStep(8);
+      setStep(12);
     } catch (err: any) {
       alert('Failed to cancel: ' + err.message);
     }
     setCancelLoading(false);
   };
 
-  // ── LiveCallPanel ─────────────────────────────────────────────────────────
-  const LiveCallPanel = ({ color }: { color: string }) => (
-    <div className="max-w-2xl mx-auto space-y-6">
-      <div className="bg-white rounded-[2.5rem] p-10 border border-slate-100 shadow-2xl text-center space-y-6">
-        <div className="w-16 h-16 bg-gradient-to-tr from-indigo-500 to-violet-600 rounded-2xl flex items-center justify-center mx-auto shadow-md animate-pulse">
-          <Video className="w-8 h-8 text-white"/>
+  // Render Login Form
+  const renderLoginForm = (role: string, theme = "patient") => (
+    <form onSubmit={(e) => { e.preventDefault(); handleAuth(e); }} className="w-full text-left animate-fadeIn">
+      {authError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl font-semibold flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" /> {authError}
         </div>
-        
-        <div>
-          <h2 className="text-3xl font-black text-slate-900 tracking-tight">Your Video Consultation is Ready</h2>
-          <p className="text-slate-500 text-sm font-bold mt-2">Press the button below to join the Google Meet session with your doctor.</p>
-        </div>
+      )}
+      <ElegantInput id={`${role}-login-email`} label="Email Address" type="email" value={authEmail} onChange={(e: any) => setAuthEmail(e.target.value)} required theme={theme} />
+      <ElegantInput id={`${role}-login-pass`} label="Password" type="password" value={authPassword} onChange={(e: any) => setAuthPassword(e.target.value)} required theme={theme} />
+      
+      <button 
+        type="submit" 
+        disabled={authLoading} 
+        className={`w-full mt-4 py-3.5 font-bold rounded-2xl transition-all active:scale-[0.98] disabled:opacity-60 text-white shadow-lg ${
+          theme === 'doctor' 
+            ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-600/20' 
+            : 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-indigo-600/20'
+        }`}
+      >
+        {authLoading ? 'Signing In...' : 'Sign In'}
+      </button>
+      
+      <div className="flex justify-between items-center mt-6 text-sm">
+        <button 
+          type="button" 
+          onClick={() => { setShowRoleSelection(true); setAuthError(''); setAuthSuccessMsg(''); }} 
+          className={`font-bold transition-colors text-slate-500 ${theme === 'doctor' ? 'hover:text-emerald-600' : 'hover:text-indigo-600'}`}
+        >
+          ← Back
+        </button>
+        <button 
+          type="button" 
+          onClick={() => { setIsLoginView(false); setAuthError(''); setAuthSuccessMsg(''); }} 
+          className={`font-bold hover:underline ${theme === 'doctor' ? 'text-emerald-600' : 'text-indigo-600'}`}
+        >
+          Create Account
+        </button>
+      </div>
+    </form>
+  );
 
-        <div className="bg-indigo-50/50 p-5 rounded-2xl border border-indigo-100/50 max-w-md mx-auto">
-          <p className="text-xs font-bold text-indigo-700">The meeting will open in a new tab. Please keep this dashboard tab open so you can continue after the call.</p>
+  // Render Register Form
+  const renderRegisterForm = (role: string, theme = "patient") => (
+    <form onSubmit={(e) => { e.preventDefault(); handleAuth(e); }} className="w-full text-left animate-fadeIn">
+      {authError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl font-semibold flex items-center gap-2">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" /> {authError}
         </div>
-
-        <div className="pt-2 max-w-sm mx-auto">
-          <a
-            href={videoRoomUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black py-4 px-6 rounded-2xl transition-all shadow-lg hover:-translate-y-0.5 active:scale-95"
-          >
-            <Video className="w-5 h-5"/> Launch Google Meet
-          </a>
+      )}
+      {authSuccessMsg && (
+        <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 text-sm rounded-2xl font-semibold flex items-center gap-2">
+          <CheckCircle2 className="w-5 h-5 flex-shrink-0" /> {authSuccessMsg}
         </div>
-
-        <div className="border-t border-slate-100 pt-6 flex justify-center">
-          <button
-            onClick={handleEndCall}
-            className="bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold py-3 px-8 rounded-2xl text-sm transition-all border border-rose-100 hover:border-rose-200"
-          >
-            End Call & Continue
-          </button>
+      )}
+      <div className="flex gap-4">
+        <div className="w-1/2">
+          <ElegantInput id={`${role}-reg-fname`} label="First Name" value={formData.first_name} onChange={(e: any) => setFormData({...formData, first_name: e.target.value})} required theme={theme} />
+        </div>
+        <div className="w-1/2">
+          <ElegantInput id={`${role}-reg-lname`} label="Last Name" value={formData.last_name} onChange={(e: any) => setFormData({...formData, last_name: e.target.value})} required theme={theme} />
         </div>
       </div>
-    </div>
+      <ElegantInput id={`${role}-reg-email`} label="Email Address" type="email" value={authEmail} onChange={(e: any) => setAuthEmail(e.target.value)} required theme={theme} />
+      <ElegantInput id={`${role}-reg-pass`} label="Password" type="password" value={authPassword} onChange={(e: any) => setAuthPassword(e.target.value)} required theme={theme} />
+      
+      <button 
+        type="submit" 
+        disabled={authLoading} 
+        className={`w-full mt-2 py-3.5 font-bold rounded-2xl transition-all active:scale-[0.98] disabled:opacity-60 text-white shadow-lg ${
+          theme === 'doctor' 
+            ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 shadow-emerald-600/20' 
+            : 'bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 shadow-indigo-600/20'
+        }`}
+      >
+        {authLoading ? 'Creating...' : 'Create Account'}
+      </button>
+      
+      <div className="flex justify-between items-center mt-6 text-sm">
+        <button 
+          type="button" 
+          onClick={() => { setShowRoleSelection(true); setAuthError(''); setAuthSuccessMsg(''); }} 
+          className={`font-bold transition-colors text-slate-500 ${theme === 'doctor' ? 'hover:text-emerald-600' : 'hover:text-indigo-600'}`}
+        >
+          ← Back
+        </button>
+        <button 
+          type="button" 
+          onClick={() => { setIsLoginView(true); setAuthError(''); setAuthSuccessMsg(''); }} 
+          className={`font-bold hover:underline ${theme === 'doctor' ? 'text-emerald-600' : 'text-indigo-600'}`}
+        >
+          Already have an account? Sign In
+        </button>
+      </div>
+    </form>
   );
 
   // ── AUTH SCREEN ───────────────────────────────────────────────────────────
   if (!user) {
     return (
-      <main className="min-h-screen bg-slate-50 flex items-center justify-center p-6 relative overflow-hidden">
-        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-indigo-200/50 rounded-full blur-[100px] z-0"></div>
-        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-violet-200/50 rounded-full blur-[100px] z-0"></div>
-        <div className="max-w-md w-full bg-white/80 backdrop-blur-2xl p-10 md:p-12 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] border border-white/60 relative z-10">
-          <div className="text-center mb-10">
-            <h1 className="text-5xl font-black bg-clip-text text-transparent bg-gradient-to-r from-indigo-900 to-violet-800 tracking-tighter mb-3">8liv</h1>
-            <p className="text-slate-500 font-bold text-sm tracking-wide uppercase">Medical Weight Loss</p>
+      <main className="min-h-screen w-full flex flex-col bg-slate-50 overflow-hidden font-sans">
+        {/* Top Bar with Logo */}
+        <div className="w-full flex justify-center pt-8 pb-4">
+          <img src="/images/logo%20loss.png" alt="8liv Logo" className="h-36 md:h-44 w-auto object-contain transition-all" />
+        </div>
+
+        {/* Main Split Container */}
+        <div className="flex-1 flex w-full max-w-7xl mx-auto px-8 pb-12 rounded-[2rem] overflow-hidden">
+          
+          {/* --- LEFT PANEL: PATIENT --- */}
+          <div 
+            className={`relative flex flex-col items-center justify-center bg-white transition-all duration-700 ease-in-out overflow-hidden cursor-pointer rounded-l-[2rem]
+              ${showRoleSelection ? 'w-1/2 hover:bg-slate-50' : selectedAuthRole === 'patient' ? 'w-[75%]' : 'w-[25%] opacity-50'}`}
+            onClick={() => (showRoleSelection || selectedAuthRole !== 'patient') && handleSelectRole('patient')}
+          >
+            {/* Subtle Background Pattern/Watermark */}
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none flex items-center justify-center">
+              <svg className="w-96 h-96 text-slate-800" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+            </div>
+
+            <div className={`relative z-10 text-center px-8 transition-all duration-500 ${selectedAuthRole === 'patient' && !showRoleSelection ? 'mt-[-30px]' : ''}`}>
+              <h2 className="text-4xl font-serif font-black bg-clip-text text-transparent bg-gradient-to-r from-indigo-900 to-violet-800 mb-4">
+                I am a Member
+              </h2>
+              {showRoleSelection && (
+                <p className="text-slate-500 font-bold mb-8 max-w-xs mx-auto">
+                  Begin your personalized journey to better health.
+                </p>
+              )}
+            </div>
+
+            {/* Patient Form (Hidden until selected) */}
+            {!showRoleSelection && selectedAuthRole === 'patient' && (
+              <div className="relative z-10 w-full max-w-sm px-8 animate-fadeIn">
+                {isLoginView ? renderLoginForm('patient', "patient") : renderRegisterForm('patient', "patient")}
+              </div>
+            )}
           </div>
-          <h2 className="text-2xl font-black text-slate-800 mb-8 text-center">{isLoginView ? 'Welcome Back 👋' : 'Create Account ✨'}</h2>
-          {authError && <div className="bg-red-50/80 text-red-600 font-bold p-4 rounded-2xl mb-6 text-sm border border-red-100 flex items-center gap-2"><AlertCircle className="w-5 h-5 flex-shrink-0"/> {authError}</div>}
-          <form onSubmit={handleAuth} className="space-y-6">
-            <div><label className={labelCls}>Email</label><input type="email" value={authEmail} onChange={e => setAuthEmail(e.target.value)} required className={inputCls} placeholder="you@email.com"/></div>
-            <div><label className={labelCls}>Password</label><input type="password" value={authPassword} onChange={e => setAuthPassword(e.target.value)} required className={inputCls} minLength={6} placeholder="Min 6 characters"/></div>
-            <button type="submit" disabled={authLoading} className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 disabled:opacity-60 text-white font-bold py-4 rounded-2xl shadow-lg hover:-translate-y-1 transition-all active:scale-[0.98]">{authLoading ? 'Processing...' : (isLoginView ? 'Sign In' : 'Create Account')}</button>
-          </form>
-          <button onClick={() => { setIsLoginView(!isLoginView); setAuthError(''); }} className="w-full text-center mt-8 text-sm text-indigo-600 font-bold hover:text-indigo-800 transition-colors">
-            {isLoginView ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-          </button>
+
+          {/* Divider */}
+          <div className="w-[1px] bg-slate-100"></div>
+
+          {/* --- RIGHT PANEL: DOCTOR --- */}
+          <div 
+            className={`relative flex flex-col items-center justify-center bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-100 text-slate-800 transition-all duration-700 ease-in-out overflow-hidden cursor-pointer rounded-r-[2rem]
+              ${showRoleSelection ? 'w-1/2 hover:from-emerald-100/90 hover:via-teal-50 hover:to-emerald-200/90' : selectedAuthRole === 'doctor' ? 'w-[75%]' : 'w-[25%] opacity-70'}`}
+            onClick={() => (showRoleSelection || selectedAuthRole !== 'doctor') && handleSelectRole('doctor')}
+          >
+            {/* Subtle Background Pattern/Watermark */}
+            <div className="absolute inset-0 opacity-[0.03] pointer-events-none flex items-center justify-center">
+              <svg className="w-96 h-96 text-emerald-800" fill="currentColor" viewBox="0 0 24 24"><path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 3c1.93 0 3.5 1.57 3.5 3.5S13.93 13 12 13s-3.5-1.57-3.5-3.5S10.07 6 12 6zm7 13H5v-.23c0-.62.28-1.2.76-1.58C7.47 15.82 9.64 15 12 15s4.53.82 6.24 2.19c.48.38.76.97.76 1.58V19z"/></svg>
+            </div>
+
+            <div className={`relative z-10 text-center px-8 transition-all duration-500 ${selectedAuthRole === 'doctor' && !showRoleSelection ? 'mt-[-30px]' : ''}`}>
+              <h2 className="text-4xl font-serif font-black bg-clip-text text-transparent bg-gradient-to-r from-emerald-900 to-teal-800 mb-4">
+                Medical Professional
+              </h2>
+              {showRoleSelection && (
+                <p className="text-emerald-700 font-bold mb-8 max-w-xs mx-auto">
+                  Access your dashboard and member profiles securely.
+                </p>
+              )}
+            </div>
+
+            {/* Doctor Form (Hidden until selected) */}
+            {!showRoleSelection && selectedAuthRole === 'doctor' && (
+              <div className="relative z-10 w-full max-w-sm px-8 animate-fadeIn">
+                {isLoginView ? renderLoginForm('doctor', 'doctor') : renderRegisterForm('doctor', 'doctor')}
+              </div>
+            )}
+          </div>
+
         </div>
       </main>
     );
@@ -1257,6 +1649,14 @@ export default function Home() {
       <div className="fixed bottom-[-20%] right-[-10%] w-[50%] h-[50%] bg-violet-200/40 rounded-full blur-[120px] pointer-events-none z-0"></div>
 
 
+
+      {/* ── Logout Button (always visible when logged in) ──────────────── */}
+      <button
+        onClick={handleLogout}
+        className="fixed top-5 right-5 z-50 flex items-center gap-2 bg-white/80 backdrop-blur-xl border border-slate-200 text-slate-600 hover:text-rose-600 hover:border-rose-200 hover:bg-rose-50/80 font-bold py-2.5 px-4 rounded-2xl shadow-sm transition-all text-sm"
+      >
+        <LogOut className="w-4 h-4" /> Sign Out
+      </button>
 
       {/* ── STEP 0 ─────────────────────────────────────────────────────────── */}
       {step === 0 && (
@@ -1316,7 +1716,7 @@ export default function Home() {
                 <h2 className="text-3xl font-black text-slate-900 flex items-center gap-3"><User className="text-indigo-500 w-8 h-8"/> Contact Info</h2>
                 {isEditing && <span className="bg-amber-100 text-amber-800 text-xs font-black px-4 py-2 rounded-full">EDIT MODE</span>}
               </div>
-              <p className="text-slate-500 mb-8 font-medium">How can you be reached? Our medical teams use email and text for patient communication.</p>
+              <p className="text-slate-500 mb-8 font-medium">How can you be reached? Our medical teams use email and text for member communication.</p>
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-6">
                   <div><label className={labelCls}>First Name</label><input type="text" name="first_name" value={formData.first_name} onChange={handleInputChange} className={inputCls} placeholder="John"/></div>
@@ -1418,8 +1818,20 @@ export default function Home() {
                 </div>
                 <div className="flex gap-4 mt-10">
                   <button onClick={() => setStep(2)} className={btnSecondaryCls}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Back</button>
-                  <button onClick={() => setStep(4)} className={btnPrimaryCls}>Continue <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform"/></button>
+                  {/* Continue / Next button */}
+                  <button
+                    onClick={handleHealthStepNext}   // <-- Changed this line
+                    className={btnPrimaryCls}
+                  >
+                    Continue
+                    <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                  </button>
                 </div>
+                {showIneligibleMsg && (
+                  <div className="mt-6 p-4 bg-red-50 border border-red-400 text-red-700 rounded-lg text-center font-semibold animate-fadeIn">
+                    YOUR HEALTH IS MORE IMPORTANT FOR US TO CONTINUE THE PROCESS , WE ARE SORRY TO INFORM YOU THAT YOU WONT BE ABLE TO CONTINUE FURTHER.
+                  </div>
+                )}
               </div>
             </>)}
 
@@ -1469,8 +1881,32 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── STEP 5 ─────────────────────────────────────────────────────────── */}
-      {step === 5 && assessmentResult && (
+      {/* ── STEP 5: PROJECTION ─────────────────────────────────────────────── */}
+      {step === 5 && !assessmentResult && (
+        <div className="max-w-2xl w-full bg-white/80 backdrop-blur-xl p-10 md:p-12 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] border border-white/60 relative z-10 animate-fadeIn text-center">
+          <h2 className="text-3xl font-black text-slate-800 mb-8 tracking-tight">Your Projection</h2>
+          
+          <div className="bg-slate-50/80 p-8 rounded-3xl border border-slate-100 mb-8">
+            <p className="text-lg text-slate-600 mb-4 font-semibold leading-relaxed">
+              With medication, you'll lose <span className="font-black text-slate-800">0.5 to 1 kg</span> per week.
+            </p>
+            <p className="text-lg text-slate-600 mb-6 font-semibold leading-relaxed">
+              It will take about <span className="font-black text-emerald-600">{getProjectionData().minWeeks} - {getProjectionData().maxWeeks} weeks</span> to reach your goal weight of <span className="font-black text-slate-800">{formData.goal_weight_kg || formData.goal_weight || 0} kg</span>.
+            </p>
+          </div>
+
+          <button
+            onClick={() => setStep(6)}
+            className={btnPrimaryCls} // Reusing primary button class
+          >
+            NEXT
+            <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+          </button>
+        </div>
+      )}
+
+      {/* ── STEP 9: ASSESSMENT RESULT ─────────────────────────────────────────── */}
+      {step === 9 && assessmentResult && (
         <div className="max-w-5xl w-full flex gap-8 items-stretch relative z-10 animate-fadeIn">
           <StepImagePanel stepNum={5}/>
           <div className="flex-1 bg-white/80 backdrop-blur-xl p-10 md:p-12 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] border border-white/60">
@@ -1499,15 +1935,478 @@ export default function Home() {
             )}
             <p className="text-slate-600 font-semibold text-lg leading-relaxed mb-10 text-center">{assessmentResult.message}</p>
             <div className="flex gap-4">
-              <button onClick={() => setStep(4)} className={btnSecondaryCls}>Back</button>
+              <button onClick={() => setStep(8)} className={btnSecondaryCls}>Back</button>
               {assessmentResult.is_eligible ? <button onClick={handleConsultationPayment} disabled={paymentLoading} className={btnPrimaryCls}>{paymentLoading ? 'Connecting...' : 'Pay ₹499 & Book Video Call'} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform"/></button> : <button onClick={() => setStep(0)} className="flex-1 bg-slate-900 hover:bg-black text-white font-bold py-4 rounded-2xl transition-all shadow-xl hover:-translate-y-1">Start Over</button>}
             </div>
           </div>
         </div>
       )}
 
-      {/* ── STEP 6: PLAN ─────────────────────────────────────────────────────── */}
+      {/* ── STEP 6: MEDICATION HISTORY CHOICE ─────────────────────────────────── */}
       {step === 6 && (
+        <div className="max-w-5xl w-full flex gap-8 items-stretch relative z-10 animate-fadeIn">
+          <StepImagePanel stepNum={4} />
+          <div className="flex-1 bg-white/80 backdrop-blur-xl p-10 md:p-12 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] border border-white/60">
+            <h2 className="text-3xl font-black text-slate-900 mb-8 flex items-center gap-3">
+              <Pill className="text-indigo-500 w-8 h-8" /> Medication History
+            </h2>
+            <p className="text-slate-600 font-semibold text-lg leading-relaxed mb-8">
+              Have you taken medication for weight loss within the past weeks?
+            </p>
+            <div className="space-y-4 mb-10">
+              {[
+                { value: 'glp1', label: "Yes, I've taken GLP-1 medication" },
+                { value: 'other', label: "Yes, other medication" },
+                { value: 'none', label: "No medication" }
+              ].map((option) => {
+                const checked = medicationHistoryChoice === option.value;
+                return (
+                  <label
+                    key={option.value}
+                    onClick={() => setMedicationHistoryChoice(option.value)}
+                    className={`group flex items-center gap-4 p-5 rounded-2xl border-2 cursor-pointer transition-all hover:shadow-md hover:-translate-y-0.5 ${
+                      checked
+                        ? 'border-indigo-500 bg-indigo-50/80'
+                        : 'border-slate-100 bg-white hover:border-slate-300'
+                    }`}
+                  >
+                    <div
+                      className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${
+                        checked ? 'border-indigo-500 bg-indigo-500 scale-110' : 'border-slate-300'
+                      }`}
+                    >
+                      {checked && <div className="w-2.5 h-2.5 bg-white rounded-full" />}
+                    </div>
+                    <span className={`text-sm font-semibold ${checked ? 'text-indigo-900' : 'text-slate-700'}`}>
+                      {option.label}
+                    </span>
+                  </label>
+                );
+              })}
+            </div>
+            <div className="flex gap-4 mt-10">
+              <button onClick={() => setStep(5)} className={btnSecondaryCls}>
+                <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" /> Back
+              </button>
+              <button
+                disabled={!medicationHistoryChoice}
+                onClick={() => setStep(7)}
+                className={btnPrimaryCls}
+              >
+                Continue <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── STEP 7: MEDICATION BRANCH DETAILS ─────────────────────────────────── */}
+      {step === 7 && (
+        <div className="max-w-5xl w-full flex gap-8 items-stretch relative z-10 animate-fadeIn">
+          <StepImagePanel stepNum={4} />
+          <div className="flex-1 bg-white/80 backdrop-blur-xl p-10 md:p-12 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] border border-white/60 overflow-y-auto max-h-[75vh] custom-scrollbar">
+            
+            {/* BRANCH 1: GLP-1 */}
+            {medicationHistoryChoice === 'glp1' && (
+              <div className="space-y-8 animate-fadeIn">
+                <h2 className="text-3xl font-black text-slate-900 flex items-center gap-3">
+                  <Pill className="text-indigo-500 w-8 h-8" /> GLP-1 History Details
+                </h2>
+                
+                <div className="bg-indigo-50/40 p-8 rounded-3xl space-y-6 border border-indigo-100/50">
+                  <div>
+                    <label className={labelCls}>Which GLP-1 medication did you take?</label>
+                    <input
+                      type="text"
+                      value={glp1Details}
+                      onChange={(e) => setGlp1Details(e.target.value)}
+                      placeholder="Semaglutide, Ozempic, Wegovy, etc."
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Last dose timeframe</label>
+                    <select
+                      value={lastDoseTimeframe}
+                      onChange={(e) => setLastDoseTimeframe(e.target.value)}
+                      className={inputCls}
+                    >
+                      <option value="">Select...</option>
+                      <option value="0-5 days">0-5 days ago</option>
+                      <option value="6-10 days">6-10 days ago</option>
+                      <option value="11-14 days">11-14 days ago</option>
+                      <option value="More than 2 weeks">2-4 weeks ago</option>
+                      <option value="More than 4 weeks">&gt; 4 weeks ago</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>Starting weight (kg) on medication</label>
+                    <input
+                      type="number"
+                      value={medStartingWeight}
+                      onChange={(e) => setMedStartingWeight(e.target.value)}
+                      placeholder="e.g. 85"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div className="bg-white border-2 border-dashed border-indigo-200 hover:border-indigo-400 hover:shadow-md transition-all rounded-3xl p-8 text-center group cursor-pointer relative">
+                    <div className="mx-auto w-16 h-16 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                      <FileText className="w-8 h-8" />
+                    </div>
+                    <label className="block text-base font-black text-slate-800 mb-2">Upload Medication Photo / Prescription</label>
+                    <p className="text-sm text-slate-500 mb-5 font-medium">Max 15 MB. JPG, PNG, or PDF.</p>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={(e) => setMedicationPhoto(e.target.files ? e.target.files[0] : null)}
+                      className="block w-full text-sm text-slate-500 file:mr-4 file:py-3 file:px-6 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer"
+                    />
+                    {medicationPhoto && (
+                      <p className="mt-3 text-emerald-600 font-bold text-sm">Selected file: {medicationPhoto.name}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-slate-50/80 p-8 rounded-3xl border border-slate-100 space-y-4">
+                  <p className="text-sm font-bold text-slate-700 leading-relaxed">
+                    Do you agree to only obtain weight loss medication through this program moving forward? <span className="font-normal text-gray-500">(It's important not to "stack" weight loss medications.)</span>
+                  </p>
+                  <div className="flex gap-4">
+                    {['No', 'Yes'].map((opt) => {
+                      const checked = stackingConsent === opt;
+                      return (
+                        <label
+                          key={opt}
+                          onClick={() => setStackingConsent(opt)}
+                          className={`flex-1 flex items-center justify-center p-4 border-2 rounded-2xl cursor-pointer transition-all font-bold text-sm ${
+                            checked ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-600'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            value={opt}
+                            checked={checked}
+                            onChange={() => {}}
+                            className="mr-2 h-4 w-4 text-emerald-600 border-gray-300 focus:ring-emerald-500"
+                          />
+                          {opt}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* BRANCH 2: OTHER MEDICATION */}
+            {medicationHistoryChoice === 'other' && (
+              <div className="space-y-8 animate-fadeIn">
+                <h2 className="text-3xl font-black text-slate-900 flex items-center gap-3">
+                  <Pill className="text-indigo-500 w-8 h-8" /> Medication Details
+                </h2>
+                
+                <div className="bg-indigo-50/40 p-8 rounded-3xl space-y-6 border border-indigo-100/50">
+                  <div>
+                    <label className={labelCls}>Which weight loss medication did you take?</label>
+                    <input
+                      type="text"
+                      value={otherMedDetails}
+                      onChange={(e) => setOtherMedDetails(e.target.value)}
+                      placeholder="Name, dose, and frequency..."
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Starting weight (kg) on medication</label>
+                    <input
+                      type="number"
+                      value={otherMedStartingWeight}
+                      onChange={(e) => setOtherMedStartingWeight(e.target.value)}
+                      placeholder="e.g. 85"
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-slate-50/80 p-8 rounded-3xl border border-slate-100 space-y-4">
+                  <p className="text-sm font-bold text-slate-700 leading-relaxed">
+                    Do you agree to only obtain weight loss medication through this program moving forward? <span className="font-normal text-gray-500">(It's important not to "stack" weight loss medications.)</span>
+                  </p>
+                  <div className="flex gap-4">
+                    {['No', 'Yes'].map((opt) => {
+                      const checked = stackingConsent === opt;
+                      return (
+                        <label
+                          key={opt}
+                          onClick={() => setStackingConsent(opt)}
+                          className={`flex-1 flex items-center justify-center p-4 border-2 rounded-2xl cursor-pointer transition-all font-bold text-sm ${
+                            checked ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-600'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            value={opt}
+                            checked={checked}
+                            onChange={() => {}}
+                            className="mr-2 h-4 w-4 text-emerald-600 border-gray-300 focus:ring-emerald-500"
+                          />
+                          {opt}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* BRANCH 3: NO MEDICATION */}
+            {(medicationHistoryChoice === 'none' || medicationHistoryChoice === 'no') && (
+              <div className="space-y-8 animate-fadeIn">
+                <h2 className="text-3xl font-black text-slate-900 flex items-center gap-3">
+                  <Activity className="text-indigo-500 w-8 h-8" /> Weight Program History
+                </h2>
+                
+                <div className="bg-slate-50/80 p-8 rounded-3xl border border-slate-100 space-y-4">
+                  <p className="text-sm font-bold text-slate-700 leading-relaxed">
+                    Have you ever tried to lose weight in a weight management program?
+                  </p>
+                  <div className="flex gap-4">
+                    {['Yes', 'No'].map((opt) => {
+                      const checked = triedWeightProgram === opt;
+                      return (
+                        <label
+                          key={opt}
+                          onClick={() => setTriedWeightProgram(opt)}
+                          className={`flex-1 flex items-center justify-center p-4 border-2 rounded-2xl cursor-pointer transition-all font-bold text-sm ${
+                            checked ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-600'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            value={opt}
+                            checked={checked}
+                            onChange={() => {}}
+                            className="mr-2 h-4 w-4 text-emerald-600 border-gray-300 focus:ring-emerald-500"
+                          />
+                          {opt}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="bg-slate-50/80 p-8 rounded-3xl border border-slate-100 space-y-4">
+                  <p className="text-sm font-bold text-slate-700 leading-relaxed">
+                    Do you have any further information which you would like our medical team to know?
+                  </p>
+                  <div className="flex gap-4">
+                    {['Yes', 'No'].map((opt) => {
+                      const checked = hasExtraInfo === opt;
+                      return (
+                        <label
+                          key={opt}
+                          onClick={() => setHasExtraInfo(opt)}
+                          className={`flex-1 flex items-center justify-center p-4 border-2 rounded-2xl cursor-pointer transition-all font-bold text-sm ${
+                            checked ? 'border-emerald-500 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-600'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            value={opt}
+                            checked={checked}
+                            onChange={() => {}}
+                            className="mr-2 h-4 w-4 text-emerald-600 border-gray-300 focus:ring-emerald-500"
+                          />
+                          {opt}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {hasExtraInfo === 'Yes' && (
+                  <div className="animate-fadeIn">
+                    <label className={labelCls}>Please specify details below</label>
+                    <textarea
+                      value={extraInfoText}
+                      onChange={(e) => setExtraInfoText(e.target.value)}
+                      placeholder="Type details here..."
+                      className={`${inputCls} p-5`}
+                      rows={4}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* COMMON NAVIGATION */}
+            <div className="flex gap-4 mt-10">
+              <button onClick={() => setStep(6)} className={btnSecondaryCls}>
+                <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" /> Back
+              </button>
+              <button
+                onClick={() => {
+                  if (!summaryFirstName) setSummaryFirstName(formData.first_name);
+                  if (!summaryLastName) setSummaryLastName(formData.last_name);
+                  setStep(8);
+                }}
+                className={btnPrimaryCls}
+              >
+                Next <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── STEP 8: SUMMARY & FINAL DETAILS ─────────────────────────────────── */}
+      {step === 8 && (
+        <div className="max-w-5xl w-full flex gap-8 items-stretch relative z-10 animate-fadeIn">
+          <StepImagePanel stepNum={4} />
+          <div className="flex-1 bg-white/80 backdrop-blur-xl p-10 md:p-12 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] border border-white/60 overflow-y-auto max-h-[75vh] custom-scrollbar">
+            <h2 className="text-3xl font-black text-slate-900 mb-6 flex items-center gap-3">
+              <ShieldCheck className="text-indigo-500 w-8 h-8" /> Eligibility Check
+            </h2>
+            <p className="text-slate-600 font-semibold text-sm leading-relaxed mb-8">
+              Please review your details and enter your shipping information below to check your eligibility.
+            </p>
+
+            <div className="space-y-6">
+              {/* Summary Cards */}
+              <div className="grid md:grid-cols-2 gap-6">
+                {/* Vitals Summary */}
+                <div className="bg-slate-50/80 p-6 rounded-3xl border border-slate-100 space-y-3">
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Scale className="w-3.5 h-3.5 text-slate-400" /> Vitals & Goals
+                  </p>
+                  <div className="text-xs font-bold text-slate-700 space-y-1.5">
+                    <p>Height: <span className="text-slate-900 font-extrabold">{formData.height_cm} cm</span></p>
+                    <p>Weight: <span className="text-slate-900 font-extrabold">{formData.weight_kg} kg</span></p>
+                    <p>Goal Weight: <span className="text-slate-900 font-extrabold">{formData.goal_weight_kg} kg</span></p>
+                    <p>Biological Sex: <span className="text-slate-900 font-extrabold capitalize">{formData.gender}</span></p>
+                    <p>DOB: <span className="text-slate-900 font-extrabold">{formData.dob_day}/{formData.dob_month}/{formData.dob_year}</span></p>
+                  </div>
+                </div>
+
+                {/* Health Questionnaire Summary */}
+                <div className="bg-slate-50/80 p-6 rounded-3xl border border-slate-100 space-y-3">
+                  <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Activity className="w-3.5 h-3.5 text-slate-400" /> Health Screening
+                  </p>
+                  <div className="text-xs font-bold text-slate-700 space-y-1.5">
+                    <p>Blood Pressure: <span className="text-slate-900 font-extrabold">{formData.blood_pressure_range}</span></p>
+                    <p>Heart Rate: <span className="text-slate-900 font-extrabold">{formData.resting_heart_rate}</span></p>
+                    <p>Severe Conditions: <span className="text-slate-900 font-extrabold">
+                      {formData.health_conditions_one.includes('None of the above') ? 'None' : formData.health_conditions_one.join(', ') || 'None'}
+                    </span></p>
+                    <p>Medical Conditions: <span className="text-slate-900 font-extrabold">
+                      {formData.health_conditions_two.includes('None of the above') ? 'None' : formData.health_conditions_two.join(', ') || 'None'}
+                    </span></p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Medication History Summary */}
+              <div className="bg-slate-50/80 p-6 rounded-3xl border border-slate-100 space-y-3">
+                <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Pill className="w-3.5 h-3.5 text-slate-400" /> Medication & Programs
+                </p>
+                <div className="text-xs font-bold text-slate-700 space-y-1.5">
+                  <p>Medication History: <span className="text-slate-900 font-extrabold">
+                    {medicationHistoryChoice === 'glp1' ? 'Yes, GLP-1' : medicationHistoryChoice === 'other' ? 'Yes, other' : 'No prior medication'}
+                  </span></p>
+                  {medicationHistoryChoice === 'glp1' && (
+                    <>
+                      <p>GLP-1 Details: <span className="text-slate-900 font-extrabold">{glp1Details || 'N/A'}</span></p>
+                      <p>Last Dose Timeframe: <span className="text-slate-900 font-extrabold">{lastDoseTimeframe || 'N/A'}</span></p>
+                      <p>Starting Weight: <span className="text-slate-900 font-extrabold">{medStartingWeight || 'N/A'} kg</span></p>
+                      <p>Prescription Uploaded: <span className="text-emerald-600 font-extrabold">{medicationPhoto ? 'Yes' : 'No'}</span></p>
+                      <p>Stacking Consent: <span className="text-slate-900 font-extrabold">{stackingConsent}</span></p>
+                    </>
+                  )}
+                  {medicationHistoryChoice === 'other' && (
+                    <>
+                      <p>Other Details: <span className="text-slate-900 font-extrabold">{otherMedDetails || 'N/A'}</span></p>
+                      <p>Starting Weight: <span className="text-slate-900 font-extrabold">{otherMedStartingWeight || 'N/A'} kg</span></p>
+                      <p>Stacking Consent: <span className="text-slate-900 font-extrabold">{stackingConsent}</span></p>
+                    </>
+                  )}
+                  {(medicationHistoryChoice === 'none' || medicationHistoryChoice === 'no') && (
+                    <>
+                      <p>Tried weight program: <span className="text-slate-900 font-extrabold">{triedWeightProgram}</span></p>
+                      <p>Has additional info: <span className="text-slate-900 font-extrabold">{hasExtraInfo}</span></p>
+                      {hasExtraInfo === 'Yes' && <p>Extra info: <span className="text-slate-900 font-semibold">{extraInfoText}</span></p>}
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Final Details Form */}
+              <div className="bg-indigo-50/40 p-8 rounded-3xl border border-indigo-100/50 space-y-6">
+                <p className="text-xs font-black text-indigo-700 uppercase tracking-widest flex items-center gap-1.5">
+                  <User className="w-4 h-4 text-indigo-600" /> Shipping & Details Confirmation
+                </p>
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <label className={labelCls}>First Name</label>
+                    <input
+                      type="text"
+                      value={summaryFirstName}
+                      onChange={(e) => setSummaryFirstName(e.target.value)}
+                      placeholder="First name"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Last Name</label>
+                    <input
+                      type="text"
+                      value={summaryLastName}
+                      onChange={(e) => setSummaryLastName(e.target.value)}
+                      placeholder="Last name"
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className={labelCls}>Shipping State</label>
+                  <select
+                    value={shippingState}
+                    onChange={(e) => setShippingState(e.target.value)}
+                    className={inputCls}
+                  >
+                    <option value="">Select State...</option>
+                    {INDIAN_STATES.map((state) => (
+                      <option key={state} value={state}>
+                        {state}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Navigation */}
+              <div className="flex gap-4 mt-10">
+                <button onClick={() => setStep(7)} className={btnSecondaryCls}>
+                  <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" /> Back
+                </button>
+                <button
+                  disabled={!summaryFirstName.trim() || !summaryLastName.trim() || !shippingState || loading}
+                  onClick={submitAssessment}
+                  className={btnPrimaryCls}
+                >
+                  {loading ? 'Checking Eligibility...' : 'Check Eligibility'}
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── STEP 10: PLAN ─────────────────────────────────────────────────────── */}
+      {step === 10 && (
         <div className="max-w-5xl w-full flex gap-8 items-stretch relative z-10 animate-fadeIn">
           <StepImagePanel stepNum={6}/>
           <div className="flex-1 bg-white/80 backdrop-blur-xl p-10 md:p-12 rounded-[2.5rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.05)] border border-white/60">
@@ -1516,8 +2415,8 @@ export default function Home() {
               <p className="text-sm font-bold text-emerald-600 bg-emerald-50 inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-100"><ShieldCheck className="w-4 h-4"/> HIPAA Compliant & Secure</p>
             </div>
             <div className="grid grid-cols-2 gap-6 mb-8">
-              <div><label className={labelCls}>First Name</label><input type="text" value={formData.first_name} disabled className={`${inputCls} bg-slate-50 cursor-not-allowed`}/></div>
-              <div><label className={labelCls}>Last Name</label><input type="text" value={formData.last_name} disabled className={`${inputCls} bg-slate-50 cursor-not-allowed`}/></div>
+              <div><label className={labelCls}>First Name</label><input type="text" value={summaryFirstName || formData.first_name} disabled className={`${inputCls} bg-slate-50 cursor-not-allowed`}/></div>
+              <div><label className={labelCls}>Last Name</label><input type="text" value={summaryLastName || formData.last_name} disabled className={`${inputCls} bg-slate-50 cursor-not-allowed`}/></div>
             </div>
 
             {/* ── FIX 3: Shipping state bound to shippingState (separate from formData) ── */}
@@ -1529,15 +2428,12 @@ export default function Home() {
                 className={inputCls}
                 required
               >
-                <option value="">Select Region...</option>
-                <option value="Tamil Nadu">Tamil Nadu</option>
-                <option value="Kerala">Kerala</option>
-                <option value="Karnataka">Karnataka</option>
-                <option value="Andhra Pradesh">Andhra Pradesh</option>
-                <option value="Telangana">Telangana</option>
-                <option value="Maharashtra">Maharashtra</option>
-                <option value="Delhi">Delhi</option>
-                <option value="Other">Other</option>
+                <option value="">Select State...</option>
+                {INDIAN_STATES.map((state) => (
+                  <option key={state} value={state}>
+                    {state}
+                  </option>
+                ))}
               </select>
               {shippingState && (
                 <p className="text-xs text-emerald-600 font-bold mt-2 flex items-center gap-1"><CheckCircle2 className="w-3.5 h-3.5"/> Medication will be shipped to {shippingState}</p>
@@ -1561,7 +2457,7 @@ export default function Home() {
             {/* FIX: Button disabled until BOTH membership AND shipping_state are filled */}
             {selectedMembership && shippingState && (
               <div className="mt-12 flex gap-4 pt-10 border-t border-slate-100 animate-fadeIn">
-                <button onClick={() => setStep(8)} className={btnSecondaryCls}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Cancel</button>
+                <button onClick={() => setStep(12)} className={btnSecondaryCls}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Cancel</button>
                 <button onClick={handleMembershipPayment} disabled={paymentLoading} className={`${btnPrimaryCls} py-5 text-lg`}>{paymentLoading ? 'Connecting Gateway...' : 'Proceed to Payment'}</button>
               </div>
             )}
@@ -1572,8 +2468,8 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── STEP 7 ─────────────────────────────────────────────────────────── */}
-      {step === 7 && (
+      {/* ── STEP 11: PAYMENT COMPLETE ─────────────────────────────────────────── */}
+      {step === 11 && (
         <div className="max-w-2xl w-full bg-white p-16 rounded-[3rem] shadow-2xl text-center mt-12 border-t-[12px] border-emerald-500 animate-fadeIn relative overflow-hidden z-10">
           <div className="absolute top-[-50px] right-[-50px] w-40 h-40 bg-emerald-100 rounded-full blur-3xl -z-10"></div>
           <div className="flex justify-center mb-8"><CheckCircle2 className="w-32 h-32 text-emerald-500 drop-shadow-md"/></div>
@@ -1583,12 +2479,12 @@ export default function Home() {
             <p>🏆 Membership: <span className="font-black text-amber-600 capitalize">{selectedMembership}</span></p>
             <p className="mt-1">📦 Shipping to: <span className="font-black text-slate-900">{shippingState}</span></p>
           </div>
-          <button onClick={() => setStep(8)} className={`${btnPrimaryCls} py-5 text-lg w-full`}>Enter Dashboard <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform"/></button>
+          <button onClick={() => setStep(12)} className={`${btnPrimaryCls} py-5 text-lg w-full`}>Enter Dashboard <ArrowRight className="w-6 h-6 group-hover:translate-x-1 transition-transform"/></button>
         </div>
       )}
 
-      {/* ── STEP 8: DASHBOARD ──────────────────────────────────────────────── */}
-      {step === 8 && (
+      {/* ── STEP 12: DASHBOARD ──────────────────────────────────────────────── */}
+      {step === 12 && (
         <div className="w-full max-w-6xl mt-4 animate-fadeIn relative z-10">
 
           {/* ── REMINDER TOAST NOTIFICATION ── */}
@@ -1610,7 +2506,7 @@ export default function Home() {
                 <span className="text-white font-black text-sm">{(formData.first_name?.[0] || user?.email?.[0] || '?').toUpperCase()}</span>
               </div>
               <div>
-                <p className="font-black text-slate-900 text-sm leading-tight">{formData.first_name || user?.email?.split('@')[0] || 'Patient'}</p>
+                <p className="font-black text-slate-900 text-sm leading-tight">{formData.first_name || user?.email?.split('@')[0] || 'Member'}</p>
                 <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
                   selectedMembership === 'gold' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
                 }`}>{selectedMembership || 'member'}</span>
@@ -1717,7 +2613,7 @@ export default function Home() {
                     <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-6 shadow-sm">
                       <h4 className="text-amber-900 font-black text-lg mb-2">Unlock Your Medication & Plan</h4>
                       <p className="text-amber-700 text-sm font-semibold mb-4">Your doctor has approved your medication. Purchase a membership plan now to start your journey and get your medication delivered.</p>
-                      <button onClick={() => setStep(6)} className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md">
+                      <button onClick={() => setStep(8)} className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-xl transition-all shadow-md">
                         Purchase Membership
                       </button>
                     </div>
@@ -1815,7 +2711,7 @@ export default function Home() {
           <div className="flex justify-between items-end mb-12 border-b border-slate-200/60 pb-8">
             <div>
               <h1 className="text-5xl font-black text-slate-900 tracking-tighter drop-shadow-sm">Dashboard</h1>
-              <p className="text-slate-500 font-bold text-lg mt-2">Welcome back, <span className="text-indigo-600">{formData.first_name || formData.full_name || 'Member'}</span></p>
+              <p className="text-slate-500 font-bold text-lg mt-2">Welcome back, <span className="text-indigo-600">{user?.user_metadata?.display_id || 'Member'}</span></p>
             </div>
             <div className="flex gap-4 items-center">
               <button onClick={() => { setIsEditing(true); setStep(1); }} className="bg-white border-2 border-slate-100 text-slate-700 px-6 py-3 rounded-2xl text-sm font-bold shadow-sm hover:border-slate-300 hover:shadow-md hover:-translate-y-0.5 transition-all flex items-center gap-2 group"><User className="w-4 h-4 text-slate-400 group-hover:text-indigo-500 transition-colors"/> Edit Profile</button>
@@ -1841,7 +2737,7 @@ export default function Home() {
               <p className="text-xs text-slate-400 font-black uppercase tracking-widest mb-5 z-10">Consultations</p>
               <div className="space-y-3 z-10">
                 {bookingDate && bookingTime && (
-                  <div className="bg-indigo-500/20 border border-indigo-500/50 p-4 rounded-xl mb-4 cursor-pointer hover:bg-indigo-500/30 transition-all shadow-lg" onClick={() => setStep(9)}>
+                  <div className="bg-indigo-500/20 border border-indigo-500/50 p-4 rounded-xl mb-4 cursor-pointer hover:bg-indigo-500/30 transition-all shadow-lg" onClick={() => setStep(13)}>
                     <p className="text-sm font-bold text-white flex items-center gap-2"><Clock className="w-4 h-4 text-indigo-300"/> Upcoming Appointment</p>
                     <p className="text-xs text-indigo-200 mt-1">{bookingDate} @ {bookingTime}</p>
                     <p className="text-xs font-black text-white mt-2 flex items-center gap-1">Click to join <ArrowRight className="w-3 h-3"/></p>
@@ -1855,13 +2751,13 @@ export default function Home() {
                   
                   let btnLabel = "Doctor";
                   let btnStyle = "bg-white/10 hover:bg-indigo-500 border border-white/5";
-                  let onClickAction = () => setStep(9);
+                  let onClickAction = () => setStep(13);
                   
                   if (hasHadCall) {
                     if (!selectedMembership) {
                       btnLabel = "Doctor (Unlock with Membership) 🔒";
                       btnStyle = "bg-white/5 hover:bg-amber-600/40 border border-amber-500/20 text-amber-200/80";
-                      onClickAction = () => setStep(6); // Redirect to membership choice
+                      onClickAction = () => setStep(10); // Redirect to membership choice
                     } else if (isSilver) {
                       btnLabel = "Doctor (1/month Refill Limit) ⏳";
                       btnStyle = "bg-white/5 hover:bg-indigo-900/40 border border-indigo-500/20 text-indigo-200/80";
@@ -1884,8 +2780,8 @@ export default function Home() {
                 })()}
                 {/* FIX: Only show Dietician + Fitness for actual gold members (from DB) */}
                 {selectedMembership === 'gold' && (<>
-                  <button onClick={() => setStep(10)} className="w-full bg-white/10 hover:bg-amber-500 border border-white/5 text-white font-bold py-3.5 px-6 rounded-2xl transition-all text-sm text-left flex justify-between items-center group"><span className="flex items-center gap-3"><Apple className="w-5 h-5 text-amber-300 group-hover:text-white"/> Dietician</span><ChevronRight className="w-4 h-4 opacity-50 group-hover:translate-x-1 group-hover:opacity-100 transition-all"/></button>
-                  <button onClick={() => setStep(11)} className="w-full bg-white/10 hover:bg-emerald-500 border border-white/5 text-white font-bold py-3.5 px-6 rounded-2xl transition-all text-sm text-left flex justify-between items-center group"><span className="flex items-center gap-3"><Dumbbell className="w-5 h-5 text-emerald-300 group-hover:text-white"/> Fitness</span><ChevronRight className="w-4 h-4 opacity-50 group-hover:translate-x-1 group-hover:opacity-100 transition-all"/></button>
+                  <button onClick={() => setStep(14)} className="w-full bg-white/10 hover:bg-amber-500 border border-white/5 text-white font-bold py-3.5 px-6 rounded-2xl transition-all text-sm text-left flex justify-between items-center group"><span className="flex items-center gap-3"><Apple className="w-5 h-5 text-amber-300 group-hover:text-white"/> Dietician</span><ChevronRight className="w-4 h-4 opacity-50 group-hover:translate-x-1 group-hover:opacity-100 transition-all"/></button>
+                  <button onClick={() => setStep(15)} className="w-full bg-white/10 hover:bg-emerald-500 border border-white/5 text-white font-bold py-3.5 px-6 rounded-2xl transition-all text-sm text-left flex justify-between items-center group"><span className="flex items-center gap-3"><Dumbbell className="w-5 h-5 text-emerald-300 group-hover:text-white"/> Fitness</span><ChevronRight className="w-4 h-4 opacity-50 group-hover:translate-x-1 group-hover:opacity-100 transition-all"/></button>
                 </>)}
               </div>
             </div>
@@ -1944,14 +2840,14 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── STEP 9: DOCTOR SESSION ─────────────────────────────────────────── */}
-      {step === 9 && (
+      {/* ── STEP 11: DOCTOR SESSION ─────────────────────────────────────────── */}
+      {step === 11 && (
         <div className="max-w-5xl w-full flex gap-8 items-stretch relative z-10 animate-fadeIn">
-          <StepImagePanel stepNum={9}/>
+          <StepImagePanel stepNum={11}/>
           <div className="flex-1 bg-white/90 backdrop-blur-xl p-10 md:p-12 rounded-[3rem] shadow-2xl border border-white">
             <div className="flex justify-between items-center mb-10 pb-8 border-b border-slate-100">
               <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3"><Activity className="w-9 h-9 text-indigo-500 bg-indigo-50 p-2 rounded-2xl"/> Doctor Session</h2>
-              <button onClick={() => { setStep(8); setCallActive(false); setVideoRoomUrl(''); }} className="bg-white border-2 border-slate-100 hover:border-slate-300 text-slate-700 font-bold px-5 py-2.5 rounded-2xl transition-all text-sm flex items-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 group"><ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform"/> Dashboard</button>
+              <button onClick={() => { setStep(10); setCallActive(false); setVideoRoomUrl(''); }} className="bg-white border-2 border-slate-100 hover:border-slate-300 text-slate-700 font-bold px-5 py-2.5 rounded-2xl transition-all text-sm flex items-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 group"><ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform"/> Dashboard</button>
             </div>
 
             {callActive && videoRoomUrl ? <LiveCallPanel color="bg-rose-500"/> : isSlotBooked ? (
@@ -1991,7 +2887,7 @@ export default function Home() {
                     </ul>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-3 mt-8 max-w-md mx-auto">
-                    <button onClick={() => setStep(8)} className="flex-1 bg-slate-900 hover:bg-indigo-600 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2">
+                    <button onClick={() => setStep(10)} className="flex-1 bg-slate-900 hover:bg-indigo-600 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2">
                       <ArrowLeft className="w-4 h-4"/> Back to Dashboard
                     </button>
                     {!canJoinCallNow && (
@@ -2093,11 +2989,12 @@ export default function Home() {
                     return (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {slotsForDate.map(slot => (
-                          <button key={slot.id} onClick={() => setBookingTime(slot.time_slot)}
-                            className={`py-4 px-5 rounded-2xl border-2 font-bold text-sm transition-all active:scale-95 text-left flex flex-col gap-1 ${bookingTime === slot.time_slot ? 'border-indigo-600 bg-indigo-50 shadow-md' : 'border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50/50'}`}>
-                            <span className={`text-base font-black ${bookingTime === slot.time_slot ? 'text-indigo-700' : 'text-slate-800'}`}>{slot.time_slot}</span>
-                            <span className="text-xs font-semibold text-slate-500 flex items-center gap-1">
-                              <Activity className="w-3 h-3 text-indigo-400"/> {(slot as any).doctor_name || 'Dr. Expert'}
+                          <button key={slot.id} onClick={() => !slot.is_locked_for_user && setBookingTime(slot.time_slot)} disabled={slot.is_locked_for_user}
+                            className={`py-4 px-5 rounded-2xl border-2 font-bold text-sm transition-all active:scale-95 text-left flex flex-col gap-1 ${slot.is_locked_for_user ? 'opacity-50 cursor-not-allowed border-slate-200 bg-slate-50' : bookingTime === slot.time_slot ? 'border-indigo-600 bg-indigo-50 shadow-md' : 'border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50/50'}`}>
+                            <span className={`text-base font-black ${slot.is_locked_for_user ? 'text-slate-400' : bookingTime === slot.time_slot ? 'text-indigo-700' : 'text-slate-800'}`}>{slot.time_slot}</span>
+                            <span className="text-xs font-semibold text-slate-500 flex items-center justify-between w-full">
+                              <span className="flex items-center gap-1"><Activity className="w-3 h-3 text-indigo-400"/> {(slot as any).doctor_name || 'Dr. Expert'}</span>
+                              {slot.is_locked_for_user && <span className="text-rose-500 text-[10px] uppercase font-black">Locked</span>}
                             </span>
                           </button>
                         ))}
@@ -2125,14 +3022,14 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── STEP 10: DIETICIAN ─────────────────────────────────────────────── */}
-      {step === 10 && (
+      {/* ── STEP 14: DIETICIAN ─────────────────────────────────────────────── */}
+      {step === 14 && (
         <div className="max-w-5xl w-full flex gap-8 items-stretch relative z-10 animate-fadeIn">
-          <StepImagePanel stepNum={10}/>
+          <StepImagePanel stepNum={12}/>
           <div className="flex-1 bg-white/90 backdrop-blur-xl p-10 md:p-12 rounded-[3rem] shadow-2xl border border-white">
             <div className="flex justify-between items-center mb-12 border-b border-slate-200/60 pb-8">
               <h2 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-4"><Apple className="w-10 h-10 text-amber-500 bg-amber-50 p-2 rounded-2xl"/> Dietician Session</h2>
-              <button onClick={() => { setStep(8); setCallActive(false); setVideoRoomUrl(''); }} className="bg-white border-2 border-slate-100 hover:border-slate-300 text-slate-700 font-bold px-6 py-3 rounded-2xl transition-all text-sm flex items-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 group"><ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform"/> Dashboard</button>
+              <button onClick={() => { setStep(12); setCallActive(false); setVideoRoomUrl(''); }} className="bg-white border-2 border-slate-100 hover:border-slate-300 text-slate-700 font-bold px-6 py-3 rounded-2xl transition-all text-sm flex items-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 group"><ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform"/> Dashboard</button>
             </div>
             {callActive && videoRoomUrl ? <LiveCallPanel color="bg-amber-500"/> : (
               <div className="text-center max-w-3xl mx-auto py-6">
@@ -2144,7 +3041,7 @@ export default function Home() {
                   <textarea value={localFood} onChange={e => setLocalFood(e.target.value)} className={`${inputCls} p-6 text-lg bg-white`} rows={5} placeholder="E.g., Idli for breakfast, Rice & sambar for lunch..."></textarea>
                 </div>
                 <div className="flex gap-5">
-                  <button onClick={() => setStep(8)} className={`${btnSecondaryCls} py-5 text-lg`}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Back</button>
+                  <button onClick={() => setStep(12)} className={`${btnSecondaryCls} py-5 text-lg`}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Back</button>
                   <button disabled={!localFood || videoLoading} onClick={handleStartVideoCall} className="flex-1 bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 disabled:opacity-50 text-white font-bold py-5 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-amber-500/30 hover:shadow-xl hover:-translate-y-1 transition-all active:scale-[0.98] text-lg group">{videoLoading ? 'Connecting...' : <><Video className="w-6 h-6 group-hover:scale-110 transition-transform"/> Connect to Dietician</>}</button>
                 </div>
               </div>
@@ -2153,14 +3050,14 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── STEP 11: FITNESS COACH ─────────────────────────────────────────── */}
-      {step === 11 && (
+      {/* ── STEP 15: FITNESS COACH ─────────────────────────────────────────── */}
+      {step === 15 && (
         <div className="max-w-5xl w-full flex gap-8 items-stretch relative z-10 animate-fadeIn">
-          <StepImagePanel stepNum={11}/>
+          <StepImagePanel stepNum={13}/>
           <div className="flex-1 bg-white/90 backdrop-blur-xl p-10 md:p-12 rounded-[3rem] shadow-2xl border border-white">
             <div className="flex justify-between items-center mb-12 border-b border-slate-200/60 pb-8">
               <h2 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-4"><Dumbbell className="w-10 h-10 text-emerald-500 bg-emerald-50 p-2 rounded-2xl"/> Fitness Coach</h2>
-              <button onClick={() => { setStep(8); setCallActive(false); setVideoRoomUrl(''); }} className="bg-white border-2 border-slate-100 hover:border-slate-300 text-slate-700 font-bold px-6 py-3 rounded-2xl transition-all text-sm flex items-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 group"><ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform"/> Dashboard</button>
+              <button onClick={() => { setStep(12); setCallActive(false); setVideoRoomUrl(''); }} className="bg-white border-2 border-slate-100 hover:border-slate-300 text-slate-700 font-bold px-6 py-3 rounded-2xl transition-all text-sm flex items-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 group"><ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform"/> Dashboard</button>
             </div>
             {callActive && videoRoomUrl ? <LiveCallPanel color="bg-emerald-500"/> : (
               <div className="text-center max-w-3xl mx-auto py-6">
@@ -2177,7 +3074,7 @@ export default function Home() {
                   ))}
                 </div>
                 <div className="flex gap-5">
-                  <button onClick={() => setStep(8)} className={`${btnSecondaryCls} py-5 text-lg`}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Back</button>
+                  <button onClick={() => setStep(12)} className={`${btnSecondaryCls} py-5 text-lg`}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Back</button>
                   <button disabled={!workoutPreference || videoLoading} onClick={handleStartVideoCall} className="flex-1 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-50 text-white font-bold py-5 rounded-2xl flex items-center justify-center gap-3 shadow-lg shadow-emerald-500/30 hover:shadow-xl hover:-translate-y-1 transition-all active:scale-[0.98] text-lg group">{videoLoading ? 'Connecting...' : <><Video className="w-6 h-6 group-hover:scale-110 transition-transform"/> Connect to Coach</>}</button>
                 </div>
               </div>
