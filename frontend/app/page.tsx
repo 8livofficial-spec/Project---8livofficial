@@ -1623,6 +1623,28 @@ export default function Home() {
     );
   }
 
+  const LiveCallPanel = ({ color }: { color: string }) => (
+    <div className={`relative w-full rounded-[2.5rem] overflow-hidden shadow-2xl border-4 border-slate-100 ${color} bg-slate-900`}>
+      <div className="absolute top-4 left-4 z-10 bg-black/60 text-white px-4 py-2 rounded-full font-bold text-sm backdrop-blur flex items-center gap-2">
+        <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse"></span>
+        Live Consult: {Math.floor(callDuration / 60).toString().padStart(2, '0')}:{(callDuration % 60).toString().padStart(2, '0')}
+      </div>
+      {!isOnline && (
+        <div className="absolute inset-0 z-20 bg-slate-900/90 backdrop-blur-sm flex flex-col items-center justify-center text-white p-8 text-center">
+          <PhoneOff className="w-16 h-16 text-rose-500 mb-4 animate-bounce" />
+          <h3 className="text-2xl font-black mb-2">Network Disconnected</h3>
+          <p className="text-slate-300">Please check your internet connection. We've paused your timer.</p>
+        </div>
+      )}
+      <iframe
+        ref={iframeRef}
+        src={videoRoomUrl}
+        allow="camera; microphone; fullscreen; display-capture"
+        className="w-full h-[600px] border-0"
+      />
+    </div>
+  );
+
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col items-center py-12 px-6 relative font-sans text-slate-900 overflow-x-hidden selection:bg-indigo-100 selection:text-indigo-900">
       <style>{`
