@@ -1104,8 +1104,8 @@ export default function Home() {
   };
 
   const getProjectionData = () => {
-    const currentWeight = parseFloat(formData.weight_kg) || parseFloat(formData.current_weight) || 0;
-    const goalWeight = parseFloat(formData.goal_weight_kg) || parseFloat(formData.goal_weight) || 0;
+    const currentWeight = parseFloat(formData.weight_kg) || parseFloat((formData as any).current_weight) || 0;
+    const goalWeight = parseFloat(formData.goal_weight_kg) || parseFloat((formData as any).goal_weight) || 0;
     const weightToLose = currentWeight - goalWeight;
     
     if (weightToLose <= 0) return { minWeeks: 0, maxWeeks: 0 };
@@ -1891,7 +1891,7 @@ export default function Home() {
               With medication, you'll lose <span className="font-black text-slate-800">0.5 to 1 kg</span> per week.
             </p>
             <p className="text-lg text-slate-600 mb-6 font-semibold leading-relaxed">
-              It will take about <span className="font-black text-emerald-600">{getProjectionData().minWeeks} - {getProjectionData().maxWeeks} weeks</span> to reach your goal weight of <span className="font-black text-slate-800">{formData.goal_weight_kg || formData.goal_weight || 0} kg</span>.
+              It will take about <span className="font-black text-emerald-600">{getProjectionData().minWeeks} - {getProjectionData().maxWeeks} weeks</span> to reach your goal weight of <span className="font-black text-slate-800">{formData.goal_weight_kg || (formData as any).goal_weight || 0} kg</span>.
             </p>
           </div>
 
