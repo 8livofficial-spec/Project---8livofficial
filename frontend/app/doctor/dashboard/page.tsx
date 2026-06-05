@@ -142,6 +142,18 @@ export default function DoctorDashboard() {
     return () => clearInterval(interval);
   }, [activeCallId]);
 
+  // Poll new consultations, availability, and wallet balance every 5 seconds for real-time updates
+  useEffect(() => {
+    if (!doctor) return;
+    const pollInterval = setInterval(() => {
+      loadConsultations(doctor.id);
+      loadAvailability(doctor.id);
+      loadWallet(doctor.id);
+    }, 5000);
+    return () => clearInterval(pollInterval);
+  }, [doctor]);
+
+
   const loadConsultations = async (doctorId: string) => {
     // Load from health_assessments where booking exists (simulate)
     const { data } = await supabase

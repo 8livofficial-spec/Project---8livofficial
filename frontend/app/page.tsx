@@ -428,6 +428,7 @@ export default function Home() {
   const [weightData, setWeightData] = useState<any[]>([]);
   const [bookingDate, setBookingDate] = useState('');
   const [bookingTime, setBookingTime] = useState('');
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const [isSlotBooked, setIsSlotBooked] = useState(false);
   const [videoRoomUrl, setVideoRoomUrl] = useState('');
   const [videoLoading, setVideoLoading] = useState(false);
@@ -593,8 +594,8 @@ export default function Home() {
   // ── Doctor slots when entering step 13 ────────────────────────────────────
   useEffect(() => {
     if (step !== 13) return;
-    const fetchSlots = async () => {
-      setSlotsLoading(true);
+    const fetchSlots = async (isInitial = false) => {
+      if (isInitial) setSlotsLoading(true);
       const today = new Date().toISOString().split('T')[0];
       
       // Fetch availability slots joined with doctor profile name
@@ -650,17 +651,37 @@ export default function Home() {
       } else {
         // DEV BYPASS: No availability in DB, auto-populate mock slots for testing
         console.log("[DEV BYPASS] No availability found in DB. Auto-generating mock slots.");
+        const today = new Date().toISOString().split('T')[0];
         const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
         const dayAfter = new Date(Date.now() + 172800000).toISOString().split('T')[0];
-        const fallbackDocId = primaryDocId || user?.id || 'mock_doc_id';
+        
+        let fallbackDocId = primaryDocId || 'mock_doc_id';
+        let fallbackDocName = 'Dr. Hussain (Expert)';
+        if (!primaryDocId && user) {
+          try {
+            const { data: realDocs } = await supabase
+              .from('doctor_profiles')
+              .select('doctor_id, full_name')
+              .limit(1);
+            if (realDocs && realDocs.length > 0) {
+              fallbackDocId = realDocs[0].doctor_id;
+              fallbackDocName = realDocs[0].full_name || 'Dr. Expert';
+            } else {
+              fallbackDocId = user.id; // fallback to patient's own ID
+            }
+          } catch (err) {
+            console.error("Error fetching fallback doctor:", err);
+            fallbackDocId = user.id;
+          }
+        }
         
         let mockSlots = [
-          { id: 'mock_1', available_date: today, time_slot: '10:00 AM', doctor_id: fallbackDocId, doctor_name: 'Dr. Hussain (Expert)' },
-          { id: 'mock_2', available_date: today, time_slot: '02:00 PM', doctor_id: fallbackDocId, doctor_name: 'Dr. Hussain (Expert)' },
-          { id: 'mock_3', available_date: tomorrow, time_slot: '11:00 AM', doctor_id: fallbackDocId, doctor_name: 'Dr. Hussain (Expert)' },
-          { id: 'mock_4', available_date: tomorrow, time_slot: '03:00 PM', doctor_id: fallbackDocId, doctor_name: 'Dr. Hussain (Expert)' },
-          { id: 'mock_5', available_date: dayAfter, time_slot: '09:00 AM', doctor_id: fallbackDocId, doctor_name: 'Dr. Hussain (Expert)' },
-          { id: 'mock_6', available_date: dayAfter, time_slot: '04:00 PM', doctor_id: fallbackDocId, doctor_name: 'Dr. Hussain (Expert)' },
+          { id: 'mock_1', available_date: today, time_slot: '10:00 AM', doctor_id: fallbackDocId, doctor_name: fallbackDocName },
+          { id: 'mock_2', available_date: today, time_slot: '02:00 PM', doctor_id: fallbackDocId, doctor_name: fallbackDocName },
+          { id: 'mock_3', available_date: tomorrow, time_slot: '11:00 AM', doctor_id: fallbackDocId, doctor_name: fallbackDocName },
+          { id: 'mock_4', available_date: tomorrow, time_slot: '03:00 PM', doctor_id: fallbackDocId, doctor_name: fallbackDocName },
+          { id: 'mock_5', available_date: dayAfter, time_slot: '09:00 AM', doctor_id: fallbackDocId, doctor_name: fallbackDocName },
+          { id: 'mock_6', available_date: dayAfter, time_slot: '04:00 PM', doctor_id: fallbackDocId, doctor_name: fallbackDocName },
         ];
         
         setDoctorSlots(mockSlots);
@@ -668,9 +689,11 @@ export default function Home() {
           setBookingDate(mockSlots[0].available_date);
         }
       }
-      setSlotsLoading(false);
+      if (isInitial) setSlotsLoading(false);
     };
-    fetchSlots();
+    fetchSlots(true);
+    const slotsPoll = setInterval(() => fetchSlots(false), 5000);
+    return () => clearInterval(slotsPoll);
   }, [step, user]);
 
   // ── Check Incoming Call ───────────────────────────────────────────────────
@@ -1283,8 +1306,8 @@ export default function Home() {
       if (workoutPreference?.trim()) payload.workout_preference = workoutPreference.trim();
       await fetch(`${API_URL}/api/update-booking`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
 
-      if (step === 11) {
-        const matchedSlot = doctorSlots.find(s => s.available_date === bookingDate && s.time_slot === bookingTime);
+      if (step === 13) {
+        const matchedSlot = doctorSlots.find(s => s.id === selectedSlotId) || doctorSlots.find(s => s.available_date === bookingDate && s.time_slot === bookingTime);
         const patientFullName = user?.user_metadata?.display_id || `${formData.first_name} ${formData.last_name}`.trim() || formData.full_name || 'Member';
         
         // DEV BYPASS: Use doctor_id from slot, or fallback to patient ID (so it passes UUID constraint in DB)
@@ -2866,14 +2889,14 @@ export default function Home() {
         </div>
       )}
 
-      {/* ── STEP 11: DOCTOR SESSION ─────────────────────────────────────────── */}
-      {step === 11 && (
+      {/* ── STEP 13: DOCTOR SESSION ─────────────────────────────────────────── */}
+      {step === 13 && (
         <div className="max-w-5xl w-full flex gap-8 items-stretch relative z-10 animate-fadeIn">
-          <StepImagePanel stepNum={11}/>
+          <StepImagePanel stepNum={13}/>
           <div className="flex-1 bg-white/90 backdrop-blur-xl p-10 md:p-12 rounded-[3rem] shadow-2xl border border-white">
             <div className="flex justify-between items-center mb-10 pb-8 border-b border-slate-100">
               <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3"><Activity className="w-9 h-9 text-indigo-500 bg-indigo-50 p-2 rounded-2xl"/> Doctor Session</h2>
-              <button onClick={() => { setStep(10); setCallActive(false); setVideoRoomUrl(''); }} className="bg-white border-2 border-slate-100 hover:border-slate-300 text-slate-700 font-bold px-5 py-2.5 rounded-2xl transition-all text-sm flex items-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 group"><ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform"/> Dashboard</button>
+              <button onClick={() => { setStep(12); setCallActive(false); setVideoRoomUrl(''); }} className="bg-white border-2 border-slate-100 hover:border-slate-300 text-slate-700 font-bold px-5 py-2.5 rounded-2xl transition-all text-sm flex items-center gap-2 shadow-sm hover:shadow-md hover:-translate-y-0.5 group"><ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform"/> Dashboard</button>
             </div>
 
             {callActive && videoRoomUrl ? <LiveCallPanel color="bg-rose-500"/> : isSlotBooked ? (
@@ -2913,7 +2936,7 @@ export default function Home() {
                     </ul>
                   </div>
                   <div className="flex flex-col sm:flex-row gap-3 mt-8 max-w-md mx-auto">
-                    <button onClick={() => setStep(10)} className="flex-1 bg-slate-900 hover:bg-indigo-600 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2">
+                    <button onClick={() => setStep(12)} className="flex-1 bg-slate-900 hover:bg-indigo-600 text-white font-bold py-4 px-6 rounded-2xl transition-all shadow-lg hover:-translate-y-0.5 flex items-center justify-center gap-2">
                       <ArrowLeft className="w-4 h-4"/> Back to Dashboard
                     </button>
                     {!canJoinCallNow && (
@@ -2991,7 +3014,7 @@ export default function Home() {
                         const label = dateObj.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' });
                         const isSelected = bookingDate === d;
                         return (
-                          <button key={d} onClick={() => { setBookingDate(d); setBookingTime(''); }}
+                          <button key={d} onClick={() => { setBookingDate(d); setBookingTime(''); setSelectedSlotId(null); }}
                             className={`px-5 py-3 rounded-2xl border-2 font-bold text-sm transition-all ${isSelected ? 'border-indigo-600 bg-indigo-50 text-indigo-700 shadow-md' : 'border-slate-200 bg-white text-slate-600 hover:border-indigo-400 hover:bg-indigo-50/50 hover:text-indigo-700'}`}>
                             {label}
                           </button>
@@ -3015,8 +3038,8 @@ export default function Home() {
                     return (
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {slotsForDate.map(slot => (
-                          <button key={slot.id} onClick={() => !slot.is_locked_for_user && setBookingTime(slot.time_slot)} disabled={slot.is_locked_for_user}
-                            className={`py-4 px-5 rounded-2xl border-2 font-bold text-sm transition-all active:scale-95 text-left flex flex-col gap-1 ${slot.is_locked_for_user ? 'opacity-50 cursor-not-allowed border-slate-200 bg-slate-50' : bookingTime === slot.time_slot ? 'border-indigo-600 bg-indigo-50 shadow-md' : 'border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50/50'}`}>
+                          <button key={slot.id} onClick={() => { if (!slot.is_locked_for_user) { setBookingTime(slot.time_slot); setSelectedSlotId(slot.id); } }} disabled={slot.is_locked_for_user}
+                            className={`py-4 px-5 rounded-2xl border-2 font-bold text-sm transition-all active:scale-95 text-left flex flex-col gap-1 ${slot.is_locked_for_user ? 'opacity-50 cursor-not-allowed border-slate-200 bg-slate-50' : selectedSlotId === slot.id ? 'border-indigo-600 bg-indigo-50 shadow-md' : 'border-slate-200 bg-white hover:border-indigo-400 hover:bg-indigo-50/50'}`}>
                             <span className={`text-base font-black ${slot.is_locked_for_user ? 'text-slate-400' : bookingTime === slot.time_slot ? 'text-indigo-700' : 'text-slate-800'}`}>{slot.time_slot}</span>
                             <span className="text-xs font-semibold text-slate-500 flex items-center justify-between w-full">
                               <span className="flex items-center gap-1"><Activity className="w-3 h-3 text-indigo-400"/> {(slot as any).doctor_name || 'Dr. Expert'}</span>
