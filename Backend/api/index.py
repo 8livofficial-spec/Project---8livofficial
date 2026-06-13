@@ -291,11 +291,11 @@ async def create_video_room():
         part1 = "".join(random.choices(string.ascii_lowercase, k=3))
         part2 = "".join(random.choices(string.ascii_lowercase, k=4))
         part3 = "".join(random.choices(string.ascii_lowercase, k=3))
-        meet_url = f"https://meet.google.com/{part1}-{part2}-{part3}"
+        meet_url = f"https://meet.jit.si/8liv-consultation-{part1}-{part2}-{part3}"
         return VideoRoomResponse(room_url=meet_url)
     except Exception as e:
         print(f"[VIDEO API ERROR] {e}")
-        return VideoRoomResponse(room_url="https://meet.google.com/abc-defg-hij")
+        return VideoRoomResponse(room_url="https://meet.jit.si/8liv-consultation-fallback")
 
 
 # ── PAYMENT ──────────────────────────────────────────────────────────────────
@@ -640,8 +640,8 @@ async def run_scheduler_cron():
                                 send_mock_email(patient_name, "Patient", "1min more to join", room_url)
                                 sent_notifications.add(key)
 
-                        # Expiration: 15 mins for scheduled/calling, 30 mins for attended calls
-                        elif diff_minutes <= (-30.0 if c_status == "attended" else -15.0):
+                        # Expiration: 90 mins (1.30 hours) for scheduled/calling/attended calls
+                        elif diff_minutes <= -90.0:
                             key = f"{notif_base_key}_expired"
                             if key not in sent_notifications:
                                 await expire_consultation(patient_id, patient_name, booking_date, booking_time, c_id, doctor_id)

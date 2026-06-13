@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import {
   Activity, Users, CheckCircle2, XCircle, Video, Calendar, Wallet,
   ArrowDownToLine, Pill, FileText, Clock, AlertCircle, LogOut,
-  Stethoscope, ChevronRight, Plus, X, TrendingUp, BadgeCheck,
+  Stethoscope, ChevronRight, Plus, X, TrendingUp, BadgeCheck, Bell, BellRing, Ban, UserCheck, Check,
 } from 'lucide-react';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -15,6 +15,58 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const inputCls = 'w-full border border-slate-200 rounded-xl p-3 bg-slate-50 outline-none transition-all text-slate-900 placeholder-slate-400 font-medium focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 [color-scheme:light]';
 const labelCls = 'block text-xs font-bold text-slate-600 mb-1 uppercase tracking-wider';
+
+// ── Helper: format call duration ──────────────────────────────────────────────
+function formatDuration(startedAt: string | null, endedAt: string | null): string {
+  if (!startedAt) return '—';
+  const start = new Date(startedAt).getTime();
+  const end = endedAt ? new Date(endedAt).getTime() : Date.now();
+  const diffMs = end - start;
+  if (diffMs < 0) return '—';
+  const h = Math.floor(diffMs / 3600000);
+  const m = Math.floor((diffMs % 3600000) / 60000);
+  const s = Math.floor((diffMs % 60000) / 1000);
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+// Helper: check if scheduled time is within the 1.30 hours (90 mins) window
+function isCallTimeNow(bookingDate: string, bookingTime: string): boolean {
+  if (bookingDate.startsWith('mock_') || bookingTime === 'Consultation' || bookingTime === 'Dietician' || bookingTime === 'Fitness') return true;
+  try {
+    let isoDate = bookingDate;
+    if (bookingDate.includes('/')) {
+      const [d, m, y] = bookingDate.split('/');
+      isoDate = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    }
+    const target = new Date(`${isoDate} ${bookingTime}`);
+    const now = Date.now();
+    const start = target.getTime();
+    const FIVE_MIN = 5 * 60 * 1000;
+    const ONE_AND_HALF_HOURS = 90 * 60 * 1000; // 1.30 hours
+    return now >= start - FIVE_MIN && now <= start + ONE_AND_HALF_HOURS;
+  } catch {
+    return true;
+  }
+}
+
+// Helper: parse booking time safely into milliseconds
+function getParsedTime(bookingDate: string, bookingTime: string): number | null {
+  if (!bookingDate || !bookingTime || bookingDate.startsWith('mock_') || bookingTime === 'Consultation' || bookingTime === 'Dietician' || bookingTime === 'Fitness') return null;
+  try {
+    let isoDate = bookingDate;
+    if (bookingDate.includes('/')) {
+      const [d, m, y] = bookingDate.split('/');
+      isoDate = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    }
+    const target = new Date(`${isoDate} ${bookingTime}`);
+    const parsed = target.getTime();
+    return isNaN(parsed) ? null : parsed;
+  } catch {
+    return null;
+  }
+}
 
 type Tab = 'overview' | 'schedule' | 'consultations' | 'prescriptions' | 'wallet';
 
@@ -27,9 +79,13 @@ type Consultation = {
   room_url: string;
   status: string;
   prescription_type: string | null;
+  prescription_text: string | null;
   prescription_notes: string | null;
   prescription_ordered: boolean;
   doctor_payout: number;
+  call_started_at: string | null;
+  call_ended_at: string | null;
+  doctor_id: string | null;
   created_at: string;
 };
 
@@ -59,15 +115,23 @@ export default function DoctorDashboard() {
 
   // Consultations
   const [consultations, setConsultations] = useState<Consultation[]>([]);
+  const [availableRequests, setAvailableRequests] = useState<Consultation[]>([]);
 
   // Video call
   const [activeCallUrl, setActiveCallUrl] = useState('');
   const [activeCallPatient, setActiveCallPatient] = useState('');
   const [activeCallStatus, setActiveCallStatus] = useState<string>('calling');
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
+  const [callTimer, setCallTimer] = useState<string>('');
+  const callTimerRef = useRef<any>(null);
+
+  // Upcoming call alert (15 min pre-call notification)
+  const [upcomingCallAlert, setUpcomingCallAlert] = useState<{ patient: string; time: string; url: string } | null>(null);
+  const [doctorNotifBell, setDoctorNotifBell] = useState(false);
 
   // Link configuration modal states
   const [showLinkModal, setShowLinkModal] = useState(false);
+  const [warningMessage, setWarningMessage] = useState<string | null>(null);
   const [tempMeetLink, setTempMeetLink] = useState('');
   const [selectedConsultationForCall, setSelectedConsultationForCall] = useState<Consultation | null>(null);
 
@@ -81,6 +145,16 @@ export default function DoctorDashboard() {
   const [prescriptionType, setPrescriptionType] = useState<'Oral' | 'Injectable'>('Oral');
   const [prescriptionText, setPrescriptionText] = useState('');
   const [prescribing, setPrescribing] = useState(false);
+
+  // Sync prescribeCase with prescription text state
+  useEffect(() => {
+    if (prescribeCase) {
+      setPrescriptionText(prescribeCase.prescription_text || '');
+      setPrescriptionType(prescribeCase.prescription_type === 'none' ? 'Oral' : (prescribeCase.prescription_type || 'Oral') as any);
+    } else {
+      setPrescriptionText('');
+    }
+  }, [prescribeCase]);
 
   // Reject modal
   const [rejectCase, setRejectCase] = useState<Consultation | null>(null);
@@ -96,27 +170,38 @@ export default function DoctorDashboard() {
   // ── Auth check ──────────────────────────────────────────────────────────
   useEffect(() => {
     const init = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) { router.push('/?role=doctor'); return; }
-      setDoctor(session.user);
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error || !session) {
+          if (error) console.warn('Doctor session load error:', error.message);
+          await supabase.auth.signOut();
+          router.push('/?role=doctor');
+          return;
+        }
+        setDoctor(session.user);
 
-      // Load profile
-      const { data: profile } = await supabase
-        .from('doctor_profiles')
-        .select('*')
-        .eq('doctor_id', session.user.id)
-        .single();
-      
-      if (profile) {
-        setDoctorProfile(profile);
+        // Load profile
+        const { data: profile } = await supabase
+          .from('doctor_profiles')
+          .select('*')
+          .eq('doctor_id', session.user.id)
+          .single();
+        
+        if (profile) {
+          setDoctorProfile(profile);
+        }
+
+        await Promise.all([
+          loadConsultations(session.user.id),
+          loadAvailability(session.user.id),
+          loadWallet(session.user.id),
+        ]);
+        setLoading(false);
+      } catch (err) {
+        console.error('Doctor dashboard initialization failed:', err);
+        await supabase.auth.signOut();
+        router.push('/?role=doctor');
       }
-
-      await Promise.all([
-        loadConsultations(session.user.id),
-        loadAvailability(session.user.id),
-        loadWallet(session.user.id),
-      ]);
-      setLoading(false);
     };
     init();
   }, [router]);
@@ -153,15 +238,99 @@ export default function DoctorDashboard() {
     return () => clearInterval(pollInterval);
   }, [doctor]);
 
+  // Heartbeat to update doctor's last_seen_at for online status tracking
+  useEffect(() => {
+    if (!doctor) return;
+    const updatePresence = async () => {
+      try {
+        await supabase
+          .from('doctor_profiles')
+          .update({ last_seen_at: new Date().toISOString() })
+          .eq('doctor_id', doctor.id);
+      } catch (err) {
+        console.error('Heartbeat error:', err);
+      }
+    };
+    updatePresence();
+    const presenceInterval = setInterval(updatePresence, 10000); // Heartbeat every 10 seconds
+    return () => clearInterval(presenceInterval);
+  }, [doctor]);
+
+  // ── 15-min pre-call notification check ──────────────────────────────────
+  const checkUpcomingCalls = useCallback((cons: Consultation[]) => {
+    const now = Date.now();
+    for (const c of cons) {
+      if (c.status !== 'scheduled') continue;
+      if (!c.booking_date || !c.booking_time) continue;
+      try {
+        const target = new Date(`${c.booking_date} ${c.booking_time}`).getTime();
+        const diffMin = (target - now) / 60000;
+        if (diffMin >= 0 && diffMin <= 15) {
+          setUpcomingCallAlert({ patient: c.patient_name || 'Member', time: c.booking_time, url: c.room_url });
+          setDoctorNotifBell(true);
+          // Play alert sound via Web Audio API
+          try {
+            const AudioCtx = (window as any).AudioContext || (window as any).webkitAudioContext;
+            if (AudioCtx) {
+              const ctx = new AudioCtx();
+              const osc = ctx.createOscillator();
+              const gain = ctx.createGain();
+              osc.type = 'sine';
+              osc.frequency.setValueAtTime(880, ctx.currentTime);
+              gain.gain.setValueAtTime(0.2, ctx.currentTime);
+              gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.8);
+              osc.connect(gain); gain.connect(ctx.destination);
+              osc.start(); osc.stop(ctx.currentTime + 0.8);
+            }
+          } catch (e) {}
+          return;
+        }
+      } catch (e) {}
+    }
+  }, []);
+
+  useEffect(() => {
+    checkUpcomingCalls(consultations);
+  }, [consultations, checkUpcomingCalls]);
+
+  // ── Live call timer (increments every second when call is active) ────────
+  useEffect(() => {
+    if (!activeCallId) {
+      if (callTimerRef.current) clearInterval(callTimerRef.current);
+      setCallTimer('');
+      return;
+    }
+    const started = Date.now();
+    callTimerRef.current = setInterval(() => {
+      const elapsed = Date.now() - started;
+      const h = Math.floor(elapsed / 3600000);
+      const m = Math.floor((elapsed % 3600000) / 60000);
+      const s = Math.floor((elapsed % 60000) / 1000);
+      setCallTimer(h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`);
+    }, 1000);
+    return () => { if (callTimerRef.current) clearInterval(callTimerRef.current); };
+  }, [activeCallId]);
+
 
   const loadConsultations = async (doctorId: string) => {
-    // Load from health_assessments where booking exists (simulate)
+    // Load doctor's own consultations
     const { data } = await supabase
       .from('doctor_consultations')
       .select('*')
       .eq('doctor_id', doctorId)
       .order('created_at', { ascending: false });
     if (data) setConsultations(data);
+
+    // Load all scheduled patient booking requests (unassigned or claimed by other doctors)
+    const { data: avail } = await supabase
+      .from('doctor_consultations')
+      .select('*')
+      .eq('status', 'scheduled')
+      .order('created_at', { ascending: true });
+    if (avail) {
+      const filtered = avail.filter((c: any) => c.doctor_id !== doctorId);
+      setAvailableRequests(filtered);
+    }
   };
 
   const loadAvailability = async (doctorId: string) => {
@@ -233,8 +402,13 @@ export default function DoctorDashboard() {
 
   // ── Video call ────────────────────────────────────────────────────────
   const joinCall = (c: Consultation) => {
+    // Check if within allowed call window: 5 mins before start up to 1.30h after start
+    if (!isCallTimeNow(c.booking_date, c.booking_time)) {
+      setWarningMessage(`Advance joining is not allowed. In accordance with clinical guidelines, you can only launch the call session between 5 minutes before and 1 hour 30 minutes after the scheduled time.\n\nScheduled time: ${c.booking_date} at ${c.booking_time}`);
+      return;
+    }
     setSelectedConsultationForCall(c);
-    const savedLink = localStorage.getItem('doctor_meet_link') || '';
+    const savedLink = c.room_url || localStorage.getItem('doctor_meet_link') || '';
     setTempMeetLink(savedLink);
     setShowLinkModal(true);
   };
@@ -260,10 +434,11 @@ export default function DoctorDashboard() {
     setActiveCallStatus('calling');
     setActiveCallId(selectedConsultationForCall.id);
 
-    // Update status and save the actual Google Meet room URL in DB
+    // Update status, save Meet URL, and record call_started_at in DB
     await supabase.from('doctor_consultations').update({ 
       status: 'calling',
       room_url: finalLink,
+      call_started_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     }).eq('id', selectedConsultationForCall.id);
 
@@ -273,34 +448,158 @@ export default function DoctorDashboard() {
     loadConsultations(doctor.id);
   };
 
-  const endCall = () => {
+  const endCall = async () => {
+    // Record call_ended_at and status: attended in DB
+    if (activeCallId) {
+      await supabase.from('doctor_consultations').update({
+        status: 'attended',
+        call_ended_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      }).eq('id', activeCallId);
+
+      const endingCons = consultations.find(c => c.id === activeCallId);
+      if (endingCons) {
+        setPrescribeCase({
+          ...endingCons,
+          status: 'attended',
+          call_started_at: endingCons.call_started_at || new Date().toISOString(),
+          call_ended_at: new Date().toISOString()
+        });
+      }
+    }
     setActiveCallUrl('');
     setActiveCallPatient('');
     setActiveCallId(null);
+    setCallTimer('');
+    if (doctor) loadConsultations(doctor.id);
+  };
+
+  // ── Claim Patient Request ──────────────────────────────────────────────
+  const handleClaimRequest = async (req: Consultation) => {
+    if (!doctor) return;
+    try {
+      // 1. Verify availability of request and check if already claimed
+      const { data: latestReq } = await supabase
+        .from('doctor_consultations')
+        .select('doctor_id, status')
+        .eq('id', req.id)
+        .maybeSingle();
+
+      if (!latestReq || latestReq.doctor_id) {
+        alert('This request has already been claimed by another doctor! ⏳');
+        loadConsultations(doctor.id);
+        return;
+      }
+
+      // 1b. Check for 2-hour gap conflict against doctor's existing scheduled consultations
+      const { data: docCons } = await supabase
+        .from('doctor_consultations')
+        .select('booking_date, booking_time')
+        .eq('doctor_id', doctor.id)
+        .eq('status', 'scheduled');
+
+      if (docCons && docCons.length > 0) {
+        const newReqTime = getParsedTime(req.booking_date, req.booking_time);
+        if (newReqTime !== null) {
+          const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+          for (const existing of docCons) {
+            const existingTime = getParsedTime(existing.booking_date, existing.booking_time);
+            if (existingTime !== null) {
+              const diff = Math.abs(newReqTime - existingTime);
+              if (diff < TWO_HOURS_MS) {
+                alert(`Conflict detected! You already have an appointment scheduled at ${existing.booking_date} ${existing.booking_time}. Doctors must maintain at least a 2-hour gap between appointments. ⏳`);
+                return;
+              }
+            }
+          }
+        }
+      }
+
+      // 2. Lock/Claim the availability slot
+      const { data: existingSlot } = await supabase
+        .from('doctor_availability')
+        .select('id')
+        .eq('doctor_id', doctor.id)
+        .eq('available_date', req.booking_date)
+        .eq('time_slot', req.booking_time)
+        .eq('is_booked', false)
+        .maybeSingle();
+
+      if (existingSlot) {
+        await supabase.from('doctor_availability')
+          .update({ is_booked: true })
+          .eq('id', existingSlot.id);
+      } else {
+        await supabase.from('doctor_availability').insert({
+          doctor_id: doctor.id,
+          available_date: req.booking_date,
+          time_slot: req.booking_time,
+          is_booked: true
+        });
+      }
+
+      // 3. Update consultation doctor_id
+      const { error } = await supabase
+        .from('doctor_consultations')
+        .update({ 
+          doctor_id: doctor.id,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', req.id);
+
+      if (error) throw error;
+
+      // 4. Get doctor display info for rich notification
+      const doctorDisplayId = doctor.user_metadata?.display_id || `DOC-${doctor.id.slice(0, 4).toUpperCase()}`;
+      const doctorSpecialty = doctorProfile?.specialty || 'Endocrinologist';
+      const doctorFullName = doctorProfile?.full_name || doctorDisplayId;
+
+      // 5. Notify patient with professional message
+      await supabase.from('patient_notifications').insert({
+        patient_id: req.patient_id,
+        doctor_id: doctor.id,
+        type: 'doctor_assigned',
+        title: `🩺 Your Doctor Has Been Assigned!`,
+        message: `Great news! ${doctorDisplayId} (${doctorSpecialty}) has accepted your consultation request and will be your dedicated health guide. Your session is confirmed for ${req.booking_date} at ${req.booking_time}. Please be ready to join the video call at the scheduled time. Your doctor will guide you through your personalised treatment plan.`,
+      });
+
+      alert('Patient request successfully claimed and confirmed! 🎉');
+      loadConsultations(doctor.id);
+    } catch (err: any) {
+      alert('Failed to claim request: ' + err.message);
+    }
   };
 
   // ── Prescribe ─────────────────────────────────────────────────────────
-  const handlePrescribe = async () => {
+  const handlePrescribe = async (isNoPrescription = false) => {
     if (!prescribeCase || !doctor) return;
     setPrescribing(true);
     
     try {
+      const finalType = isNoPrescription ? 'none' : prescriptionType;
+      const finalText = isNoPrescription ? null : prescriptionText;
+
       // Update consultation status and prescription text in DB
-      // NOTE: We do not set prescription_ordered: true here anymore.
-      // The pharmacy API dispatch will happen after the patient buys the membership plan.
       const { error } = await supabase.from('doctor_consultations').update({
         status: 'approved',
-        prescription_type: prescriptionType,
-        prescription_text: prescriptionText,
+        prescription_type: finalType,
+        prescription_text: finalText,
         updated_at: new Date().toISOString(),
       }).eq('id', prescribeCase.id);
 
       if (error) throw error;
 
-      // Also update patient's health_assessments prescription_type
+      // Also update patient's health_assessments: set prescription, reset payment, and clear booking
       if (prescribeCase.patient_id) {
         await supabase.from('health_assessments')
-          .update({ prescription_type: prescriptionType })
+          .update({ 
+            prescription_type: finalType,
+            consultation_fee_paid: false,
+            booking_date: null,
+            booking_time: null,
+            room_url: null,
+            updated_at: new Date().toISOString()
+          })
           .eq('patient_id', prescribeCase.patient_id);
       }
 
@@ -461,6 +760,12 @@ export default function DoctorDashboard() {
     { key: 'wallet', label: 'Wallet', icon: <Wallet className="w-4 h-4"/> },
   ];
 
+  const activeRejoinableConsultation = consultations.find(c => 
+    c.room_url && 
+    ['scheduled', 'calling', 'attended'].includes(c.status) && 
+    isCallTimeNow(c.booking_date, c.booking_time)
+  );
+
   return (
     <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
       <style>{`
@@ -468,13 +773,38 @@ export default function DoctorDashboard() {
         .anim { animation: fadeIn 0.4s ease-out both; }
       `}</style>
 
+      {/* ── 15-MIN PRE-CALL ALERT BANNER ── */}
+      {upcomingCallAlert && (
+        <div className="fixed top-4 right-4 z-[200] max-w-sm w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl p-5 shadow-2xl shadow-indigo-500/40 border border-white/20" style={{animation:'fadeIn 0.4s ease-out both'}}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-xl">
+                <BellRing className="w-5 h-5 animate-bounce"/>
+              </div>
+              <div>
+                <p className="font-black text-sm">⏰ Upcoming Call in 15 mins!</p>
+                <p className="text-xs text-white/80 font-semibold mt-0.5">Patient: {upcomingCallAlert.patient} @ {upcomingCallAlert.time}</p>
+              </div>
+            </div>
+            <button onClick={() => { setUpcomingCallAlert(null); setDoctorNotifBell(false); }} className="text-white/60 hover:text-white transition-colors mt-0.5">
+              <X className="w-4 h-4"/>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── ACTIVE VIDEO CALL OVERLAY ── */}
       {activeCallUrl && (
         <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col">
           <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-4">
               <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
               <span className="font-black text-base">Live — {activeCallPatient}</span>
+              {callTimer && (
+                <span className="bg-white/10 text-white font-mono font-black text-sm px-3 py-1 rounded-full border border-white/20">
+                  ⏱ {callTimer}
+                </span>
+              )}
             </div>
             <button onClick={endCall} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition-all shadow-lg">
               End Session
@@ -496,6 +826,14 @@ export default function DoctorDashboard() {
                 <span className="text-sm font-black tracking-wide">
                   {activeCallStatus === 'calling' ? '📞 Ringing Member...' : '🟢 Member Connected!'}
                 </span>
+              </div>
+
+              {/* Privacy Warning Banner for Doctor */}
+              <div className="bg-amber-500/10 border-2 border-amber-500/30 text-amber-500 font-bold p-4 rounded-2xl text-xs text-left flex items-start gap-3">
+                <span className="text-base mt-0.5">⚠️</span>
+                <p>
+                  <strong>Privacy Alert:</strong> Do not share personal contact details (email, phone). Sharing any personal data is strictly at your own risk.
+                </p>
               </div>
 
               <div className="bg-slate-800/50 p-4 rounded-xl text-left border border-slate-700/50">
@@ -584,7 +922,7 @@ export default function DoctorDashboard() {
       {/* ── PRESCRIBE MODAL ── */}
       {prescribeCase && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl anim">
+          <div className="bg-white rounded-[2rem] p-8 max-w-lg w-full shadow-2xl anim">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-black text-slate-900 flex items-center gap-2"><Pill className="w-6 h-6 text-blue-500"/> E-Prescription</h3>
               <button onClick={() => setPrescribeCase(null)}><X className="w-6 h-6 text-slate-400 hover:text-slate-600"/></button>
@@ -592,7 +930,30 @@ export default function DoctorDashboard() {
             <div className="bg-blue-50 p-4 rounded-2xl mb-6 border border-blue-100">
               <p className="text-sm font-bold text-blue-800">Patient: {prescribeCase.patient_name}</p>
               <p className="text-xs text-blue-600 mt-1">Date: {prescribeCase.booking_date} @ {prescribeCase.booking_time}</p>
+              {prescribeCase.call_started_at && (
+                <p className="text-xs text-indigo-600 font-bold mt-1.5">
+                  ⏱ Call Duration: {formatDuration(prescribeCase.call_started_at, prescribeCase.call_ended_at)}
+                </p>
+              )}
             </div>
+
+            {/* ── No Prescription Option ── */}
+            <div
+              onClick={() => handlePrescribe(true)}
+              className="cursor-pointer border-2 border-slate-200 hover:border-rose-400 hover:bg-rose-50 rounded-2xl p-4 text-center transition-all mb-5 group"
+            >
+              <p className="font-black text-slate-600 group-hover:text-rose-700 flex items-center justify-center gap-2">
+                <Ban className="w-5 h-5"/> No Prescription Needed
+              </p>
+              <p className="text-xs text-slate-400 font-medium mt-1">Click to close this case without a prescription</p>
+            </div>
+
+            <div className="relative flex items-center gap-3 mb-5">
+              <div className="flex-1 h-px bg-slate-200"/>
+              <span className="text-xs font-black text-slate-400 uppercase tracking-widest">OR PRESCRIBE MEDICATION</span>
+              <div className="flex-1 h-px bg-slate-200"/>
+            </div>
+
             <label className={labelCls}>Select Medication Type</label>
             <div className="grid grid-cols-2 gap-4 mt-2 mb-4">
               {(['Oral', 'Injectable'] as const).map(type => (
@@ -606,14 +967,13 @@ export default function DoctorDashboard() {
               ))}
             </div>
 
-            <label className={`${labelCls} mt-4`}>Prescription Notes & Dosage Instructions *</label>
+            <label className={`${labelCls} mt-4`}>Medicine Name & Dosage Instructions *</label>
             <textarea
               value={prescriptionText}
               onChange={e => setPrescriptionText(e.target.value)}
               className={`${inputCls} mt-1 mb-4`}
               rows={3}
-              placeholder="e.g. Take 0.25mg once weekly on Wednesdays. Increase dose after 4 weeks."
-              required
+              placeholder="e.g. Semaglutide 0.25mg — take once weekly on Wednesdays. Increase to 0.5mg after 4 weeks."
             />
 
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-6">
@@ -621,7 +981,7 @@ export default function DoctorDashboard() {
             </div>
             <div className="flex gap-3">
               <button onClick={() => setPrescribeCase(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-all">Cancel</button>
-              <button onClick={handlePrescribe} disabled={prescribing || !prescriptionText.trim()}
+              <button onClick={() => handlePrescribe(false)} disabled={prescribing || !prescriptionText.trim()}
                 className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-all shadow-lg">
                 {prescribing ? 'Prescribing...' : 'Prescribe & Order ✓'}
               </button>
@@ -669,10 +1029,23 @@ export default function DoctorDashboard() {
               <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-2xl flex items-center justify-center shadow-md">
                 <Stethoscope className="w-6 h-6 text-white"/>
               </div>
-              <div>
+              <div className="flex-1">
                 <p className="font-black text-slate-900 text-sm leading-tight">{doctorProfile?.full_name || doctor?.email?.split('@')[0] || 'Doctor'}</p>
                 <p className="text-xs text-slate-500 font-semibold">Endocrinologist</p>
               </div>
+              {/* Notification Bell */}
+              <button
+                onClick={() => { setUpcomingCallAlert(null); setDoctorNotifBell(false); }}
+                className="relative p-1.5 rounded-xl hover:bg-slate-100 transition-colors"
+                title="Notifications"
+              >
+                {doctorNotifBell
+                  ? <BellRing className="w-5 h-5 text-indigo-600 animate-bounce"/>
+                  : <Bell className="w-5 h-5 text-slate-400"/>}
+                {doctorNotifBell && (
+                  <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white"/>
+                )}
+              </button>
             </div>
             <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 flex items-center gap-2">
               <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
@@ -788,6 +1161,90 @@ export default function DoctorDashboard() {
                   </div>
                 </div>
               </div>
+
+              {/* ── AVAILABLE PATIENTS REQUESTS (CLAIM SYSTEM) ── */}
+              <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
+                <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                    <UserCheck className="w-5 h-5 text-indigo-500"/> Available Patient Requests (Escrow Pool)
+                  </h3>
+                  <span className="bg-indigo-100 text-indigo-700 font-black text-xs px-3 py-1 rounded-full animate-pulse">
+                    {availableRequests.filter((r) => !r.doctor_id).length} Awaiting
+                  </span>
+                </div>
+                {availableRequests.length === 0 ? (
+                  <div className="text-center py-10 text-slate-400">
+                    <UserCheck className="w-10 h-10 mx-auto mb-3 opacity-20"/>
+                    <p className="text-sm font-semibold">No new patient requests at the moment</p>
+                    <p className="text-xs text-slate-400 mt-1">New requests will appear here when patients pay and choose dates.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {availableRequests.map((req) => {
+                      const isClaimedByOther = req.doctor_id !== null && req.doctor_id !== doctor?.id;
+                      
+                      const newReqTime = getParsedTime(req.booking_date, req.booking_time);
+                      const hasConflict = !isClaimedByOther && newReqTime !== null && consultations.some(c => {
+                        if (c.status !== 'scheduled') return false;
+                        const cTime = getParsedTime(c.booking_date, c.booking_time);
+                        return cTime !== null && Math.abs(newReqTime - cTime) < 2 * 60 * 60 * 1000;
+                      });
+
+                      const isLocked = isClaimedByOther || hasConflict;
+
+                      return (
+                        <div 
+                          key={req.id} 
+                          className={`border p-5 rounded-2xl flex flex-col justify-between gap-4 transition-all ${
+                            isLocked 
+                              ? 'border-slate-200 bg-slate-100 opacity-70 grayscale' 
+                              : 'border-slate-100 hover:border-indigo-200 bg-slate-50/50 hover:bg-white hover:shadow-md'
+                          }`}
+                        >
+                          <div>
+                            <p className="text-xs font-black text-slate-400 uppercase tracking-wider">
+                              Patient display ID 
+                              {isClaimedByOther && <span className="text-rose-500 font-bold"> (booked)</span>}
+                              {hasConflict && <span className="text-amber-600 font-bold"> (time conflict)</span>}
+                            </p>
+                            <h4 className={`font-black text-base mt-0.5 ${isLocked ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                              {req.patient_name || 'Anonymous Patient'} 
+                              {isClaimedByOther && <span className="text-sm font-bold text-slate-500 normal-case"> (booked)</span>}
+                              {hasConflict && <span className="text-sm font-bold text-amber-600 normal-case"> (time conflict)</span>}
+                            </h4>
+                            <p className="text-xs font-bold text-slate-500 mt-2 flex items-center gap-1">
+                              <span>📅</span> {req.booking_date} at {req.booking_time}
+                            </p>
+                            <p className={`text-[10px] px-2 py-0.5 rounded-md w-fit font-bold mt-2 border ${
+                              isLocked 
+                                ? 'text-slate-500 bg-slate-200 border-slate-300' 
+                                : 'text-indigo-600 bg-indigo-50 border-indigo-100'
+                            }`}>
+                              💰 Escrow Paid: ₹499
+                            </p>
+                          </div>
+                           {isClaimedByOther ? (
+                            <div className="bg-slate-200 border border-slate-300 text-slate-600 font-bold py-2.5 px-4 rounded-xl text-xs text-center flex items-center justify-center gap-2">
+                              ⚡ Sorry, try to be quicker next time!
+                            </div>
+                          ) : hasConflict ? (
+                            <div className="bg-amber-100 border border-amber-200 text-amber-800 font-bold py-2.5 px-4 rounded-xl text-xs text-center flex items-center justify-center gap-2">
+                              ⚠️ Gap Conflict: Requires 2h gap with your bookings
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => handleClaimRequest(req)}
+                              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5 shadow-sm active:scale-95"
+                            >
+                              <Check className="w-4 h-4"/> Accept & Pair Patient
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
@@ -892,7 +1349,13 @@ export default function DoctorDashboard() {
                         <div className="flex items-start justify-between gap-4 flex-wrap">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 flex-wrap mb-2">
-                              <p className="font-black text-slate-900 text-lg">{c.patient_name || 'Member'}</p>
+                              <p 
+                                onClick={() => setPrescribeCase(c)}
+                                className="font-black text-slate-900 text-lg cursor-pointer hover:text-indigo-600 transition-colors flex items-center gap-1.5"
+                                title="Click to view/write prescription"
+                              >
+                                {c.patient_name || 'Member'}
+                              </p>
                               <span className={`text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full ${st.color}`}>{st.label}</span>
                             </div>
                             <div className="flex gap-4 text-sm text-slate-500 font-semibold flex-wrap">
@@ -908,12 +1371,15 @@ export default function DoctorDashboard() {
                           </div>
                           <div className="flex gap-2 flex-wrap">
                             {/* Join call */}
-                            {c.room_url && ['scheduled', 'attended'].includes(c.status) && (
-                              <button onClick={() => joinCall(c)}
-                                className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2 transition-all shadow-md">
-                                <Video className="w-4 h-4"/> Join Call
-                              </button>
-                            )}
+                            {c.room_url && ['scheduled', 'attended'].includes(c.status) && (() => {
+                              const active = isCallTimeNow(c.booking_date, c.booking_time);
+                              return (
+                                <button onClick={() => joinCall(c)}
+                                  className={`font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2 transition-all shadow-md ${active ? 'bg-indigo-600 hover:bg-indigo-700 text-white animate-pulse' : 'bg-slate-100 hover:bg-slate-200 text-slate-700'}`}>
+                                  <Video className="w-4 h-4"/> Join Call
+                                </button>
+                              );
+                            })()}
                             {/* Prescribe */}
                             {c.status === 'attended' && (
                               <button onClick={() => setPrescribeCase(c)}
@@ -1087,6 +1553,53 @@ export default function DoctorDashboard() {
                     ))}
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Floating Rejoin Widget */}
+          {!activeCallUrl && activeRejoinableConsultation && (
+            <div className="fixed bottom-6 right-6 z-[9999] animate-bounce">
+              <button
+                onClick={() => {
+                  if (activeRejoinableConsultation.status === 'scheduled') {
+                    joinCall(activeRejoinableConsultation);
+                  } else {
+                    window.open(activeRejoinableConsultation.room_url, '_blank');
+                  }
+                }}
+                className="bg-rose-600 hover:bg-rose-700 text-white font-black py-4 px-6 rounded-2xl shadow-2xl flex items-center gap-3 transition-all scale-100 hover:scale-105 active:scale-95 border border-rose-500 animate-pulse"
+              >
+                <span className="flex h-3 w-3 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                </span>
+                <Video className="w-5 h-5"/> Rejoin Call with {activeRejoinableConsultation.patient_name || 'Member'}
+              </button>
+            </div>
+          )}
+
+          {/* ── CALL TIMING WARNING MODAL ── */}
+          {warningMessage && (
+            <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
+              <div className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl anim border-2 border-amber-200">
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-xl font-black text-amber-700 flex items-center gap-2">
+                    <AlertCircle className="w-6 h-6 text-amber-500 animate-bounce"/> Advance Joining Restrained
+                  </h3>
+                  <button onClick={() => setWarningMessage(null)}><X className="w-6 h-6 text-slate-400 hover:text-slate-600"/></button>
+                </div>
+                
+                <div className="bg-amber-50/80 p-5 rounded-2xl mb-6 border border-amber-100/50">
+                  <p className="text-sm font-semibold text-amber-900 leading-relaxed whitespace-pre-wrap">
+                    {warningMessage}
+                  </p>
+                </div>
+
+                <button onClick={() => setWarningMessage(null)}
+                  className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-md">
+                  Okay, I'll return later
+                </button>
               </div>
             </div>
           )}

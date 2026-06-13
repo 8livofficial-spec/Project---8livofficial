@@ -294,11 +294,11 @@ async def create_video_room():
         part1 = "".join(random.choices(string.ascii_lowercase, k=3))
         part2 = "".join(random.choices(string.ascii_lowercase, k=4))
         part3 = "".join(random.choices(string.ascii_lowercase, k=3))
-        meet_url = f"https://meet.google.com/{part1}-{part2}-{part3}"
+        meet_url = f"https://meet.jit.si/8liv-consultation-{part1}-{part2}-{part3}"
         return VideoRoomResponse(room_url=meet_url)
     except Exception as e:
         print(f"[VIDEO API ERROR] {e}")
-        return VideoRoomResponse(room_url="https://meet.google.com/abc-defg-hij")
+        return VideoRoomResponse(room_url="https://meet.jit.si/8liv-consultation-fallback")
 
 
 # ── PAYMENT ──────────────────────────────────────────────────────────────────
@@ -445,6 +445,71 @@ import asyncio
 
 sent_notifications = set()
 last_reschedule_reminder_sent = {}
+last_hourly_reminder_sent = {}
+last_10min_reminder_sent = {}
+last_unassigned_reminder_sent = {}
+
+def parse_iso_datetime(dt_str: str) -> Optional[datetime]:
+    try:
+        from datetime import timezone
+        dt = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+        dt_utc = dt.astimezone(timezone.utc)
+        return dt_utc.replace(tzinfo=None)
+    except Exception as e:
+        print(f"[PARSER ERROR] {e}")
+        return None
+
+def send_refund_email(patient_name: str, booking_date: str, booking_time: str):
+    border = "=" * 80
+    subject = "💸 Refund Issued: Your consultation booking has been refunded"
+    body = (
+        f"Dear {patient_name},\n\n"
+        f"We regret to inform you that we could not match your consultation scheduled for "
+        f"{booking_date} at {booking_time} with a doctor within our 5-hour limit.\n\n"
+        f"As a result, your booking has been cancelled and a full refund of ₹499 has been "
+        f"processed back to your original payment method. The funds should reflect in your account within 5-7 business days.\n\n"
+        f"You can log back in and schedule a new session anytime.\n\n"
+        f"Best regards,\n"
+        f"The 8liv Health Team"
+    )
+    print(f"\n{border}\n[MOCK EMAIL SENT TO PATIENT: {patient_name}]\nSUBJECT: {subject}\n\n{body}\n{border}\n")
+
+def send_pairing_reminder_email(patient_name: str, booking_date: str, booking_time: str, hours_remaining: float):
+    border = "=" * 80
+    subject = "⏳ Pairing Update: Matching you with a doctor"
+    body = (
+        f"Dear {patient_name},\n\n"
+        f"This is an update regarding your consultation scheduled for {booking_date} at {booking_time}.\n"
+        f"Our team is actively matching you with one of our expert doctors. We will notify you as soon as they accept.\n\n"
+        f"Note: If no doctor accepts your booking within the next {hours_remaining:.1f} hour(s), the booking will be automatically cancelled and you will receive a full refund of ₹499.\n\n"
+        f"Best regards,\n"
+        f"The 8liv Health Team"
+    )
+    print(f"\n{border}\n[MOCK EMAIL SENT TO PATIENT: {patient_name}]\nSUBJECT: {subject}\n\n{body}\n{border}\n")
+
+def send_meeting_reminder_email(patient_name: str, doctor_display_id: str, booking_date: str, booking_time: str, room_url: str, time_remaining: str):
+    border = "=" * 80
+    subject = f"[REMINDER] Upcoming Consultation Appointment: {time_remaining} remaining!"
+    body_patient = (
+        f"Dear {patient_name},\n\n"
+        f"This is a professional reminder that your scheduled consultation is starting soon.\n"
+        f"Time remaining: {time_remaining}\n"
+        f"Assigned Doctor: {doctor_display_id}\n\n"
+        f"Join Meeting link: {room_url}\n\n"
+        f"Best regards,\n"
+        f"The 8liv Health Team"
+    )
+    body_doctor = (
+        f"Dear Doctor ({doctor_display_id}),\n\n"
+        f"This is a professional reminder that your scheduled consultation with patient {patient_name} is starting soon.\n"
+        f"Time remaining: {time_remaining}\n\n"
+        f"Join Meeting link: {room_url}\n\n"
+        f"Best regards,\n"
+        f"The 8liv Health Team"
+    )
+    print(f"\n{border}\n[MOCK EMAIL SENT TO PATIENT: {patient_name}]\nSUBJECT: {subject}\n\n{body_patient}\n{border}\n")
+    print(f"\n{border}\n[MOCK EMAIL SENT TO DOCTOR: {doctor_display_id}]\nSUBJECT: {subject}\n\n{body_doctor}\n{border}\n")
+
 
 def send_mock_reschedule_email(name: str, patient_id: str):
     border = "=" * 80
@@ -622,29 +687,36 @@ async def consultation_scheduler_loop():
                         # Unique notification/reminder key
                         notif_base_key = f"{c_id}" if c_id else f"legacy_{patient_id}_{booking_date}_{booking_time}"
 
-                        # 1 Hour Reminder (55 to 60 minutes remaining)
-                        if 55.0 <= diff_minutes <= 60.0:
-                            key = f"{notif_base_key}_1h"
-                            if key not in sent_notifications:
-                                send_mock_email(patient_name, "Patient", "1 hour more to join", room_url)
-                                sent_notifications.add(key)
+                        # Automated Email Reminders:
+                        # 1hr once if > 1hr remains; 10min once if <= 1hr remains. Sent to both doctor and patient.
+                        if diff_seconds > 0:
+                            # Fetch doctor display ID
+                            doctor_display_id = "Unassigned"
+                            if doctor_id:
+                                try:
+                                    dp_res = supabase.table("profiles").select("display_id").eq("id", doctor_id).execute()
+                                    if dp_res.data:
+                                        doctor_display_id = dp_res.data[0].get("display_id") or f"DOC-{doctor_id[:4].upper()}"
+                                    else:
+                                        doctor_display_id = f"DOC-{doctor_id[:4].upper()}"
+                                except Exception:
+                                    doctor_display_id = f"DOC-{doctor_id[:4].upper()}"
 
-                        # 30 Minutes Reminder (25 to 30 minutes remaining)
-                        elif 25.0 <= diff_minutes <= 30.0:
-                            key = f"{notif_base_key}_30m"
-                            if key not in sent_notifications:
-                                send_mock_email(patient_name, "Patient", "30min more to join", room_url)
-                                sent_notifications.add(key)
+                            key = c_id if c_id else f"pat_{patient_id}"
+                            
+                            if diff_minutes > 60.0:
+                                last_sent = last_hourly_reminder_sent.get(key)
+                                if not last_sent or (now - last_sent).total_seconds() >= 3600:
+                                    send_meeting_reminder_email(patient_name, doctor_display_id, booking_date, booking_time, room_url, f"{int(diff_minutes // 60)} hour(s)")
+                                    last_hourly_reminder_sent[key] = now
+                            else:
+                                last_sent = last_10min_reminder_sent.get(key)
+                                if not last_sent or (now - last_sent).total_seconds() >= 600:
+                                    send_meeting_reminder_email(patient_name, doctor_display_id, booking_date, booking_time, room_url, f"{int(diff_minutes)} minute(s)")
+                                    last_10min_reminder_sent[key] = now
 
-                        # 1 Minute Reminder (0 to 2 minutes remaining)
-                        elif 0.0 <= diff_minutes <= 2.0:
-                            key = f"{notif_base_key}_1m"
-                            if key not in sent_notifications:
-                                send_mock_email(patient_name, "Patient", "1min more to join", room_url)
-                                sent_notifications.add(key)
-
-                        # Expiration: 15 mins for scheduled/calling, 30 mins for attended calls
-                        elif diff_minutes <= (-30.0 if c_status == "attended" else -15.0):
+                        # Expiration: 90 mins (1.30 hours) for scheduled/calling/attended calls
+                        elif diff_minutes <= -90.0:
                             key = f"{notif_base_key}_expired"
                             if key not in sent_notifications:
                                 await expire_consultation(patient_id, patient_name, booking_date, booking_time, c_id, doctor_id)
@@ -667,6 +739,91 @@ async def consultation_scheduler_loop():
                                 if not last_sent or (now - last_sent).total_seconds() >= 3600:
                                     send_mock_reschedule_email(patient_name, patient_id)
                                     last_reschedule_reminder_sent[patient_id] = now
+
+            # ── CASE 3: Unassigned consultation checks (unclaimed escrow bookings) ──
+            unassigned_res = supabase.table("doctor_consultations")\
+                .select("id, patient_id, patient_name, booking_date, booking_time, created_at, status, doctor_id")\
+                .eq("status", "scheduled")\
+                .execute()
+
+            if unassigned_res.data:
+                now_utc = datetime.utcnow()
+                for c in unassigned_res.data:
+                    # Only check if doctor_id is None/null
+                    if c.get("doctor_id") is None:
+                        c_id = c["id"]
+                        patient_id = c["patient_id"]
+                        patient_name = c.get("patient_name") or "Member"
+                        booking_date = c.get("booking_date")
+                        booking_time = c.get("booking_time")
+                        created_at_str = c.get("created_at")
+
+                        created_dt = parse_iso_datetime(created_at_str)
+                        if not created_dt:
+                            continue
+
+                        age_seconds = (now_utc - created_dt).total_seconds()
+                        age_minutes = age_seconds / 60.0
+                        age_hours = age_minutes / 60.0
+
+                        # ── Timeout Exceeded (5 hours) -> Refund ──
+                        if age_hours >= 5.0:
+                            # 1. Update status to cancelled/refunded
+                            supabase.table("doctor_consultations")\
+                                .update({"status": "cancelled", "prescription_notes": "Cancelled & Refunded: No doctor claimed within 5 hours."})\
+                                .eq("id", c_id)\
+                                .execute()
+
+                            # 2. Reset patient's assessment/fee state
+                            supabase.table("health_assessments")\
+                                .update({
+                                    "consultation_fee_paid": False,
+                                    "booking_date": None,
+                                    "booking_time": None,
+                                    "room_url": None,
+                                    "updated_at": datetime.now().isoformat()
+                                })\
+                                .eq("patient_id", patient_id)\
+                                .execute()
+
+                            # 2b. Free the doctor_availability slot (is_booked -> False)
+                            if booking_date and booking_time:
+                                supabase.table("doctor_availability")\
+                                    .update({"is_booked": False})\
+                                    .eq("available_date", booking_date)\
+                                    .eq("time_slot", booking_time)\
+                                    .execute()
+
+                            # 3. Create notification for the patient
+                            supabase.table("patient_notifications").insert({
+                                "patient_id": patient_id,
+                                "type": "refund_issued",
+                                "title": "💸 Booking Cancelled & Refunded",
+                                "message": f"Your consultation scheduled for {booking_date} at {booking_time} could not be paired with a doctor within 5 hours. We have cancelled the request and issued a full refund of ₹499."
+                            }).execute()
+
+                            # 4. Send email
+                            send_refund_email(patient_name, booking_date, booking_time)
+                            print(f"[SCHEDULER] Auto-refunded consultation {c_id} for patient {patient_name} due to 5h timeout.")
+
+                        # ── Reminder (Every 25 minutes) ──
+                        else:
+                            last_sent = last_unassigned_reminder_sent.get(c_id)
+                            # Check if 25 minutes (1500 seconds) have passed since last reminder (or since creation if first time)
+                            time_since_last_sent = (now_utc - last_sent).total_seconds() if last_sent else age_seconds
+
+                            if not last_sent or time_since_last_sent >= 1500:
+                                # Send patient notification
+                                supabase.table("patient_notifications").insert({
+                                    "patient_id": patient_id,
+                                    "type": "pairing_update",
+                                    "title": "⏳ Matching with a Doctor...",
+                                    "message": f"We are still matching your consultation scheduled for {booking_date} at {booking_time} with our expert doctors. If no doctor claims it within 5 hours of booking, you will receive a full refund of ₹499."
+                                }).execute()
+
+                                # Send email
+                                send_pairing_reminder_email(patient_name, booking_date, booking_time, 5.0 - age_hours)
+                                last_unassigned_reminder_sent[c_id] = now_utc
 
         except Exception as e:
             print(f"[SCHEDULER LOOP ERROR] {e}")

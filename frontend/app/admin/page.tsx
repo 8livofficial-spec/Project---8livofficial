@@ -4,7 +4,22 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut } from 'lucide-react';
+import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer } from 'lucide-react';
+
+// ── Helper: format duration from timestamps ──────────────────────────────
+function fmtDuration(startedAt: string | null, endedAt: string | null): string {
+  if (!startedAt) return '—';
+  const start = new Date(startedAt).getTime();
+  const end = endedAt ? new Date(endedAt).getTime() : Date.now();
+  const diffMs = end - start;
+  if (diffMs < 0) return '—';
+  const h = Math.floor(diffMs / 3600000);
+  const m = Math.floor((diffMs % 3600000) / 60000);
+  const s = Math.floor((diffMs % 60000) / 1000);
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -19,15 +34,65 @@ export default function AdminDashboard() {
   const [activeCall, setActiveCall] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [prescribeLoading, setPrescribeLoading] = useState(false);
-  const [adminTab, setAdminTab] = useState<'patients' | 'payouts'>('patients');
+  const [adminTab, setAdminTab] = useState<'patients' | 'doctors' | 'connections' | 'payouts'>('patients');
+  const [selectedDoctor, setSelectedDoctor] = useState<any>(null);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [payoutLoading, setPayoutLoading] = useState(false);
+  const [connections, setConnections] = useState<any[]>([]);
+  const [selectedConnection, setSelectedConnection] = useState<any>(null);
 
   useEffect(() => { 
     fetchPatients(); 
     fetchPayoutsData();
+    fetchConnections();
   }, []);
+
+  // ── Fetch doctor-patient connections ───────────────────────────────────
+  const fetchConnections = async () => {
+    try {
+      // Get all consultations that have been at least scheduled
+      const { data: cons } = await supabase
+        .from('doctor_consultations')
+        .select('id, patient_id, doctor_id, status, booking_date, booking_time, prescription_type, prescription_text, prescription_notes, call_started_at, call_ended_at, created_at')
+        .in('status', ['scheduled', 'calling', 'attended', 'approved', 'rejected'])
+        .order('created_at', { ascending: false });
+
+      if (!cons || cons.length === 0) { setConnections([]); return; }
+
+      // Fetch doctor profiles
+      const docIds = [...new Set(cons.map((c: any) => c.doctor_id))];
+      const { data: docProfiles } = await supabase
+        .from('doctor_profiles')
+        .select('doctor_id, full_name')
+        .in('doctor_id', docIds);
+
+      // Fetch patient names from health_assessments
+      const patientIds = [...new Set(cons.map((c: any) => c.patient_id))];
+      const { data: patientData } = await supabase
+        .from('health_assessments')
+        .select('patient_id, full_name, first_name, last_name, phone_number, age')
+        .in('patient_id', patientIds);
+
+      const docMap: Record<string, string> = {};
+      if (docProfiles) docProfiles.forEach((d: any) => { docMap[d.doctor_id] = d.full_name || 'Dr. Expert'; });
+
+      const patMap: Record<string, any> = {};
+      if (patientData) patientData.forEach((p: any) => { patMap[p.patient_id] = p; });
+
+      const enriched = cons.map((c: any) => ({
+        ...c,
+        doctor_name: docMap[c.doctor_id] || 'Unknown Doctor',
+        patient_name: patMap[c.patient_id]?.full_name || `${patMap[c.patient_id]?.first_name || ''} ${patMap[c.patient_id]?.last_name || ''}`.trim() || 'Unknown Patient',
+        patient_phone: patMap[c.patient_id]?.phone_number || '',
+        patient_age: patMap[c.patient_id]?.age || '',
+      }));
+
+      setConnections(enriched);
+    } catch (err) {
+      console.error('[Connections Fetch Error]', err);
+    }
+  };
 
   const fetchPatients = async () => {
     setLoading(true);
@@ -194,18 +259,30 @@ export default function AdminDashboard() {
 
         {/* Navigation tabs */}
         <div className="px-6 pt-6 pb-2">
-          <div className="bg-slate-100 p-1.5 rounded-2xl flex gap-1">
+          <div className="bg-slate-100 p-1.5 rounded-2xl flex gap-1 flex-wrap">
             <button 
               onClick={() => setAdminTab('patients')}
-              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black tracking-wide uppercase transition-all ${adminTab === 'patients' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all ${adminTab === 'patients' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
             >
               Members
             </button>
             <button 
-              onClick={() => setAdminTab('payouts')}
-              className={`flex-1 py-2.5 px-4 rounded-xl text-xs font-black tracking-wide uppercase transition-all ${adminTab === 'payouts' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+              onClick={() => { setAdminTab('doctors'); setSelectedDoctor(null); }}
+              className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all ${adminTab === 'doctors' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
             >
-              Doctor Payouts
+              Doctors
+            </button>
+            <button 
+              onClick={() => { setAdminTab('connections'); setSelectedConnection(null); fetchConnections(); }}
+              className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all ${adminTab === 'connections' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              Pairs
+            </button>
+            <button 
+              onClick={() => setAdminTab('payouts')}
+              className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all ${adminTab === 'payouts' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
+            >
+              Payouts
             </button>
           </div>
         </div>
@@ -223,36 +300,84 @@ export default function AdminDashboard() {
                 assessments.map((patient) => (
                   <div 
                     key={patient.id} 
-                    onClick={() => setSelectedPatient(patient)} 
+                    onClick={() => { setSelectedPatient(patient); setSelectedDoctor(null); }} 
                     className={`p-5 rounded-[1.5rem] cursor-pointer transition-all duration-300 border-2 hover:-translate-y-1 ${selectedPatient?.id === patient.id ? 'border-indigo-500 bg-indigo-50/50 shadow-lg shadow-indigo-500/10 scale-[1.02]' : 'border-transparent bg-white shadow-sm hover:border-slate-200 hover:shadow-md'}`}
                   >
                     <div className="flex justify-between items-start mb-3">
                       <h4 className="font-black text-slate-800 text-lg leading-tight pr-2">{patient.full_name || `Member #${patient.id?.slice(0, 4)}`}</h4>
                       <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest flex-shrink-0 shadow-sm ${patient.is_eligible ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-rose-100 text-rose-700 border border-rose-200'}`}>{patient.is_eligible ? 'Eligible' : 'Rejected'}</span>
                     </div>
-                    <div className="flex gap-5 text-xs font-bold text-slate-500 mb-4 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                    <div className="flex gap-5 text-xs font-bold text-slate-500 mb-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
                       <p className="flex items-center gap-1.5"><Scale className="w-4 h-4 text-slate-400"/> {patient.weight_kg} kg</p>
                       <p className="flex items-center gap-1.5 text-indigo-600"><Target className="w-4 h-4 text-indigo-400"/> {patient.goal_weight_kg} kg</p>
                     </div>
-                    {(patient.booking_date || patient.booking_time) && (
-                      <div className="mt-2 bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-black px-3 py-2.5 rounded-xl flex items-center justify-between shadow-sm">
-                        <span className="flex items-center gap-2"><Clock className="w-4 h-4 text-amber-500"/> Scheduled</span>
-                        <span>{patient.booking_time}</span>
-                      </div>
-                    )}
-                    {patient.prescription_type && (
-                      <div className="mt-2 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] font-black px-3 py-2.5 rounded-xl flex items-center justify-between shadow-sm">
-                        <span className="flex items-center gap-2"><Pill className="w-4 h-4 text-emerald-500"/> Prescribed</span>
-                        <span className="uppercase">{patient.prescription_type}</span>
-                      </div>
-                    )}
+
+                    {/* Member Payment Status */}
+                    <div className="mt-2 text-[10px] font-black uppercase tracking-wider py-1.5 px-3 rounded-xl border flex items-center justify-between shadow-sm bg-white">
+                      <span>Payment Status:</span>
+                      {patient.consultation_fee_paid ? (
+                        patient.booking_date ? (
+                          <span className="text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">🟢 Call Booked</span>
+                        ) : (
+                          <span className="text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-md">🟡 Paid (Awaiting Slot)</span>
+                        )
+                      ) : (
+                        <span className="text-rose-700 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md">🔴 Needs Payment</span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </>
+          ) : adminTab === 'doctors' ? (
+            <>
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 px-2 flex items-center gap-2"><Stethoscope className="w-4 h-4"/> Doctor Profiles ({doctors.length})</h3>
+              {doctors.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+                  <Stethoscope className="w-10 h-10 mb-2 opacity-20"/>
+                  <p className="text-sm font-semibold">No doctors found</p>
+                </div>
+              ) : (
+                doctors.map((doc) => (
+                  <div 
+                    key={doc.doctor_id} 
+                    onClick={() => { setSelectedDoctor(doc); setSelectedPatient(null); }}
+                    className={`p-5 rounded-[1.5rem] cursor-pointer transition-all border-2 hover:-translate-y-1 ${selectedDoctor?.doctor_id === doc.doctor_id ? 'border-indigo-500 bg-indigo-50/50 shadow-lg scale-[1.02]' : 'border-transparent bg-white shadow-sm hover:border-slate-200 hover:shadow-md'}`}
+                  >
+                    <h4 className="font-black text-slate-800 text-base leading-tight pr-2 mb-2">{doc.full_name || 'Dr. Doctor'}</h4>
+                    <p className="text-[10px] text-slate-400 font-mono">ID: {doc.doctor_id.slice(0, 8)}...</p>
+                  </div>
+                ))
+              )}
+            </>
+          ) : adminTab === 'connections' ? (
+            <>
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 px-2 flex items-center gap-2"><Link2 className="w-4 h-4"/> Doctor–Patient Pairs ({connections.length})</h3>
+              {connections.length === 0 ? (
+                <div className="flex flex-col items-center justify-center h-40 text-slate-400">
+                  <Link2 className="w-10 h-10 mb-2 opacity-20"/>
+                  <p className="text-sm font-semibold">No pairs yet</p>
+                </div>
+              ) : (
+                connections.map((conn) => (
+                  <div
+                    key={conn.id}
+                    onClick={() => setSelectedConnection(conn)}
+                    className={`p-4 rounded-2xl cursor-pointer transition-all border-2 hover:-translate-y-0.5 ${selectedConnection?.id === conn.id ? 'border-indigo-500 bg-indigo-50/60 shadow-md' : 'border-transparent bg-white shadow-sm hover:border-slate-200 hover:shadow-md'}`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 uppercase tracking-wide">{conn.status}</span>
+                    </div>
+                    <p className="font-black text-slate-800 text-sm">{conn.patient_name}</p>
+                    <p className="text-xs text-slate-500 font-semibold mt-0.5">→ {conn.doctor_name}</p>
+                    <p className="text-[10px] text-slate-400 mt-1">{conn.booking_date} @ {conn.booking_time}</p>
                   </div>
                 ))
               )}
             </>
           ) : (
             <>
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 px-2 flex items-center gap-2"><Stethoscope className="w-4 h-4"/> Doctor Roster ({doctors.length})</h3>
+              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 px-2 flex items-center gap-2"><Stethoscope className="w-4 h-4"/> Doctor Wallets ({doctors.length})</h3>
               {doctors.length === 0 ? (
                 <div className="flex flex-col items-center justify-center h-40 text-slate-400">
                   <Stethoscope className="w-10 h-10 mb-2 opacity-20"/>
@@ -341,7 +466,91 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {adminTab === 'payouts' ? (
+        {adminTab === 'connections' ? (
+          <div className="p-8 md:p-12 max-w-5xl mx-auto animate-fade-in">
+            {selectedConnection ? (
+              <div className="space-y-6">
+                <div className="flex items-center gap-4 mb-8">
+                  <button onClick={() => setSelectedConnection(null)} className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2 px-4 rounded-xl text-sm transition-all flex items-center gap-2">
+                    ← Back
+                  </button>
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                    <Link2 className="w-8 h-8 text-indigo-500 bg-indigo-50 p-1.5 rounded-xl"/> Connection Details
+                  </h2>
+                </div>
+
+                {/* Doctor info */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Stethoscope className="w-4 h-4"/> Doctor</h3>
+                    <p className="text-2xl font-black text-slate-900">{selectedConnection.doctor_name}</p>
+                    <p className="text-xs text-slate-500 font-mono mt-2 bg-slate-50 px-3 py-1 rounded-lg inline-block">ID: {selectedConnection.doctor_id}</p>
+                  </div>
+                  <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><User className="w-4 h-4"/> Patient</h3>
+                    <p className="text-2xl font-black text-slate-900">{selectedConnection.patient_name}</p>
+                    <p className="text-xs text-slate-500 font-mono mt-2 bg-slate-50 px-3 py-1 rounded-lg inline-block">ID: {selectedConnection.patient_id}</p>
+                    {selectedConnection.patient_phone && <p className="text-xs text-slate-500 font-bold mt-1">📞 {selectedConnection.patient_phone}</p>}
+                    {selectedConnection.patient_age && <p className="text-xs text-slate-500 font-bold mt-0.5">Age: {selectedConnection.patient_age}</p>}
+                  </div>
+                </div>
+
+                {/* Consultation details */}
+                <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Clock className="w-4 h-4"/> Consultation</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="bg-slate-50 rounded-2xl p-4 text-center">
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Status</p>
+                      <span className={`text-sm font-black uppercase px-3 py-1 rounded-full ${selectedConnection.status === 'approved' ? 'bg-emerald-100 text-emerald-700' : selectedConnection.status === 'attended' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'}`}>{selectedConnection.status}</span>
+                    </div>
+                    <div className="bg-slate-50 rounded-2xl p-4 text-center">
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Date</p>
+                      <p className="font-black text-slate-900 text-sm">{selectedConnection.booking_date || '—'}</p>
+                    </div>
+                    <div className="bg-slate-50 rounded-2xl p-4 text-center">
+                      <p className="text-xs font-black text-slate-400 uppercase tracking-wider mb-1">Time</p>
+                      <p className="font-black text-slate-900 text-sm">{selectedConnection.booking_time || '—'}</p>
+                    </div>
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-4 text-center">
+                      <p className="text-xs font-black text-indigo-400 uppercase tracking-wider mb-1 flex items-center justify-center gap-1"><Timer className="w-3 h-3"/> Call Duration</p>
+                      <p className="font-black text-indigo-700 text-sm">{fmtDuration(selectedConnection.call_started_at, selectedConnection.call_ended_at)}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Prescription */}
+                <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Pill className="w-4 h-4"/> Prescription</h3>
+                  {selectedConnection.prescription_type ? (
+                    <div className="space-y-3">
+                      <div className="flex gap-3 flex-wrap">
+                        <span className={`font-black px-4 py-2 rounded-xl text-sm border ${selectedConnection.prescription_type === 'none' ? 'bg-slate-100 border-slate-200 text-slate-600' : 'bg-indigo-50 border-indigo-200 text-indigo-700'}`}>
+                          {selectedConnection.prescription_type === 'none' ? '🚫 No Prescription' : selectedConnection.prescription_type === 'Oral' ? '💊 Oral' : '💉 Injectable'}
+                        </span>
+                      </div>
+                      {selectedConnection.prescription_text && (
+                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-4 mt-3">
+                          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Doctor's Notes</p>
+                          <p className="text-slate-800 font-semibold text-sm leading-relaxed whitespace-pre-wrap">{selectedConnection.prescription_text}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-slate-400 font-semibold text-sm">No prescription written yet</p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full text-center py-32">
+                <div className="w-20 h-20 bg-indigo-50 rounded-3xl flex items-center justify-center mb-6 mx-auto">
+                  <Link2 className="w-10 h-10 text-indigo-400"/>
+                </div>
+                <h3 className="text-xl font-black text-slate-700">Select a Connection</h3>
+                <p className="text-slate-400 font-semibold mt-2 text-sm">Click any pair on the left to see full details</p>
+              </div>
+            )}
+          </div>
+        ) : adminTab === 'payouts' ? (
           <div className="p-8 md:p-12 max-w-6xl mx-auto animate-fade-in space-y-10">
             <div className="flex justify-between items-center mb-8">
               <div>
