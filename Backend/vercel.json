@@ -7,7 +7,7 @@
   ],
   "crons": [
     {
-      "path": "/api/cron/scheduler",
+      "path": "/api/cron/process-bookings",
       "schedule": "* * * * *"
     }
   ]

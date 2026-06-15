@@ -1,6 +1,6 @@
 import os
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional
@@ -640,133 +640,109 @@ async def expire_consultation(patient_id: str, patient_name: str, booking_date: 
     except Exception as e:
         print(f"[SCHEDULER EXPIRY ERROR] {e}")
 
-async def consultation_scheduler_loop():
-    print("[SCHEDULER] Consultation scheduler background task started!")
-    while True:
-        try:
-            # Query all active bookings from health_assessments
-            res = supabase.table("health_assessments")\
-                .select("patient_id, full_name, first_name, last_name, booking_date, booking_time, room_url, consultation_fee_paid")\
-                .execute()
-            
-            if res.data:
-                now = datetime.now()
-                for row in res.data:
-                    booking_date = row.get("booking_date")
-                    booking_time = row.get("booking_time")
-                    patient_id = row["patient_id"]
-                    first_name = row.get("first_name") or ""
-                    last_name = row.get("last_name") or ""
-                    patient_name = row.get("full_name") or f"{first_name} {last_name}".strip() or "Patient"
+@app.get("/api/cron/process-bookings")
+async def cron_process_bookings(request: Request):
+    auth_header = request.headers.get("Authorization")
+    expected_secret = os.getenv("CRON_SECRET", "dev-cron-secret")
+    
+    if auth_header != f"Bearer {expected_secret}":
+        raise HTTPException(status_code=401, detail="Unauthorized")
+        
+    print("[SCHEDULER] Cron endpoint triggered!")
+    try:
+        # Query all active bookings from health_assessments
+        res = supabase.table("health_assessments")\
+            .select("patient_id, full_name, first_name, last_name, booking_date, booking_time, room_url, consultation_fee_paid")\
+            .execute()
+        
+        if res.data:
+            now = datetime.now()
+            for row in res.data:
+                booking_date = row.get("booking_date")
+                booking_time = row.get("booking_time")
+                patient_id = row["patient_id"]
+                first_name = row.get("first_name") or ""
+                last_name = row.get("last_name") or ""
+                patient_name = row.get("full_name") or f"{first_name} {last_name}".strip() or "Patient"
 
-                    # ── CASE 1: Patient has a booked appointment ────────────────────────
-                    if booking_date and booking_time:
-                        room_url = row.get("room_url") or "https://meet.google.com/abc-defg-hij"
-                        booking_dt = parse_booking_dt(booking_date, booking_time)
-                        if not booking_dt:
-                            continue
+                # ── CASE 1: Patient has a booked appointment ────────────────────────
+                if booking_date and booking_time:
+                    room_url = row.get("room_url") or "https://meet.google.com/abc-defg-hij"
+                    booking_dt = parse_booking_dt(booking_date, booking_time)
+                    if not booking_dt:
+                        continue
 
-                        # Time difference in minutes
-                        diff_seconds = (booking_dt - now).total_seconds()
-                        diff_minutes = diff_seconds / 60.0
+                    # Time difference in minutes
+                    diff_seconds = (booking_dt - now).total_seconds()
+                    diff_minutes = diff_seconds / 60.0
 
-                        # Let's find any active doctor_consultation for this patient
-                        c_id = None
-                        doctor_id = None
-                        c_status = "scheduled"
-                        c_res = supabase.table("doctor_consultations")\
-                            .select("id, doctor_id, status")\
-                            .eq("patient_id", patient_id)\
-                            .in_("status", ["scheduled", "calling", "attended"])\
-                            .execute()
-                        if c_res.data:
-                            c_id = c_res.data[0]["id"]
-                            doctor_id = c_res.data[0]["doctor_id"]
-                            c_status = c_res.data[0].get("status") or "scheduled"
+                    # Let's find any active doctor_consultation for this patient
+                    c_id = None
+                    doctor_id = None
+                    c_status = "scheduled"
+                    c_res = supabase.table("doctor_consultations")\
+                        .select("id, doctor_id, status")\
+                        .eq("patient_id", patient_id)\
+                        .in_("status", ["scheduled", "calling", "attended"])\
+                        .order("created_at", desc=True)\
+                        .limit(1)\
+                        .execute()
+                    
+                    if c_res.data:
+                        c_id = c_res.data[0]["id"]
+                        doctor_id = c_res.data[0]["doctor_id"]
+                        c_status = c_res.data[0]["status"]
 
-                        # Unique notification/reminder key
-                        notif_base_key = f"{c_id}" if c_id else f"legacy_{patient_id}_{booking_date}_{booking_time}"
+                    # If the appointment is in the PAST
+                    if diff_minutes < 0:
+                        age_minutes = abs(diff_minutes)
+                        
+                        if c_status == "calling" and age_minutes > 15:
+                            # Doctor called but patient never joined within 15 mins of call start -> NO-SHOW (Patient)
+                            supabase.table("doctor_consultations").update({"status": "cancelled", "prescription_notes": "Patient No-Show"}).eq("id", c_id).execute()
+                            supabase.table("health_assessments").update({"booking_date": None, "booking_time": None}).eq("patient_id", patient_id).execute()
+                            # Free slot
+                            supabase.table("doctor_availability").update({"is_booked": False}).eq("available_date", booking_date).eq("time_slot", booking_time).execute()
 
-                        # Automated Email Reminders:
-                        # 1hr once if > 1hr remains; 10min once if <= 1hr remains. Sent to both doctor and patient.
-                        if diff_seconds > 0:
-                            # Fetch doctor display ID
-                            doctor_display_id = "Unassigned"
-                            if doctor_id:
-                                try:
-                                    dp_res = supabase.table("profiles").select("display_id").eq("id", doctor_id).execute()
-                                    if dp_res.data:
-                                        doctor_display_id = dp_res.data[0].get("display_id") or f"DOC-{doctor_id[:4].upper()}"
-                                    else:
-                                        doctor_display_id = f"DOC-{doctor_id[:4].upper()}"
-                                except Exception:
-                                    doctor_display_id = f"DOC-{doctor_id[:4].upper()}"
+                        elif c_status == "scheduled" and age_minutes >= 30:
+                            # Appointment time passed and doctor never called within 30 mins -> NO-SHOW (Doctor) -> auto-refund!
+                            if c_id:
+                                supabase.table("doctor_consultations").update({"status": "cancelled", "prescription_notes": "Doctor No-Show - Auto Refunded"}).eq("id", c_id).execute()
+                            supabase.table("health_assessments").update({
+                                "consultation_fee_paid": False,
+                                "booking_date": None,
+                                "booking_time": None
+                            }).eq("patient_id", patient_id).execute()
+                            supabase.table("doctor_availability").update({"is_booked": False}).eq("available_date", booking_date).eq("time_slot", booking_time).execute()
+                            # Send refund notification
+                            supabase.table("patient_notifications").insert({
+                                "patient_id": patient_id,
+                                "type": "refund_issued",
+                                "title": "💸 Booking Cancelled & Refunded",
+                                "message": f"Your consultation for {booking_date} at {booking_time} was cancelled as the doctor did not join. A full refund has been initiated."
+                            }).execute()
 
-                            key = c_id if c_id else f"pat_{patient_id}"
-                            
-                            if diff_minutes > 60.0:
-                                last_sent = last_hourly_reminder_sent.get(key)
-                                if not last_sent or (now - last_sent).total_seconds() >= 3600:
-                                    send_meeting_reminder_email(patient_name, doctor_display_id, booking_date, booking_time, room_url, f"{int(diff_minutes // 60)} hour(s)")
-                                    last_hourly_reminder_sent[key] = now
-                            else:
-                                last_sent = last_10min_reminder_sent.get(key)
-                                if not last_sent or (now - last_sent).total_seconds() >= 600:
-                                    send_meeting_reminder_email(patient_name, doctor_display_id, booking_date, booking_time, room_url, f"{int(diff_minutes)} minute(s)")
-                                    last_10min_reminder_sent[key] = now
+                # ── CASE 2: Patient paid fee but NO booking date ────────────────────
+                elif row.get("consultation_fee_paid") and not booking_date:
+                    # Look for their consultation record
+                    c_res = supabase.table("doctor_consultations")\
+                        .select("id, created_at")\
+                        .eq("patient_id", patient_id)\
+                        .in_("status", ["scheduled"])\
+                        .order("created_at", desc=True)\
+                        .limit(1)\
+                        .execute()
 
-                        # Expiration: 90 mins (1.30 hours) for scheduled/calling/attended calls
-                        elif diff_minutes <= -90.0:
-                            key = f"{notif_base_key}_expired"
-                            if key not in sent_notifications:
-                                await expire_consultation(patient_id, patient_name, booking_date, booking_time, c_id, doctor_id)
-                                sent_notifications.add(key)
+                    if c_res.data:
+                        c_id = c_res.data[0]["id"]
+                        created_at_str = c_res.data[0]["created_at"]
+                        created_at_dt = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
+                        now_utc = datetime.now(created_at_dt.tzinfo)
+                        
+                        age_seconds = (now_utc - created_at_dt).total_seconds()
+                        age_hours = age_seconds / 3600.0
 
-                    # ── CASE 2: Patient has paid but has no active booking ──────────────
-                    else:
-                        if row.get("consultation_fee_paid"):
-                            # Check if they have an approved/completed consultation already
-                            c_res = supabase.table("doctor_consultations")\
-                                .select("id")\
-                                .eq("patient_id", patient_id)\
-                                .in_("status", ["approved", "rejected"])\
-                                .execute()
-                            
-                            # If they don't have a completed consultation, they need to reschedule
-                            if not c_res.data:
-                                last_sent = last_reschedule_reminder_sent.get(patient_id)
-                                # Check if we should send a rescheduling reminder (every 1 hour)
-                                if not last_sent or (now - last_sent).total_seconds() >= 3600:
-                                    send_mock_reschedule_email(patient_name, patient_id)
-                                    last_reschedule_reminder_sent[patient_id] = now
-
-            # ── CASE 3: Unassigned consultation checks (unclaimed escrow bookings) ──
-            unassigned_res = supabase.table("doctor_consultations")\
-                .select("id, patient_id, patient_name, booking_date, booking_time, created_at, status, doctor_id")\
-                .eq("status", "scheduled")\
-                .execute()
-
-            if unassigned_res.data:
-                now_utc = datetime.utcnow()
-                for c in unassigned_res.data:
-                    # Only check if doctor_id is None/null
-                    if c.get("doctor_id") is None:
-                        c_id = c["id"]
-                        patient_id = c["patient_id"]
-                        patient_name = c.get("patient_name") or "Member"
-                        booking_date = c.get("booking_date")
-                        booking_time = c.get("booking_time")
-                        created_at_str = c.get("created_at")
-
-                        created_dt = parse_iso_datetime(created_at_str)
-                        if not created_dt:
-                            continue
-
-                        age_seconds = (now_utc - created_dt).total_seconds()
-                        age_minutes = age_seconds / 60.0
-                        age_hours = age_minutes / 60.0
-
-                        # ── Timeout Exceeded (5 hours) -> Refund ──
+                        # ── Timeout (5 hours) ──
                         if age_hours >= 5.0:
                             # 1. Update status to cancelled/refunded
                             supabase.table("doctor_consultations")\
@@ -778,58 +754,20 @@ async def consultation_scheduler_loop():
                             supabase.table("health_assessments")\
                                 .update({
                                     "consultation_fee_paid": False,
-                                    "booking_date": None,
-                                    "booking_time": None,
-                                    "room_url": None,
                                     "updated_at": datetime.now().isoformat()
                                 })\
                                 .eq("patient_id", patient_id)\
                                 .execute()
 
-                            # 2b. Free the doctor_availability slot (is_booked -> False)
-                            if booking_date and booking_time:
-                                supabase.table("doctor_availability")\
-                                    .update({"is_booked": False})\
-                                    .eq("available_date", booking_date)\
-                                    .eq("time_slot", booking_time)\
-                                    .execute()
-
-                            # 3. Create notification for the patient
+                            # 3. Create notification
                             supabase.table("patient_notifications").insert({
                                 "patient_id": patient_id,
                                 "type": "refund_issued",
                                 "title": "💸 Booking Cancelled & Refunded",
-                                "message": f"Your consultation scheduled for {booking_date} at {booking_time} could not be paired with a doctor within 5 hours. We have cancelled the request and issued a full refund of ₹499."
+                                "message": f"We could not match you with a doctor within 5 hours. We have cancelled the request and issued a full refund of ₹499."
                             }).execute()
 
-                            # 4. Send email
-                            send_refund_email(patient_name, booking_date, booking_time)
-                            print(f"[SCHEDULER] Auto-refunded consultation {c_id} for patient {patient_name} due to 5h timeout.")
-
-                        # ── Reminder (Every 25 minutes) ──
-                        else:
-                            last_sent = last_unassigned_reminder_sent.get(c_id)
-                            # Check if 25 minutes (1500 seconds) have passed since last reminder (or since creation if first time)
-                            time_since_last_sent = (now_utc - last_sent).total_seconds() if last_sent else age_seconds
-
-                            if not last_sent or time_since_last_sent >= 1500:
-                                # Send patient notification
-                                supabase.table("patient_notifications").insert({
-                                    "patient_id": patient_id,
-                                    "type": "pairing_update",
-                                    "title": "⏳ Matching with a Doctor...",
-                                    "message": f"We are still matching your consultation scheduled for {booking_date} at {booking_time} with our expert doctors. If no doctor claims it within 5 hours of booking, you will receive a full refund of ₹499."
-                                }).execute()
-
-                                # Send email
-                                send_pairing_reminder_email(patient_name, booking_date, booking_time, 5.0 - age_hours)
-                                last_unassigned_reminder_sent[c_id] = now_utc
-
-        except Exception as e:
-            print(f"[SCHEDULER LOOP ERROR] {e}")
-        
-        await asyncio.sleep(10)  # Run every 10 seconds
-
-@app.on_event("startup")
-async def startup_event():
-    asyncio.create_task(consultation_scheduler_loop())
+        return {"status": "success", "message": "Cron executed"}
+    except Exception as e:
+        print(f"[SCHEDULER LOOP ERROR] {e}")
+        raise HTTPException(status_code=500, detail=str(e))
