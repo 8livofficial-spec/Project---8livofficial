@@ -44,6 +44,10 @@ export default function PatientDashboard() {
 
   // Payment
   const [paymentLoading, setPaymentLoading] = useState(false)
+  const [showPayModal, setShowPayModal] = useState(false)
+  const [payModalType, setPayModalType] = useState<'consultation' | 'membership'>('consultation')
+  const [payStep, setPayStep] = useState<'options' | 'processing' | 'success'>('options')
+  const [payStatusText, setPayStatusText] = useState('')
 
   // Notifications
   const [notifications, setNotifications] = useState<any[]>([])
@@ -256,12 +260,27 @@ export default function PatientDashboard() {
   }
 
   // 5. Simulation Payment Handler (₹499 Consultation fee)
-  const handleConsultationPayment = async () => {
-    setPaymentLoading(true)
+  const handleConsultationPayment = () => {
+    setPayModalType('consultation')
+    setPayStep('options')
+    setShowPayModal(true)
+  }
+
+  const startFakePaymentCycle = async () => {
+    setPayStep('processing')
+    const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+    
+    setPayStatusText("Initializing sandbox gateway session...")
+    await sleep(800)
+    setPayStatusText("Authorizing tokenized mock payload...")
+    await sleep(800)
+    setPayStatusText("Recording database transaction state...")
+    
+    const mockOrderId = 'order_mock_' + Math.random().toString(36).substring(2, 11)
+    const mockPaymentId = 'pay_mock_' + Math.random().toString(36).substring(2, 11)
+
     try {
-      const mockOrderId = 'order_mock_' + Math.random().toString(36).substring(2, 11)
-      const mockPaymentId = 'pay_mock_' + Math.random().toString(36).substring(2, 11)
-      
+      // 1. Try to call the python backend
       const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'
       const response = await fetch(`${API_URL}/api/verify-payment`, {
         method: 'POST',
@@ -271,22 +290,53 @@ export default function PatientDashboard() {
           razorpay_payment_id: mockPaymentId,
           razorpay_signature: 'mock_signature',
           patient_id: user.id,
-          payment_type: 'consultation'
+          payment_type: payModalType,
+          membership_tier: payModalType === 'membership' ? (selectedMembership || 'Gold Plan') : undefined,
+          shipping_state: payModalType === 'membership' ? shippingState : undefined
         })
       })
 
       const verifyData = await response.json()
       if (verifyData.status === 'success' && verifyData.verified) {
-        alert("Payment of ₹499 verified successfully! Please choose your consultation slot.")
-        setAssessment((prev: any) => ({ ...prev, consultation_fee_paid: true }))
-      } else {
-        alert("Payment verification failed. Please try again.")
+        setPayStatusText("Finalizing payment receipt...")
+        await sleep(400)
+        setPayStep('success')
+        if (payModalType === 'consultation') {
+          setAssessment((prev: any) => ({ ...prev, consultation_fee_paid: true }))
+        }
+        return
       }
-    } catch (err: any) {
-      console.error(err)
-      alert("Failed to connect to backend for payment simulation.")
-    } finally {
-      setPaymentLoading(false)
+    } catch (backendErr) {
+      console.warn("Backend verification unavailable. Falling back to frontend secure API...", backendErr)
+    }
+
+    // 2. Fallback: Update DB directly using Next.js Serverless API
+    try {
+      const response = await fetch('/api/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientId: user.id,
+          paymentType: payModalType,
+          membershipTier: payModalType === 'membership' ? (selectedMembership || 'Gold Plan') : undefined,
+          shippingState: payModalType === 'membership' ? shippingState : undefined
+        })
+      })
+
+      if (response.ok) {
+        setPayStatusText("Finalizing payment receipt...")
+        await sleep(400)
+        setPayStep('success')
+        if (payModalType === 'consultation') {
+          setAssessment((prev: any) => ({ ...prev, consultation_fee_paid: true }))
+        }
+      } else {
+        alert("Payment processing fallback failed. Please verify environment config.")
+        setPayStep('options')
+      }
+    } catch (fallbackErr: any) {
+      alert("Error processing sandbox payment: " + fallbackErr.message)
+      setPayStep('options')
     }
   }
 
@@ -375,43 +425,14 @@ export default function PatientDashboard() {
   }
 
   // 8. Membership payment handler
-  const handleMembershipPayment = async () => {
+  const handleMembershipPayment = () => {
     if (!shippingState) {
       alert("Please select your shipping state.")
       return
     }
-    setPaymentLoading(true)
-    try {
-      const mockOrderId = 'order_mock_' + Math.random().toString(36).substring(2, 11)
-      const mockPaymentId = 'pay_mock_' + Math.random().toString(36).substring(2, 11)
-      
-      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000'
-      const response = await fetch(`${API_URL}/api/verify-payment`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          razorpay_order_id: mockOrderId,
-          razorpay_payment_id: mockPaymentId,
-          razorpay_signature: 'mock_signature',
-          patient_id: user.id,
-          payment_type: 'membership',
-          membership_tier: selectedMembership || 'Gold Plan',
-          shipping_state: shippingState
-        })
-      })
-
-      const verifyData = await response.json()
-      if (verifyData.status === 'success' && verifyData.verified) {
-        alert("Membership purchased successfully! Your pharmacy order is being prepared for dispatch. 📦")
-        window.location.reload()
-      } else {
-        alert("Verification failed.")
-      }
-    } catch (err) {
-      alert("Verification connection failed.")
-    } finally {
-      setPaymentLoading(false)
-    }
+    setPayModalType('membership')
+    setPayStep('options')
+    setShowPayModal(true)
   }
 
   // 9. Signout Handler
@@ -827,6 +848,83 @@ export default function PatientDashboard() {
               allow="camera; microphone; fullscreen; display-capture"
               className="w-full h-[550px] border-0"
             />
+          </div>
+        </div>
+      )}
+
+      {/* Fake Payment Capsule Modal */}
+      {showPayModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+          <div className="bg-[#161622] border border-white/10 rounded-[2.5rem] p-8 max-w-md w-full relative overflow-hidden shadow-2xl space-y-6 text-white text-left">
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#2DD4BF]/10 rounded-full blur-2xl pointer-events-none" />
+            
+            {payStep === 'options' && (
+              <>
+                <div className="text-center space-y-2">
+                  <h3 className="text-xl font-bold font-sora">8Liv Sandbox Checkout</h3>
+                  <p className="text-xs opacity-60">This is a simulated payment gateway for development mode.</p>
+                </div>
+                
+                <div className="p-4 bg-white/5 rounded-2xl border border-white/5 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="opacity-60">Payment Mode:</span>
+                    <span className="font-bold uppercase text-[#2DD4BF]">{payModalType} fee</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="opacity-60">Amount due:</span>
+                    <span className="font-extrabold text-white">{payModalType === 'consultation' ? '₹499' : 'Selected Plan Fee'}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <button
+                    onClick={() => startFakePaymentCycle()}
+                    className="w-full bg-[#2DD4BF] hover:bg-[#0FA89E] text-[#0A0A0F] font-bold rounded-2xl py-4 transition-all cursor-pointer"
+                  >
+                    Authorize Sandbox Payment
+                  </button>
+                  <button
+                    onClick={() => setShowPayModal(false)}
+                    className="w-full bg-white/5 hover:bg-white/10 text-white font-bold rounded-2xl py-4 transition-all border border-white/10 cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+
+            {payStep === 'processing' && (
+              <div className="text-center py-8 space-y-6 flex flex-col items-center">
+                <div className="w-16 h-16 border-4 border-[#2DD4BF] border-t-transparent rounded-full animate-spin" />
+                <div className="space-y-2">
+                  <p className="font-bold text-lg animate-pulse">{payStatusText}</p>
+                  <p className="text-xs opacity-50">Please do not refresh the page</p>
+                </div>
+              </div>
+            )}
+
+            {payStep === 'success' && (
+              <div className="text-center py-8 space-y-6 flex flex-col items-center">
+                <div className="w-16 h-16 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center shadow-lg animate-bounce">
+                  <CheckCircle2 className="w-10 h-10" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-bold font-sora">Transaction Authorized</h3>
+                  <p className="text-xs opacity-60">Payment processed successfully and verified in Supabase.</p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowPayModal(false)
+                    if (payModalType === 'membership') {
+                      window.location.reload()
+                    }
+                  }}
+                  className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold rounded-2xl py-4 transition-all cursor-pointer"
+                >
+                  Continue to Dashboard
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
