@@ -12,8 +12,8 @@ import {
 import StaffChat from '@/components/StaffChat';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
 const inputCls = 'w-full border border-slate-200 rounded-xl p-3 bg-slate-50 outline-none transition-all text-slate-900 placeholder-slate-400 font-medium focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/10 [color-scheme:light]';
