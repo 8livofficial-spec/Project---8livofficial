@@ -82,7 +82,7 @@ export default function Navbar() {
             {user ? (
               <>
                 <a 
-                  href={role === 'admin' ? '/admin' : role === 'doctor' ? '/doctor/dashboard' : '/dashboard'} 
+                  href={role === 'admin' ? '/admin' : role === 'doctor' ? '/doctor/dashboard' : '/patient'} 
                   className="px-5 py-2.5 rounded-full text-sm font-semibold text-[#0F172A] bg-white border border-[#D46E53]/20 hover:bg-[#F9F6F0] transition-all flex items-center gap-1.5"
                 >
                   <User size={16} /> My Dashboard
@@ -132,7 +132,7 @@ export default function Navbar() {
               {user ? (
                 <>
                   <a 
-                    href={role === 'admin' ? '/admin' : role === 'doctor' ? '/doctor/dashboard' : '/dashboard'} 
+                    href={role === 'admin' ? '/admin' : role === 'doctor' ? '/doctor/dashboard' : '/patient'} 
                     onClick={() => setMobileMenuOpen(false)}
                     className="w-full text-center bg-white border border-[#D46E53]/20 text-[#0F172A] font-semibold rounded-full px-6 py-4 mt-4 block"
                   >

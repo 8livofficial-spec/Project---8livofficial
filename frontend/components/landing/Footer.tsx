@@ -44,7 +44,7 @@ export default function Footer() {
           <div>
             <h4 className="text-[#0F172A] font-bold mb-6 font-sora">Contact</h4>
             <ul className="space-y-4 mb-8">
-              <li className="text-[#475569]">support@8liv.com</li>
+              <li className="text-[#475569]">8livofficial@gmail.com</li>
               <li className="text-[#475569]">1-800-8LIV-CARE</li>
             </ul>
           </div>

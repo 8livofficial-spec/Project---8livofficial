@@ -286,16 +286,39 @@ def update_booking(data: BookingRequest):
 @app.post("/api/create-video-room", response_model=VideoRoomResponse)
 async def create_video_room():
     try:
+        if DAILY_API_KEY and DAILY_API_KEY != "your_daily_api_key_here":
+            async with httpx.AsyncClient() as client:
+                headers = {
+                    "Authorization": f"Bearer {DAILY_API_KEY}",
+                    "Content-Type": "application/json"
+                }
+                import time
+                exp_time = int(time.time()) + 86400  # 24 hours
+                payload = {
+                    "properties": {
+                        "exp": exp_time,
+                        "enable_chat": True,
+                        "enable_people_ui": True
+                    }
+                }
+                resp = await client.post("https://api.daily.co/v1/rooms", headers=headers, json=payload, timeout=10.0)
+                if resp.status_code in [200, 201]:
+                    room_data = resp.json()
+                    room_url = room_data.get("url")
+                    if room_url:
+                        return VideoRoomResponse(room_url=room_url)
+                print(f"[DAILY API RESPONSE ERROR] {resp.status_code} - {resp.text}")
+
         import random
         import string
         part1 = "".join(random.choices(string.ascii_lowercase, k=3))
         part2 = "".join(random.choices(string.ascii_lowercase, k=4))
         part3 = "".join(random.choices(string.ascii_lowercase, k=3))
-        meet_url = f"https://meet.jit.si/8liv-consultation-{part1}-{part2}-{part3}"
-        return VideoRoomResponse(room_url=meet_url)
+        room_url = f"https://8liv.daily.co/consultation-{part1}-{part2}-{part3}"
+        return VideoRoomResponse(room_url=room_url)
     except Exception as e:
         print(f"[VIDEO API ERROR] {e}")
-        return VideoRoomResponse(room_url="https://meet.jit.si/8liv-consultation-fallback")
+        return VideoRoomResponse(room_url="https://8liv.daily.co/consultation-fallback")
 
 
 # ── PAYMENT ──────────────────────────────────────────────────────────────────

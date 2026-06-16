@@ -11,59 +11,6 @@ export default function AssessmentPage() {
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [step, setStep] = useState(1)
   const [stepError, setStepError] = useState('')
-
-  useEffect(() => {
-    const checkRedirect = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        let role = 'patient'
-        const match = document.cookie.match(/user_role=([^;]+)/)
-        if (match) {
-          role = match[1]
-        } else {
-          if (session.user.email === '8livofficial@gmail.com') {
-            role = 'admin'
-          } else {
-            const { data: docProfile } = await supabase
-              .from('doctor_profiles')
-              .select('doctor_id')
-              .eq('doctor_id', session.user.id)
-              .single()
-            if (docProfile) {
-              role = 'doctor'
-            } else {
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', session.user.id)
-                .single()
-              role = profile?.role || session.user.user_metadata?.role || 'patient'
-            }
-          }
-          document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
-        }
-
-        if (role === 'admin') {
-          router.replace('/admin')
-        } else if (role === 'doctor') {
-          router.replace('/doctor/dashboard')
-        } else {
-          router.replace('/dashboard')
-        }
-      } else {
-        setCheckingAuth(false)
-      }
-    }
-    checkRedirect()
-  }, [router])
-
-  if (checkingAuth) {
-    return (
-      <div className="min-h-screen bg-[#F9F6F0] flex items-center justify-center text-[#D46E53]">
-        <div className="w-12 h-12 border-4 border-current border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
@@ -99,6 +46,59 @@ export default function AssessmentPage() {
     email: '',
     password: ''
   })
+
+  useEffect(() => {
+    const checkRedirect = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        let role = 'patient'
+        const match = document.cookie.match(/user_role=([^;]+)/)
+        if (match) {
+          role = match[1]
+        } else {
+          if (session.user.email === '8livofficial@gmail.com') {
+            role = 'admin'
+          } else {
+            const { data: docProfile } = await supabase
+              .from('doctor_profiles')
+              .select('id')
+              .eq('id', session.user.id)
+              .maybeSingle()
+            if (docProfile) {
+              role = 'doctor'
+            } else {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', session.user.id)
+                .maybeSingle()
+              role = profile?.role || session.user.user_metadata?.role || 'patient'
+            }
+          }
+          document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
+        }
+
+        if (role === 'admin') {
+          router.replace('/admin')
+        } else if (role === 'doctor') {
+          router.replace('/doctor/dashboard')
+        } else {
+          router.replace('/patient')
+        }
+      } else {
+        setCheckingAuth(false)
+      }
+    }
+    checkRedirect()
+  }, [router])
+
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-[#F9F6F0] flex items-center justify-center text-[#D46E53]">
+        <div className="w-12 h-12 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   const handleAssessmentSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -146,7 +146,7 @@ export default function AssessmentPage() {
       } else {
         // Set user_role cookie and redirect straight to dashboard
         document.cookie = `user_role=patient; path=/; max-age=86400; SameSite=Lax`
-        window.location.href = '/dashboard'
+        window.location.href = '/patient'
       }
 
     } catch (err: any) {

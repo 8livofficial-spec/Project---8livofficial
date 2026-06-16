@@ -19,47 +19,60 @@ export default function Home() {
 
   useEffect(() => {
     const checkRedirect = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        let role = 'patient'
-        const match = document.cookie.match(/user_role=([^;]+)/)
-        if (match) {
-          role = match[1]
-        } else {
-          // Fallback if role cookie is missing (fetch from db and write it)
-          if (session.user.email === '8livofficial@gmail.com') {
-            role = 'admin'
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        if (error) {
+          console.error("Auth check error:", error)
+        }
+        
+        if (session?.user) {
+          let role = 'patient'
+          const match = document.cookie.match(/user_role=([^;]+)/)
+          if (match) {
+            role = match[1]
           } else {
-            const { data: docProfile } = await supabase
-              .from('doctor_profiles')
-              .select('doctor_id')
-              .eq('doctor_id', session.user.id)
-              .single()
-
-            if (docProfile) {
-              role = 'doctor'
+            // Fallback if role cookie is missing (fetch from db and write it)
+            if (session.user.email === '8livofficial@gmail.com') {
+              role = 'admin'
             } else {
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('role')
+              const { data: docProfile } = await supabase
+                .from('doctor_profiles')
+                .select('id')
                 .eq('id', session.user.id)
-                .single()
-              role = profile?.role || session.user.user_metadata?.role || 'patient'
-            }
-          }
-          // Set role cookie
-          document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
-        }
+                .maybeSingle()
 
-        // Redirect to their active flow
-        if (role === 'admin') {
-          router.replace('/admin')
-        } else if (role === 'doctor') {
-          router.replace('/doctor/dashboard')
+              if (docProfile) {
+                role = 'doctor'
+              } else {
+                const { data: profile } = await supabase
+                  .from('profiles')
+                  .select('role')
+                  .eq('id', session.user.id)
+                  .maybeSingle()
+                role = profile?.role || session.user.user_metadata?.role || 'patient'
+              }
+            }
+            // Set role cookie
+            document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
+          }
+
+          // Redirect to their active flow
+          if (role === 'admin') {
+            router.replace('/admin')
+          } else if (role === 'doctor') {
+            router.replace('/doctor/dashboard')
+          } else if (role === 'dietitian') {
+            router.replace('/dietitian/dashboard')
+          } else if (role === 'trainer') {
+            router.replace('/trainer/dashboard')
+          } else {
+            router.replace('/patient')
+          }
         } else {
-          router.replace('/dashboard')
+          setCheckingAuth(false)
         }
-      } else {
+      } catch (err) {
+        console.error("Auth session check threw an exception:", err)
         setCheckingAuth(false)
       }
     }

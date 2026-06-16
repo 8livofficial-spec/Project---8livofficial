@@ -4,8 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer } from 'lucide-react';
-
+import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer, Trash2, GitMerge, ClipboardList, DollarSign } from 'lucide-react';
+import { motion } from 'framer-motion';
+import SessionMonitor from '@/components/admin/SessionMonitor';
 // ── Helper: format duration from timestamps ──────────────────────────────
 function fmtDuration(startedAt: string | null, endedAt: string | null): string {
   if (!startedAt) return '—';
@@ -34,7 +35,7 @@ export default function AdminDashboard() {
   const [activeCall, setActiveCall] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [prescribeLoading, setPrescribeLoading] = useState(false);
-  const [adminTab, setAdminTab] = useState<'patients' | 'doctors' | 'connections' | 'payouts'>('patients');
+  const [adminTab, setAdminTab] = useState<'patients' | 'doctors' | 'connections' | 'payouts' | 'staff' | 'plans'>('patients');
   const [selectedDoctor, setSelectedDoctor] = useState<any>(null);
   const [doctors, setDoctors] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
@@ -42,11 +43,252 @@ export default function AdminDashboard() {
   const [connections, setConnections] = useState<any[]>([]);
   const [selectedConnection, setSelectedConnection] = useState<any>(null);
 
-  useEffect(() => { 
-    fetchPatients(); 
-    fetchPayoutsData();
-    fetchConnections();
+  // ── Auth states ────────────────────────────────────────────────────────
+  const [adminUser, setAdminUser] = useState<any>(null);
+  const [authChecking, setAuthChecking] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
+
+  // ── New Tab state ──────────────────────────────────────────────────────
+  const [allStaff, setAllStaff] = useState<any[]>([]);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<any>(null);
+  const [selectedStaff, setSelectedStaff] = useState<any>(null);
+
+  // ── Care Team Assignment state ──────────────────────────────────────────
+  const [currentAssignment, setCurrentAssignment] = useState<any>(null);
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [updatingAssignment, setUpdatingAssignment] = useState(false);
+
+  // ── Revenue State ───────────────────────────────────────────────────────
+  const [monthlyRevenue, setMonthlyRevenue] = useState<number>(0);
+
+  // ── Staff Form state ────────────────────────────────────────────────────
+  const [staffEmail, setStaffEmail] = useState('');
+  const [staffPassword, setStaffPassword] = useState('');
+  const [staffRole, setStaffRole] = useState<'admin' | 'doctor' | 'dietitian' | 'trainer'>('doctor');
+  const [staffFirstName, setStaffFirstName] = useState('');
+  const [staffLastName, setStaffLastName] = useState('');
+  const [staffPhone, setStaffPhone] = useState('');
+  const [staffSubmitting, setStaffSubmitting] = useState(false);
+  const [staffDeleting, setStaffDeleting] = useState(false);
+
+  // ── Plan Form state ─────────────────────────────────────────────────────
+  const [planName, setPlanName] = useState('');
+  const [planPrice, setPlanPrice] = useState('');
+  const [planConsultFee, setPlanConsultFee] = useState('499');
+  const [planFeatures, setPlanFeatures] = useState('');
+  const [planIsActive, setPlanIsActive] = useState(true);
+  const [planDiscountCode, setPlanDiscountCode] = useState('');
+  const [planDiscountPercent, setPlanDiscountPercent] = useState('0');
+  const [planSubmitting, setPlanSubmitting] = useState(false);
+
+  const resetStaffForm = () => {
+    setStaffEmail('');
+    setStaffPassword('');
+    setStaffRole('doctor');
+    setStaffFirstName('');
+    setStaffLastName('');
+    setStaffPhone('');
+  };
+
+  const handleRemoveStaff = async (staffMember: any) => {
+    if (!adminUser) return;
+    if (staffMember.id === adminUser.id) {
+      alert("Security Block: You cannot delete your own logged-in admin account!");
+      return;
+    }
+
+    const firstConfirm = window.confirm(
+      `Are you absolutely sure you want to remove ${staffMember.first_name} ${staffMember.last_name} (${staffMember.role})?\n\nThis will completely delete their account and dissociate them from all assigned care teams.`
+    );
+    if (!firstConfirm) return;
+
+    const doubleCheck = window.prompt(
+      `CRITICAL WARNING: This action cannot be undone.\nTo permanently delete this user, please type the word 'REMOVE' below:`
+    );
+    if (doubleCheck !== 'REMOVE') {
+      alert("Action cancelled. Input did not match 'REMOVE'.");
+      return;
+    }
+
+    setStaffDeleting(true);
+    try {
+      const res = await fetch(`/api/admin/users?adminId=${adminUser.id}&userId=${staffMember.id}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to delete staff member.');
+      }
+      alert(`Successfully removed ${staffMember.first_name} ${staffMember.last_name} from the system.`);
+      setSelectedStaff(null);
+      
+      // Refresh all necessary listings in background
+      await Promise.all([
+        fetchStaffProfiles(),
+        fetchPayoutsData(),
+        fetchConnections(),
+        fetchPatients()
+      ]);
+    } catch (err: any) {
+      console.error('[Remove Staff Error]', err);
+      alert('Error removing staff member: ' + err.message);
+    } finally {
+      setStaffDeleting(false);
+    }
+  };
+
+  const resetPlanForm = () => {
+    setPlanName('');
+    setPlanPrice('');
+    setPlanConsultFee('499');
+    setPlanFeatures('');
+    setPlanIsActive(true);
+    setPlanDiscountCode('');
+    setPlanDiscountPercent('0');
+  };
+
+  useEffect(() => {
+    async function checkAuthAndLoad() {
+      try {
+        setAuthChecking(true);
+        const { data: { session }, error: sessionErr } = await supabase.auth.getSession();
+        if (sessionErr || !session?.user) {
+          setAuthError('Please sign in to access the administrator control center.');
+          setAuthChecking(false);
+          setLoading(false);
+          router.push('/');
+          return;
+        }
+
+        const profileRes = await fetch(`/api/admin/profile?userId=${session.user.id}`);
+        if (!profileRes.ok) {
+          setAuthError('Access Denied. You do not have permission to view the admin control center.');
+          setAuthChecking(false);
+          setLoading(false);
+          return;
+        }
+
+        const { profile } = await profileRes.json();
+
+        if (!profile || profile.role !== 'admin') {
+          setAuthError('Access Denied. You do not have permission to view the admin control center.');
+          setAuthChecking(false);
+          setLoading(false);
+          return;
+        }
+
+        setAdminUser(profile);
+        setAuthChecking(false);
+
+        // Load data
+        await Promise.all([
+          fetchPatients(),
+          fetchPayoutsData(),
+          fetchConnections(),
+          fetchStaffProfiles(),
+          fetchPlans()
+        ]);
+      } catch (err: any) {
+        setAuthError('Authentication verification failed: ' + (err.message || err));
+        setAuthChecking(false);
+      } finally {
+        setLoading(false);
+      }
+    }
+    checkAuthAndLoad();
   }, []);
+
+  // ── Fetch staff profiles ───────────────────────────────────────────────
+  const fetchStaffProfiles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, first_name, last_name, role, phone_number')
+        .in('role', ['admin', 'doctor', 'dietitian', 'trainer'])
+        .order('role', { ascending: true });
+      if (!error && data) {
+        setAllStaff(data);
+      }
+    } catch (err) {
+      console.error('[Staff Fetch Error]', err);
+    }
+  };
+
+  // ── Fetch plans from backend API ───────────────────────────────────────
+  const fetchPlans = async () => {
+    try {
+      const res = await fetch('/api/admin/plans');
+      if (res.ok) {
+        const data = await res.json();
+        setPlans(data.plans || []);
+      }
+    } catch (err) {
+      console.error('[Plans Fetch Error]', err);
+    }
+  };
+
+  // ── Fetch assignments for a patient ────────────────────────────────────
+  const fetchPatientAssignment = async (patientId: string) => {
+    if (!adminUser) return;
+    setAssignmentLoading(true);
+    try {
+      const res = await fetch(`/api/admin/assignments?patientId=${patientId}&adminId=${adminUser.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.assignment) {
+          setCurrentAssignment({
+            doctor_id: data.assignment.doctor_id || '',
+            dietitian_id: data.assignment.dietitian_id || '',
+            trainer_id: data.assignment.trainer_id || ''
+          });
+        } else {
+          setCurrentAssignment({ doctor_id: '', dietitian_id: '', trainer_id: '' });
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch patient assignments:', err);
+    } finally {
+      setAssignmentLoading(false);
+    }
+  };
+
+  // ── Update Care Team clinician assignment ───────────────────────────────
+  const handleUpdateAssignment = async (roleType: 'doctor' | 'dietitian' | 'trainer', value: string) => {
+    if (!adminUser || !selectedPatient) return;
+    setUpdatingAssignment(true);
+    try {
+      const payload = {
+        adminId: adminUser.id,
+        patientId: selectedPatient.patient_id,
+        doctorId: roleType === 'doctor' ? value : currentAssignment?.doctor_id,
+        dietitianId: roleType === 'dietitian' ? value : currentAssignment?.dietitian_id,
+        trainerId: roleType === 'trainer' ? value : currentAssignment?.trainer_id,
+      };
+
+      const res = await fetch('/api/admin/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        setCurrentAssignment({
+          doctor_id: payload.doctorId || '',
+          dietitian_id: payload.dietitianId || '',
+          trainer_id: payload.trainerId || ''
+        });
+        alert('Care team updated and patient notified! ✅');
+      } else {
+        const data = await res.json();
+        alert(data.error || 'Failed to update care team.');
+      }
+    } catch (err: any) {
+      alert('Error updating assignment: ' + err.message);
+    } finally {
+      setUpdatingAssignment(false);
+    }
+  };
 
   // ── Fetch doctor-patient connections ───────────────────────────────────
   const fetchConnections = async () => {
@@ -64,8 +306,8 @@ export default function AdminDashboard() {
       const docIds = [...new Set(cons.map((c: any) => c.doctor_id))];
       const { data: docProfiles } = await supabase
         .from('doctor_profiles')
-        .select('doctor_id, full_name')
-        .in('doctor_id', docIds);
+        .select('id, full_name')
+        .in('id', docIds);
 
       // Fetch patient names from health_assessments
       const patientIds = [...new Set(cons.map((c: any) => c.patient_id))];
@@ -75,7 +317,7 @@ export default function AdminDashboard() {
         .in('patient_id', patientIds);
 
       const docMap: Record<string, string> = {};
-      if (docProfiles) docProfiles.forEach((d: any) => { docMap[d.doctor_id] = d.full_name || 'Dr. Expert'; });
+      if (docProfiles) docProfiles.forEach((d: any) => { docMap[d.id] = d.full_name || 'Dr. Expert'; });
 
       const patMap: Record<string, any> = {};
       if (patientData) patientData.forEach((p: any) => { patMap[p.patient_id] = p; });
@@ -102,7 +344,7 @@ export default function AdminDashboard() {
         id, patient_id, full_name, first_name, last_name, age, phone_number, address, dob_month, dob_day, dob_year, agree_terms,
         height_cm, weight_kg, goal_weight_kg, tried_weight_program, extra_medical_info, prescription_type,
         health_conditions_two, glp1_image_url,
-        is_eligible, medical_history, booking_date, booking_time, room_url, local_food, workout_preference, created_at
+        is_eligible, medical_history, booking_date, booking_time, room_url, local_food, workout_preference, created_at, consultation_fee_paid
       `)
       .order('created_at', { ascending: false });
 
@@ -121,9 +363,10 @@ export default function AdminDashboard() {
 
       if (profiles && wallets) {
         const doctorsWithWallets = profiles.map((doc: any) => {
-          const wallet = wallets.find((w: any) => w.doctor_id === doc.doctor_id) || { balance: 0, total_earned: 0, total_withdrawn: 0 };
+          const wallet = wallets.find((w: any) => w.doctor_id === doc.id) || { balance: 0, total_earned: 0, total_withdrawn: 0 };
           return {
             ...doc,
+            doctor_id: doc.id,
             balance: wallet.balance,
             total_earned: wallet.total_earned,
             total_withdrawn: wallet.total_withdrawn,
@@ -133,6 +376,22 @@ export default function AdminDashboard() {
       }
       if (txs) {
         setTransactions(txs);
+      }
+
+      // Fetch monthly revenue from patient payments
+      const startOfMonth = new Date();
+      startOfMonth.setDate(1);
+      startOfMonth.setHours(0, 0, 0, 0);
+
+      const { data: payments } = await supabase
+        .from('payment_transactions')
+        .select('amount')
+        .eq('status', 'success')
+        .gte('created_at', startOfMonth.toISOString());
+      
+      if (payments) {
+        const total = payments.reduce((sum: number, p: any) => sum + Number(p.amount), 0);
+        setMonthlyRevenue(total);
       }
     } catch (err) {
       console.error('[Payouts Fetch Error]', err);
@@ -176,10 +435,12 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (selectedPatient?.patient_id) {
       fetchPatientLogs(selectedPatient.patient_id, selectedPatient.weight_kg);
+      fetchPatientAssignment(selectedPatient.patient_id);
     } else { 
       setPatientLogs([]); 
+      setCurrentAssignment(null);
     }
-  }, [selectedPatient]);
+  }, [selectedPatient, adminUser]);
 
   const fetchPatientLogs = async (userId: string, startWeight: number) => {
     const { data, error } = await supabase
@@ -230,6 +491,47 @@ export default function AdminDashboard() {
   const hasWorkoutPref = selectedPatient?.workout_preference && selectedPatient.workout_preference.trim().length > 0;
   const hasDietFitnessData = hasLocalFood || hasWorkoutPref;
 
+  if (authChecking) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-900">
+        <div className="relative">
+          <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin"></div>
+        </div>
+        <p className="text-lg font-black text-slate-300 mt-6 tracking-wide">Verifying credentials...</p>
+      </div>
+    );
+  }
+
+  if (authError) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-955 p-6">
+        <div className="max-w-md w-full bg-slate-900 border border-slate-800 rounded-[2.5rem] p-10 shadow-2xl text-center space-y-6">
+          <div className="w-16 h-16 bg-rose-500/10 text-rose-500 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+            <AlertCircle className="w-8 h-8"/>
+          </div>
+          <div>
+            <h3 className="text-2xl font-black text-white tracking-tight">Security Alert</h3>
+            <p className="text-slate-400 text-sm font-semibold mt-3 leading-relaxed">{authError}</p>
+          </div>
+          <div className="pt-2 flex flex-col gap-3">
+            <button
+              onClick={() => router.push('/')}
+              className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black py-4 px-6 rounded-2xl transition-all shadow-lg hover:-translate-y-0.5 active:scale-95 text-sm"
+            >
+              Go to Homepage
+            </button>
+            <button
+              onClick={handleLogout}
+              className="w-full bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-3 px-6 rounded-2xl text-sm transition-all"
+            >
+              Logout / Switch Account
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50">
@@ -250,61 +552,84 @@ export default function AdminDashboard() {
       <div className="absolute bottom-[-20%] left-[-10%] w-[50%] h-[50%] bg-violet-200/40 rounded-full blur-[120px] pointer-events-none z-0"></div>
 
       {/* ── LEFT SIDEBAR ── */}
-      <div className="w-[380px] bg-white/80 backdrop-blur-2xl border-r border-white/60 flex flex-col shadow-[10px_0_30px_rgba(0,0,0,0.03)] z-20">
-        <div className="p-8 bg-slate-900 text-white rounded-br-[3rem] shadow-xl relative overflow-hidden">
+      <motion.div 
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.5 }}
+        className="w-[380px] bg-white/80 backdrop-blur-2xl border-r border-white/60 flex flex-col shadow-[10px_0_30px_rgba(0,0,0,0.03)] z-20"
+      >
+        <div className="p-8 bg-[#1A1F36] text-white rounded-br-[3rem] shadow-xl relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full blur-2xl"></div>
-          <h1 className="text-3xl font-black tracking-tight flex items-center gap-3"><ShieldCheck className="w-8 h-8 text-indigo-400"/> 8liv Admin</h1>
-          <p className="text-slate-400 text-sm mt-2 font-bold tracking-wide uppercase">Control Center</p>
+          <h1 className="text-3xl font-black tracking-tight flex items-center gap-3"><ShieldCheck className="w-8 h-8 text-orange-500"/> 8liv Admin</h1>
+          <p className="text-[#5C7A6B] text-sm mt-2 font-bold tracking-wide uppercase">Control Center</p>
         </div>
 
-        {/* Navigation tabs */}
-        <div className="px-6 pt-6 pb-2">
-          <div className="bg-slate-100 p-1.5 rounded-2xl flex gap-1 flex-wrap">
-            <button 
-              onClick={() => setAdminTab('patients')}
-              className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all ${adminTab === 'patients' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-            >
-              Members
-            </button>
-            <button 
-              onClick={() => { setAdminTab('doctors'); setSelectedDoctor(null); }}
-              className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all ${adminTab === 'doctors' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-            >
-              Doctors
-            </button>
-            <button 
-              onClick={() => { setAdminTab('connections'); setSelectedConnection(null); fetchConnections(); }}
-              className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all ${adminTab === 'connections' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-            >
-              Pairs
-            </button>
-            <button 
-              onClick={() => setAdminTab('payouts')}
-              className={`flex-1 py-2.5 px-2 rounded-xl text-xs font-black tracking-wide uppercase transition-all ${adminTab === 'payouts' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-500 hover:text-slate-800'}`}
-            >
-              Payouts
-            </button>
-          </div>
+        {/* Navigation Menu */}
+        <div className="flex-1 flex flex-col py-6 px-4 gap-2 overflow-y-auto">
+          {[
+            { id: 'patients', label: 'Members', icon: Users },
+            { id: 'doctors', label: 'Doctors', icon: Stethoscope },
+            { id: 'connections', label: 'Pairs', icon: GitMerge },
+            { id: 'payouts', label: 'Payouts', icon: DollarSign },
+            { id: 'staff', label: 'Staff Mgmt', icon: ShieldCheck },
+            { id: 'plans', label: 'Plans', icon: ClipboardList }
+          ].map(item => {
+            const isActive = adminTab === item.id;
+            const Icon = item.icon;
+            return (
+              <button 
+                key={item.id}
+                onClick={() => {
+                  setAdminTab(item.id as any);
+                  if (item.id === 'doctors') setSelectedDoctor(null);
+                  if (item.id === 'connections') { setSelectedConnection(null); fetchConnections(); }
+                }}
+                className={`flex items-center gap-3 px-4 py-3 text-sm font-black tracking-wide uppercase transition-all rounded-r-xl border-l-4 ${
+                  isActive 
+                    ? 'bg-orange-50 text-orange-600 border-orange-500 shadow-sm' 
+                    : 'border-transparent text-slate-500 hover:bg-slate-50 hover:text-slate-800 hover:border-slate-300'
+                }`}
+              >
+                <Icon className="w-5 h-5" />
+                {item.label}
+              </button>
+            )
+          })}
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
           {adminTab === 'patients' ? (
             <>
-              <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 px-2 flex items-center gap-2"><Users className="w-4 h-4"/> Member Roster ({assessments.length})</h3>
+              <div className="flex flex-col gap-3 mb-4 px-2">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"><Users className="w-4 h-4"/> Member Roster ({assessments.length})</h3>
+                <a
+                  href={`/api/admin/reports?adminId=${adminUser?.id}&format=csv`}
+                  download="8liv_patients_report.csv"
+                  className="flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98] w-full"
+                >
+                  <ArrowDownToLine className="w-4 h-4"/> Export Patient Roster (CSV)
+                </a>
+              </div>
               {assessments.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-slate-400">
-                  <Users className="w-10 h-10 mb-2 opacity-20"/>
-                  <p className="text-sm font-semibold">No members found</p>
+                <div className="flex flex-col items-center justify-center text-center py-12 px-4 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 mx-2">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center mb-4">
+                    <Users className="w-8 h-8 text-indigo-400" />
+                  </div>
+                  <h3 className="text-base font-black text-slate-700 mb-1">No members found</h3>
+                  <p className="text-xs font-semibold text-slate-400 max-w-[200px]">New registered members will appear here automatically.</p>
                 </div>
               ) : (
-                assessments.map((patient) => (
-                  <div 
+                assessments.map((patient, index) => (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
                     key={patient.id} 
                     onClick={() => { setSelectedPatient(patient); setSelectedDoctor(null); }} 
-                    className={`p-5 rounded-[1.5rem] cursor-pointer transition-all duration-300 border-2 hover:-translate-y-1 ${selectedPatient?.id === patient.id ? 'border-indigo-500 bg-indigo-50/50 shadow-lg shadow-indigo-500/10 scale-[1.02]' : 'border-transparent bg-white shadow-sm hover:border-slate-200 hover:shadow-md'}`}
+                    className={`p-5 rounded-2xl cursor-pointer transition-all duration-300 border hover:-translate-y-1 ${selectedPatient?.id === patient.id ? 'ring-2 ring-orange-500 bg-orange-50/50 shadow-md border-transparent scale-[1.01]' : 'border-slate-100 bg-white shadow-sm hover:border-orange-200 hover:shadow-md hover:bg-orange-50/30'}`}
                   >
                     <div className="flex justify-between items-start mb-3">
-                      <h4 className="font-black text-slate-800 text-lg leading-tight pr-2">{patient.full_name || `Member #${patient.id?.slice(0, 4)}`}</h4>
+                      <h4 className="font-black text-slate-800 text-lg leading-tight pr-2">{patient.first_name || patient.last_name ? `${patient.first_name || ''} ${patient.last_name || ''}`.trim() : `Member #${patient.id?.slice(0, 4)}`}</h4>
                       <span className={`text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-widest flex-shrink-0 shadow-sm ${patient.is_eligible ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' : 'bg-rose-100 text-rose-700 border border-rose-200'}`}>{patient.is_eligible ? 'Eligible' : 'Rejected'}</span>
                     </div>
                     <div className="flex gap-5 text-xs font-bold text-slate-500 mb-3 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
@@ -317,15 +642,15 @@ export default function AdminDashboard() {
                       <span>Payment Status:</span>
                       {patient.consultation_fee_paid ? (
                         patient.booking_date ? (
-                          <span className="text-emerald-700 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded-md">🟢 Call Booked</span>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">Call Booked</span>
                         ) : (
-                          <span className="text-amber-700 bg-amber-50 border border-amber-100 px-2 py-0.5 rounded-md">🟡 Paid (Awaiting Slot)</span>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800">Paid (Not Scheduled)</span>
                         )
                       ) : (
-                        <span className="text-rose-700 bg-rose-50 border border-rose-100 px-2 py-0.5 rounded-md">🔴 Needs Payment</span>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">Needs Payment</span>
                       )}
                     </div>
-                  </div>
+                  </motion.div>
                 ))
               )}
             </>
@@ -333,20 +658,26 @@ export default function AdminDashboard() {
             <>
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 px-2 flex items-center gap-2"><Stethoscope className="w-4 h-4"/> Doctor Profiles ({doctors.length})</h3>
               {doctors.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-slate-400">
-                  <Stethoscope className="w-10 h-10 mb-2 opacity-20"/>
-                  <p className="text-sm font-semibold">No doctors found</p>
+                <div className="flex flex-col items-center justify-center text-center py-12 px-4 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 mx-2">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center mb-4">
+                    <Stethoscope className="w-8 h-8 text-indigo-400" />
+                  </div>
+                  <h3 className="text-base font-black text-slate-700 mb-1">No doctors found</h3>
+                  <p className="text-xs font-semibold text-slate-400 max-w-[200px]">Register doctors in the Staff Mgmt tab.</p>
                 </div>
               ) : (
-                doctors.map((doc) => (
-                  <div 
+                doctors.map((doc, index) => (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
                     key={doc.doctor_id} 
                     onClick={() => { setSelectedDoctor(doc); setSelectedPatient(null); }}
-                    className={`p-5 rounded-[1.5rem] cursor-pointer transition-all border-2 hover:-translate-y-1 ${selectedDoctor?.doctor_id === doc.doctor_id ? 'border-indigo-500 bg-indigo-50/50 shadow-lg scale-[1.02]' : 'border-transparent bg-white shadow-sm hover:border-slate-200 hover:shadow-md'}`}
+                    className={`p-5 rounded-2xl cursor-pointer transition-all duration-300 border hover:-translate-y-1 ${selectedDoctor?.doctor_id === doc.doctor_id ? 'ring-2 ring-orange-500 bg-orange-50/50 shadow-md border-transparent scale-[1.01]' : 'border-slate-100 bg-white shadow-sm hover:border-orange-200 hover:shadow-md hover:bg-orange-50/30'}`}
                   >
                     <h4 className="font-black text-slate-800 text-base leading-tight pr-2 mb-2">{doc.full_name || 'Dr. Doctor'}</h4>
                     <p className="text-[10px] text-slate-400 font-mono">ID: {doc.doctor_id.slice(0, 8)}...</p>
-                  </div>
+                  </motion.div>
                 ))
               )}
             </>
@@ -354,16 +685,22 @@ export default function AdminDashboard() {
             <>
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 px-2 flex items-center gap-2"><Link2 className="w-4 h-4"/> Doctor–Patient Pairs ({connections.length})</h3>
               {connections.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-slate-400">
-                  <Link2 className="w-10 h-10 mb-2 opacity-20"/>
-                  <p className="text-sm font-semibold">No pairs yet</p>
+                <div className="flex flex-col items-center justify-center text-center py-12 px-4 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 mx-2">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center mb-4">
+                    <GitMerge className="w-8 h-8 text-indigo-400" />
+                  </div>
+                  <h3 className="text-base font-black text-slate-700 mb-1">No pairs yet</h3>
+                  <p className="text-xs font-semibold text-slate-400 max-w-[200px]">Assign members to their care teams to create pairs.</p>
                 </div>
               ) : (
-                connections.map((conn) => (
-                  <div
+                connections.map((conn, index) => (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
                     key={conn.id}
                     onClick={() => setSelectedConnection(conn)}
-                    className={`p-4 rounded-2xl cursor-pointer transition-all border-2 hover:-translate-y-0.5 ${selectedConnection?.id === conn.id ? 'border-indigo-500 bg-indigo-50/60 shadow-md' : 'border-transparent bg-white shadow-sm hover:border-slate-200 hover:shadow-md'}`}
+                    className={`p-5 rounded-2xl cursor-pointer transition-all duration-300 border hover:-translate-y-1 ${selectedConnection?.id === conn.id ? 'ring-2 ring-orange-500 bg-orange-50/50 shadow-md border-transparent scale-[1.01]' : 'border-slate-100 bg-white shadow-sm hover:border-orange-200 hover:shadow-md hover:bg-orange-50/30'}`}
                   >
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-xs font-black text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100 uppercase tracking-wide">{conn.status}</span>
@@ -371,7 +708,113 @@ export default function AdminDashboard() {
                     <p className="font-black text-slate-800 text-sm">{conn.patient_name}</p>
                     <p className="text-xs text-slate-500 font-semibold mt-0.5">→ {conn.doctor_name}</p>
                     <p className="text-[10px] text-slate-400 mt-1">{conn.booking_date} @ {conn.booking_time}</p>
+                  </motion.div>
+                ))
+              )}
+            </>
+          ) : adminTab === 'staff' ? (
+            <>
+              <div className="px-2 mb-4 space-y-3">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <Users className="w-4 h-4"/> Staff Directory ({allStaff.length})
+                </h3>
+                <button
+                  onClick={() => { setSelectedStaff(null); resetStaffForm(); }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-black text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-all shadow-sm"
+                >
+                  + Appoint New Staff
+                </button>
+              </div>
+              {allStaff.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-center py-12 px-4 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 mx-2">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center mb-4">
+                    <ShieldCheck className="w-8 h-8 text-indigo-400" />
                   </div>
+                  <h3 className="text-base font-black text-slate-700 mb-1">No staff found</h3>
+                  <p className="text-xs font-semibold text-slate-400 max-w-[200px]">Add staff members to manage the platform.</p>
+                </div>
+              ) : (
+                allStaff.map((staff, index) => (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    key={staff.id}
+                    onClick={() => setSelectedStaff(staff)}
+                    className={`p-5 rounded-2xl cursor-pointer transition-all duration-300 border hover:-translate-y-1 ${selectedStaff?.id === staff.id ? 'ring-2 ring-orange-500 bg-orange-50/50 shadow-md border-transparent scale-[1.01]' : 'border-slate-100 bg-white shadow-sm hover:border-orange-200 hover:shadow-md hover:bg-orange-50/30'}`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-black text-slate-800 text-base leading-tight pr-2">
+                        {staff.first_name} {staff.last_name}
+                      </h4>
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${staff.role === 'admin' ? 'bg-purple-100 text-purple-700 border border-purple-200' : staff.role === 'doctor' ? 'bg-blue-100 text-blue-700 border border-blue-200' : staff.role === 'dietitian' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}`}>
+                        {staff.role}
+                      </span>
+                    </div>
+                    {staff.phone_number && <p className="text-xs font-bold text-slate-500">📞 {staff.phone_number}</p>}
+                    <p className="text-[10px] text-slate-400 font-mono mt-1">ID: {staff.id.slice(0, 8)}...</p>
+                  </motion.div>
+                ))
+              )}
+            </>
+          ) : adminTab === 'plans' ? (
+            <>
+              <div className="px-2 mb-4 space-y-3">
+                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                  <Apple className="w-4 h-4"/> Membership Tiers ({plans.length})
+                </h3>
+                <button
+                  onClick={() => { setSelectedPlan(null); resetPlanForm(); }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl text-xs font-black text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 transition-all shadow-sm"
+                >
+                  + Configure New Plan
+                </button>
+              </div>
+              {plans.length === 0 ? (
+                <div className="flex flex-col items-center justify-center text-center py-12 px-4 border-2 border-dashed border-slate-200 rounded-3xl bg-slate-50/50 mx-2">
+                  <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-slate-100 flex items-center justify-center mb-4">
+                    <Apple className="w-8 h-8 text-indigo-400" />
+                  </div>
+                  <h3 className="text-base font-black text-slate-700 mb-1">No active plans found</h3>
+                  <p className="text-xs font-semibold text-slate-400 max-w-[200px]">Create membership plans for patients.</p>
+                </div>
+              ) : (
+                plans.map((plan, index) => (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
+                    key={plan.id || plan.name}
+                    onClick={() => {
+                      setSelectedPlan(plan);
+                      setPlanName(plan.name);
+                      setPlanPrice(plan.price_monthly.toString());
+                      setPlanConsultFee((plan.consultation_fee || 499).toString());
+                      setPlanFeatures(plan.features?.join(', ') || '');
+                      setPlanIsActive(plan.is_active !== false);
+                      setPlanDiscountCode(plan.discount_code || '');
+                      setPlanDiscountPercent((plan.discount_percent || 0).toString());
+                    }}
+                    className={`p-5 rounded-2xl cursor-pointer transition-all duration-300 border hover:-translate-y-1 ${selectedPlan?.name === plan.name ? 'ring-2 ring-orange-500 bg-orange-50/50 shadow-md border-transparent scale-[1.01]' : 'border-slate-100 bg-white shadow-sm hover:border-orange-200 hover:shadow-md hover:bg-orange-50/30'}`}
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <h4 className="font-black text-slate-800 text-base leading-tight pr-2">
+                        {plan.name}
+                      </h4>
+                      <span className={`text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest ${plan.is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'}`}>
+                        {plan.is_active ? 'Active' : 'Inactive'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between font-bold text-xs text-slate-500">
+                      <span>Monthly Fee:</span>
+                      <span className="text-indigo-600">₹{plan.price_monthly}</span>
+                    </div>
+                    {plan.discount_code && (
+                      <div className="mt-2 text-[10px] bg-amber-50 text-amber-700 border border-amber-100 px-2 py-0.5 rounded-md font-bold inline-block">
+                        🏷️ Code: {plan.discount_code} ({plan.discount_percent}% off)
+                      </div>
+                    )}
+                  </motion.div>
                 ))
               )}
             </>
@@ -379,15 +822,18 @@ export default function AdminDashboard() {
             <>
               <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 px-2 flex items-center gap-2"><Stethoscope className="w-4 h-4"/> Doctor Wallets ({doctors.length})</h3>
               {doctors.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-40 text-slate-400">
-                  <Stethoscope className="w-10 h-10 mb-2 opacity-20"/>
-                  <p className="text-sm font-semibold">No doctors found</p>
+                <div className="flex flex-col items-center justify-center text-center py-10">
+                  <Stethoscope className="w-10 h-10 text-gray-300 mb-4" />
+                  <h3 className="text-sm font-semibold text-gray-500 mb-1">No doctors found</h3>
                 </div>
               ) : (
-                doctors.map((doc) => (
-                  <div 
+                doctors.map((doc, index) => (
+                  <motion.div 
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: index * 0.05 }}
                     key={doc.doctor_id} 
-                    className="p-5 rounded-[1.5rem] border bg-white shadow-sm hover:shadow-md transition-all duration-300 space-y-3"
+                    className="p-5 rounded-2xl bg-white shadow-sm border border-slate-100 hover:shadow-md hover:border-slate-200 transition-all space-y-3"
                   >
                     <h4 className="font-black text-slate-800 text-base leading-tight pr-2">{doc.full_name || 'Dr. Doctor'}</h4>
                     <div className="space-y-1.5 text-xs font-bold text-slate-500">
@@ -395,35 +841,40 @@ export default function AdminDashboard() {
                       <p className="flex justify-between"><span>Total Earned:</span> <span className="text-slate-700">₹{doc.total_earned}</span></p>
                       <p className="flex justify-between"><span>Total Withdrawn:</span> <span className="text-slate-700">₹{doc.total_withdrawn}</span></p>
                     </div>
-                  </div>
+                  </motion.div>
                 ))
               )}
             </>
           )}
         </div>
 
-        {/* Logout */}
-        <div className="p-6 border-t border-slate-100/60 bg-white/40">
+        {/* Sign Out */}
+        <div className="p-4 pt-0 border-t border-slate-100">
           <button 
             onClick={handleLogout}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3.5 rounded-2xl text-sm font-black text-rose-600 bg-rose-50 hover:bg-rose-100 hover:text-rose-700 transition-all duration-300 shadow-sm hover:shadow-md hover:-translate-y-0.5 active:scale-[0.98]"
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors border border-red-100 hover:border-red-200"
           >
-            <LogOut className="w-5 h-5"/> Logout
+            <LogOut className="w-4 h-4"/> Sign Out
           </button>
         </div>
-      </div>
+      </motion.div>
 
       {/* ── RIGHT MAIN AREA ── */}
-      <div className="flex-1 overflow-y-auto relative z-10 custom-scrollbar">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1, duration: 0.5 }}
+        className="flex-1 overflow-y-auto relative z-10 custom-scrollbar bg-[#F5F0EB]/20"
+      >
         {activeCall && (
-          <div className="absolute inset-0 z-50 bg-slate-950 flex flex-col animate-fade-in">
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-50 bg-slate-950 flex flex-col">
             <div className="bg-slate-900 text-white p-6 flex justify-between items-center shadow-2xl border-b border-slate-800">
               <div className="flex items-center gap-4">
                 <div className="relative flex h-4 w-4">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-4 w-4 bg-rose-500 shadow-[0_0_15px_rgba(244,63,94,0.8)]"></span>
                 </div>
-                <h2 className="text-xl font-black tracking-wide">Live {activeCall} Session <span className="text-slate-500 font-medium">|</span> {selectedPatient?.full_name || 'Member'}</h2>
+                <h2 className="text-xl font-black tracking-wide">Live {activeCall} Session <span className="text-slate-500 font-medium">|</span> {selectedPatient?.first_name || selectedPatient?.last_name ? `${selectedPatient.first_name || ''} ${selectedPatient.last_name || ''}`.trim() : 'Member'}</h2>
               </div>
               <button onClick={() => setActiveCall(null)} className="bg-rose-600 hover:bg-rose-700 text-white font-bold py-3 px-8 rounded-xl text-sm transition-all flex items-center gap-2 shadow-lg hover:shadow-rose-600/30 active:scale-95"><PhoneOff className="w-5 h-5"/> End Session</button>
             </div>
@@ -463,11 +914,11 @@ export default function AdminDashboard() {
                 </div>
               </div>
             </div>
-          </div>
+          </motion.div>
         )}
 
         {adminTab === 'connections' ? (
-          <div className="p-8 md:p-12 max-w-5xl mx-auto animate-fade-in">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="p-8 md:p-12 max-w-5xl mx-auto">
             {selectedConnection ? (
               <div className="space-y-6">
                 <div className="flex items-center gap-4 mb-8">
@@ -549,9 +1000,9 @@ export default function AdminDashboard() {
                 <p className="text-slate-400 font-semibold mt-2 text-sm">Click any pair on the left to see full details</p>
               </div>
             )}
-          </div>
+          </motion.div>
         ) : adminTab === 'payouts' ? (
-          <div className="p-8 md:p-12 max-w-6xl mx-auto animate-fade-in space-y-10">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="p-8 md:p-12 max-w-6xl mx-auto space-y-10">
             <div className="flex justify-between items-center mb-8">
               <div>
                 <h2 className="text-4xl font-black text-slate-900 tracking-tight flex items-center gap-3">
@@ -573,17 +1024,23 @@ export default function AdminDashboard() {
                 <Clock className="w-6 h-6 text-amber-500 bg-amber-50 p-1.5 rounded-xl"/> Pending Withdrawal Requests
               </h3>
               {transactions.filter(tx => tx.type === 'withdrawal' && tx.status !== 'paid' && tx.status !== 'approved' && tx.status !== 'completed').length === 0 ? (
-                <div className="text-center py-16 text-slate-400">
-                  <CheckCircle2 className="w-16 h-16 mx-auto mb-4 text-emerald-500/80 animate-bounce"/>
-                  <p className="font-black text-lg text-slate-800">All cleared!</p>
-                  <p className="text-sm font-semibold text-slate-400 mt-1">No pending withdrawal requests from doctors.</p>
+                <div className="flex flex-col items-center justify-center text-center py-16">
+                  <CheckCircle2 className="w-12 h-12 text-gray-300 mb-4" />
+                  <h3 className="text-base font-semibold text-gray-500 mb-1">All cleared!</h3>
+                  <p className="text-sm text-gray-400 max-w-xs mx-auto">No pending withdrawal requests from doctors.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {transactions.filter(tx => tx.type === 'withdrawal' && tx.status !== 'paid' && tx.status !== 'approved' && tx.status !== 'completed').map((tx: any) => {
+                  {transactions.filter(tx => tx.type === 'withdrawal' && tx.status !== 'paid' && tx.status !== 'approved' && tx.status !== 'completed').map((tx: any, index: number) => {
                     const doc = doctors.find(d => d.doctor_id === tx.doctor_id);
                     return (
-                      <div key={tx.id} className="flex flex-col md:flex-row md:items-center justify-between p-6 rounded-[2rem] border-2 border-amber-200 bg-amber-50/10 gap-4 transition-all hover:bg-amber-50/20">
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        key={tx.id} 
+                        className="flex flex-col md:flex-row md:items-center justify-between p-6 rounded-3xl border border-orange-200 bg-orange-50/50 gap-4 transition-colors hover:bg-orange-50 hover:border-orange-300 cursor-pointer shadow-sm hover:shadow-md"
+                      >
                         <div>
                           <h4 className="font-black text-slate-800 text-lg leading-tight">{doc?.full_name || 'Dr. Doctor'}</h4>
                           <p className="text-xs text-slate-400 font-bold mt-1.5 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> Requested: {new Date(tx.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
@@ -598,7 +1055,7 @@ export default function AdminDashboard() {
                             <CheckCircle2 className="w-4 h-4"/> Mark as Paid (Offline)
                           </button>
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
@@ -611,16 +1068,25 @@ export default function AdminDashboard() {
                 <CheckCircle2 className="w-6 h-6 text-emerald-500 bg-emerald-50 p-1.5 rounded-xl"/> Payout History
               </h3>
               {transactions.filter(tx => tx.type === 'withdrawal' && (tx.status === 'paid' || tx.status === 'approved' || tx.status === 'completed')).length === 0 ? (
-                <div className="text-center py-16 text-slate-400">
-                  <Wallet className="w-14 h-14 mx-auto mb-3 opacity-20"/>
-                  <p className="font-bold">No completed payouts history found.</p>
+                <div className="flex flex-col items-center justify-center text-center py-16 px-4 border-2 border-dashed border-slate-200 rounded-[2rem] bg-slate-50/50">
+                  <div className="w-20 h-20 bg-white rounded-3xl shadow-sm border border-slate-100 flex items-center justify-center mb-6">
+                    <CheckCircle2 className="w-10 h-10 text-emerald-400" />
+                  </div>
+                  <h3 className="text-xl font-black text-slate-700 mb-2">No completed payouts</h3>
+                  <p className="text-sm font-semibold text-slate-400 max-w-[250px]">No completed payouts history found.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {transactions.filter(tx => tx.type === 'withdrawal' && (tx.status === 'paid' || tx.status === 'approved' || tx.status === 'completed')).map((tx: any) => {
+                  {transactions.filter(tx => tx.type === 'withdrawal' && (tx.status === 'paid' || tx.status === 'approved' || tx.status === 'completed')).map((tx: any, index: number) => {
                     const doc = doctors.find(d => d.doctor_id === tx.doctor_id);
                     return (
-                      <div key={tx.id} className="flex items-center justify-between p-5 rounded-[1.8rem] border border-slate-100 hover:bg-slate-50/50 transition-colors">
+                      <motion.div 
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.1 }}
+                        key={tx.id} 
+                        className="flex items-center justify-between p-5 rounded-[1.8rem] border border-slate-100 hover:bg-gray-50 transition-colors cursor-pointer"
+                      >
                         <div className="flex items-center gap-4">
                           <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-inner">
                             <ArrowDownToLine className="w-6 h-6"/>
@@ -634,28 +1100,453 @@ export default function AdminDashboard() {
                           <p className="font-black text-xl text-emerald-600">-₹{tx.amount.toLocaleString('en-IN')}</p>
                           <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 mt-1.5 inline-block">Paid Offline</span>
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
               )}
             </div>
-          </div>
+          </motion.div>
+        ) : adminTab === 'staff' ? (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="p-8 md:p-12 max-w-4xl mx-auto space-y-8">
+            {selectedStaff ? (
+              <div className="bg-white/80 backdrop-blur-xl p-10 rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
+                <div className="flex items-center gap-4 mb-8">
+                  <button
+                    onClick={() => setSelectedStaff(null)}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2 px-4 rounded-xl text-sm transition-all"
+                  >
+                    ← Back to Appoint Form
+                  </button>
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tight">Staff Member Details</h2>
+                </div>
+
+                <div className="space-y-6">
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Full Name</p>
+                    <p className="text-xl font-black text-slate-800">{selectedStaff.first_name} {selectedStaff.last_name}</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Assigned Role</p>
+                    <span className={`text-sm font-black uppercase px-3 py-1 rounded-full inline-block mt-1 ${selectedStaff.role === 'admin' ? 'bg-purple-100 text-purple-700 border border-purple-200' : selectedStaff.role === 'doctor' ? 'bg-blue-100 text-blue-700 border border-blue-200' : selectedStaff.role === 'dietitian' ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-emerald-100 text-emerald-700 border border-emerald-200'}`}>
+                      {selectedStaff.role}
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Phone Number</p>
+                    <p className="text-lg font-bold text-slate-700">{selectedStaff.phone_number || 'N/A'}</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100">
+                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Unique User ID</p>
+                    <p className="text-sm font-mono text-slate-500">{selectedStaff.id}</p>
+                  </div>
+                </div>
+
+                {/* Remove Staff Action */}
+                <div className="mt-8 pt-6 border-t border-slate-100 flex flex-col gap-4">
+                  {selectedStaff.id === adminUser?.id ? (
+                    <div className="bg-rose-50 text-rose-700 p-4 rounded-2xl border border-rose-100 text-xs font-black text-center uppercase tracking-wider">
+                      🛡️ Currently Logged In (Self-deletion Blocked)
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => handleRemoveStaff(selectedStaff)}
+                      disabled={staffDeleting}
+                      className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-2xl text-sm font-black text-white bg-rose-600 hover:bg-rose-700 disabled:bg-rose-300 transition-all duration-300 shadow-lg hover:shadow-rose-600/20 hover:-translate-y-0.5 active:scale-[0.98] active:translate-y-0"
+                    >
+                      {staffDeleting ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                          Removing Staff Member...
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="w-5 h-5"/>
+                          Remove Staff Member / Doctor
+                        </>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="bg-white/80 backdrop-blur-xl p-10 rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
+                <h2 className="text-3xl font-black text-slate-900 mb-2 tracking-tight flex items-center gap-3">
+                  <ShieldCheck className="w-8 h-8 text-indigo-500 bg-indigo-50/80 p-1.5 rounded-xl"/> Appoint New Clinician / Staff
+                </h2>
+                <p className="text-slate-500 font-semibold text-sm mb-8">
+                  Appoint a new administrator, doctor (physician), dietitian, or fitness trainer. Credentials will bypass email confirmation requirements.
+                </p>
+
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!adminUser) return;
+                    if (!staffEmail || !staffPassword || !staffFirstName || !staffLastName) {
+                      alert('Please fill in all required fields.');
+                      return;
+                    }
+                    setStaffSubmitting(true);
+                    try {
+                      const res = await fetch('/api/admin/users', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          adminId: adminUser.id,
+                          email: staffEmail,
+                          password: staffPassword,
+                          role: staffRole,
+                          firstName: staffFirstName,
+                          lastName: staffLastName,
+                          phoneNumber: staffPhone
+                        })
+                      });
+
+                      if (res.ok) {
+                        alert('New staff member appointed successfully! ✅');
+                        resetStaffForm();
+                        await fetchStaffProfiles();
+                      } else {
+                        const data = await res.json();
+                        alert(data.error || 'Failed to appoint staff.');
+                      }
+                    } catch (err: any) {
+                      alert('Error: ' + err.message);
+                    } finally {
+                      setStaffSubmitting(false);
+                    }
+                  }}
+                  className="space-y-6"
+                >
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest">First Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={staffFirstName}
+                        onChange={(e) => setStaffFirstName(e.target.value)}
+                        placeholder="John"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Last Name *</label>
+                      <input
+                        type="text"
+                        required
+                        value={staffLastName}
+                        onChange={(e) => setStaffLastName(e.target.value)}
+                        placeholder="Doe"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Email Address *</label>
+                      <input
+                        type="email"
+                        required
+                        value={staffEmail}
+                        onChange={(e) => setStaffEmail(e.target.value)}
+                        placeholder="doctor@8liv.com"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Initial Password *</label>
+                      <input
+                        type="password"
+                        required
+                        value={staffPassword}
+                        onChange={(e) => setStaffPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest">System Role *</label>
+                      <select
+                        value={staffRole}
+                        onChange={(e: any) => setStaffRole(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      >
+                        <option value="doctor">Doctor (Physician)</option>
+                        <option value="dietitian">Dietitian</option>
+                        <option value="trainer">Fitness Coach</option>
+                        <option value="admin">Administrator</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Phone Number</label>
+                      <input
+                        type="text"
+                        value={staffPhone}
+                        onChange={(e) => setStaffPhone(e.target.value)}
+                        placeholder="+91 9876543210"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4">
+                    <button
+                      type="submit"
+                      disabled={staffSubmitting}
+                      className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black py-4 px-6 rounded-2xl transition-all shadow-lg hover:-translate-y-0.5 active:scale-95 text-sm flex items-center justify-center gap-2"
+                    >
+                      {staffSubmitting ? 'Appointing Clinician...' : 'Appoint Staff Member'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+          </motion.div>
+        ) : adminTab === 'plans' ? (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="p-8 md:p-12 max-w-4xl mx-auto">
+            <div className="bg-white/80 backdrop-blur-xl p-10 rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
+              <div className="flex justify-between items-center mb-8">
+                <div>
+                  <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                    <Apple className="w-8 h-8 text-indigo-500 bg-indigo-50 p-1.5 rounded-xl"/> 
+                    {selectedPlan ? `Configure: ${selectedPlan.name}` : 'Create Membership Plan'}
+                  </h2>
+                  <p className="text-slate-500 font-semibold text-sm mt-1">
+                    {selectedPlan ? 'Update pricing tiers, consultation fee, promotional discount codes, and features.' : 'Initialize a new membership subscription tier.'}
+                  </p>
+                </div>
+                {selectedPlan && (
+                  <button
+                    onClick={() => { setSelectedPlan(null); resetPlanForm(); }}
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2 px-4 rounded-xl text-xs transition-all"
+                  >
+                    Create Instead
+                  </button>
+                )}
+              </div>
+
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!adminUser) return;
+                  if (!planName || !planPrice) {
+                    alert('Please fill in Plan Name and Monthly Price.');
+                    return;
+                  }
+                  setPlanSubmitting(true);
+                  try {
+                    const parsedFeatures = planFeatures.split(',').map(f => f.trim()).filter(f => f.length > 0);
+                    const res = await fetch('/api/admin/plans', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        adminId: adminUser.id,
+                        name: planName,
+                        priceMonthly: parseFloat(planPrice),
+                        consultationFee: parseFloat(planConsultFee || '499'),
+                        features: parsedFeatures,
+                        isActive: planIsActive,
+                        discountCode: planDiscountCode || null,
+                        discountPercent: parseInt(planDiscountPercent || '0')
+                      })
+                    });
+
+                    if (res.ok) {
+                      alert('Membership plan saved successfully! ✅');
+                      resetPlanForm();
+                      setSelectedPlan(null);
+                      await fetchPlans();
+                    } else {
+                      const data = await res.json();
+                      alert(data.error || 'Failed to save plan.');
+                    }
+                  } catch (err: any) {
+                    alert('Error: ' + err.message);
+                  } finally {
+                    setPlanSubmitting(false);
+                  }
+                }}
+                className="space-y-6"
+              >
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Plan Name *</label>
+                    <input
+                      type="text"
+                      required
+                      value={planName}
+                      onChange={(e) => setPlanName(e.target.value)}
+                      placeholder="Silver Plan / Gold Plan"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Monthly Subscription Price (INR) *</label>
+                    <input
+                      type="number"
+                      required
+                      value={planPrice}
+                      onChange={(e) => setPlanPrice(e.target.value)}
+                      placeholder="999"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Consultation Fee (INR)</label>
+                    <input
+                      type="number"
+                      value={planConsultFee}
+                      onChange={(e) => setPlanConsultFee(e.target.value)}
+                      placeholder="499"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3 pt-6 h-full">
+                    <input
+                      id="planIsActive"
+                      type="checkbox"
+                      checked={planIsActive}
+                      onChange={(e) => setPlanIsActive(e.target.checked)}
+                      className="w-5 h-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                    />
+                    <label htmlFor="planIsActive" className="text-sm font-bold text-slate-700 cursor-pointer">
+                      Plan is Active (Visible to members during checkout)
+                    </label>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Discount Code (Promo Code)</label>
+                    <input
+                      type="text"
+                      value={planDiscountCode}
+                      onChange={(e) => setPlanDiscountCode(e.target.value)}
+                      placeholder="SAVE20"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Discount Percent (0-100)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="100"
+                      value={planDiscountPercent}
+                      onChange={(e) => setPlanDiscountPercent(e.target.value)}
+                      placeholder="20"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Plan Features (comma-separated)</label>
+                  <textarea
+                    rows={4}
+                    value={planFeatures}
+                    onChange={(e) => setPlanFeatures(e.target.value)}
+                    placeholder="GLP-1 Prescriptions, 1:1 Video Consultations, Pharmacy Delivery, priority chat support"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                  />
+                  <p className="text-[10px] text-slate-400 font-semibold">Separate features with commas (e.g. Feature A, Feature B, Feature C)</p>
+                </div>
+
+                <div className="pt-4">
+                  <button
+                    type="submit"
+                    disabled={planSubmitting}
+                    className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black py-4 px-6 rounded-2xl transition-all shadow-lg hover:-translate-y-0.5 active:scale-95 text-sm flex items-center justify-center gap-2"
+                  >
+                    {planSubmitting ? 'Saving Configuration...' : selectedPlan ? 'Update Membership Plan' : 'Save Plan Configuration'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </motion.div>
         ) : (
           <>
             {!selectedPatient && !activeCall ? (
-              <div className="h-full flex flex-col items-center justify-center text-slate-400 p-10 animate-fade-in">
-                <div className="w-32 h-32 bg-white rounded-full shadow-lg flex items-center justify-center mb-6 border border-slate-100"><Users className="w-16 h-16 text-indigo-300" /></div>
-                <h2 className="text-3xl font-black text-slate-800 tracking-tight mb-2">Select a member</h2>
-                <p className="text-base font-medium text-slate-500">View detailed health profiles and manage sessions.</p>
-              </div>
+              <motion.div 
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="p-8 md:p-12 max-w-6xl mx-auto h-full flex flex-col"
+              >
+                <div className="mb-10">
+                  <h2 className="text-4xl font-black text-[#1A1F36] tracking-tight mb-2">Dashboard Overview</h2>
+                  <p className="text-[#5C7A6B] font-semibold">Track key metrics and recent platform activity.</p>
+                </div>
+                
+                <motion.div 
+                  initial="hidden"
+                  animate="show"
+                  variants={{
+                    hidden: { opacity: 0 },
+                    show: {
+                      opacity: 1,
+                      transition: { staggerChildren: 0.1 }
+                    }
+                  }}
+                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12"
+                >
+                  <motion.div variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }} className="bg-white p-6 rounded-2xl hover:scale-105 transition-transform duration-300 hover:shadow-lg shadow-[0_4px_20px_rgba(26,31,54,0.05)] border border-[#F5F0EB]">
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="bg-orange-50 text-orange-500 p-4 rounded-full"><Users className="w-6 h-6"/></div>
+                      <h3 className="text-sm font-black text-[#5C7A6B] uppercase tracking-widest">Total Patients</h3>
+                    </div>
+                    <p className="text-4xl font-black text-[#1A1F36]">{assessments.length}</p>
+                  </motion.div>
+                  
+                  <motion.div variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }} className="bg-white p-6 rounded-2xl hover:scale-105 transition-transform duration-300 hover:shadow-lg shadow-[0_4px_20px_rgba(26,31,54,0.05)] border border-[#F5F0EB]">
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="bg-orange-50 text-orange-500 p-4 rounded-full"><Stethoscope className="w-6 h-6"/></div>
+                      <h3 className="text-sm font-black text-[#5C7A6B] uppercase tracking-widest">Total Doctors</h3>
+                    </div>
+                    <p className="text-4xl font-black text-[#1A1F36]">{doctors.length}</p>
+                  </motion.div>
+
+                  <motion.div variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }} className="bg-white p-6 rounded-2xl hover:scale-105 transition-transform duration-300 hover:shadow-lg shadow-[0_4px_20px_rgba(26,31,54,0.05)] border border-[#F5F0EB]">
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="bg-orange-50 text-orange-500 p-4 rounded-full"><Wallet className="w-6 h-6"/></div>
+                      <h3 className="text-sm font-black text-[#5C7A6B] uppercase tracking-widest">Monthly Revenue</h3>
+                    </div>
+                    <p className="text-4xl font-black text-[#1A1F36]">₹{monthlyRevenue.toLocaleString('en-IN')}</p>
+                  </motion.div>
+
+                  <motion.div variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }} className="bg-white p-6 rounded-2xl hover:scale-105 transition-transform duration-300 hover:shadow-lg shadow-[0_4px_20px_rgba(26,31,54,0.05)] border border-[#F5F0EB]">
+                    <div className="flex items-center gap-4 mb-4">
+                      <div className="bg-orange-50 text-orange-500 p-4 rounded-full"><Activity className="w-6 h-6"/></div>
+                      <h3 className="text-sm font-black text-[#5C7A6B] uppercase tracking-widest">Active Plans</h3>
+                    </div>
+                    <p className="text-4xl font-black text-[#1A1F36]">{plans.length}</p>
+                  </motion.div>
+                </motion.div>
+
+                <div className="flex-1 flex flex-col items-center justify-center text-slate-400 bg-white/40 rounded-[3rem] border border-white/60 shadow-sm p-10">
+                  <div className="w-24 h-24 bg-white rounded-full shadow-lg flex items-center justify-center mb-6 border border-[#F5F0EB]"><Users className="w-12 h-12 text-[#5C7A6B]" /></div>
+                  <h2 className="text-2xl font-black text-[#1A1F36] tracking-tight mb-2">Select a member</h2>
+                  <p className="text-sm font-medium text-[#5C7A6B]">View detailed health profiles and manage sessions from the left sidebar.</p>
+                </div>
+              </motion.div>
             ) : !activeCall && (
-              <div className="p-8 md:p-12 max-w-6xl mx-auto animate-fade-in">
+              <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="p-8 md:p-12 max-w-6xl mx-auto">
                 
                 {/* ── MEMBER HEADER CARD ── */}
                 <div className="bg-white/80 backdrop-blur-xl p-10 rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-white/60 mb-10 flex justify-between items-center transition-all hover:shadow-[0_8px_30px_rgba(79,70,229,0.06)]">
                   <div>
-                    <h2 className="text-5xl font-black text-slate-900 mb-4 tracking-tighter flex items-center gap-4"><div className="bg-indigo-100 text-indigo-600 p-3 rounded-[1.5rem]"><User className="w-8 h-8"/></div> {selectedPatient.full_name || 'Anonymous Member'}</h2>
+                    <h2 className="text-5xl font-black text-slate-900 mb-4 tracking-tighter flex items-center gap-4"><div className="bg-indigo-100 text-indigo-600 p-3 rounded-[1.5rem]"><User className="w-8 h-8"/></div> {selectedPatient?.first_name || selectedPatient?.last_name ? `${selectedPatient.first_name || ''} ${selectedPatient.last_name || ''}`.trim() : 'Anonymous Member'}</h2>
                     <div className="flex flex-wrap gap-5 text-slate-600 font-bold text-sm mt-2 bg-slate-50/80 p-4 rounded-2xl border border-slate-100 inline-flex items-center">
                       <p className="flex items-center gap-2"><span className="text-slate-400">AGE</span> {selectedPatient.age || 'N/A'}</p>
                       <div className="w-1.5 h-1.5 rounded-full bg-slate-300"></div>
@@ -664,11 +1555,6 @@ export default function AdminDashboard() {
                       <p className="flex items-center gap-2"><span className="text-slate-400">TEL</span> {selectedPatient.phone_number || 'N/A'}</p>
                     </div>
                     <p className="text-slate-500 font-semibold text-sm mt-5 pl-2 flex items-center gap-2"><HomeIcon className="w-4 h-4 text-slate-400"/> {selectedPatient.address || 'N/A'}</p>
-                  </div>
-                  <div className="flex flex-col gap-4 min-w-[220px]">
-                    <button onClick={() => setActiveCall('Doctor')} className="bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-indigo-500/30 flex items-center justify-between transition-all hover:-translate-y-1 active:scale-[0.98] group"><span className="flex items-center gap-3"><Video className="w-5 h-5"/> Doctor View</span><ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"/></button>
-                    <button onClick={() => setActiveCall('Dietician')} className="bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-amber-500/30 flex items-center justify-between transition-all hover:-translate-y-1 active:scale-[0.98] group"><span className="flex items-center gap-3"><Apple className="w-5 h-5"/> Dietician View</span><ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"/></button>
-                    <button onClick={() => setActiveCall('Fitness')} className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white font-bold py-4 px-6 rounded-2xl shadow-lg hover:shadow-emerald-500/30 flex items-center justify-between transition-all hover:-translate-y-1 active:scale-[0.98] group"><span className="flex items-center gap-3"><Dumbbell className="w-5 h-5"/> Coach View</span><ChevronRight className="w-4 h-4 opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"/></button>
                   </div>
                 </div>
 
@@ -686,6 +1572,75 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                 )}
+
+                {/* ── CARE TEAM ASSIGNMENT PANEL ── */}
+                <div className="bg-white/80 backdrop-blur-xl border border-indigo-100 p-10 rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.03)] mb-10">
+                  <h3 className="text-indigo-900 font-black text-2xl flex items-center gap-3 mb-6"><Users className="w-8 h-8 text-indigo-500 bg-indigo-50 p-1.5 rounded-xl"/> Assigned Care Team</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    {/* Doctor Dropdown */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest block flex items-center gap-1.5">
+                        <Stethoscope className="w-4 h-4 text-slate-400"/> Doctor (Physician)
+                      </label>
+                      <select
+                        value={currentAssignment?.doctor_id || ''}
+                        onChange={(e) => handleUpdateAssignment('doctor', e.target.value)}
+                        disabled={updatingAssignment || assignmentLoading}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                      >
+                        <option value="">Not Assigned</option>
+                        {allStaff.filter(s => s.role === 'doctor').map(doc => (
+                          <option key={doc.id} value={doc.id}>
+                            Dr. {doc.first_name} {doc.last_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Dietitian Dropdown */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest block flex items-center gap-1.5">
+                        <Apple className="w-4 h-4 text-slate-400"/> Dietitian Specialist
+                      </label>
+                      <select
+                        value={currentAssignment?.dietitian_id || ''}
+                        onChange={(e) => handleUpdateAssignment('dietitian', e.target.value)}
+                        disabled={updatingAssignment || assignmentLoading}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                      >
+                        <option value="">Not Assigned</option>
+                        {allStaff.filter(s => s.role === 'dietitian').map(diet => (
+                          <option key={diet.id} value={diet.id}>
+                            {diet.first_name} {diet.last_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Trainer Dropdown */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest block flex items-center gap-1.5">
+                        <Dumbbell className="w-4 h-4 text-slate-400"/> Fitness Coach
+                      </label>
+                      <select
+                        value={currentAssignment?.trainer_id || ''}
+                        onChange={(e) => handleUpdateAssignment('trainer', e.target.value)}
+                        disabled={updatingAssignment || assignmentLoading}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all"
+                      >
+                        <option value="">Not Assigned</option>
+                        {allStaff.filter(s => s.role === 'trainer').map(train => (
+                          <option key={train.id} value={train.id}>
+                            {train.first_name} {train.last_name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  {(assignmentLoading || updatingAssignment) && (
+                    <p className="text-xs font-bold text-indigo-500 mt-4 animate-pulse">Syncing assignments with database...</p>
+                  )}
+                </div>
 
                 {/* ── DOCTOR PRESCRIPTION PANEL ── */}
                 <div className="bg-white/80 backdrop-blur-xl border border-indigo-100 p-10 rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.03)] mb-10">
@@ -727,6 +1682,12 @@ export default function AdminDashboard() {
                     <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-2"><User className="w-4 h-4"/> Gender</p>
                     <p className="text-3xl font-black text-slate-800 capitalize mt-1">{selectedPatient.medical_history?.gender}</p>
                   </div>
+                </div>
+
+                {/* ── SESSION MONITOR ── */}
+                <div className="mb-10">
+                  <h3 className="text-2xl font-black text-[#1A1F36] mb-6 flex items-center gap-3"><Video className="w-6 h-6 text-indigo-600"/> Live Session Monitor</h3>
+                  <SessionMonitor memberId={selectedPatient.id} />
                 </div>
 
                 {/* ── GRAPH SECTION ── */}
@@ -876,11 +1837,11 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-              </div>
+              </motion.div>
             )}
           </>
         )}
-      </div>
+      </motion.div>
     </div>
   );
 }

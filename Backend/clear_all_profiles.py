@@ -41,7 +41,7 @@ clear_table("patient_notifications", "id")
 clear_table("doctor_consultations", "id")
 clear_table("doctor_wallet_transactions", "id")
 clear_table("doctor_wallet", "id")
-clear_table("doctor_profiles", "doctor_id")
+clear_table("doctor_profiles", "id")
 clear_table("health_assessments", "patient_id")
 clear_table("profiles", "id")
 

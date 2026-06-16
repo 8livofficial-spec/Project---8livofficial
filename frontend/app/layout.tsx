@@ -15,6 +15,11 @@ const sora = Sora({
 export const metadata: Metadata = {
   title: "8Liv - Wellness Wherever You Are",
   description: "Premium concierge telehealth platform connecting patients with board-certified clinicians.",
+  icons: {
+    icon: "/logo.png",
+    shortcut: "/logo.png",
+    apple: "/logo.png",
+  },
 };
 
 export default function RootLayout({

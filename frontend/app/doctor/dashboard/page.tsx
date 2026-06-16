@@ -3,11 +3,14 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
+import { motion } from 'framer-motion';
 import {
   Activity, Users, CheckCircle2, XCircle, Video, Calendar, Wallet,
   ArrowDownToLine, Pill, FileText, Clock, AlertCircle, LogOut,
-  Stethoscope, ChevronRight, Plus, X, TrendingUp, BadgeCheck, Bell, BellRing, Ban, UserCheck, Check,
+  Stethoscope, ChevronRight, Plus, X, TrendingUp, BadgeCheck, Bell, BellRing, Ban, UserCheck, Check, PhoneOff, MessageCircle,
 } from 'lucide-react';
+import StaffChat from '@/components/StaffChat';
+import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
@@ -68,7 +71,7 @@ function getParsedTime(bookingDate: string, bookingTime: string): number | null 
   }
 }
 
-type Tab = 'overview' | 'schedule' | 'consultations' | 'prescriptions' | 'wallet';
+type Tab = 'overview' | 'patients' | 'schedule' | 'consultations' | 'prescriptions' | 'wallet' | 'messages';
 
 type Consultation = {
   id: string;
@@ -116,6 +119,8 @@ export default function DoctorDashboard() {
   // Consultations
   const [consultations, setConsultations] = useState<Consultation[]>([]);
   const [availableRequests, setAvailableRequests] = useState<Consultation[]>([]);
+  const [patients, setPatients] = useState<any[]>([]);
+  const [selectedPatient, setSelectedPatient] = useState<any>(null);
 
   // Video call
   const [activeCallUrl, setActiveCallUrl] = useState('');
@@ -180,21 +185,56 @@ export default function DoctorDashboard() {
         }
         setDoctor(session.user);
 
-        // Load profile
+        // Fetch user profile securely via our backend to bypass any RLS limitations on Profiles
+        const profileRes = await fetch('/api/staff/profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ userId: session.user.id })
+        });
+        const profileData = await profileRes.json();
+        const userProfile = profileData.profile;
+        const profErr = profileData.error;
+
+        if (profErr || !userProfile || userProfile.role !== 'doctor') {
+          console.warn('Access Denied: User is not a doctor.');
+          alert('Access Denied. You must be a doctor to view this dashboard.');
+          await supabase.auth.signOut();
+          document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax';
+          router.push('/login');
+          return;
+        }
+
+        // Load or auto-create doctor profile
         const { data: profile } = await supabase
           .from('doctor_profiles')
           .select('*')
-          .eq('doctor_id', session.user.id)
-          .single();
+          .eq('id', session.user.id)
+          .maybeSingle();
         
         if (profile) {
           setDoctorProfile(profile);
+        } else {
+          // Auto-create to satisfy foreign key constraints
+          const { data: newProfile, error: insertErr } = await supabase
+            .from('doctor_profiles')
+            .upsert({
+              id: session.user.id,
+              full_name: `Dr. ${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || 'Dr. Unknown',
+              specialty: 'Physician'
+            })
+            .select()
+            .single();
+            
+          if (!insertErr && newProfile) {
+            setDoctorProfile(newProfile);
+          }
         }
 
         await Promise.all([
           loadConsultations(session.user.id),
           loadAvailability(session.user.id),
           loadWallet(session.user.id),
+          loadPatients(session.user.id),
         ]);
         setLoading(false);
       } catch (err) {
@@ -246,7 +286,7 @@ export default function DoctorDashboard() {
         await supabase
           .from('doctor_profiles')
           .update({ last_seen_at: new Date().toISOString() })
-          .eq('doctor_id', doctor.id);
+          .eq('id', doctor.id);
       } catch (err) {
         console.error('Heartbeat error:', err);
       }
@@ -313,23 +353,33 @@ export default function DoctorDashboard() {
 
 
   const loadConsultations = async (doctorId: string) => {
-    // Load doctor's own consultations
-    const { data } = await supabase
-      .from('doctor_consultations')
-      .select('*')
-      .eq('doctor_id', doctorId)
-      .order('created_at', { ascending: false });
-    if (data) setConsultations(data);
+    try {
+      const res = await fetch('/api/doctor/consultations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ doctorId })
+      });
+      const data = await res.json();
+      if (data.consultations) setConsultations(data.consultations);
+      if (data.availableRequests) setAvailableRequests(data.availableRequests);
+    } catch (err) {
+      console.error('Failed to load consultations:', err);
+    }
+  };
 
-    // Load all scheduled patient booking requests (unassigned or claimed by other doctors)
-    const { data: avail } = await supabase
-      .from('doctor_consultations')
-      .select('*')
-      .eq('status', 'scheduled')
-      .order('created_at', { ascending: true });
-    if (avail) {
-      const filtered = avail.filter((c: any) => c.doctor_id !== doctorId);
-      setAvailableRequests(filtered);
+  const loadPatients = async (doctorId: string) => {
+    try {
+      const res = await fetch('/api/staff/patients', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ staffId: doctorId, role: 'doctor' })
+      });
+      const data = await res.json();
+      if (data.patients) {
+        setPatients(data.patients);
+      }
+    } catch (err) {
+      console.error('Failed to load patients:', err);
     }
   };
 
@@ -400,50 +450,48 @@ export default function DoctorDashboard() {
     loadAvailability(doctor.id);
   };
 
-  // ── Video call ────────────────────────────────────────────────────────
-  const joinCall = (c: Consultation) => {
+  const joinCall = async (c: Consultation) => {
     // Check if within allowed call window: 5 mins before start up to 1.30h after start
     if (!isCallTimeNow(c.booking_date, c.booking_time)) {
       setWarningMessage(`Advance joining is not allowed. In accordance with clinical guidelines, you can only launch the call session between 5 minutes before and 1 hour 30 minutes after the scheduled time.\n\nScheduled time: ${c.booking_date} at ${c.booking_time}`);
       return;
     }
-    setSelectedConsultationForCall(c);
-    const savedLink = c.room_url || localStorage.getItem('doctor_meet_link') || '';
-    setTempMeetLink(savedLink);
-    setShowLinkModal(true);
-  };
-
-  const handleStartCall = async () => {
-    if (!selectedConsultationForCall) return;
     
-    let finalLink = tempMeetLink.trim();
+    let finalLink = c.room_url;
+    if (!finalLink || finalLink.trim() === '') {
+      // Auto-create a Daily.co room if no room_url exists
+      try {
+        const res = await fetch('/api/daily/create-room', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ roomName: `8liv-consult-${c.id.slice(0, 8)}` })
+        });
+        const data = await res.json();
+        finalLink = data.url || '';
+        if (finalLink) {
+          await supabase.from('doctor_consultations').update({ room_url: finalLink }).eq('id', c.id);
+        }
+      } catch (err) {
+        console.error('Failed to create Daily.co room:', err);
+      }
+    }
+
     if (!finalLink) {
-      alert("Please enter a valid Google Meet link.");
+      alert("Error: Could not create or find a video room for this consultation.");
       return;
     }
-    
-    if (!finalLink.startsWith('http://') && !finalLink.startsWith('https://')) {
-      finalLink = 'https://' + finalLink;
-    }
-
-    localStorage.setItem('doctor_meet_link', finalLink);
-    setShowLinkModal(false);
 
     setActiveCallUrl(finalLink);
-    setActiveCallPatient(selectedConsultationForCall.patient_name || 'Member');
+    setActiveCallPatient(c.patient_name || 'Member');
     setActiveCallStatus('calling');
-    setActiveCallId(selectedConsultationForCall.id);
+    setActiveCallId(c.id);
 
-    // Update status, save Meet URL, and record call_started_at in DB
+    // Update status and record call_started_at in DB
     await supabase.from('doctor_consultations').update({ 
       status: 'calling',
-      room_url: finalLink,
       call_started_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
-    }).eq('id', selectedConsultationForCall.id);
-
-    // Open Google Meet in a new tab immediately for the doctor
-    window.open(finalLink, '_blank');
+    }).eq('id', c.id);
     
     loadConsultations(doctor.id);
   };
@@ -754,10 +802,12 @@ export default function DoctorDashboard() {
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
     { key: 'overview', label: 'Overview', icon: <Activity className="w-4 h-4"/> },
+    { key: 'patients', label: 'Patients', icon: <Users className="w-4 h-4"/> },
     { key: 'schedule', label: 'Schedule', icon: <Calendar className="w-4 h-4"/> },
     { key: 'consultations', label: 'Consultations', icon: <Video className="w-4 h-4"/> },
     { key: 'prescriptions', label: 'Prescriptions', icon: <Pill className="w-4 h-4"/> },
     { key: 'wallet', label: 'Wallet', icon: <Wallet className="w-4 h-4"/> },
+    { key: 'messages', label: 'Messages', icon: <MessageCircle className="w-4 h-4"/> },
   ];
 
   const activeRejoinableConsultation = consultations.find(c => 
@@ -767,13 +817,7 @@ export default function DoctorDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">
-      <style>{`
-        @keyframes fadeIn { from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)} }
-        .anim { animation: fadeIn 0.4s ease-out both; }
-      `}</style>
-
-      {/* ── 15-MIN PRE-CALL ALERT BANNER ── */}
+    <div className="min-h-screen bg-slate-50 font-sans text-slate-900">      {/* ── 15-MIN PRE-CALL ALERT BANNER ── */}
       {upcomingCallAlert && (
         <div className="fixed top-4 right-4 z-[200] max-w-sm w-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl p-5 shadow-2xl shadow-indigo-500/40 border border-white/20" style={{animation:'fadeIn 0.4s ease-out both'}}>
           <div className="flex items-start justify-between gap-3">
@@ -793,128 +837,47 @@ export default function DoctorDashboard() {
         </div>
       )}
 
-      {/* ── ACTIVE VIDEO CALL OVERLAY ── */}
+      {/* ── ACTIVE VIDEO CALL OVERLAY (Embedded Daily.co) ── */}
       {activeCallUrl && (
         <div className="fixed inset-0 z-[100] bg-slate-950 flex flex-col">
-          <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
-            <div className="flex items-center gap-4">
+          {/* Top Control Bar */}
+          <div className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between border-b border-slate-800 shrink-0">
+            <div className="flex items-center gap-3">
               <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
-              <span className="font-black text-base">Live — {activeCallPatient}</span>
+              <Video className="w-5 h-5 text-cyan-400"/>
+              <span className="font-black text-base">Live Consultation — {activeCallPatient}</span>
               {callTimer && (
                 <span className="bg-white/10 text-white font-mono font-black text-sm px-3 py-1 rounded-full border border-white/20">
                   ⏱ {callTimer}
                 </span>
               )}
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                activeCallStatus === 'calling' 
+                  ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' 
+                  : 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+              }`}>
+                {activeCallStatus === 'calling' ? '📞 Waiting for patient...' : '🟢 Patient Connected'}
+              </span>
             </div>
-            <button onClick={endCall} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition-all shadow-lg">
-              End Session
-            </button>
-          </div>
-          <div className="flex-1 flex flex-col items-center justify-center bg-slate-905 text-white p-8">
-            <div className="max-w-md w-full bg-slate-900 rounded-[2.5rem] p-10 border border-slate-800 shadow-2xl text-center space-y-6">
-              <div className="w-16 h-16 bg-gradient-to-tr from-blue-500 to-cyan-600 rounded-2xl flex items-center justify-center mx-auto shadow-lg animate-pulse">
-                <Video className="w-8 h-8 text-white"/>
-              </div>
-
-              <div>
-                <h3 className="text-2xl font-black tracking-tight">Google Meet Call Ready</h3>
-                <p className="text-slate-400 text-sm font-semibold mt-2">Click the button below to start the Google Meet session with <strong>{activeCallPatient}</strong>.</p>
-              </div>
-
-              <div className="flex justify-center items-center gap-2.5 py-2 px-5 rounded-full bg-slate-800 border border-slate-700/50 w-fit mx-auto animate-pulse">
-                <span className={`w-3.5 h-3.5 rounded-full ${activeCallStatus === 'calling' ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.5)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'}`}></span>
-                <span className="text-sm font-black tracking-wide">
-                  {activeCallStatus === 'calling' ? '📞 Ringing Member...' : '🟢 Member Connected!'}
-                </span>
-              </div>
-
-              {/* Privacy Warning Banner for Doctor */}
-              <div className="bg-amber-500/10 border-2 border-amber-500/30 text-amber-500 font-bold p-4 rounded-2xl text-xs text-left flex items-start gap-3">
-                <span className="text-base mt-0.5">⚠️</span>
-                <p>
-                  <strong>Privacy Alert:</strong> Do not share personal contact details (email, phone). Sharing any personal data is strictly at your own risk.
-                </p>
-              </div>
-
-              <div className="bg-slate-800/50 p-4 rounded-xl text-left border border-slate-700/50">
-                <p className="text-xs font-bold text-cyan-400">⚡ Google Meet will open in a new browser tab. Please keep this dashboard window open to write the prescription after the meeting.</p>
-              </div>
-
-              <div className="pt-2">
-                <a
-                  href={activeCallUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="w-full inline-flex items-center justify-center gap-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-black py-4 px-6 rounded-2xl transition-all shadow-lg hover:-translate-y-0.5 active:scale-95"
-                >
-                  <Video className="w-5 h-5"/> Launch Google Meet
-                </a>
-              </div>
-
-              <div className="border-t border-slate-800 pt-6 space-y-3">
-                {activeCallStatus !== 'attended' && activeCallId && (
-                  <button
-                    onClick={async () => {
-                      await supabase.from('doctor_consultations').update({
-                        status: 'calling',
-                        updated_at: new Date().toISOString()
-                      }).eq('id', activeCallId);
-                      setActiveCallStatus('calling');
-                    }}
-                    className="w-full bg-amber-500 hover:bg-amber-400 text-white font-bold py-3 px-6 rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-amber-500/30"
-                  >
-                    📞 Ring Member Again
-                  </button>
-                )}
-                <button
-                  onClick={endCall}
-                  className="w-full bg-slate-800 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-xl text-sm transition-all"
-                >
-                  Close Session Panel
-                </button>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── GOOGLE MEET LINK CONFIGURATION MODAL ── */}
-      {showLinkModal && selectedConsultationForCall && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl anim">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-black text-slate-900 flex items-center gap-2">
-                <Video className="w-6 h-6 text-indigo-500"/> Start Video Call
-              </h3>
-              <button onClick={() => setShowLinkModal(false)}><X className="w-6 h-6 text-slate-400 hover:text-slate-600"/></button>
-            </div>
-            
-            <div className="bg-indigo-50 p-4 rounded-2xl mb-6 border border-indigo-100">
-              <p className="text-sm font-bold text-indigo-800">Calling: {selectedConsultationForCall.patient_name}</p>
-              <p className="text-xs text-indigo-600 mt-1">Scheduled for: {selectedConsultationForCall.booking_date} @ {selectedConsultationForCall.booking_time}</p>
-            </div>
-
-            <label className={labelCls}>Google Meet Link (Or any valid meeting link) *</label>
-            <input
-              type="text"
-              value={tempMeetLink}
-              onChange={e => setTempMeetLink(e.target.value)}
-              className={`${inputCls} mt-1 mb-2`}
-              placeholder="https://meet.google.com/xxx-yyyy-zzz"
-              required
-            />
-            <p className="text-[11px] text-slate-500 font-bold mb-6">
-              💡 Tip: Open <a href="https://meet.new" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline">meet.new</a> in a new tab to create a live Google Meet link instantly, then paste it here.
-            </p>
-
-            <div className="flex gap-3">
-              <button onClick={() => setShowLinkModal(false)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-all">Cancel</button>
-              <button onClick={handleStartCall} disabled={!tempMeetLink.trim()}
-                className="flex-1 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-all shadow-lg">
-                Call Member & Launch
+            <div className="flex items-center gap-3">
+              <div className="text-xs text-slate-400 font-semibold hidden sm:block">⚠️ Do not share personal contact details</div>
+              <button 
+                onClick={endCall} 
+                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-5 rounded-xl text-sm transition-all shadow-lg flex items-center gap-2"
+              >
+                <PhoneOff className="w-4 h-4"/> End Session
               </button>
             </div>
+          </div>
+          {/* Daily.co Embedded Video Call */}
+          <div className="flex-1 w-full bg-slate-950">
+            <iframe
+              src={activeCallUrl}
+              allow="camera; microphone; display-capture; autoplay; fullscreen"
+              className="w-full h-full border-none"
+              title="8Liv Consultation Call"
+              ref={iframeRef}
+            />
           </div>
         </div>
       )}
@@ -922,7 +885,7 @@ export default function DoctorDashboard() {
       {/* ── PRESCRIBE MODAL ── */}
       {prescribeCase && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="bg-white rounded-[2rem] p-8 max-w-lg w-full shadow-2xl anim">
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[2rem] p-8 max-w-lg w-full shadow-2xl">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-black text-slate-900 flex items-center gap-2"><Pill className="w-6 h-6 text-blue-500"/> E-Prescription</h3>
               <button onClick={() => setPrescribeCase(null)}><X className="w-6 h-6 text-slate-400 hover:text-slate-600"/></button>
@@ -938,15 +901,15 @@ export default function DoctorDashboard() {
             </div>
 
             {/* ── No Prescription Option ── */}
-            <div
+            <button
               onClick={() => handlePrescribe(true)}
-              className="cursor-pointer border-2 border-slate-200 hover:border-rose-400 hover:bg-rose-50 rounded-2xl p-4 text-center transition-all mb-5 group"
+              className="w-full cursor-pointer border-2 border-slate-200 hover:border-[#5C7A6B] hover:bg-[#5C7A6B]/10 rounded-2xl p-4 text-center transition-all mb-5 group hover:scale-[1.02] active:scale-95"
             >
-              <p className="font-black text-slate-600 group-hover:text-rose-700 flex items-center justify-center gap-2">
+              <p className="font-black text-[#1A1F36] group-hover:text-[#5C7A6B] flex items-center justify-center gap-2 transition-colors">
                 <Ban className="w-5 h-5"/> No Prescription Needed
               </p>
-              <p className="text-xs text-slate-400 font-medium mt-1">Click to close this case without a prescription</p>
-            </div>
+              <p className="text-xs text-[#8896A4] font-medium mt-1">Click to close this case without a prescription</p>
+            </button>
 
             <div className="relative flex items-center gap-3 mb-5">
               <div className="flex-1 h-px bg-slate-200"/>
@@ -957,13 +920,13 @@ export default function DoctorDashboard() {
             <label className={labelCls}>Select Medication Type</label>
             <div className="grid grid-cols-2 gap-4 mt-2 mb-4">
               {(['Oral', 'Injectable'] as const).map(type => (
-                <div key={type} onClick={() => setPrescriptionType(type)}
-                  className={`cursor-pointer border-2 rounded-2xl p-4 text-center transition-all ${prescriptionType === type ? 'border-blue-500 bg-blue-50' : 'border-slate-200 hover:border-blue-300'}`}>
-                  <p className={`font-black text-base ${prescriptionType === type ? 'text-blue-700' : 'text-slate-700'}`}>
+                <button key={type} onClick={() => setPrescriptionType(type)}
+                  className={`w-full cursor-pointer border-2 rounded-2xl p-4 text-center transition-all hover:scale-[1.03] active:scale-95 ${prescriptionType === type ? 'border-[#C4622D] bg-[#C4622D]/10' : 'border-slate-200 hover:border-[#C4622D]/40'}`}>
+                  <p className={`font-black text-base ${prescriptionType === type ? 'text-[#C4622D]' : 'text-[#1A1F36]'}`}>
                     {type === 'Oral' ? '💊' : '💉'} {type}
                   </p>
-                  <p className="text-xs text-slate-500 mt-1 font-medium">{type === 'Oral' ? 'Daily tablet' : 'Weekly injection'}</p>
-                </div>
+                  <p className="text-xs text-[#8896A4] mt-1 font-medium">{type === 'Oral' ? 'Daily tablet' : 'Weekly injection'}</p>
+                </button>
               ))}
             </div>
 
@@ -980,20 +943,20 @@ export default function DoctorDashboard() {
               <p className="text-xs font-bold text-amber-800">⚡ Order will be placed automatically and sent to pharmacy with patient address & details.</p>
             </div>
             <div className="flex gap-3">
-              <button onClick={() => setPrescribeCase(null)} className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-3 rounded-xl transition-all">Cancel</button>
+              <button onClick={() => setPrescribeCase(null)} className="flex-1 bg-[#F5F0EB] hover:bg-[#e6dfd7] text-[#1A1F36] font-bold py-3 rounded-xl transition-all hover:scale-105 active:scale-95">Cancel</button>
               <button onClick={() => handlePrescribe(false)} disabled={prescribing || !prescriptionText.trim()}
-                className="flex-1 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-all shadow-lg">
+                className="flex-1 bg-[#1A1F36] hover:bg-[#2A314D] disabled:opacity-60 text-white font-bold py-3 rounded-xl transition-all shadow-lg hover:scale-105 active:scale-95">
                 {prescribing ? 'Prescribing...' : 'Prescribe & Order ✓'}
               </button>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
 
       {/* ── REJECT MODAL ── */}
       {rejectCase && (
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
-          <div className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl anim">
+          <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl">
             <div className="flex items-center justify-between mb-6">
               <h3 className="text-xl font-black text-slate-900 flex items-center gap-2"><XCircle className="w-6 h-6 text-rose-500"/> Not Approved</h3>
               <button onClick={() => setRejectCase(null)}><X className="w-6 h-6 text-slate-400 hover:text-slate-600"/></button>
@@ -1016,18 +979,22 @@ export default function DoctorDashboard() {
                 {rejecting ? 'Saving...' : 'Submit & Close Case'}
               </button>
             </div>
-          </div>
+          </motion.div>
         </div>
       )}
 
       {/* ── SIDEBAR ── */}
       <div className="flex h-screen overflow-hidden">
-        <aside className="w-64 bg-white border-r border-slate-200/60 flex flex-col shadow-sm flex-shrink-0">
+        <motion.aside 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="w-64 bg-white border-r border-[#8896A4]/20 flex flex-col shadow-sm flex-shrink-0">
           {/* Doctor info */}
           <div className="p-6 border-b border-slate-100">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-blue-600 to-cyan-600 rounded-2xl flex items-center justify-center shadow-md">
-                <Stethoscope className="w-6 h-6 text-white"/>
+              <div className="w-12 h-12 bg-[#1A1F36] rounded-2xl flex items-center justify-center shadow-md">
+                <Stethoscope className="w-6 h-6 text-[#C4622D]"/>
               </div>
               <div className="flex-1">
                 <p className="font-black text-slate-900 text-sm leading-tight">{doctorProfile?.full_name || doctor?.email?.split('@')[0] || 'Doctor'}</p>
@@ -1047,9 +1014,13 @@ export default function DoctorDashboard() {
                 )}
               </button>
             </div>
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 flex items-center gap-2">
-              <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-              <span className="text-xs font-bold text-emerald-700">Online</span>
+            {/* Online Indicator */}
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full border border-green-100">
+              <span className="relative flex w-2 h-2">
+                <span className="absolute inline-flex w-full h-full bg-green-400 rounded-full opacity-75 animate-ping"></span>
+                <span className="relative inline-flex w-2 h-2 bg-green-500 rounded-full"></span>
+              </span>
+              <span className="text-xs font-medium text-green-700">Online</span>
             </div>
           </div>
 
@@ -1057,9 +1028,9 @@ export default function DoctorDashboard() {
           <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
             {tabs.map(t => (
               <button key={t.key} onClick={() => setActiveTab(t.key)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all ${activeTab === t.key
-                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-md shadow-blue-500/20'
-                  : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}`}>
+                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-r-xl text-sm transition-colors ${activeTab === t.key
+                  ? 'bg-orange-50 text-orange-600 font-semibold border-l-4 border-orange-500'
+                  : 'text-gray-500 hover:bg-gray-50 hover:text-gray-900'}`}>
                 {t.icon} {t.label}
                 {t.key === 'consultations' && pendingCases > 0 && (
                   <span className="ml-auto bg-amber-400 text-white text-[10px] font-black px-2 py-0.5 rounded-full">{pendingCases}</span>
@@ -1070,49 +1041,76 @@ export default function DoctorDashboard() {
 
           {/* Wallet quick view */}
           <div className="p-4 border-t border-slate-100">
-            <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-4 text-white">
-              <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Wallet Balance</p>
-              <p className="text-2xl font-black">₹{wallet.balance.toLocaleString('en-IN')}</p>
-              <button onClick={() => setActiveTab('wallet')}
-                className="mt-3 w-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold py-2 rounded-xl transition-all flex items-center justify-center gap-1">
-                <ArrowDownToLine className="w-3.5 h-3.5"/> Withdraw
-              </button>
-            </div>
+            {/* FIX: Bug 4 — Hide ₹0 wallet balance and show a placeholder instead */}
+            {wallet.balance > 0 ? (
+              <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-4 text-white shadow-md">
+                <p className="text-xs text-slate-400 font-bold uppercase tracking-wider mb-1">Wallet Balance</p>
+                <p className="text-2xl font-black">₹{wallet.balance.toLocaleString('en-IN')}</p>
+                <button onClick={() => setActiveTab('wallet')}
+                  className="mt-3 w-full bg-white/10 hover:bg-white/20 text-white text-xs font-bold py-2 rounded-xl transition-all flex items-center justify-center gap-1">
+                  <ArrowDownToLine className="w-3.5 h-3.5"/> Withdraw
+                </button>
+              </div>
+            ) : (
+              <div className="bg-slate-50 rounded-2xl p-4 text-center border border-dashed border-slate-200">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Wallet</p>
+                <div className="w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center mx-auto mb-2">
+                  <Wallet className="w-4 h-4 text-slate-400" />
+                </div>
+                <p className="text-xs font-medium text-slate-500">Complete a consult to earn</p>
+              </div>
+            )}
           </div>
 
           {/* Logout */}
           <div className="p-4 pt-0">
             <button onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold text-slate-500 hover:bg-rose-50 hover:text-rose-600 transition-all">
-              <LogOut className="w-4 h-4"/> Logout
+              className="w-full flex items-center justify-center gap-2 text-sm text-gray-400 hover:text-red-500 transition-colors py-2 px-3 rounded-lg hover:bg-red-50">
+              <LogOut className="w-5 h-5"/> Sign Out
             </button>
           </div>
-        </aside>
+        </motion.aside>
 
         {/* ── MAIN CONTENT ── */}
-        <main className="flex-1 overflow-y-auto bg-slate-50 p-8">
+        <motion.main 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="flex-1 overflow-y-auto bg-[#F5F0EB]/50 p-8">
 
           {/* ── TAB: OVERVIEW ── */}
           {activeTab === 'overview' && (
-            <div className="anim space-y-8">
-              <div>
-                <h1 className="text-4xl font-black text-slate-900 tracking-tight">Dashboard</h1>
-                <p className="text-slate-500 font-bold mt-1">Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, Dr. {doctorProfile?.full_name?.split(' ')[0] || 'Doctor'} 👋</p>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ staggerChildren: 0.1 }} className="space-y-8">
+              <div className="border-b border-gray-100 pb-4 mb-6 flex justify-between items-end">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+                  <p className="text-sm text-gray-400 mt-0.5">Overview of your practice and upcoming appointments. Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, Dr. {doctorProfile?.full_name?.split(' ')[0] || 'Doctor'} 👋</p>
+                </div>
+                <div className="flex gap-3"></div>
               </div>
 
+              {/* FIX: Bug 3 — Doctor Overview stats dynamically computed from consultations array */}
               {/* Quick stats */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
                 {[
-                  { label: 'Total Cases', value: consultations.length, icon: <Users className="w-5 h-5"/>, color: 'from-blue-500 to-cyan-500', bg: 'bg-blue-50', text: 'text-blue-600' },
-                  { label: 'Approved', value: approvedCases, icon: <CheckCircle2 className="w-5 h-5"/>, color: 'from-emerald-500 to-teal-500', bg: 'bg-emerald-50', text: 'text-emerald-600' },
-                  { label: 'Pending Review', value: pendingCases, icon: <Clock className="w-5 h-5"/>, color: 'from-amber-500 to-orange-500', bg: 'bg-amber-50', text: 'text-amber-600' },
-                  { label: 'Not Approved', value: rejectedCases, icon: <XCircle className="w-5 h-5"/>, color: 'from-rose-500 to-pink-500', bg: 'bg-rose-50', text: 'text-rose-600' },
-                ].map(s => (
-                  <div key={s.label} className="bg-white rounded-[2rem] p-6 shadow-sm border border-slate-100 hover:shadow-md hover:-translate-y-0.5 transition-all">
-                    <div className={`${s.bg} ${s.text} w-10 h-10 rounded-xl flex items-center justify-center mb-4`}>{s.icon}</div>
-                    <p className="text-3xl font-black text-slate-900">{s.value}</p>
-                    <p className="text-xs text-slate-500 font-bold uppercase tracking-wider mt-1">{s.label}</p>
-                  </div>
+                  { label: 'Total Cases', value: consultations.length, icon: <Users className="w-6 h-6"/> },
+                  { label: 'Approved', value: approvedCases, icon: <CheckCircle2 className="w-6 h-6"/> },
+                  { label: 'Pending Review', value: pendingCases, icon: <Clock className="w-6 h-6"/> },
+                  { label: 'Not Approved', value: rejectedCases, icon: <XCircle className="w-6 h-6"/> },
+                ].map((s, idx) => (
+                  <motion.div 
+                    key={s.label} 
+                    initial={{ opacity: 0, y: 20 }} 
+                    animate={{ opacity: 1, y: 0 }} 
+                    transition={{ delay: idx * 0.1 }}
+                    className="bg-white p-6 border border-gray-200 rounded-2xl shadow-sm flex items-center gap-4 hover:scale-105 transition-transform duration-300"
+                  >
+                    <div className="bg-orange-50 text-orange-500 p-4 rounded-full">{s.icon}</div>
+                    <div>
+                      <p className="text-xs font-medium text-gray-400 uppercase tracking-wider">{s.label}</p>
+                      <p className="text-3xl font-bold text-gray-900 mt-1">{s.value}</p>
+                    </div>
+                  </motion.div>
                 ))}
               </div>
 
@@ -1134,7 +1132,7 @@ export default function DoctorDashboard() {
                         { period: 'This Week', cases: weekCases, app: consultations.filter(c => new Date(c.created_at) >= thisWeekStart && c.status === 'approved').length, rej: consultations.filter(c => new Date(c.created_at) >= thisWeekStart && c.status === 'rejected').length, att: consultations.filter(c => new Date(c.created_at) >= thisWeekStart && ['attended','approved','rejected'].includes(c.status)).length },
                         { period: 'This Month', cases: monthCases, app: approvedCases, rej: rejectedCases, att: attendedCalls },
                       ].map(row => (
-                        <tr key={row.period} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                        <tr key={row.period} className="border-b border-slate-50 hover:bg-slate-50 transition-colors duration-200">
                           <td className="py-4 px-4 font-bold text-slate-900">{row.period}</td>
                           <td className="py-4 px-4"><span className="bg-blue-100 text-blue-700 font-black text-sm px-3 py-1 rounded-full">{row.cases}</span></td>
                           <td className="py-4 px-4"><span className="bg-emerald-100 text-emerald-700 font-black text-sm px-3 py-1 rounded-full">{row.app}</span></td>
@@ -1169,7 +1167,7 @@ export default function DoctorDashboard() {
                     <UserCheck className="w-5 h-5 text-indigo-500"/> Available Patient Requests (Escrow Pool)
                   </h3>
                   <span className="bg-indigo-100 text-indigo-700 font-black text-xs px-3 py-1 rounded-full animate-pulse">
-                    {availableRequests.filter((r) => !r.doctor_id).length} Awaiting
+                    {availableRequests.filter((r) => !r.doctor_id).length} Awaiting Review
                   </span>
                 </div>
                 {availableRequests.length === 0 ? (
@@ -1193,12 +1191,14 @@ export default function DoctorDashboard() {
                       const isLocked = isClaimedByOther || hasConflict;
 
                       return (
-                        <div 
+                        <motion.div 
                           key={req.id} 
-                          className={`border p-5 rounded-2xl flex flex-col justify-between gap-4 transition-all ${
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className={`border p-5 rounded-2xl flex flex-col justify-between gap-4 transition-transform duration-300 ${
                             isLocked 
-                              ? 'border-slate-200 bg-slate-100 opacity-70 grayscale' 
-                              : 'border-slate-100 hover:border-indigo-200 bg-slate-50/50 hover:bg-white hover:shadow-md'
+                              ? 'border-[#8896A4]/30 bg-[#8896A4]/10 opacity-70 grayscale' 
+                              : 'border-[#5C7A6B]/20 hover:border-[#C4622D] bg-white hover:scale-105 hover:shadow-lg shadow-sm'
                           }`}
                         >
                           <div>
@@ -1234,24 +1234,29 @@ export default function DoctorDashboard() {
                           ) : (
                             <button
                               onClick={() => handleClaimRequest(req)}
-                              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-black py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5 shadow-sm active:scale-95"
+                              className="w-full bg-[#C4622D] hover:bg-[#A95123] text-white font-black py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all duration-300 hover:scale-[1.02] hover:-translate-y-0.5 shadow-sm active:scale-95 hover:shadow-lg hover:shadow-[#C4622D]/20"
                             >
                               <Check className="w-4 h-4"/> Accept & Pair Patient
                             </button>
                           )}
-                        </div>
+                        </motion.div>
                       );
                     })}
                   </div>
                 )}
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* ── TAB: SCHEDULE ── */}
           {activeTab === 'schedule' && (
-            <div className="anim space-y-8">
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight">Availability Schedule</h1>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+              <div className="border-b border-gray-100 pb-4 mb-6 flex justify-between items-end">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Availability Schedule</h1>
+                  <p className="text-sm text-gray-400 mt-0.5">Manage your video consultation slots.</p>
+                </div>
+              </div>
 
               {/* Add slot */}
               <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
@@ -1282,14 +1287,21 @@ export default function DoctorDashboard() {
               <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
                 <h3 className="text-lg font-black text-slate-900 mb-6">Upcoming Available Slots ({availSlots.length})</h3>
                 {availSlots.length === 0 ? (
-                  <div className="text-center py-12 text-slate-400">
-                    <Calendar className="w-12 h-12 mx-auto mb-3 opacity-30"/>
-                    <p className="font-bold">No slots added yet. Add your availability above.</p>
+                  <div className="flex flex-col items-center justify-center text-center py-12">
+                    <Calendar className="w-12 h-12 text-gray-300 mb-4" />
+                    <h3 className="text-base font-semibold text-gray-500 mb-1">No slots added</h3>
+                    <p className="text-sm text-gray-400 max-w-xs mx-auto">Add some available slots above.</p>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {availSlots.map(slot => (
-                      <div key={slot.id} className={`flex items-center justify-between p-4 rounded-2xl border-2 ${slot.is_booked ? 'border-amber-300 bg-amber-50' : 'border-emerald-300 bg-emerald-50'}`}>
+                    {availSlots.map((slot, idx) => (
+                      <motion.div 
+                        key={slot.id} 
+                        initial={{ opacity: 0, y: 10 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        transition={{ delay: idx * 0.05 }}
+                        className={`flex items-center justify-between p-4 rounded-2xl border-2 hover:scale-105 transition-transform duration-300 hover:shadow-lg ${slot.is_booked ? 'border-amber-300 bg-amber-50' : 'border-emerald-300 bg-emerald-50'}`}
+                      >
                         <div>
                           <p className="font-black text-slate-900 text-sm">{slot.available_date}</p>
                           <p className="text-xs font-bold text-slate-600 mt-0.5">{slot.time_slot}</p>
@@ -1302,18 +1314,23 @@ export default function DoctorDashboard() {
                             <X className="w-5 h-5"/>
                           </button>
                         )}
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 )}
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* ── TAB: CONSULTATIONS ── */}
           {activeTab === 'consultations' && (
-            <div className="anim space-y-6">
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight">Consultations</h1>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+              <div className="border-b border-gray-100 pb-4 mb-6 flex justify-between items-end">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">Consultations</h1>
+                  <p className="text-sm text-gray-400 mt-0.5">Review your patient cases and approvals.</p>
+                </div>
+              </div>
 
               {/* Appointed cases notification banner */}
               {pendingCases > 0 && (
@@ -1327,25 +1344,31 @@ export default function DoctorDashboard() {
               )}
 
               {consultations.length === 0 ? (
-                <div className="bg-white rounded-[2rem] p-16 text-center shadow-sm border border-slate-100">
-                  <Users className="w-16 h-16 mx-auto mb-4 text-slate-200"/>
-                  <p className="font-black text-slate-600 text-lg">No consultations yet</p>
-                  <p className="text-slate-400 font-semibold mt-2">Members will appear here once they book a video call</p>
+                <div className="flex flex-col items-center justify-center text-center py-20">
+                  <Users className="w-12 h-12 text-gray-300 mb-4" />
+                  <h3 className="text-base font-semibold text-gray-500 mb-1">No consultations yet</h3>
+                  <p className="text-sm text-gray-400 max-w-xs mx-auto">Members will appear here once they book a video call.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {consultations.map(c => {
+                  {consultations.map((c, idx) => {
                     const statusMap: Record<string, { label: string; color: string }> = {
                       scheduled: { label: 'Scheduled', color: 'bg-blue-100 text-blue-700' },
                       attended: { label: 'Attended — Pending Review', color: 'bg-amber-100 text-amber-700' },
                       approved: { label: 'Approved', color: 'bg-emerald-100 text-emerald-700' },
                       rejected: { label: 'Not Approved', color: 'bg-rose-100 text-rose-700' },
-                      not_attended: { label: 'Not Attended', color: 'bg-slate-100 text-slate-600' },
-                      cancelled: { label: 'Cancelled', color: 'bg-slate-200 text-slate-500' },
+                      not_attended: { label: 'Not Attended', color: 'bg-gray-200 text-gray-600' },
+                      cancelled: { label: 'Cancelled', color: 'bg-gray-200 text-gray-600' },
                     };
                     const st = statusMap[c.status] || { label: c.status, color: 'bg-slate-100 text-slate-600' };
                     return (
-                      <div key={c.id} className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-slate-100 hover:shadow-md transition-all">
+                      <motion.div 
+                        key={c.id} 
+                        initial={{ opacity: 0, x: -10 }} 
+                        animate={{ opacity: 1, x: 0 }} 
+                        transition={{ delay: idx * 0.05 }}
+                        className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-slate-100 hover:scale-[1.01] transition-transform duration-300 hover:shadow-lg"
+                      >
                         <div className="flex items-start justify-between gap-4 flex-wrap">
                           <div className="flex-1">
                             <div className="flex items-center gap-3 flex-wrap mb-2">
@@ -1356,7 +1379,9 @@ export default function DoctorDashboard() {
                               >
                                 {c.patient_name || 'Member'}
                               </p>
-                              <span className={`text-xs font-black uppercase tracking-wider px-3 py-1 rounded-full ${st.color}`}>{st.label}</span>
+                              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${st.color}`}>
+                                {st.label}
+                              </span>
                             </div>
                             <div className="flex gap-4 text-sm text-slate-500 font-semibold flex-wrap">
                               <span className="flex items-center gap-1"><Calendar className="w-4 h-4"/> {c.booking_date}</span>
@@ -1410,29 +1435,40 @@ export default function DoctorDashboard() {
                             )}
                           </div>
                         </div>
-                      </div>
+                      </motion.div>
                     );
                   })}
                 </div>
               )}
-            </div>
+            </motion.div>
           )}
 
           {/* ── TAB: PRESCRIPTIONS (E-Prescription Portal) ── */}
           {activeTab === 'prescriptions' && (
-            <div className="anim space-y-6">
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight">E-Prescription Portal</h1>
-              <p className="text-slate-500 font-semibold">All approved prescriptions — visible to both doctor and patient.</p>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+              <div className="border-b border-gray-100 pb-4 mb-6 flex justify-between items-end">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">E-Prescription Portal</h1>
+                  <p className="text-sm text-gray-400 mt-0.5">All approved prescriptions — visible to both doctor and patient.</p>
+                </div>
+              </div>
 
               {consultations.filter(c => c.status === 'approved').length === 0 ? (
-                <div className="bg-white rounded-[2rem] p-16 text-center shadow-sm border border-slate-100">
-                  <FileText className="w-16 h-16 mx-auto mb-4 text-slate-200"/>
-                  <p className="font-black text-slate-600 text-lg">No prescriptions yet</p>
+                <div className="flex flex-col items-center justify-center text-center py-20">
+                  <FileText className="w-12 h-12 text-gray-300 mb-4" />
+                  <h3 className="text-base font-semibold text-gray-500 mb-1">No approved prescriptions</h3>
+                  <p className="text-sm text-gray-400 max-w-xs mx-auto">When you approve a case, its prescription will appear here.</p>
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {consultations.filter(c => c.status === 'approved').map(c => (
-                    <div key={c.id} className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-slate-100">
+                  {consultations.filter(c => c.status === 'approved').map((c, idx) => (
+                    <motion.div 
+                      key={c.id} 
+                      initial={{ opacity: 0, y: 10 }} 
+                      animate={{ opacity: 1, y: 0 }} 
+                      transition={{ delay: idx * 0.05 }}
+                      className="bg-white rounded-[1.5rem] p-6 shadow-sm border border-slate-100 hover:shadow-lg hover:scale-[1.01] transition-transform duration-300"
+                    >
                       <div className="flex items-center justify-between flex-wrap gap-4">
                         <div>
                           <div className="flex items-center gap-3 mb-2">
@@ -1457,17 +1493,22 @@ export default function DoctorDashboard() {
                           <p className="text-xs font-bold text-slate-500">📦 Order automatically sent to pharmacy with patient address & details.</p>
                         </div>
                       )}
-                    </div>
+                    </motion.div>
                   ))}
                 </div>
               )}
-            </div>
+            </motion.div>
           )}
 
           {/* ── TAB: WALLET ── */}
           {activeTab === 'wallet' && (
-            <div className="anim space-y-8">
-              <h1 className="text-4xl font-black text-slate-900 tracking-tight">8liv Doctor Wallet</h1>
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
+              <div className="border-b border-gray-100 pb-4 mb-6 flex justify-between items-end">
+                <div>
+                  <h1 className="text-2xl font-bold text-gray-900">8liv Doctor Wallet</h1>
+                  <p className="text-sm text-gray-400 mt-0.5">Manage your earnings and withdrawals.</p>
+                </div>
+              </div>
 
               {/* Wallet cards */}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -1522,14 +1563,21 @@ export default function DoctorDashboard() {
               <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-slate-100">
                 <h3 className="text-lg font-black text-slate-900 mb-6">Transaction History</h3>
                 {transactions.length === 0 ? (
-                  <div className="text-center py-8 text-slate-400">
-                    <Wallet className="w-12 h-12 mx-auto mb-3 opacity-30"/>
-                    <p className="font-bold">No transactions yet</p>
+                  <div className="flex flex-col items-center justify-center text-center py-16">
+                    <Wallet className="w-12 h-12 text-gray-300 mb-4" />
+                    <h3 className="text-base font-semibold text-gray-500 mb-1">No transactions found</h3>
+                    <p className="text-sm text-gray-400 max-w-xs mx-auto">Your withdrawals will appear here.</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {transactions.map(tx => (
-                      <div key={tx.id} className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 hover:bg-slate-50 transition-colors">
+                    {transactions.map((tx, idx) => (
+                      <motion.div 
+                        key={tx.id} 
+                        initial={{ opacity: 0, y: 10 }} 
+                        animate={{ opacity: 1, y: 0 }} 
+                        transition={{ delay: idx * 0.05 }}
+                        className="flex items-center justify-between p-4 rounded-2xl border border-slate-100 hover:bg-slate-50 transition-colors"
+                      >
                         <div className="flex items-center gap-3">
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type === 'credit' ? 'bg-emerald-100 text-emerald-600' : 'bg-blue-100 text-blue-600'}`}>
                             {tx.type === 'credit' ? <TrendingUp className="w-5 h-5"/> : <ArrowDownToLine className="w-5 h-5"/>}
@@ -1549,12 +1597,12 @@ export default function DoctorDashboard() {
                         <p className={`font-black text-base ${tx.type === 'credit' ? 'text-emerald-600' : 'text-blue-600'}`}>
                           {tx.type === 'credit' ? '+' : '-'}₹{tx.amount.toLocaleString('en-IN')}
                         </p>
-                      </div>
+                      </motion.div>
                     ))}
                   </div>
                 )}
               </div>
-            </div>
+            </motion.div>
           )}
 
           {/* Floating Rejoin Widget */}
@@ -1582,7 +1630,7 @@ export default function DoctorDashboard() {
           {/* ── CALL TIMING WARNING MODAL ── */}
           {warningMessage && (
             <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-6">
-              <div className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl anim border-2 border-amber-200">
+              <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl border-2 border-amber-200">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-black text-amber-700 flex items-center gap-2">
                     <AlertCircle className="w-6 h-6 text-amber-500 animate-bounce"/> Advance Joining Restrained
@@ -1600,10 +1648,193 @@ export default function DoctorDashboard() {
                   className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-3.5 rounded-xl transition-all shadow-md">
                   Okay, I'll return later
                 </button>
+              </motion.div>
+            </div>
+          )}
+          {/* Messages Tab */}
+          {activeTab === 'messages' && doctor && (
+            <div className="h-full flex flex-col">
+              <div className="px-6 pt-6 pb-4">
+                <h2 className="text-xl font-black text-slate-900">Patient Messages</h2>
+                <p className="text-sm text-slate-500 mt-0.5">Communicate securely with your assigned patients.</p>
+              </div>
+              <div className="flex-1 px-6 pb-6 overflow-hidden" style={{ minHeight: 0 }}>
+                <StaffChat
+                  staffId={doctor.id}
+                  staffName={doctorProfile?.full_name || 'Doctor'}
+                  patients={patients}
+                  accentColor="#3B82F6"
+                />
               </div>
             </div>
           )}
-        </main>
+
+          {/* Patients Tab */}
+          {activeTab === 'patients' && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex-1 flex overflow-hidden h-full"
+            >
+              {/* Patient List Sidebar */}
+              <div className="w-80 bg-white border-r border-slate-100 overflow-y-auto p-6 space-y-4 custom-scrollbar shrink-0">
+                <h3 className="text-xs font-black text-slate-450 uppercase tracking-widest mb-4 px-2">Assigned Members</h3>
+                {patients.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center text-center py-12">
+                    <Users className="w-12 h-12 text-gray-300 mb-4" />
+                    <h3 className="text-base font-semibold text-gray-500 mb-1">No patients</h3>
+                    <p className="text-sm text-gray-400 max-w-xs mx-auto">No patients assigned yet.</p>
+                  </div>
+                ) : (
+                  patients.map((p) => (
+                    <div
+                      key={p.id}
+                      onClick={() => setSelectedPatient(p)}
+                      className={`p-4 rounded-2xl cursor-pointer border-2 transition-all duration-300 ${selectedPatient?.id === p.id ? 'border-[#C4622D] bg-[#F5F0EB]/50 shadow-sm scale-[1.01]' : 'border-transparent bg-slate-50/50 hover:bg-[#F5F0EB]/40 hover:border-[#C4622D]/30'}`}
+                    >
+                      <h4 className="font-black text-slate-800 text-sm leading-tight mb-1">{p.first_name} {p.last_name}</h4>
+                      <div className="flex justify-between items-center text-[10px] text-slate-400 font-bold">
+                        <span>Goal: {p.goal_weight_kg || '—'} kg</span>
+                        <p className={`text-[10px] font-black mt-1 ${(p.status_color || '').replace('bg-', 'text-').split(' ')[0]}`}>
+                          {p.status_label}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Patient Details Pane */}
+              <div className="flex-1 overflow-y-auto p-8 md:p-10 custom-scrollbar">
+                {selectedPatient ? (
+                  <div className="max-w-3xl space-y-8">
+                    
+                    {/* Header info */}
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <h2 className="text-3xl font-black text-slate-900 tracking-tight">{selectedPatient.first_name} {selectedPatient.last_name}</h2>
+                        <p className="text-xs font-bold text-slate-400 mt-1 uppercase tracking-wider flex items-center gap-1.5">
+                          <Activity className="w-3.5 h-3.5 text-blue-500"/> Patient Medical File
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {selectedPatient.phone_number && (
+                          <div className="bg-white border border-slate-150 px-4 py-2 rounded-xl text-xs font-bold text-slate-600 shadow-sm">
+                            📞 {selectedPatient.phone_number}
+                          </div>
+                        )}
+                        <button
+                          onClick={() => {
+                            setActiveTab('messages');
+                          }}
+                          className="bg-[#1A1F36] hover:bg-[#0D101C] text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5" /> Message Patient
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Telemetry metrics */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                      <div className="bg-white p-5 rounded-2xl border border-slate-150 shadow-sm hover:shadow-md transition-shadow duration-300 text-center">
+                        <p className="text-[10px] font-black text-[#8896A4] uppercase tracking-widest">Height</p>
+                        <p className="text-xl font-black text-[#1A1F36] mt-1">{selectedPatient.height_cm ? `${selectedPatient.height_cm} cm` : '—'}</p>
+                      </div>
+                      <div className="bg-white p-5 rounded-2xl border border-slate-150 shadow-sm hover:shadow-md transition-shadow duration-300 text-center">
+                        <p className="text-[10px] font-black text-[#8896A4] uppercase tracking-widest">Start Weight</p>
+                        <p className="text-xl font-black text-[#1A1F36] mt-1">{selectedPatient.weight_kg ? `${selectedPatient.weight_kg} kg` : '—'}</p>
+                      </div>
+                      <div className="bg-white p-5 rounded-2xl border border-slate-150 shadow-sm hover:shadow-md transition-shadow duration-300 text-center">
+                        <p className="text-[10px] font-black text-[#8896A4] uppercase tracking-widest">Target Weight</p>
+                        <p className="text-xl font-black text-[#C4622D] mt-1">{selectedPatient.goal_weight_kg ? `${selectedPatient.goal_weight_kg} kg` : '—'}</p>
+                      </div>
+                      <div className="bg-white p-5 rounded-2xl border border-slate-150 shadow-sm hover:shadow-md transition-shadow duration-300 text-center">
+                        <p className="text-[10px] font-black text-[#8896A4] uppercase tracking-widest">BMI Ratio</p>
+                        <p className="text-xl font-black text-[#5C7A6B] mt-1">
+                          {selectedPatient.weight_kg && selectedPatient.height_cm 
+                            ? (selectedPatient.weight_kg / Math.pow(selectedPatient.height_cm / 100, 2)).toFixed(1)
+                            : '—'
+                          }
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Weight Progress Chart */}
+                    <div className="bg-white p-6 rounded-[2rem] border border-slate-150 shadow-sm">
+                      <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-1.5">
+                        <Activity className="w-4 h-4 text-[#C4622D]"/> Weight Progress Log
+                      </h3>
+                      {!selectedPatient.weight_logs || selectedPatient.weight_logs.length === 0 ? (
+                        <div className="h-48 flex items-center justify-center text-slate-400 text-sm font-bold">
+                          No weight logs recorded by this user yet.
+                        </div>
+                      ) : (
+                        <div className="h-60 w-full">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={selectedPatient.weight_logs}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
+                              <XAxis dataKey="date" stroke="#94A3B8" fontSize={10} tickLine={false} />
+                              <YAxis domain={['dataMin - 5', 'dataMax + 5']} stroke="#94A3B8" fontSize={10} tickLine={false} />
+                              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', fontFamily: 'sans-serif' }} />
+                              <Line type="monotone" dataKey="weight" stroke="#10B981" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} name="Weight (kg)" />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Stated Medical History / Health Intake */}
+                    {selectedPatient.medical_history && (
+                      <div className="bg-white p-6 rounded-[2.2rem] border border-slate-150 shadow-sm">
+                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                          <FileText className="w-4 h-4 text-blue-500"/> Stated Medical History
+                        </h3>
+                        <p className="text-sm font-bold text-[#1A1F36] bg-slate-50 p-4.5 rounded-2xl border border-slate-100 leading-relaxed shadow-inner">
+                          {selectedPatient.medical_history}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Extra Info */}
+                    {selectedPatient.extra_medical_info && (
+                      <div className="bg-white p-6 rounded-[2.2rem] border border-slate-150 shadow-sm">
+                        <h3 className="text-xs font-black text-[#8896A4] uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                          <FileText className="w-4 h-4 text-emerald-500"/> Intake Additional Notes
+                        </h3>
+                        <p className="text-sm font-bold text-[#1A1F36] bg-slate-50 p-4.5 rounded-2xl border border-slate-100 leading-relaxed shadow-inner">
+                          {selectedPatient.extra_medical_info}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Food Preferences */}
+                    {selectedPatient.local_food && (
+                      <div className="bg-white p-6 rounded-[2.2rem] border border-slate-150 shadow-sm">
+                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                          <FileText className="w-4 h-4 text-amber-500"/> Food & Dietary Preferences
+                        </h3>
+                        <p className="text-sm font-bold text-[#1A1F36] bg-[#F5F0EB]/50 p-4.5 rounded-2xl border border-[#F5F0EB] leading-relaxed shadow-inner">
+                          {selectedPatient.local_food}
+                        </p>
+                      </div>
+                    )}
+
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-center p-8 h-64">
+                    <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100 mb-6">
+                      <Users className="w-10 h-10 text-slate-350" />
+                    </div>
+                    <h3 className="text-base font-black text-slate-600">Select a patient</h3>
+                    <p className="text-xs text-slate-450 font-semibold mt-2 max-w-xs">
+                      Choose a patient from the roster to view their medical files, telemetry history, and logs.
+                    </p>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </motion.main>
       </div>
     </div>
   );

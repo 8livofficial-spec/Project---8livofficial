@@ -4,8 +4,8 @@ import type { NextRequest } from 'next/server';
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Only protect /admin, /doctor and /dashboard routes
-  if (pathname.startsWith('/admin') || pathname.startsWith('/doctor') || pathname.startsWith('/dashboard')) {
+  // Only protect /admin, /doctor and /patient routes
+  if (pathname.startsWith('/admin') || pathname.startsWith('/doctor') || pathname.startsWith('/patient')) {
     // Get the role from the cookie we set during login
     const cookieHeader = request.headers.get('cookie') || '';
     const roleMatch = cookieHeader.match(/user_role=([^;]+)/);
@@ -29,7 +29,7 @@ export function middleware(request: NextRequest) {
       return NextResponse.redirect(unauthorizedUrl);
     }
 
-    if (pathname.startsWith('/dashboard') && userRole !== 'patient') {
+    if (pathname.startsWith('/patient') && userRole !== 'patient') {
       const unauthorizedUrl = new URL('/', request.url);
       return NextResponse.redirect(unauthorizedUrl);
     }
@@ -40,5 +40,5 @@ export function middleware(request: NextRequest) {
 
 // Define which paths the middleware should run on
 export const config = {
-  matcher: ['/admin/:path*', '/doctor/:path*', '/dashboard/:path*'],
+  matcher: ['/admin/:path*', '/doctor/:path*', '/patient/:path*'],
 };

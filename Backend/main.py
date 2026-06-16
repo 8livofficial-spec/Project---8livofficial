@@ -771,3 +771,14 @@ async def cron_process_bookings(request: Request):
     except Exception as e:
         print(f"[SCHEDULER LOOP ERROR] {e}")
         raise HTTPException(status_code=500, detail=str(e))
+from routers import admin_sessions, sessions, webhooks
+from services.session_scheduler import start_scheduler
+
+app.include_router(admin_sessions.router)
+app.include_router(sessions.router)
+app.include_router(webhooks.router)
+
+@app.on_event("startup")
+async def startup_event():
+    start_scheduler()
+

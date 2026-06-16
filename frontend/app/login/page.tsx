@@ -17,44 +17,57 @@ export default function UnifiedLogin() {
 
   useEffect(() => {
     const checkRedirect = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        let role = 'patient'
-        const match = document.cookie.match(/user_role=([^;]+)/)
-        if (match) {
-          role = match[1]
-        } else {
-          if (session.user.email === '8livofficial@gmail.com') {
-            role = 'admin'
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        if (error) {
+          console.error("Auth check error:", error)
+        }
+        
+        if (session?.user) {
+          let role = 'patient'
+          const match = document.cookie.match(/user_role=([^;]+)/)
+          if (match) {
+            role = match[1]
           } else {
-            const { data: docProfile } = await supabase
-              .from('doctor_profiles')
-              .select('doctor_id')
-              .eq('doctor_id', session.user.id)
-              .single()
-
-            if (docProfile) {
-              role = 'doctor'
+            if (session.user.email === '8livofficial@gmail.com') {
+              role = 'admin'
             } else {
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('role')
+              const { data: docProfile } = await supabase
+                .from('doctor_profiles')
+                .select('id')
                 .eq('id', session.user.id)
-                .single()
-              role = profile?.role || session.user.user_metadata?.role || 'patient'
-            }
-          }
-          document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
-        }
+                .maybeSingle()
 
-        if (role === 'admin') {
-          window.location.href = '/admin'
-        } else if (role === 'doctor') {
-          window.location.href = '/doctor/dashboard'
+              if (docProfile) {
+                role = 'doctor'
+              } else {
+                const { data: profile } = await supabase
+                  .from('profiles')
+                  .select('role')
+                  .eq('id', session.user.id)
+                  .maybeSingle()
+                role = profile?.role || session.user.user_metadata?.role || 'patient'
+              }
+            }
+            document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
+          }
+
+          if (role === 'admin') {
+            router.push('/admin')
+          } else if (role === 'doctor') {
+            router.push('/doctor/dashboard')
+          } else if (role === 'dietitian') {
+            router.push('/dietitian/dashboard')
+          } else if (role === 'trainer') {
+            router.push('/trainer/dashboard')
+          } else {
+            router.push('/patient')
+          }
         } else {
-          window.location.href = '/dashboard'
+          setCheckingAuth(false)
         }
-      } else {
+      } catch (err) {
+        console.error("Auth session check threw an exception:", err)
         setCheckingAuth(false)
       }
     }
@@ -103,9 +116,9 @@ export default function UnifiedLogin() {
         // Check if user is registered in doctor_profiles
         const { data: docProfile } = await supabase
           .from('doctor_profiles')
-          .select('doctor_id')
-          .eq('doctor_id', data.user.id)
-          .single()
+          .select('id')
+          .eq('id', data.user.id)
+          .maybeSingle()
 
         if (docProfile) {
           role = 'doctor'
@@ -115,7 +128,7 @@ export default function UnifiedLogin() {
             .from('profiles')
             .select('role')
             .eq('id', data.user.id)
-            .single()
+            .maybeSingle()
 
           role = profile?.role || data.user.user_metadata?.role || 'patient'
         }
@@ -129,8 +142,12 @@ export default function UnifiedLogin() {
         window.location.href = '/admin'
       } else if (role === 'doctor') {
         window.location.href = '/doctor/dashboard'
+      } else if (role === 'dietitian') {
+        window.location.href = '/dietitian/dashboard'
+      } else if (role === 'trainer') {
+        window.location.href = '/trainer/dashboard'
       } else {
-        window.location.href = '/dashboard'
+        window.location.href = '/patient'
       }
     } catch (err: any) {
       setAuthError(err.message || 'Authentication failed.')
@@ -220,7 +237,7 @@ export default function UnifiedLogin() {
             <div className="space-y-2">
               <div className="flex justify-between items-center ml-1">
                 <label className="text-sm font-semibold text-[#0F172A]">Password</label>
-                <a href="#" className="text-sm font-medium text-[#D46E53] hover:text-[#A84A33] transition-colors">Forgot password?</a>
+                <a href="/forgot-password" className="text-sm font-medium text-[#D46E53] hover:text-[#A84A33] transition-colors">Forgot password?</a>
               </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">

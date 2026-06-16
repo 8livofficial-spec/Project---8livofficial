@@ -37,13 +37,13 @@ def main():
         print(f"Logged in successfully. User ID: {user.id}")
         
         # Check if profile already exists
-        profile_check = supabase.from_("doctor_profiles").select("*").eq("doctor_id", user.id).execute()
+        profile_check = supabase.from_("doctor_profiles").select("*").eq("id", user.id).execute()
         if profile_check.data:
             print("Doctor profile already exists for this user!")
         else:
             print("Creating doctor profile...")
             supabase.from_("doctor_profiles").insert({
-                "doctor_id": user.id,
+                "id": user.id,
                 "full_name": full_name
             }).execute()
             print("Doctor profile created successfully.")

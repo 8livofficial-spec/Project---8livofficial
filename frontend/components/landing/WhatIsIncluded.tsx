@@ -93,48 +93,8 @@ export default function WhatIsIncluded() {
           >
             <div className="absolute inset-0 bg-gradient-to-tr from-[#D46E53]/10 to-transparent rounded-3xl -rotate-6 scale-105"></div>
             <div className="bg-white p-8 rounded-3xl relative z-10 shadow-2xl border border-gray-100">
-              <div className="space-y-6">
-                
-                {/* Mock App UI Element 1 */}
-                <motion.div 
-                  initial={{ opacity: 0, x: 20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.4, duration: 0.5 }}
-                  viewport={{ once: true }}
-                  className="bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm border border-[#D46E53]/10"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-[#D46E53]/10 flex items-center justify-center">
-                      <Pill className="w-5 h-5 text-[#D46E53]" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-[#0F172A]">Medication Shipped</p>
-                      <p className="text-sm text-[#475569]">Arriving Tomorrow</p>
-                    </div>
-                  </div>
-                  <span className="text-[#D46E53] text-sm font-medium">On Track</span>
-                </motion.div>
-
-                {/* Mock App UI Element 2 */}
-                <motion.div 
-                  initial={{ opacity: 0, x: 20 }}
-                  whileInView={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.6, duration: 0.5 }}
-                  viewport={{ once: true }}
-                  className="bg-white rounded-2xl p-4 flex items-center justify-between shadow-sm border border-[#D46E53]/10 ml-8"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center">
-                      <Activity className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="font-semibold text-[#0F172A]">Doctor Video Call</p>
-                      <p className="text-sm text-[#475569]">Dr. Sharma is ready</p>
-                    </div>
-                  </div>
-                  <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-                </motion.div>
-                
+              <div className="w-full rounded-2xl overflow-hidden shadow-sm bg-white flex items-center justify-center p-4">
+                <img src="/8liv_program_illustration.png" alt="8liv Program Elements - Medication, Coaching, Nutrition" className="w-full h-auto object-contain transform hover:scale-105 transition-transform duration-500 rounded-xl" />
               </div>
             </div>
           </motion.div>
