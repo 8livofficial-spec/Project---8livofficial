@@ -1,4 +1,10 @@
 import type { NextConfig } from "next";
+import dotenv from "dotenv";
+import path from "path";
+
+// Explicitly load .env.local on startup to ensure Turbopack/Next.js has all environment variables
+dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
+dotenv.config({ path: path.resolve(process.cwd(), "frontend", ".env.local") });
 
 const nextConfig: NextConfig = {
   // other config options...
