@@ -9,7 +9,7 @@ const PATIENT_STATUS_CACHE_MS = 15000
 let patientStatusCache: { userId: string; data: any; fetchedAt: number } | null = null
 const patientStatusRequests = new Map<string, Promise<any>>()
 
-async function fetchPatientStatus(userId: string, force = false) {
+async function fetchPatientStatus(userId: string, accessToken: string, force = false) {
   const now = Date.now()
   if (!force && patientStatusCache?.userId === userId && now - patientStatusCache.fetchedAt < PATIENT_STATUS_CACHE_MS) {
     return patientStatusCache.data
@@ -19,7 +19,9 @@ async function fetchPatientStatus(userId: string, force = false) {
     return patientStatusRequests.get(userId)!
   }
 
-  const request = fetch(`/api/patient/status?patientId=${userId}`)
+  const request = fetch(`/api/patient/status?patientId=${userId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
     .then(async (res) => {
       if (!res.ok) throw new Error("Failed to fetch patient onboarding status from backend API")
       const data = await res.json()
@@ -34,8 +36,10 @@ async function fetchPatientStatus(userId: string, force = false) {
   return request
 }
 
-async function fetchPatientDashboard(userId: string, force = false) {
-  const res = await fetch(`/api/patient/dashboard?patientId=${userId}`)
+async function fetchPatientDashboard(userId: string, accessToken: string) {
+  const res = await fetch(`/api/patient/dashboard?patientId=${userId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
   if (!res.ok) throw new Error("Failed to fetch patient dashboard from backend API")
   return res.json()
 }
@@ -226,7 +230,10 @@ function usePatientDataInternal() {
 
       if (pathname === '/patient') {
         // Aggregated Dashboard call: loads everything in one batch
-        const dashboardData = await fetchPatientDashboard(session.user.id, options?.force === true)
+        const dashboardData = await fetchPatientDashboard(
+          session.user.id,
+          session.access_token,
+        )
 
         setProfile(dashboardData.profile)
         setAssessment(dashboardData.assessment)
@@ -310,7 +317,11 @@ function usePatientDataInternal() {
         setFlowStep(journeyFlowStep)
       } else {
         // Lightweight status call (bypasses large collections queries)
-        const statusData = await fetchPatientStatus(session.user.id, options?.force === true)
+        const statusData = await fetchPatientStatus(
+          session.user.id,
+          session.access_token,
+          options?.force === true,
+        )
 
         setProfile(statusData.profile)
         setAssessment(statusData.assessment)
