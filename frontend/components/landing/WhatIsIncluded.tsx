@@ -9,7 +9,7 @@ export default function WhatIsIncluded() {
     {
       icon: <Pill className="w-6 h-6 text-[#D46E53]" />,
       title: "GLP-1 Medication",
-      description: "FDA-approved medications like Wegovy® or Ozempic®, shipped directly to your door."
+      description: "CDSCO & FSSAI -approved medications like Wegovy® or Ozempic®, shipped directly to your door."
     },
     {
       icon: <Activity className="w-6 h-6 text-[#D46E53]" />,

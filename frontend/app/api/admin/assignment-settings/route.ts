@@ -1,20 +1,10 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-
-async function assertAdmin(adminId?: string | null) {
-  if (!adminId) throw new Error('Missing adminId')
-  const { data } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', adminId)
-    .maybeSingle()
-  if (data?.role !== 'admin') throw new Error('Unauthorized')
-}
+import { assertAdmin } from '@/lib/apiSecurity'
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    await assertAdmin(searchParams.get('adminId'))
+    await assertAdmin(request)
 
     const { data, error } = await supabaseAdmin
       .from('assignment_engine_settings')
@@ -26,14 +16,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ settings: data })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unable to load assignment settings.'
-    return NextResponse.json({ error: message }, { status: message === 'Unauthorized' ? 403 : 400 })
+    const status = message === 'Forbidden' ? 403 : (message === 'Unauthorized' ? 401 : 400)
+    return NextResponse.json({ error: message }, { status })
   }
 }
 
 export async function PATCH(request: Request) {
   try {
+    await assertAdmin(request)
     const body = await request.json()
-    await assertAdmin(body.adminId)
 
     const updates = {
       auto_assignment_enabled: body.autoAssignmentEnabled !== false,
@@ -54,6 +45,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ settings: data })
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Unable to update assignment settings.'
-    return NextResponse.json({ error: message }, { status: message === 'Unauthorized' ? 403 : 400 })
+    const status = message === 'Forbidden' ? 403 : (message === 'Unauthorized' ? 401 : 400)
+    return NextResponse.json({ error: message }, { status })
   }
 }

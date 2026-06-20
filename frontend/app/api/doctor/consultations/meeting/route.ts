@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { createJitsiMeeting } from '@/lib/jitsi'
+import { assertDoctor } from '@/lib/apiSecurity'
 
 function isLegacyVideoUrl(url?: string | null) {
   return Boolean(url && /daily\.co|8liv\.daily/i.test(url))
@@ -17,6 +18,8 @@ export async function POST(request: Request) {
     if (!doctorId || !consultationId) {
       return NextResponse.json({ error: 'doctorId and consultationId are required' }, { status: 400 })
     }
+
+    await assertDoctor(request, doctorId)
 
     const { data: consultation, error: lookupError } = await supabaseAdmin
       .from('doctor_consultations')
@@ -97,6 +100,8 @@ export async function POST(request: Request) {
     })
   } catch (err: unknown) {
     console.error('Error in POST /api/doctor/consultations/meeting:', err)
-    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
+    const message = getErrorMessage(err)
+    const status = message === 'Forbidden' ? 403 : (message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: message }, { status })
   }
 }

@@ -1,24 +1,10 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-
-async function assertAdmin(adminId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', adminId)
-    .maybeSingle()
-
-  if (error || data?.role !== 'admin') {
-    throw new Error('Unauthorized. Admin access required.')
-  }
-}
+import { assertAdmin } from '@/lib/apiSecurity'
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const adminId = searchParams.get('adminId')
-    if (!adminId) return NextResponse.json({ error: 'Missing adminId' }, { status: 400 })
-    await assertAdmin(adminId)
+    await assertAdmin(request)
 
     const todayKey = new Date().toISOString().split('T')[0]
     const startOfMonth = new Date()
@@ -176,6 +162,7 @@ export async function GET(request: Request) {
   } catch (err: unknown) {
     console.error("API Error in GET /api/admin/dashboard:", err)
     const message = err instanceof Error ? err.message : 'Internal Server Error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    const status = message === 'Forbidden' ? 403 : (message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: message }, { status })
   }
 }

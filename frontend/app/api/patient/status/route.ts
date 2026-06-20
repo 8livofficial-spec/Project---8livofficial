@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { loadPatientJourneyState } from '@/lib/patientJourneyServer'
 import { getMembershipValidity } from '@/lib/membershipServer'
+import { assertPatientOrAssignedProvider } from '@/lib/apiSecurity'
 
 type CareTeamStatus = {
   doctor_name: string
@@ -27,6 +28,8 @@ export async function GET(request: Request) {
     if (!patientId) {
       return NextResponse.json({ error: 'Missing patientId' }, { status: 400 })
     }
+
+    await assertPatientOrAssignedProvider(request, patientId)
 
     // 1. Fetch Profile and related data securely in parallel (bypassing RLS)
     const [
@@ -286,6 +289,7 @@ export async function GET(request: Request) {
   } catch (err: unknown) {
     console.error("API Error in /api/patient/status:", err)
     const message = err instanceof Error ? err.message : 'Internal Server Error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    const status = message === 'Forbidden' ? 403 : (message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: message }, { status })
   }
 }

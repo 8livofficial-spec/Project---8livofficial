@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { getAuthenticatedUser } from '@/lib/apiSecurity'
 
 // GET: Fetch messages between two users
 export async function GET(request: Request) {
@@ -10,6 +11,15 @@ export async function GET(request: Request) {
 
     if (!userId || !contactId) {
       return NextResponse.json({ error: 'Missing userId or contactId' }, { status: 400 })
+    }
+
+    const authUser = await getAuthenticatedUser(request)
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (authUser.role !== 'admin' && authUser.user.id !== userId && authUser.user.id !== contactId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { data, error } = await supabaseAdmin
@@ -24,7 +34,8 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ messages: data })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    const status = err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: err.message }, { status })
   }
 }
 
@@ -36,6 +47,15 @@ export async function POST(request: Request) {
 
     if (!senderId || !receiverId || !messageText) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    }
+
+    const authUser = await getAuthenticatedUser(request)
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    if (authUser.role !== 'admin' && authUser.user.id !== senderId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
     const { data, error } = await supabaseAdmin
@@ -55,6 +75,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, message: data })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    const status = err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: err.message }, { status })
   }
 }

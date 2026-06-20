@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 import { EmailService } from '@/lib/emailService'
 import { updatePatientJourneyState } from '@/lib/patientJourneyServer'
 import { assignMembershipCareTeam } from '@/lib/smartAssignmentEngine'
+import { assertPatientOrAssignedProvider } from '@/lib/apiSecurity'
 
 function generateTxnId(): string {
   return `TXN8LIV${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`
@@ -24,6 +25,8 @@ export async function POST(request: Request) {
     if (!patientId || !paymentType) {
       return NextResponse.json({ error: 'Missing patientId or paymentType' }, { status: 400 })
     }
+
+    await assertPatientOrAssignedProvider(request, patientId)
 
     const txnId = generateTxnId()
 
@@ -182,6 +185,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true, transaction_id: txnId })
   } catch (err: any) {
     console.error('API Error in /api/payment:', err)
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 })
+    const status = err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status })
   }
 }

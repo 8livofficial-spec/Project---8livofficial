@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { EmailService } from '@/lib/emailService'
 import { createToken, getOrigin } from '@/lib/authSecurity'
+import { assertAdmin } from '@/lib/apiSecurity'
 
 const providerRoles = ['doctor', 'dietitian', 'nutritionist', 'fitness_coach']
 const fallbackProviderRoles = ['doctor', 'dietitian', 'nutritionist', 'fitness_coach', 'trainer']
@@ -49,24 +50,10 @@ async function loadFallbackProviders(search = '', from = 0, to = 24) {
   return { providers, count: count || 0 };
 }
 
-async function assertAdmin(adminId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', adminId)
-    .maybeSingle()
-
-  if (error || data?.role !== 'admin') {
-    throw new Error('Unauthorized. Admin access required.')
-  }
-}
-
 export async function GET(request: Request) {
   try {
+    await assertAdmin(request)
     const { searchParams } = new URL(request.url)
-    const adminId = searchParams.get('adminId')
-    if (!adminId) return NextResponse.json({ error: 'Missing adminId' }, { status: 400 })
-    await assertAdmin(adminId)
 
     const page = Number(searchParams.get('page') || '1')
     const limit = Number(searchParams.get('limit') || '25')
@@ -105,15 +92,16 @@ export async function GET(request: Request) {
       totalPages: Math.ceil((count || 0) / limit)
     })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Failed to load providers' }, { status: err.message?.includes('Unauthorized') ? 403 : 500 })
+    const status = err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: err.message || 'Failed to load providers' }, { status })
   }
 }
 
 export async function POST(request: Request) {
   try {
+    await assertAdmin(request)
     const body = await request.json()
     const {
-      adminId,
       fullName,
       email,
       password,
@@ -131,14 +119,12 @@ export async function POST(request: Request) {
       upiId,
     } = body
 
-    if (!adminId || !fullName || !email || !password || !role) {
-      return NextResponse.json({ error: 'Full name, email, password, role, and adminId are required.' }, { status: 400 })
+    if (!fullName || !email || !password || !role) {
+      return NextResponse.json({ error: 'Full name, email, password, and role are required.' }, { status: 400 })
     }
     if (!providerRoles.includes(role)) {
       return NextResponse.json({ error: 'Invalid provider role.' }, { status: 400 })
     }
-
-    await assertAdmin(adminId)
 
     const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -223,18 +209,19 @@ export async function POST(request: Request) {
         : undefined,
     })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Failed to create provider' }, { status: err.message?.includes('Unauthorized') ? 403 : 500 })
+    const status = err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: err.message || 'Failed to create provider' }, { status })
   }
 }
 
 export async function PATCH(request: Request) {
   try {
+    await assertAdmin(request)
     const body = await request.json()
-    const { adminId, providerId, updates } = body
-    if (!adminId || !providerId || !updates) {
-      return NextResponse.json({ error: 'Missing adminId, providerId, or updates.' }, { status: 400 })
+    const { providerId, updates } = body
+    if (!providerId || !updates) {
+      return NextResponse.json({ error: 'Missing providerId, or updates.' }, { status: 400 })
     }
-    await assertAdmin(adminId)
 
     const { error } = await supabaseAdmin
       .from('provider_profiles')
@@ -271,6 +258,7 @@ export async function PATCH(request: Request) {
     }
     return NextResponse.json({ success: true })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Failed to update provider' }, { status: err.message?.includes('Unauthorized') ? 403 : 500 })
+    const status = err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: err.message || 'Failed to update provider' }, { status })
   }
 }

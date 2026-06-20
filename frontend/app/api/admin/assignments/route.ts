@@ -1,26 +1,18 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { assertAdmin } from '@/lib/apiSecurity'
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const patientId = searchParams.get('patientId')
-    const adminId = searchParams.get('adminId')
 
-    if (!patientId || !adminId) {
+    if (!patientId) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
     }
 
     // 1. Verify admin role
-    const { data: adminProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', adminId)
-      .maybeSingle()
-
-    if (!adminProfile || adminProfile.role !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 })
-    }
+    await assertAdmin(request)
 
     // 2. Fetch assignments
     const { data, error } = await supabaseAdmin
@@ -36,28 +28,19 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ assignment: data })
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 })
+    const status = err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status })
   }
 }
 
 export async function POST(request: Request) {
   try {
+    await assertAdmin(request)
     const body = await request.json()
-    const { adminId, patientId, doctorId, dietitianId, nutritionistId, fitnessCoachId, trainerId } = body
+    const { patientId, doctorId, dietitianId, nutritionistId, fitnessCoachId, trainerId } = body
 
-    if (!adminId || !patientId) {
+    if (!patientId) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
-    }
-
-    // 1. Verify admin role
-    const { data: adminProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', adminId)
-      .maybeSingle()
-
-    if (!adminProfile || adminProfile.role !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 })
     }
 
     // 2. Upsert assignments
@@ -92,6 +75,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('API Error in /api/admin/assignments:', err)
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 })
+    const status = err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status })
   }
 }

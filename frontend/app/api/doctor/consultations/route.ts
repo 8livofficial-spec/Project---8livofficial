@@ -5,6 +5,7 @@ import { loadPatientJourneyState, updatePatientJourneyState } from '@/lib/patien
 import { INITIAL_CONSULTATION, isInitialConsultationType } from '@/lib/providerConsultations';
 import { getMembershipValidity } from '@/lib/membershipServer';
 import { creditCompletedConsultation } from '@/lib/walletLedger';
+import { getAuthenticatedUser, assertDoctor } from '@/lib/apiSecurity';
 
 type ConsultationRow = {
   id: string;
@@ -175,11 +176,14 @@ async function creditDoctorWalletOnce(doctorId: string, patientId: string, appoi
 
 export async function POST(req: Request) {
   try {
-    const { doctorId, page = 1, limit = 25, search = '', status = '' } = await req.json();
+    const body = await req.json();
+    const { doctorId, page = 1, limit = 25, search = '', status = '' } = body;
 
     if (!doctorId) {
       return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
     }
+
+    await assertDoctor(req, doctorId);
 
     let matchingPatientIds: string[] = [];
     if (search.trim()) {
@@ -279,29 +283,46 @@ export async function POST(req: Request) {
     });
   } catch (err: unknown) {
     console.error('Error in POST /api/doctor/consultations:', err);
-    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 });
+    const message = getErrorMessage(err);
+    const status = message === 'Forbidden' ? 403 : (message === 'Unauthorized' ? 401 : 500);
+    return NextResponse.json({ error: message }, { status });
   }
 }
 
 export async function PATCH(req: Request) {
   try {
+    const authUser = await getAuthenticatedUser(req);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    const body = await req.json();
     const {
       doctorId,
       consultationId,
       action = 'cancel_by_doctor',
-      actorRole,
       decision,
       notes,
       diagnosisSummary,
       recommendedMedicationType,
       prescriptionText,
       followUpInstruction
-    } = await req.json();
-    const isAdminAction = actorRole === 'admin';
+    } = body;
+    const isAdminAction = authUser.role === 'admin';
 
-    if ((!doctorId && !isAdminAction) || !consultationId) {
-      return NextResponse.json({ error: 'doctorId and consultationId are required' }, { status: 400 });
+    if (!isAdminAction) {
+      if (authUser.role !== 'doctor') {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      if (doctorId && authUser.user.id !== doctorId) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
+
+    if (!consultationId) {
+      return NextResponse.json({ error: 'consultationId is required' }, { status: 400 });
+    }
+
+    const targetDoctorId = doctorId || authUser.user.id;
 
     let lookupQuery = supabaseAdmin
       .from('doctor_consultations')
@@ -309,7 +330,7 @@ export async function PATCH(req: Request) {
       .eq('id', consultationId);
 
     if (!isAdminAction) {
-      lookupQuery = lookupQuery.eq('doctor_id', doctorId);
+      lookupQuery = lookupQuery.eq('doctor_id', targetDoctorId);
     }
 
     const { data: consultation, error: lookupErr } = await lookupQuery.maybeSingle();
@@ -333,7 +354,7 @@ export async function PATCH(req: Request) {
           updated_at: now,
         })
         .eq('id', consultationId)
-        .eq('doctor_id', doctorId)
+        .eq('doctor_id', targetDoctorId)
         .select('*')
         .single();
       if (startError) throw startError;
@@ -355,7 +376,7 @@ export async function PATCH(req: Request) {
           updated_at: now,
         })
         .eq('id', consultationId)
-        .eq('doctor_id', doctorId)
+        .eq('doctor_id', targetDoctorId)
         .select('*')
         .single();
       if (endError) throw endError;
@@ -695,6 +716,8 @@ export async function PATCH(req: Request) {
     return NextResponse.json({ success: true });
   } catch (err: unknown) {
     console.error('Error in PATCH /api/doctor/consultations:', err);
-    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 });
+    const message = getErrorMessage(err);
+    const status = message === 'Forbidden' ? 403 : (message === 'Unauthorized' ? 401 : 500);
+    return NextResponse.json({ error: message }, { status });
   }
 }

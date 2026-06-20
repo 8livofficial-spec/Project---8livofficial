@@ -2,25 +2,16 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { EmailService } from '@/lib/emailService'
 import { createToken, getOrigin } from '@/lib/authSecurity'
+import { assertAdmin } from '@/lib/apiSecurity'
 
 export async function POST(request: Request) {
   try {
+    const admin = await assertAdmin(request)
     const body = await request.json()
-    const { adminId, email, password, role, firstName, lastName, phoneNumber } = body
+    const { email, password, role, firstName, lastName, phoneNumber } = body
 
-    if (!adminId || !email || !password || !role) {
+    if (!email || !password || !role) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
-    }
-
-    // 1. Verify that the requester is indeed an admin
-    const { data: adminProfile, error: adminCheckErr } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', adminId)
-      .maybeSingle()
-
-    if (adminCheckErr || !adminProfile || adminProfile.role !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 })
     }
 
     // 2. Register user using service role client to bypass email confirmation blocks
@@ -107,7 +98,7 @@ export async function POST(request: Request) {
     await supabaseAdmin
       .from('patient_notifications')
       .insert({
-        patient_id: adminId,
+        patient_id: admin.id,
         type: 'security',
         title: 'Staff Registered',
         message: `Registered ${firstName} ${lastName} as a ${role}.`,
@@ -118,33 +109,23 @@ export async function POST(request: Request) {
 
   } catch (err: any) {
     console.error('API Error in /api/admin/users:', err)
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 })
+    const status = err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status })
   }
 }
 
 export async function DELETE(request: Request) {
   try {
+    const admin = await assertAdmin(request)
     const { searchParams } = new URL(request.url)
-    const adminId = searchParams.get('adminId')
     const targetUserId = searchParams.get('userId')
 
-    if (!adminId || !targetUserId) {
+    if (!targetUserId) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
     }
 
-    // 1. Verify that the requester is indeed an admin
-    const { data: adminProfile, error: adminCheckErr } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', adminId)
-      .maybeSingle()
-
-    if (adminCheckErr || !adminProfile || adminProfile.role !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 })
-    }
-
     // Prevent deleting oneself
-    if (adminId === targetUserId) {
+    if (admin.id === targetUserId) {
       return NextResponse.json({ error: 'Cannot remove your own admin account.' }, { status: 400 })
     }
 
@@ -216,7 +197,7 @@ export async function DELETE(request: Request) {
     await supabaseAdmin
       .from('patient_notifications')
       .insert({
-        patient_id: adminId,
+        patient_id: admin.id,
         type: 'security',
         title: 'Staff Member Removed',
         message: `Successfully removed staff member with ID ${targetUserId}.`,
@@ -227,6 +208,7 @@ export async function DELETE(request: Request) {
 
   } catch (err: any) {
     console.error('API Error in DELETE /api/admin/users:', err)
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 })
+    const status = err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status })
   }
 }

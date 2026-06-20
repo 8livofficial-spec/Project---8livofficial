@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { assertDoctor } from '@/lib/apiSecurity'
 
 type GeneratedSlot = {
   available_date: string
@@ -46,6 +47,8 @@ export async function POST(request: Request) {
     if (!doctorId) {
       return NextResponse.json({ error: 'Missing doctorId.' }, { status: 400 })
     }
+
+    await assertDoctor(request, doctorId)
 
     if (!Array.isArray(slots) || slots.length === 0) {
       return NextResponse.json({ error: 'No availability slots were provided.' }, { status: 400 })
@@ -215,6 +218,8 @@ export async function POST(request: Request) {
 
   } catch (err: unknown) {
     console.error('API Error in /api/doctor/availability:', err)
-    return NextResponse.json({ error: getErrorMessage(err) }, { status: 500 })
+    const message = getErrorMessage(err)
+    const status = message === 'Forbidden' ? 403 : (message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: message }, { status })
   }
 }

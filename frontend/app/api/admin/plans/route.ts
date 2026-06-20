@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { assertAdmin } from '@/lib/apiSecurity'
 
 const FALLBACK_PLANS = [
   {
@@ -41,22 +42,12 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    await assertAdmin(request)
     const body = await request.json()
-    const { adminId, name, priceMonthly, consultationFee, features, isActive, discountCode, discountPercent } = body
+    const { name, priceMonthly, consultationFee, features, isActive, discountCode, discountPercent } = body
 
-    if (!adminId || !name || !priceMonthly) {
+    if (!name || !priceMonthly) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
-    }
-
-    // Verify admin role
-    const { data: adminProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', adminId)
-      .maybeSingle()
-
-    if (!adminProfile || adminProfile.role !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 })
     }
 
     // Upsert plan
@@ -81,6 +72,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ success: true })
   } catch (err: any) {
     console.error('API Error in /api/admin/plans:', err)
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 })
+    const status = err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status })
   }
 }
