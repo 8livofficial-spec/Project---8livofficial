@@ -74,13 +74,17 @@ export async function POST(request: Request) {
 
     const { token, tokenHash } = createToken()
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-    await supabaseAdmin.from('email_verification_tokens').insert({
+    const { error: tokenError } = await supabaseAdmin.from('email_verification_tokens').insert({
       user_id: data.user.id,
       email,
       token_hash: tokenHash,
       purpose: 'EMAIL_VERIFICATION',
       expires_at: expiresAt,
     })
+
+    if (tokenError) {
+      throw new Error(`Unable to create email verification link: ${tokenError.message}`)
+    }
 
     const link = `${getOrigin(request)}/verify-email?token=${encodeURIComponent(token)}`
     await EmailService.sendEmailVerification({

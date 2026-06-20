@@ -13,7 +13,6 @@ export async function POST(request: Request) {
       .from('email_verification_tokens')
       .select('*')
       .eq('token_hash', tokenHash)
-      .is('used_at', null)
       .maybeSingle()
 
     if (error || !record) {
@@ -24,15 +23,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Verification link has expired.' }, { status: 400 })
     }
 
+    // A verification request may be repeated by React development checks,
+    // browser retries, or email-link scanners. Patient verification is safe
+    // to treat as idempotent once the token has already been consumed.
+    if (record.used_at) {
+      if (record.purpose === 'EMAIL_VERIFICATION') {
+        return NextResponse.json({ success: true, nextPath: '/login' })
+      }
+      return NextResponse.json({ error: 'This invitation link has already been used.' }, { status: 400 })
+    }
+
     const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(record.user_id, {
       email_confirm: true,
     })
     if (updateError) return NextResponse.json({ error: updateError.message }, { status: 400 })
 
-    await supabaseAdmin
+    const { error: consumeError } = await supabaseAdmin
       .from('email_verification_tokens')
       .update({ used_at: new Date().toISOString() })
       .eq('id', record.id)
+
+    if (consumeError) {
+      return NextResponse.json({ error: 'Unable to complete email verification.' }, { status: 500 })
+    }
 
     await writeAuthAudit({ userId: record.user_id, email: record.email, event: 'EMAIL_VERIFIED', status: 'SUCCESS' })
 
