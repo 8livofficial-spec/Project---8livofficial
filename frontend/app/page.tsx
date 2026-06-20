@@ -61,10 +61,8 @@ export default function Home() {
             router.replace('/admin')
           } else if (role === 'doctor') {
             router.replace('/doctor/dashboard')
-          } else if (role === 'dietitian') {
-            router.replace('/dietitian/dashboard')
-          } else if (role === 'trainer') {
-            router.replace('/trainer/dashboard')
+          } else if (role === 'dietitian' || role === 'trainer' || role === 'fitness_coach' || role === 'nutritionist') {
+            router.replace('/provider/dashboard')
           } else {
             router.replace('/patient')
           }

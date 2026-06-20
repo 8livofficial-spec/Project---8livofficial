@@ -31,9 +31,9 @@ export async function POST(req: Request) {
         .in('status', ['scheduled', 'calling', 'attended']);
 
       if (matchTarget.startsWith('https://')) {
-        docQuery = docQuery.eq('room_url', matchTarget);
+        docQuery = docQuery.or(`room_url.eq.${matchTarget},meeting_url.eq.${matchTarget}`);
       } else {
-        docQuery = docQuery.or(`room_url.eq.${matchTarget},room_url.ilike.%${matchTarget}%`);
+        docQuery = docQuery.or(`room_url.eq.${matchTarget},meeting_url.eq.${matchTarget},meeting_room.eq.${matchTarget},room_url.ilike.%${matchTarget}%,meeting_url.ilike.%${matchTarget}%,meeting_room.ilike.%${matchTarget}%`);
       }
 
       const { data: docConsult } = await docQuery.maybeSingle();
@@ -60,9 +60,9 @@ export async function POST(req: Request) {
         .in('status', ['scheduled', 'attended']);
 
       if (matchTarget.startsWith('https://')) {
-        staffQuery = staffQuery.eq('room_url', matchTarget);
+        staffQuery = staffQuery.or(`room_url.eq.${matchTarget},meeting_url.eq.${matchTarget}`);
       } else {
-        staffQuery = staffQuery.or(`room_url.eq.${matchTarget},room_url.ilike.%${matchTarget}%`);
+        staffQuery = staffQuery.or(`room_url.eq.${matchTarget},meeting_url.eq.${matchTarget},meeting_room.eq.${matchTarget},room_url.ilike.%${matchTarget}%,meeting_url.ilike.%${matchTarget}%,meeting_room.ilike.%${matchTarget}%`);
       }
 
       const { data: staffConsult } = await staffQuery.maybeSingle();
@@ -75,6 +75,7 @@ export async function POST(req: Request) {
           .update({
             status: nextStatus,
             is_completed: nextStatus === 'completed',
+            completed_at: nextStatus === 'completed' ? new Date().toISOString() : null,
             updated_at: new Date().toISOString()
           })
           .eq('id', staffConsult.id);

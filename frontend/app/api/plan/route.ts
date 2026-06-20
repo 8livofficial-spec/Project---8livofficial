@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { updatePatientJourneyState } from '@/lib/patientJourneyServer'
 
 export async function POST(request: Request) {
   try {
@@ -44,6 +45,17 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: insertError.message }, { status: 500 })
       }
     }
+
+    await updatePatientJourneyState(patientId, {
+      consultationStatus: 'COMPLETED',
+      membershipStatus: 'SELECTED',
+      dashboardAccess: false,
+      firstConsultationCompleted: true,
+      onboardingCompleted: false,
+      currentJourneyStep: 'MEMBERSHIP_PAYMENT',
+      lastCompletedStep: 'PLAN_SELECTED',
+      metadata: { membershipTier },
+    })
 
     return NextResponse.json({ success: true })
   } catch (err: any) {

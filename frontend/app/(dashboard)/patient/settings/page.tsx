@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabaseClient'
 import { usePatientData } from '@/hooks/usePatientData'
 
 export default function PatientSettingsPage() {
-  const { assessment, reloadData } = usePatientData()
+  const { assessment, reloadData, loading } = usePatientData()
 
   // Notification toggles
   const [emailNotif, setEmailNotif] = useState(true)
@@ -18,6 +18,16 @@ export default function PatientSettingsPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
 
   const [savingPass, setSavingPass] = useState(false)
+  const [passSuccess, setPassSuccess] = useState('')
+  const [passError, setPassError] = useState('')
+
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
   const [savingPrefs, setSavingPrefs] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')

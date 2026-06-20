@@ -6,8 +6,16 @@ import { usePatientData } from '@/hooks/usePatientData'
 import { supabase } from '@/lib/supabaseClient'
 
 export default function BillingPage() {
-  const { assessment, reloadData } = usePatientData()
+  const { assessment, reloadData, loading } = usePatientData()
   const [upgrading, setUpgrading] = useState(false)
+
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   const activePlan = assessment?.membership_tier || 'Silver Plan'
 

@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { EmailService } from '@/lib/emailService'
 
 export async function POST(request: Request) {
   try {
@@ -21,6 +22,21 @@ export async function POST(request: Request) {
 
     if (profileError) {
       return NextResponse.json({ error: profileError.message }, { status: 500 })
+    }
+
+    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId)
+    if (userError) {
+      console.error('Failed to fetch user email for welcome email:', userError.message)
+    } else if (userData.user?.email) {
+      try {
+        await EmailService.sendWelcomeEmail({
+          email: userData.user.email,
+          name: `${firstName || ''} ${lastName || ''}`.trim() || userData.user.email.split('@')[0],
+          patientId: userId,
+        })
+      } catch (emailError) {
+        console.error('Failed to send welcome email:', emailError)
+      }
     }
 
     return NextResponse.json({ success: true })

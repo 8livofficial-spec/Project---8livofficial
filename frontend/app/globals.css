@@ -36,6 +36,25 @@
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
+  .input {
+    width: 100%;
+    border-radius: 18px;
+    border: 1px solid #E8DED4;
+    background: #F9F6F0;
+    padding: 0.9rem 1rem;
+    color: #1A1F36;
+    font-weight: 600;
+    outline: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  }
+  .input:focus {
+    border-color: #C4622D;
+    background: #FFFFFF;
+    box-shadow: 0 0 0 3px rgba(196, 98, 45, 0.14);
+  }
+  .input::placeholder {
+    color: #8896A4;
+  }
 }
 
 @keyframes fadeInUp {

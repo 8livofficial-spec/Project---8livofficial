@@ -1,125 +1,298 @@
 'use client'
 
-import React, { useState, useEffect, useRef } from 'react'
-import Link from 'next/link'
-import { useRouter } from 'next/navigation'
-import { Calendar as CalendarIcon, Clock, Video, User, ChevronLeft, ChevronRight, BellRing, PhoneCall } from 'lucide-react'
+import React, { useState, useEffect, useMemo, useCallback } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Video, PhoneCall, Lock, Shield, CheckCircle, MapPin, Users, CreditCard, Smartphone, Building2, AlertCircle, CalendarPlus, Sun, CloudSun, Moon, Clock, CalendarDays } from 'lucide-react'
 import { usePatientData } from '@/hooks/usePatientData'
 import { supabase } from '@/lib/supabaseClient'
 
+const CONSULTATION_FEE = 499
+const SESSION_EXPIRED = 'SESSION_EXPIRED'
+
+async function patientFetch(input: RequestInfo | URL, init: RequestInit = {}) {
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData.session?.access_token
+  if (!token) throw new Error(SESSION_EXPIRED)
+
+  const request = (accessToken: string) => fetch(input, {
+    ...init,
+    headers: {
+      ...init.headers,
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
+
+  const response = await request(token)
+  if (response.status !== 401) return response
+
+  const { data: refreshed, error } = await supabase.auth.refreshSession()
+  const refreshedToken = refreshed.session?.access_token
+  if (error || !refreshedToken) {
+    await supabase.auth.signOut()
+    throw new Error(SESSION_EXPIRED)
+  }
+
+  const retriedResponse = await request(refreshedToken)
+  if (retriedResponse.status === 401) {
+    await supabase.auth.signOut()
+    throw new Error(SESSION_EXPIRED)
+  }
+  return retriedResponse
+}
+
+type AvailableDoctorSlot = {
+  slotId?: string
+  providerId?: string
+  providerRole?: string
+  date?: string
+  startTime?: string
+  endTime?: string
+  status?: string
+  source?: string
+  available_date: string
+  time_slot: string
+  available_count?: number
+}
+
+type PaymentMethod = 'upi' | 'card' | 'netbanking'
+type PaymentStage = 'method' | 'assigning' | 'confirmed'
+type AssignmentDetails = {
+  consultationId: string
+  bookingId?: string
+  paymentId?: string
+  paymentAmount?: number
+  paymentStatus?: string
+  appointmentStatus?: string
+  doctorName: string
+  specialty: string
+  bookingDate: string
+  bookingTime: string
+  meetingType: string
+}
+
+// Design System Tokens
+const designTokens = {
+  colors: {
+    primary: '#1A1F36',
+    primaryHover: '#0D101C',
+    secondary: '#C4622D',
+    success: '#5C7A6B',
+    background: '#F5F0EB',
+    surface: '#FFFFFF',
+    border: 'rgba(26, 31, 54, 0.08)',
+    textPrimary: '#1A1F36',
+    textSecondary: '#40516A',
+    textTertiary: '#8896A4',
+  },
+  borderRadius: {
+    sm: '0.5rem',
+    md: '0.75rem',
+    lg: '1rem',
+    xl: '1.25rem',
+    '2xl': '1.5rem',
+  },
+  spacing: {
+    xs: '0.25rem',
+    sm: '0.5rem',
+    md: '1rem',
+    lg: '1.5rem',
+    xl: '2rem',
+    '2xl': '2.5rem',
+    '3xl': '3rem',
+  },
+  shadows: {
+    sm: '0 1px 3px 0 rgba(26, 31, 54, 0.08), 0 1px 2px 0 rgba(26, 31, 54, 0.04)',
+    md: '0 4px 14px -2px rgba(26, 31, 54, 0.08)',
+    lg: '0 18px 40px -18px rgba(26, 31, 54, 0.22)',
+  },
+}
+
+function formatSlotTime(time: string) {
+  const [hourPart, minutePart = '00'] = time.split(':')
+  const hours = Number(hourPart)
+  if (!Number.isFinite(hours)) return time
+  const suffix = hours >= 12 ? 'PM' : 'AM'
+  const displayHour = hours % 12 || 12
+  return `${String(displayHour).padStart(2, '0')}:${minutePart} ${suffix}`
+}
+
+function formatSlotDate(date: string, long = false) {
+  const parsed = new Date(`${date}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) return date
+  return parsed.toLocaleDateString('en-US', long
+    ? { day: 'numeric', month: 'long', year: 'numeric' }
+    : { weekday: 'short', month: 'short', day: 'numeric' }
+  )
+}
+function getDateHeading(date: string) {
+  const today = new Date()
+  const tomorrow = new Date()
+  tomorrow.setDate(today.getDate() + 1)
+  const target = new Date(`${date}T00:00:00`)
+  const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString()
+  if (sameDay(target, today)) return 'Today'
+  if (sameDay(target, tomorrow)) return 'Tomorrow'
+  return formatSlotDate(date)
+}
+
+function getDateParts(date: string) {
+  const parsed = new Date(`${date}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) {
+    return { weekday: date, day: '' }
+  }
+
+  return {
+    weekday: parsed.toLocaleDateString('en-US', { weekday: 'short' }),
+    day: parsed.toLocaleDateString('en-US', { day: '2-digit' }),
+  }
+}
+
+function getSlotPeriod(time: string): 'morning' | 'afternoon' | 'evening' {
+  const hour = Number(time.split(':')[0])
+  if (hour < 12) return 'morning'
+  if (hour < 17) return 'afternoon'
+  return 'evening'
+}
+
+const periodMeta = {
+  morning: { label: 'Morning', icon: Sun },
+  afternoon: { label: 'Afternoon', icon: CloudSun },
+  evening: { label: 'Evening', icon: Moon },
+}
+
 export default function ConsultationSchedulingPage() {
   const router = useRouter()
-  const { assessment, consultation, reloadData } = usePatientData()
-  
-  const [selectedDoctor, setSelectedDoctor] = useState('')
-  const [bookingDate, setBookingDate] = useState('')
-  const [bookingTime, setBookingTime] = useState('')
+  const searchParams = useSearchParams()
+  const { reloadData, onboardingState, loading: patientDataLoading } = usePatientData()
+  const reusePaymentFromBookingId = searchParams.get('rescheduleFrom') || ''
+  const isActiveMemberFollowUp = onboardingState.membershipStatus === 'ACTIVE' && onboardingState.firstConsultationCompleted === true
+
+  const [availableDates, setAvailableDates] = useState<string[]>([])
+  const [selectedDateSlots, setSelectedDateSlots] = useState<AvailableDoctorSlot[]>([])
+  const [selectedDate, setSelectedDate] = useState('')
+  const [slotsLoading, setSlotsLoading] = useState(true)
+  const [dateSlotsLoading, setDateSlotsLoading] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [countdownText, setCountdownText] = useState('')
-  const [isJoinEnabled, setIsJoinEnabled] = useState(false)
+  const [paymentOpen, setPaymentOpen] = useState(false)
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('upi')
+  const [paymentStage, setPaymentStage] = useState<PaymentStage>('method')
+  const [paymentError, setPaymentError] = useState('')
+  const [assignment, setAssignment] = useState<AssignmentDetails | null>(null)
+
+  if (patientDataLoading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+  const [selectedSlot, setSelectedSlot] = useState<AvailableDoctorSlot | null>(null)
 
   // Real-time calling alert state
   const [doctorCallingAlert, setDoctorCallingAlert] = useState<{ roomUrl: string; consultationId: string } | null>(null)
-  const callingAudioRef = useRef<HTMLAudioElement | null>(null)
 
-  const activeBookingDate = assessment?.booking_date
-  const activeBookingTime = assessment?.booking_time
+  const selectableDates = useMemo(() => {
+    return [...availableDates].sort((a, b) => {
+      return new Date(`${a}T00:00:00`).getTime() - new Date(`${b}T00:00:00`).getTime()
+    })
+  }, [availableDates])
 
-  // Doctors list (loaded dynamically from database with fallback)
-  const [doctors, setDoctors] = useState<any[]>([])
+  const groupedSlots = useMemo(() => {
+    const sorted = [...selectedDateSlots].sort((a, b) => {
+      const aTime = new Date(`${a.available_date} ${a.time_slot}`).getTime()
+      const bTime = new Date(`${b.available_date} ${b.time_slot}`).getTime()
+      return aTime - bTime
+    })
 
-  // Times slots (loaded dynamically from doctor availability table with fallback)
-  const [slots, setSlots] = useState<any[]>([])
+    return sorted.reduce<Record<'morning' | 'afternoon' | 'evening', AvailableDoctorSlot[]>>((acc, slot) => {
+      const period = getSlotPeriod(slot.time_slot)
+      acc[period].push(slot)
+      return acc
+    }, { morning: [], afternoon: [], evening: [] })
+  }, [selectedDateSlots])
 
-  // Past consultations (loaded dynamically from database with fallback)
-  const [pastConsultations, setPastConsultations] = useState<any[]>([])
-
-  // 1. Fetch real clinicians from the database
-  useEffect(() => {
-    const fetchClinicians = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('doctor_profiles')
-          .select('id, full_name, specialty')
-        if (data && data.length > 0) {
-          const mappedDoctors = data.map(d => ({
-            name: d.full_name,
-            role: d.specialty || 'Physician Specialist',
-            initials: d.full_name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
-          }))
-          setDoctors(mappedDoctors)
-          if (mappedDoctors.length > 0) setSelectedDoctor(mappedDoctors[0].name)
-        }
-      } catch (e) {
-        console.error("Error fetching clinicians:", e)
-      }
+  const loadSlotsForDate = useCallback(async (date: string) => {
+    if (!date) {
+      setSelectedDateSlots([])
+      return
     }
-    fetchClinicians()
-  }, [])
 
-  // 2. Fetch slots dynamically based on date and clinician availability
-  useEffect(() => {
-    if (!bookingDate) return
-
-    const fetchSlots = async () => {
-      try {
-        let query = supabase.from('doctor_availability').select('*').eq('available_date', bookingDate)
-        
-        // Find matching doctor ID if available
-        const { data: doc } = await supabase
-          .from('doctor_profiles')
-          .select('id')
-          .eq('full_name', selectedDoctor)
-          .maybeSingle()
-
-        if (doc) {
-          query = query.eq('doctor_id', doc.id)
-        }
-
-        const { data, error } = await query
-        if (data && data.length > 0) {
-          setSlots(data.map(s => ({
-            time: s.time_slot,
-            booked: s.is_booked
-          })))
-        }
-      } catch (e) {
-        console.error("Error fetching slots:", e)
+    setDateSlotsLoading(true)
+    try {
+      const params = new URLSearchParams({ role: 'DOCTOR', date })
+      const res = await patientFetch(`/api/appointments/available-slots?${params.toString()}`)
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to load slots for selected date')
       }
-    }
-    fetchSlots()
-  }, [bookingDate, selectedDoctor])
 
-  // 3. Fetch past consultations dynamically from the database
-  useEffect(() => {
-    const fetchPastConsultations = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) return
-
-        const { data, error } = await supabase
-          .from('doctor_consultations')
-          .select('*, doctor_profiles(full_name)')
-          .eq('patient_id', session.user.id)
-          .eq('is_completed', true)
-          .order('created_at', { ascending: false })
-
-        if (data && data.length > 0) {
-          setPastConsultations(data.map(c => ({
-            doctor: c.doctor_profiles?.full_name || 'Clinician',
-            date: c.booking_date ? new Date(c.booking_date).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'Unknown Date',
-            duration: '20 mins',
-            notes: c.consultation_notes || 'Consultation completed successfully.'
-          })))
+      const uniqueTimes = new Map<string, AvailableDoctorSlot>()
+      for (const slot of data.slots || []) {
+        const mapped: AvailableDoctorSlot = {
+          ...slot,
+          available_date: slot.date,
+          time_slot: slot.startTime,
         }
-      } catch (e) {
-        console.error("Error fetching past consultations:", e)
+        if (!uniqueTimes.has(mapped.time_slot)) uniqueTimes.set(mapped.time_slot, mapped)
       }
+      setSelectedDateSlots(Array.from(uniqueTimes.values()))
+    } catch (err) {
+      if (err instanceof Error && err.message === SESSION_EXPIRED) {
+        router.replace('/login')
+        return
+      }
+      console.error('Failed to load slots for selected date:', err)
+      setSelectedDateSlots([])
+    } finally {
+      setDateSlotsLoading(false)
     }
-    fetchPastConsultations()
-  }, [])
+  }, [router])
 
-  // ── Real-time: Listen for doctor starting the call ──────────────────────────
+  const loadAvailableSlots = useCallback(async () => {
+    setSlotsLoading(true)
+    try {
+      const params = new URLSearchParams({ role: 'DOCTOR' })
+      const res = await patientFetch(`/api/appointments/available-dates?${params.toString()}`)
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to load available slots')
+      }
+
+      const dates = ((data.dates || []) as Array<{ date: string }>).map(item => item.date).sort((a, b) => {
+        return new Date(`${a}T00:00:00`).getTime() - new Date(`${b}T00:00:00`).getTime()
+      })
+      setAvailableDates(dates)
+
+      if (dates.length > 0) {
+        const nextDate = dates[0]
+        setSelectedSlot(null)
+        setSelectedDate(nextDate)
+        await loadSlotsForDate(nextDate)
+      } else {
+        setSelectedSlot(null)
+        setSelectedDate('')
+        setSelectedDateSlots([])
+      }
+    } catch (err) {
+      if (err instanceof Error && err.message === SESSION_EXPIRED) {
+        router.replace('/login')
+        return
+      }
+      console.error('Failed to load available doctor slots:', err)
+    } finally {
+      setSlotsLoading(false)
+    }
+  }, [loadSlotsForDate, router])
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadAvailableSlots()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
+  }, [loadAvailableSlots])
+
+  // Real-time: Listen for doctor calling
   useEffect(() => {
     let channel: ReturnType<typeof supabase.channel> | null = null
     let active = true
@@ -131,8 +304,10 @@ export default function ConsultationSchedulingPage() {
       const patientId = session.user.id
       const channelName = `patient-call-alert-${patientId}`
 
-      // Remove channel if already cached and subscribed
-      const existingChannel = supabase.getChannels().find((c: any) => c.topic === channelName || c.name === channelName)
+      const existingChannel = supabase.getChannels().find((channel) => {
+        const cachedChannel = channel as { topic?: string; name?: string }
+        return cachedChannel.topic === channelName || cachedChannel.name === channelName
+      })
       if (existingChannel) {
         await supabase.removeChannel(existingChannel)
       }
@@ -150,16 +325,9 @@ export default function ConsultationSchedulingPage() {
             filter: `patient_id=eq.${patientId}`,
           },
           (payload) => {
-            const updated = payload.new as any
-            if (updated.status === 'calling' && updated.room_url) {
+            const updated = payload.new as { id?: string; room_url?: string; status?: string }
+            if (updated.status === 'calling' && updated.room_url && updated.id) {
               setDoctorCallingAlert({ roomUrl: updated.room_url, consultationId: updated.id })
-              // Play a subtle notification sound if browser allows
-              try {
-                if (!callingAudioRef.current) {
-                  callingAudioRef.current = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2ozEy5p')
-                }
-                callingAudioRef.current.play().catch(() => {})
-              } catch {}
             } else if (updated.status === 'attended' || updated.status === 'completed') {
               setDoctorCallingAlert(null)
             }
@@ -177,370 +345,640 @@ export default function ConsultationSchedulingPage() {
     }
   }, [])
 
-  // Simple calendar render
-  const daysInMonth = Array.from({ length: 30 }, (_, i) => i + 1)
-  const currentMonth = 'June'
-  const currentYear = '2026'
-
-  // Live countdown timer check
-  useEffect(() => {
-    if (!activeBookingDate || !activeBookingTime) {
-      setCountdownText('No upcoming consultations')
-      setIsJoinEnabled(false)
+  const handleConfirmBooking = async () => {
+    if (!selectedSlot) {
+      alert("Please select a consultation time first.")
       return
     }
 
-    const interval = setInterval(() => {
-      try {
-        // Parse "2026-06-15" and "10:00 AM" into local Date object
-        const timePart = activeBookingTime.trim() // "10:00 AM"
-        const isPM = timePart.toLowerCase().includes('pm')
-        const [hourStr, minStr] = timePart.replace(/(am|pm)/i, '').trim().split(':')
-        
-        let hr = parseInt(hourStr)
-        const mn = parseInt(minStr)
-        if (isPM && hr < 12) hr += 12
-        if (!isPM && hr === 12) hr = 0
+    if (reusePaymentFromBookingId || isActiveMemberFollowUp) {
+      void handlePaidBooking()
+      return
+    }
 
-        const apptDateTime = new Date(`${activeBookingDate}T${hr.toString().padStart(2, '0')}:${mn.toString().padStart(2, '0')}:00`)
-        const now = new Date()
-        
-        const diffMs = apptDateTime.getTime() - now.getTime()
-        
-        if (diffMs <= 0) {
-          // Check if meeting recently started (less than 1 hour ago)
-          if (Math.abs(diffMs) < 3600000) {
-            setCountdownText('Live Now')
-            setIsJoinEnabled(true)
-          } else {
-            setCountdownText('Passed')
-            setIsJoinEnabled(false)
-          }
-        } else {
-          const hours = Math.floor(diffMs / 3600000)
-          const mins = Math.floor((diffMs % 3600000) / 60000)
-          
-          setCountdownText(`Starts in ${hours}h ${mins}m`)
-          
-          // Enable join button 15 minutes before the start time
-          if (diffMs <= 900000) {
-            setIsJoinEnabled(true)
-          } else {
-            setIsJoinEnabled(false)
-          }
-        }
-      } catch (e) {
-        setCountdownText('Calculation error')
-      }
-    }, 1000)
+    setPaymentError('')
+    setPaymentStage('method')
+    setPaymentOpen(true)
+  }
 
-    return () => clearInterval(interval)
-  }, [activeBookingDate, activeBookingTime])
-
-  const handleConfirmBooking = async () => {
-    if (!bookingDate || !bookingTime) {
-      alert("Please select a date and time slot first.")
+  const handlePaidBooking = async () => {
+    if (!selectedSlot) {
+      setPaymentError('Please select a consultation time before payment.')
+      setPaymentStage('method')
       return
     }
 
     setLoading(true)
+    setPaymentError('')
+    setPaymentStage('assigning')
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+      if (!session) throw new Error(SESSION_EXPIRED)
 
-      // Call Next.js backend to create the real Daily.co room
-      const roomRes = await fetch('/api/daily/create-room', { method: 'POST' });
-      const roomData = await roomRes.json();
-      const roomUrl = roomData.url || `https://8liv.daily.co/consultation-fallback`;
-
-      const { error } = await supabase
-        .from('health_assessments')
-        .update({
-          booking_date: bookingDate,
-          booking_time: bookingTime,
-          room_url: roomUrl
+      const res = await patientFetch('/api/patient/consultations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          patientId: session.user.id,
+          paymentMethod: isActiveMemberFollowUp ? undefined : paymentMethod,
+          reusePaymentFromBookingId: reusePaymentFromBookingId || undefined,
+          selectedDate: selectedSlot.available_date,
+          selectedTime: selectedSlot.time_slot
         })
-        .eq('patient_id', session.user.id)
+      })
 
-      if (error) throw error
-
-      // Also create a pending/scheduled consultation entry for doctor dashboard discovery
-      const { error: consultError } = await supabase
-        .from('doctor_consultations')
-        .insert({
-          patient_id: session.user.id,
-          booking_date: bookingDate,
-          booking_time: bookingTime,
-          room_url: roomUrl,
-          status: 'scheduled',
-          is_completed: false
-        })
-
-      if (consultError) throw consultError
-
-      // ── Insert notification for scheduling consultation ──
-      const { error: notifErr } = await supabase
-        .from('patient_notifications')
-        .insert({
-          patient_id: session.user.id,
-          type: 'consultation',
-          title: 'Consultation Scheduled',
-          message: `Your video consultation is successfully scheduled on ${bookingDate} at ${bookingTime}.`,
-          is_read: false
-        })
-
-      if (notifErr) {
-        console.error('Failed to log consultation notification:', notifErr.message)
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to book consultation slot')
       }
 
-      alert("Consultation booked successfully! 🗓️")
-      setBookingDate('')
-      setBookingTime('')
-      reloadData()
-    } catch (err: any) {
-      alert("Error booking slot: " + err.message)
+      setAssignment(data.assignment || null)
+      setPaymentStage('confirmed')
+      await reloadData()
+      await loadAvailableSlots()
+      router.replace(`/patient/appointments/${data.bookingId || data.assignment?.bookingId || data.assignment?.consultationId}`)
+    } catch (err: unknown) {
+      if (err instanceof Error && err.message === SESSION_EXPIRED) {
+        router.replace('/login')
+        return
+      }
+      const message = err instanceof Error ? err.message : 'Unable to schedule consultation.'
+      setPaymentError(message)
+      setPaymentStage('method')
+      if (reusePaymentFromBookingId) {
+        alert(message)
+      }
     } finally {
       setLoading(false)
     }
   }
 
-  const handleDateClick = (day: number) => {
-    const monthIndex = 5 // June (0-indexed = May, 5 = June)
-    const formattedDate = `${currentYear}-06-${day.toString().padStart(2, '0')}`
-    setBookingDate(formattedDate)
+  const handleAddToCalendar = () => {
+    if (!assignment) return
+    const start = new Date(`${assignment.bookingDate} ${assignment.bookingTime}`)
+    const end = new Date(start.getTime() + 30 * 60 * 1000)
+    const formatCalendarDate = (date: Date) => date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text: `8Liv Consultation with ${assignment.doctorName}`,
+      dates: `${formatCalendarDate(start)}/${formatCalendarDate(end)}`,
+      details: 'Video consultation. The session length depends on your discussion with the doctor. Join from your 8Liv dashboard.'
+    })
+    window.open(`https://calendar.google.com/calendar/render?${params.toString()}`, '_blank')
   }
 
-
-
   return (
-    <div className="space-y-6 text-[#1A1F36]">
-      {/* ── REAL-TIME DOCTOR CALLING ALERT BANNER ── */}
+    <div className="min-h-screen" style={{ backgroundColor: designTokens.colors.background }}>
+      {/* Real-time Doctor Calling Alert */}
       {doctorCallingAlert && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center space-y-5 animate-bounce-once">
-            <div className="w-20 h-20 bg-gradient-to-tr from-[#C4622D] to-orange-400 rounded-full flex items-center justify-center mx-auto shadow-lg animate-pulse">
-              <PhoneCall className="w-10 h-10 text-white" />
-            </div>
-            <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-[#C4622D] bg-[#C4622D]/10 px-3 py-1 rounded-full">Live Call</span>
-              <h3 className="text-xl font-bold font-sora text-[#1A1F36] mt-3">Your Doctor is Calling!</h3>
-              <p className="text-xs text-[#8896A4] font-medium mt-2">
-                Your physician has started the consultation session. Join now to avoid waiting.
-              </p>
-            </div>
-            <div className="flex flex-col gap-3">
-              <button
-                onClick={() => {
-                  router.push(`/patient/consultation/room?id=${encodeURIComponent(doctorCallingAlert.roomUrl)}`)
-                  setDoctorCallingAlert(null)
-                }}
-                className="w-full bg-[#C4622D] hover:bg-[#A8522A] text-white font-bold py-4 rounded-2xl text-sm transition-all shadow-lg shadow-[#C4622D]/20 flex items-center justify-center gap-2 animate-pulse"
-              >
-                <Video className="w-5 h-5" /> Join Consultation Now
-              </button>
-              <button
-                onClick={() => setDoctorCallingAlert(null)}
-                className="text-xs text-[#8896A4] hover:text-[#1A1F36] font-semibold transition-colors"
-              >
-                Dismiss (I\'ll join later)
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDoctorCallingAlert(null)} />
+          <div
+            className="relative bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl animate-in fade-in zoom-in-95"
+            style={{ backgroundColor: designTokens.colors.surface }}
+          >
+            <div className="absolute top-0 right-0 w-32 h-32 bg-[#C4622D]/10 rounded-full blur-3xl" />
+            <div className="relative space-y-6 text-center">
+              <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center animate-pulse" style={{ backgroundColor: `${designTokens.colors.primary}15` }}>
+                <PhoneCall className="w-10 h-10" style={{ color: designTokens.colors.primary }} />
+              </div>
+              <div>
+                <span className="text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-full inline-block" style={{ backgroundColor: `${designTokens.colors.primary}10`, color: designTokens.colors.primary }}>
+                  Incoming Call
+                </span>
+                <h3 className="text-2xl font-bold mt-4" style={{ color: designTokens.colors.textPrimary }}>
+                  Your Doctor is Ready
+                </h3>
+                <p className="text-sm mt-2" style={{ color: designTokens.colors.textSecondary }}>
+                  Your consultation session is starting now. Click below to join.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    router.push(`/patient/consultation/room?id=${encodeURIComponent(doctorCallingAlert.roomUrl)}`)
+                    setDoctorCallingAlert(null)
+                  }}
+                  className="w-full py-3 px-4 rounded-lg font-semibold text-white transition-all flex items-center justify-center gap-2"
+                  style={{ backgroundColor: designTokens.colors.primary }}
+                >
+                  <Video className="w-5 h-5" /> Join Now
+                </button>
+                <button
+                  onClick={() => setDoctorCallingAlert(null)}
+                  className="text-sm font-medium"
+                  style={{ color: designTokens.colors.textSecondary }}
+                >
+                  I&apos;ll join in a moment
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold font-sora">Schedule consultations</h2>
-        <p className="text-xs text-[#8896A4] font-medium">Book medical appointments and access your live clinic calls.</p>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left column: Schedule form */}
-        <div className="bg-white rounded-2xl p-6 shadow-[0_2px_12px_rgba(26,31,54,0.08)] border border-[#1A1F36]/6 space-y-6">
-          <h3 className="font-bold text-base font-sora">1. Select Clinician</h3>
-          
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            {doctors.length === 0 ? (
-              <p className="text-xs text-[#8896A4] col-span-3 py-4 text-center border border-dashed rounded-xl">No clinicians available</p>
-            ) : doctors.map(doc => {
-              const isSelected = selectedDoctor === doc.name
-              return (
-                <div
-                  key={doc.name}
-                  onClick={() => setSelectedDoctor(doc.name)}
-                  className={`p-4 rounded-2xl border cursor-pointer transition-all flex flex-col items-center text-center gap-2 select-none ${
-                    isSelected 
-                      ? 'border-[#C4622D] bg-[#C4622D]/5' 
-                      : 'border-[#1A1F36]/8 hover:border-[#1A1F36]/20'
-                  }`}
-                >
-                  <div className={`w-9 h-9 rounded-full font-bold text-xs flex items-center justify-center ${
-                    isSelected ? 'bg-[#C4622D] text-white' : 'bg-[#F5F0EB] text-[#1A1F36]'
-                  }`}>
-                    {doc.initials}
-                  </div>
+      {paymentOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-sm" onClick={() => !loading && setPaymentOpen(false)} />
+          <div className="relative w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl border" style={{ borderColor: designTokens.colors.border }}>
+            {paymentStage === 'method' && (
+              <>
+                <div className="flex items-start justify-between gap-4 mb-6">
                   <div>
-                    <h4 className="text-xs font-bold font-sora">{doc.name}</h4>
-                    <p className="text-[9px] text-[#8896A4] font-medium mt-0.5">{doc.role}</p>
+                    <p className="text-xs font-bold uppercase tracking-wider" style={{ color: designTokens.colors.textTertiary }}>
+                      Consultation Fee
+                    </p>
+                    <h3 className="text-xl font-bold mt-1" style={{ color: designTokens.colors.textPrimary }}>
+                      Confirm your selected consultation time
+                    </h3>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-bold" style={{ color: designTokens.colors.primary }}>
+                      INR {CONSULTATION_FEE}
+                    </p>
+                    <p className="text-xs" style={{ color: designTokens.colors.textTertiary }}>
+                      Razorpay simulated
+                    </p>
                   </div>
                 </div>
-              )
-            })}
-          </div>
 
-          <hr className="border-[#1A1F36]/8" />
-          
-          <h3 className="font-bold text-base font-sora">2. Select Date (June)</h3>
-          
-          {/* Simple CSS Grid calendar */}
-          <div className="grid grid-cols-7 gap-y-2 justify-items-center">
-            {daysInMonth.map(day => {
-              const formatted = `${currentYear}-06-${day.toString().padStart(2, '0')}`
-              const isSelected = bookingDate === formatted
-              const isPast = day < new Date().getDate() && new Date().getMonth() === 5 // June mock check
-              return (
-                <button
-                  key={day}
-                  disabled={isPast}
-                  onClick={() => handleDateClick(day)}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition-all cursor-pointer ${
-                    isPast 
-                      ? 'text-[#8896A4]/40 cursor-not-allowed line-through'
-                      : isSelected 
-                        ? 'bg-[#C4622D] text-white shadow-sm font-extrabold'
-                        : 'hover:bg-[#F5F0EB] text-[#1A1F36]'
-                  }`}
-                >
-                  {day}
-                </button>
-              )
-            })}
-          </div>
-
-          {bookingDate && (
-            <>
-              <hr className="border-[#1A1F36]/8" />
-              <h3 className="font-bold text-base font-sora">3. Select Time</h3>
-              <div className="flex flex-wrap gap-2">
-                {slots.length === 0 ? (
-                  <p className="text-xs text-[#8896A4] py-2 w-full text-center">No time slots available for this date.</p>
-                ) : slots.map(s => {
-                  const isSelected = bookingTime === s.time
-                  return (
-                    <button
-                      key={s.time}
-                      disabled={s.booked}
-                      onClick={() => setBookingTime(s.time)}
-                      className={`px-4 py-2 rounded-full text-xs font-bold transition-all border cursor-pointer ${
-                        s.booked 
-                          ? 'bg-[#F5F0EB] border-[#1A1F36]/8 text-[#8896A4]/60 line-through cursor-not-allowed'
-                          : isSelected 
-                            ? 'bg-[#C4622D] text-white border-[#C4622D] shadow-sm'
-                            : 'border-[#1A1F36]/15 hover:border-[#C4622D] hover:text-[#C4622D]'
-                      }`}
-                    >
-                      {s.time}
-                    </button>
-                  )
-                })}
-              </div>
-            </>
-          )}
-
-          <button
-            onClick={handleConfirmBooking}
-            disabled={!bookingDate || !bookingTime || loading}
-            className="w-full bg-[#1A1F36] hover:bg-[#C4622D] text-white font-bold uppercase tracking-wider text-xs rounded-full py-4 transition-all cursor-pointer disabled:opacity-50"
-          >
-            {loading ? "Confirming slot..." : "Confirm Consultation Appointment"}
-          </button>
-        </div>
-
-        {/* Right column: Next consultation detail + past calls */}
-        <div className="space-y-6">
-          {/* Active Call Alert box */}
-          <div className="bg-[#1A1F36] rounded-2xl p-6 text-white border border-white/5 relative overflow-hidden select-none">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-[#C4622D]/15 rounded-full blur-2xl pointer-events-none" />
-            <div className="space-y-5 relative z-10">
-              <span className="text-[10px] font-black uppercase tracking-wider text-white/50">Next Consultation</span>
-              
-              {activeBookingDate && activeBookingTime ? (
-                <>
-                  <div className="flex items-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-white/10 text-white font-black text-sm flex items-center justify-center shrink-0">
-                      PS
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm font-sora">
-                        {consultation?.doctor_profiles?.full_name || 'Assigned Clinician'}
-                      </h4>
-                      <p className="text-white/60 text-xs mt-0.5">Physician Specialist</p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1 pt-1">
-                    <p className="text-xl font-bold font-sora">{activeBookingDate}</p>
-                    <p className="text-sm font-semibold text-white/70">{activeBookingTime} • Video Call</p>
-                  </div>
-
-                  <div className="bg-[#C4622D]/20 text-[#C4622D] border border-[#C4622D]/35 rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-wider flex items-center gap-2 select-none w-fit">
-                    <Clock className="w-4 h-4 text-[#C4622D]" />
-                    <span>{countdownText}</span>
-                  </div>
-
-                  <div className="pt-2">
-                    <Link
-                      href="/patient/consultation/room"
-                      className={`w-full text-center rounded-xl py-3.5 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-[#C4622D]/10 cursor-pointer ${
-                        isJoinEnabled 
-                          ? 'bg-[#C4622D] hover:bg-[#A8522A] text-white animate-pulse' 
-                          : 'bg-white/10 text-white/30 border border-white/5 cursor-not-allowed pointer-events-none'
-                      }`}
-                    >
-                      <Video className="w-4 h-4 shrink-0" /> Join Call Room
-                    </Link>
-                    {!isJoinEnabled && (
-                      <p className="text-[10px] text-white/40 mt-2 text-center">
-                        Join button will activate 15 minutes before the session starts.
-                      </p>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div className="py-6 text-center space-y-3">
-                  <p className="text-xs text-white/50 leading-relaxed max-w-xs mx-auto">
-                    You have no scheduled video clinical consultations. Please book a slot using the form on the left.
+                <div className="rounded-xl p-4 mb-5" style={{ backgroundColor: designTokens.colors.background }}>
+                  <p className="text-sm font-semibold" style={{ color: designTokens.colors.textPrimary }}>
+                    After payment, we will reserve your selected time and assign the best available specialist.
+                  </p>
+                  <p className="text-xs mt-1" style={{ color: designTokens.colors.textSecondary }}>
+                    You choose the time. 8Liv handles specialist matching and workload balancing behind the scenes.
                   </p>
                 </div>
-              )}
+
+                <div className="mb-5">
+                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: designTokens.colors.textTertiary }}>
+                    Payment Method
+                  </p>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      { key: 'upi' as PaymentMethod, label: 'UPI', icon: Smartphone },
+                      { key: 'card' as PaymentMethod, label: 'Card', icon: CreditCard },
+                      { key: 'netbanking' as PaymentMethod, label: 'NetBanking', icon: Building2 },
+                    ].map(({ key, label, icon: Icon }) => {
+                      const selected = paymentMethod === key
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setPaymentMethod(key)}
+                          className="h-20 rounded-xl border-2 text-xs font-bold flex flex-col items-center justify-center gap-2 transition-all"
+                          style={{
+                            borderColor: selected ? designTokens.colors.primary : designTokens.colors.border,
+                            color: selected ? designTokens.colors.primary : designTokens.colors.textSecondary,
+                            backgroundColor: selected ? `${designTokens.colors.primary}10` : designTokens.colors.surface
+                          }}
+                        >
+                          <Icon className="w-5 h-5" />
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {paymentError && (
+                  <div className="flex items-start gap-2 rounded-xl p-3 mb-5 bg-red-50 text-red-700 text-sm">
+                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <span>{paymentError}</span>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentOpen(false)}
+                    disabled={loading}
+                    className="flex-1 py-3 rounded-xl font-bold border disabled:opacity-50"
+                    style={{ borderColor: designTokens.colors.border, color: designTokens.colors.textSecondary }}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePaidBooking}
+                    disabled={loading}
+                    className="flex-[1.4] py-3 rounded-xl font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                    style={{ backgroundColor: designTokens.colors.primary }}
+                  >
+                    <Lock className="w-4 h-4" />
+                    Pay INR {CONSULTATION_FEE}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {paymentStage === 'assigning' && (
+              <div className="text-center py-8">
+                <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-5" style={{ backgroundColor: `${designTokens.colors.success}12` }}>
+                  <CheckCircle className="w-9 h-9" style={{ color: designTokens.colors.success }} />
+                </div>
+                <h3 className="text-2xl font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                  Payment Successful
+                </h3>
+                <p className="text-sm mt-2" style={{ color: designTokens.colors.textSecondary }}>
+                  Reserving your selected time and assigning the best available specialist.
+                </p>
+                <div className="w-10 h-10 border-4 border-[#F5F0EB] border-t-[#C4622D] rounded-full animate-spin mx-auto mt-6" />
+              </div>
+            )}
+
+            {paymentStage === 'confirmed' && assignment && (
+              <div className="space-y-5">
+                <div className="text-center">
+                  <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-4" style={{ backgroundColor: `${designTokens.colors.success}12` }}>
+                    <CheckCircle className="w-9 h-9" style={{ color: designTokens.colors.success }} />
+                  </div>
+                  <h3 className="text-xl font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                    Appointment Confirmed
+                  </h3>
+                  <p className="text-sm mt-2" style={{ color: designTokens.colors.textSecondary }}>
+                    Your consultation has been successfully scheduled. You will receive reminders before your appointment.
+                  </p>
+                </div>
+
+                <div className="rounded-xl p-4 space-y-3" style={{ backgroundColor: designTokens.colors.background }}>
+                  {[
+                    { label: 'Assigned Healthcare Professional', value: assignment.doctorName },
+                    { label: 'Specialization', value: assignment.specialty },
+                    { label: 'Date', value: formatSlotDate(assignment.bookingDate, true) },
+                    { label: 'Time', value: formatSlotTime(assignment.bookingTime) },
+                    { label: 'Booking ID', value: assignment.bookingId || assignment.consultationId },
+                    { label: 'Meeting Type', value: assignment.meetingType },
+                    { label: 'Status', value: assignment.appointmentStatus || 'SCHEDULED' },
+                    { label: 'Payment Amount', value: `INR ${(assignment.paymentAmount || CONSULTATION_FEE).toLocaleString('en-IN')}` },
+                    { label: 'Payment Status', value: assignment.paymentStatus || 'PAID' },
+                    { label: 'Payment ID', value: assignment.paymentId || 'Recorded' },
+                  ].map((row) => (
+                    <div key={row.label} className="flex justify-between gap-4 text-sm">
+                      <span style={{ color: designTokens.colors.textSecondary }}>{row.label}</span>
+                      <span className="font-semibold text-right" style={{ color: designTokens.colors.textPrimary }}>{row.value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentOpen(false)
+                      router.push(`/patient/appointments/${assignment.bookingId || assignment.consultationId}`)
+                    }}
+                    className="flex-1 py-3 rounded-xl font-bold text-white"
+                    style={{ backgroundColor: designTokens.colors.primary }}
+                  >
+                    View Appointment
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleAddToCalendar}
+                    className="flex-1 py-3 rounded-xl font-bold border flex items-center justify-center gap-2"
+                    style={{ borderColor: designTokens.colors.border, color: designTokens.colors.textPrimary }}
+                  >
+                    <CalendarPlus className="w-4 h-4" />
+                    Add Calendar
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="mb-12">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-3xl font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                Choose Your Preferred Consultation Time
+              </h1>
+                <p className="text-base mt-2" style={{ color: designTokens.colors.textSecondary }}>
+                {reusePaymentFromBookingId
+                  ? 'Choose a new consultation slot. Your eligible consultation payment will be reused.'
+                  : isActiveMemberFollowUp
+                    ? 'Select a follow-up time that fits your schedule. Your active membership covers this consultation.'
+                  : 'Select a consultation time that fits your schedule. We&apos;ll automatically assign the best available specialist for your chosen time.'}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Specialist Assignment Card */}
+        <div className="mb-8 rounded-2xl p-6 border-2" style={{ backgroundColor: designTokens.colors.surface, borderColor: designTokens.colors.border }}>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+            <div>
+              <div className="flex items-center gap-3 mb-3">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white" style={{ backgroundColor: designTokens.colors.primary }}>
+                  AD
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: designTokens.colors.textTertiary }}>
+                    Automatic Specialist Assignment
+                  </p>
+                  <h3 className="text-lg font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                    You choose the time
+                  </h3>
+                </div>
+              </div>
+              <p className="text-sm" style={{ color: designTokens.colors.textSecondary }}>
+                Doctor names and photos are hidden during booking. Once you confirm a time, 8Liv reserves that slot and assigns the best available healthcare professional.
+              </p>
+            </div>
+
+            <div className="text-center">
+                <Video className="w-6 h-6 mx-auto mb-1" style={{ color: designTokens.colors.primary }} />
+                <p className="text-xs" style={{ color: designTokens.colors.textSecondary }}>Video Call</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Booking Layout - Two Column on Desktop */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+          <div className="lg:col-span-2 rounded-2xl p-8 border-2" style={{ backgroundColor: designTokens.colors.surface, borderColor: designTokens.colors.border }}>
+            <div className="flex items-start justify-between gap-4 mb-8">
+              <div>
+                <h2 className="text-xl font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                  Available Consultation Times
+                </h2>
+                <p className="text-sm max-w-2xl mt-2" style={{ color: designTokens.colors.textSecondary }}>
+                  Choose a time that works for you. Booked and unavailable slots are hidden automatically.
+                </p>
+              </div>
+              <Clock className="w-6 h-6 shrink-0" style={{ color: designTokens.colors.secondary }} />
+            </div>
+
+            {slotsLoading ? (
+              <div className="flex items-center gap-3 rounded-xl p-5 border" style={{ borderColor: designTokens.colors.border }}>
+                <div className="w-8 h-8 border-4 border-[#F5F0EB] border-t-[#C4622D] rounded-full animate-spin" />
+                <p className="text-sm font-semibold" style={{ color: designTokens.colors.textSecondary }}>
+                  Checking available consultation dates...
+                </p>
+              </div>
+            ) : selectableDates.length > 0 ? (
+              <div className="space-y-6">
+                <div>
+                  <div className="mb-3 flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4" style={{ color: designTokens.colors.secondary }} />
+                    <p className="text-xs font-bold uppercase tracking-wider" style={{ color: designTokens.colors.textSecondary }}>
+                      Select Consultation Date
+                    </p>
+                  </div>
+                  <div className="flex gap-3 overflow-x-auto pb-2">
+                    {selectableDates.map((date) => {
+                      const selected = selectedDate === date
+                      const parts = getDateParts(date)
+                      return (
+                        <button
+                          key={date}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSlot(null)
+                            setSelectedDate(date)
+                            void loadSlotsForDate(date)
+                          }}
+                          className="min-w-24 rounded-2xl border-2 px-4 py-3 text-center transition-all duration-200 hover:-translate-y-0.5"
+                          style={{
+                            borderColor: selected ? designTokens.colors.primary : designTokens.colors.border,
+                            backgroundColor: selected ? designTokens.colors.primary : designTokens.colors.surface,
+                            color: selected ? '#FFFFFF' : designTokens.colors.textPrimary,
+                            boxShadow: selected ? designTokens.shadows.md : 'none'
+                          }}
+                        >
+                          <span className="block text-xs font-bold">{getDateHeading(date)}</span>
+                          <span className="block text-2xl font-bold leading-tight mt-1">{parts.day}</span>
+                          <span className="block text-[11px] font-semibold opacity-75">{parts.weekday}</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border p-5" style={{ borderColor: designTokens.colors.border, backgroundColor: `${designTokens.colors.background}70` }}>
+                  <div className="mb-5">
+                    <h3 className="text-lg font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                      {selectedDate ? getDateHeading(selectedDate) : 'Selected Date'}
+                    </h3>
+                    <p className="text-xs font-semibold mt-1" style={{ color: designTokens.colors.textTertiary }}>
+                      {selectedDate ? formatSlotDate(selectedDate, true) : 'Choose a date above'}
+                    </p>
+                  </div>
+
+                  {dateSlotsLoading ? (
+                    <div className="flex items-center gap-3 rounded-xl p-5 border bg-white" style={{ borderColor: designTokens.colors.border }}>
+                      <div className="w-7 h-7 border-4 border-[#F5F0EB] border-t-[#C4622D] rounded-full animate-spin" />
+                      <p className="text-sm font-semibold" style={{ color: designTokens.colors.textSecondary }}>
+                        Loading available slots for this date...
+                      </p>
+                    </div>
+                  ) : selectedDateSlots.length > 0 ? (
+                    <div className="space-y-5">
+                      {(['morning', 'afternoon', 'evening'] as const).map((period) => {
+                        const slots = groupedSlots[period]
+                        if (slots.length === 0) return null
+                        const Icon = periodMeta[period].icon
+                        return (
+                          <div key={period}>
+                            <div className="flex items-center gap-2 mb-3">
+                              <Icon className="w-4 h-4" style={{ color: designTokens.colors.secondary }} />
+                              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: designTokens.colors.textSecondary }}>
+                                {periodMeta[period].label}
+                              </p>
+                            </div>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                              {slots.map((slot) => {
+                                const selected = selectedSlot?.available_date === slot.available_date && selectedSlot?.time_slot === slot.time_slot
+                                return (
+                                  <button
+                                    key={`${slot.available_date}-${slot.time_slot}`}
+                                    type="button"
+                                    onClick={() => setSelectedSlot(slot)}
+                                    className="rounded-2xl border-2 px-4 py-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                                    style={{
+                                      borderColor: selected ? designTokens.colors.primary : designTokens.colors.border,
+                                      backgroundColor: selected ? `${designTokens.colors.primary}10` : designTokens.colors.surface,
+                                      color: selected ? designTokens.colors.primary : designTokens.colors.textPrimary,
+                                      boxShadow: selected ? designTokens.shadows.md : 'none'
+                                    }}
+                                  >
+                                    <span className="block text-base font-bold">{formatSlotTime(slot.time_slot)}</span>
+                                    <span className="block text-[11px] font-semibold mt-1" style={{ color: designTokens.colors.textTertiary }}>
+                                      Video consultation
+                                    </span>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl p-5 border border-dashed text-center bg-white" style={{ borderColor: designTokens.colors.border }}>
+                      <h3 className="text-base font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                        No slots available on this date.
+                      </h3>
+                      <p className="text-sm mt-2" style={{ color: designTokens.colors.textSecondary }}>
+                        Please choose another available date above.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl p-5 border border-dashed text-center" style={{ borderColor: designTokens.colors.border }}>
+                <h3 className="text-base font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                  No consultation times are currently available.
+                </h3>
+                <p className="text-sm mt-2" style={{ color: designTokens.colors.textSecondary }}>
+                  You can join the waiting list, request a callback, or check again for future availability.
+                </p>
+              </div>
+            )}
+          </div>
+          {/* Right: Sticky Summary Card */}
+          <div className="lg:col-span-1">
+            <div className="sticky top-8 rounded-2xl p-6 border-2 space-y-6" style={{ backgroundColor: designTokens.colors.surface, borderColor: designTokens.colors.border }}>
+              <h3 className="font-bold text-lg" style={{ color: designTokens.colors.textPrimary }}>
+                Booking Summary
+              </h3>
+
+              {/* Summary Details */}
+              <div className="space-y-4">
+                <div className="pb-4 border-b-2" style={{ borderColor: designTokens.colors.border }}>
+                  <p className="text-xs font-semibold uppercase" style={{ color: designTokens.colors.textTertiary }}>
+                    Selected Consultation
+                  </p>
+                  <p className="text-base font-bold mt-2" style={{ color: designTokens.colors.textPrimary }}>
+                    {selectedSlot ? formatSlotDate(selectedSlot.available_date, true) : 'Not selected'}
+                  </p>
+                  <p className="text-sm mt-1" style={{ color: designTokens.colors.textSecondary }}>
+                    {selectedSlot ? formatSlotTime(selectedSlot.time_slot) : 'Choose an available time'}
+                  </p>
+                </div>
+
+                <div className="pb-4 border-b-2" style={{ borderColor: designTokens.colors.border }}>
+                  <p className="text-xs font-semibold uppercase" style={{ color: designTokens.colors.textTertiary }}>
+                    Type
+                  </p>
+                  <div className="flex items-center gap-2 mt-2">
+                    <Video className="w-4 h-4" style={{ color: designTokens.colors.primary }} />
+                    <span className="font-semibold" style={{ color: designTokens.colors.textPrimary }}>
+                      Video Consultation
+                    </span>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold uppercase" style={{ color: designTokens.colors.textTertiary }}>
+                    Healthcare Professional
+                  </p>
+                  <p className="font-semibold mt-2" style={{ color: designTokens.colors.textPrimary }}>
+                    Automatically Assigned
+                  </p>
+                </div>
+
+                <div className="pt-4 border-t-2" style={{ borderColor: designTokens.colors.border }}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase" style={{ color: designTokens.colors.textTertiary }}>
+                    {isActiveMemberFollowUp ? 'Included in membership' : 'Consultation Fee'}
+                    </p>
+                    <p className="font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                      {isActiveMemberFollowUp ? 'INR 0' : `INR ${CONSULTATION_FEE}`}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* CTA Button */}
+              <button
+                onClick={handleConfirmBooking}
+                disabled={!selectedSlot || loading}
+                className="w-full py-4 px-6 rounded-xl font-bold text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg"
+                style={{
+                  backgroundColor: selectedSlot ? designTokens.colors.primary : designTokens.colors.textTertiary,
+                }}
+              >
+                {loading ? 'Processing...' : reusePaymentFromBookingId || isActiveMemberFollowUp ? 'Confirm Appointment' : 'Confirm Appointment'}
+              </button>
+
+              <p className="text-xs text-center" style={{ color: designTokens.colors.textTertiary }}>
+                You can reschedule anytime in your account
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Guidance Section */}
+        <div className="rounded-2xl p-8 border-2 mb-8" style={{ backgroundColor: `${designTokens.colors.secondary}08`, borderColor: `${designTokens.colors.secondary}20` }}>
+          <div className="flex items-center gap-3 mb-6">
+            <Shield className="w-6 h-6" style={{ color: designTokens.colors.secondary }} />
+            <div>
+              <h2 className="text-xl font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                What Happens Next
+              </h2>
+              <p className="text-sm mt-1" style={{ color: designTokens.colors.textSecondary }}>
+                Here is how 8Liv handles your consultation after payment.
+              </p>
             </div>
           </div>
 
-          {/* Past Consultations history logs */}
-          <div className="space-y-3">
-            <h3 className="font-bold text-base font-sora">Past Session Summaries</h3>
-            {pastConsultations.length === 0 ? (
-              <div className="bg-white rounded-2xl p-6 border border-[#1A1F36]/6 shadow-sm text-center">
-                <p className="text-xs text-[#8896A4] font-medium">No past sessions found.</p>
-              </div>
-            ) : pastConsultations.map((p, idx) => (
-              <div key={idx} className="bg-white rounded-2xl p-4 border border-[#1A1F36]/6 shadow-sm space-y-2.5">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h4 className="text-xs font-bold">{p.doctor}</h4>
-                    <p className="text-[9px] text-[#8896A4] font-semibold mt-0.5">{p.date} • {p.duration}</p>
-                  </div>
-                  <span className="bg-[#5C7A6B]/10 text-[#5C7A6B] text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
-                    Concluded
-                  </span>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                title: 'Automatic matching',
+                description: 'You choose a convenient time, then we assign an available specialist with workload balancing.'
+              },
+              {
+                title: 'Clear appointment card',
+                description: 'Your dashboard will show the doctor, date, time, status, and countdown once the appointment is assigned.'
+              },
+              {
+                title: 'Join window',
+                description: 'The video room becomes available 15 minutes before your scheduled consultation time.'
+              },
+              {
+                title: 'After the call',
+                description: 'You can return to the dashboard to view appointment details, prescriptions, and next care steps.'
+              }
+            ].map((item, index) => (
+              <div key={item.title} className="rounded-xl p-5 border bg-white" style={{ borderColor: designTokens.colors.border }}>
+                <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white mb-4" style={{ backgroundColor: index === 0 ? designTokens.colors.primary : designTokens.colors.secondary }}>
+                  {index + 1}
                 </div>
-                <p className="text-[10px] text-[#8896A4] italic leading-relaxed border-t border-[#1A1F36]/5 pt-2">
-                  " {p.notes} "
+                <h3 className="text-sm font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                  {item.title}
+                </h3>
+                <p className="text-xs mt-2 leading-relaxed" style={{ color: designTokens.colors.textSecondary }}>
+                  {item.description}
                 </p>
               </div>
             ))}
           </div>
+        </div>
+
+        {/* Trust Badges */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {[
+            { icon: Lock, label: 'Secure & Encrypted', color: '#1A1F36' },
+            { icon: Shield, label: 'HIPAA Compliant', color: '#5C7A6B' },
+            { icon: Users, label: 'Licensed Doctors', color: '#C4622D' },
+            { icon: MapPin, label: 'Private Sessions', color: '#8896A4' }
+          ].map((badge, idx) => (
+            <div key={idx} className="text-center p-4 rounded-lg" style={{ backgroundColor: `${badge.color}08`, borderRadius: designTokens.borderRadius.lg }}>
+              <badge.icon className="w-6 h-6 mx-auto mb-2" style={{ color: badge.color }} />
+              <p className="text-xs font-semibold" style={{ color: designTokens.colors.textPrimary }}>
+                {badge.label}
+              </p>
+            </div>
+          ))}
         </div>
       </div>
     </div>

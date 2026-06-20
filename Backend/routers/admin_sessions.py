@@ -20,7 +20,7 @@ class CancelRequest(BaseModel):
 
 @router.get("/members/{member_id}/sessions")
 async def get_member_sessions(member_id: str):
-    """Returns sessions for a member without exposing daily_room_url."""
+    """Returns sessions for a member without exposing meeting URLs."""
     try:
         res = supabase.table("sessions").select("*").eq("member_id", member_id).order("scheduled_at", desc=True).execute()
         sessions = res.data

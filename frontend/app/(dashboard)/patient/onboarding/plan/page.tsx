@@ -104,7 +104,7 @@ export default function PlanSelectionPage() {
         throw new Error(resData.error || 'Failed to save plan selection.')
       }
 
-      router.replace('/patient/onboarding/payment')
+      router.replace('/membership-payment')
     } catch (err: any) {
       alert('Error saving plan: ' + err.message)
       setSaving(false)

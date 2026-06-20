@@ -1,13 +1,8 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createClient } from '@supabase/supabase-js';
 import { Send, MessageCircle, X, Search, Check, CheckCheck, RefreshCw } from 'lucide-react';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
-);
+import { supabase } from '@/lib/supabaseClient';
 
 type Message = {
   id: string;

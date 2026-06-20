@@ -2,15 +2,102 @@
 
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight, ArrowLeft, User, Scale, Activity, ShieldCheck, Pill, CheckCircle2, AlertCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+
+type EligibilityStatus = 'ELIGIBLE' | 'REVIEW_REQUIRED' | 'NOT_ELIGIBLE'
+type RadioField = 'has_mtc_men2' | 'is_pregnant_nursing' | 'has_pancreatitis' | 'has_active_cancer' | 'has_severe_gi_disease'
+
+type PatientStatus = {
+  assessmentStatus?: string
+  eligibilityStatus?: string
+  consultationPaymentStatus?: string
+  appointmentStatus?: string
+  consultationStatus?: string
+  membershipStatus?: string
+  firstConsultationCompleted?: boolean
+  bookingId?: string | null
+}
+
+function validatePasswordStrength(password: string) {
+  if (password.length < 8) return 'Password must be at least 8 characters.'
+  if (!/[A-Z]/.test(password)) return 'Password must include at least one uppercase letter.'
+  if (!/[a-z]/.test(password)) return 'Password must include at least one lowercase letter.'
+  if (!/\d/.test(password)) return 'Password must include at least one number.'
+  if (!/[^A-Za-z0-9]/.test(password)) return 'Password must include at least one special character.'
+  return null
+}
+
+function getPatientJourneyTarget(status: PatientStatus) {
+  if (status.membershipStatus === 'ACTIVE' && status.firstConsultationCompleted === true) return '/patient'
+  if (status.assessmentStatus !== 'COMPLETED') return '/assessment'
+  if (status.eligibilityStatus !== 'ELIGIBLE') return '/assessment'
+  if (status.consultationPaymentStatus !== 'PAID') return '/consultation-payment'
+  if (status.appointmentStatus !== 'SCHEDULED') return '/appointments/select-slot'
+  if (status.consultationStatus !== 'COMPLETED') {
+    return status.bookingId ? `/patient/appointments/${status.bookingId}` : '/patient/appointments'
+  }
+  if (status.membershipStatus === 'NOT_SELECTED') return '/plans'
+  if (status.membershipStatus === 'ACTIVE') return '/patient'
+  return '/membership-payment'
+}
+
+const hardRejectionOptions = [
+  'End-stage kidney disease',
+  'Dialysis treatment',
+  'End-stage liver disease',
+  'Liver cirrhosis',
+  'Active cancer treatment',
+  'Cancer-free for less than 5 years',
+  'Gastroparesis',
+  'Intestinal blockage',
+  'Inflammatory bowel disease',
+  'Current suicidal thoughts',
+  'Previous suicide attempt',
+  'Current alcohol dependence',
+  'Opioid dependence',
+  'Substance use disorder',
+  'Type 1 Diabetes',
+  'Personal history of thyroid cancer',
+  'Family history of thyroid cancer',
+  'Opiate medications used within the last 3 months',
+  'Opiate street drugs used within the last 3 months',
+]
+
+const reviewConditionOptions = [
+  'Hypertension',
+  'Sleep apnea',
+  'Type 2 diabetes',
+  'PCOS',
+  'Depression',
+  'Fatty liver disease',
+  'Kidney disease',
+  'Coronary artery disease',
+  'Previous heart attack',
+  'Previous stroke',
+  'Asthma',
+  'Congestive heart failure',
+  'Hospitalization within last year',
+  'Seizure history',
+  'Glaucoma',
+  'Gallbladder disease',
+  'Pancreatitis history',
+  'HIV',
+  'High cholesterol',
+  'High triglycerides',
+  'None of the above',
+]
 
 export default function AssessmentPage() {
   const router = useRouter()
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [step, setStep] = useState(1)
+  const [resumeNotice, setResumeNotice] = useState('')
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [stepError, setStepError] = useState('')
+  const [stepSaving, setStepSaving] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
 
@@ -27,6 +114,8 @@ export default function AssessmentPage() {
     height_cm: '',
     weight_kg: '',
     goal_weight_kg: '',
+    blood_pressure_range: '',
+    resting_heart_rate: '',
     gender: 'female',
     
     // Step 3: Absolute Contraindications
@@ -35,9 +124,11 @@ export default function AssessmentPage() {
     has_pancreatitis: '',
     has_active_cancer: '',
     has_severe_gi_disease: '',
+    hard_rejections: [] as string[],
 
     // Step 4: Comorbidities
     comorbidities: [] as string[],
+    review_conditions: [] as string[],
     
     // Step 5: Prior Meds
     medication_history_choice: '',
@@ -83,7 +174,27 @@ export default function AssessmentPage() {
         } else if (role === 'doctor') {
           router.replace('/doctor/dashboard')
         } else {
-          router.replace('/patient')
+          const res = await fetch(`/api/patient/status?patientId=${session.user.id}`)
+          if (!res.ok) {
+            setCheckingAuth(false)
+            return
+          }
+          const statusData = await res.json()
+          const targetPath = getPatientJourneyTarget(statusData)
+          if (targetPath !== '/assessment') {
+            router.replace(targetPath)
+            return
+          }
+          setCurrentUserId(session.user.id)
+          if (statusData.assessmentProgress && statusData.assessmentProgress > 1) {
+            setStep(Math.min(Number(statusData.assessmentProgress), 5))
+            setResumeNotice("Welcome back! We've restored your progress. Continue where you left off.")
+          }
+          const draftForm = statusData.assessment?.medical_history?.draft_form
+          if (draftForm && typeof draftForm === 'object') {
+            setFormData(prev => ({ ...prev, ...draftForm }))
+          }
+          setCheckingAuth(false)
         }
       } else {
         setCheckingAuth(false)
@@ -106,19 +217,23 @@ export default function AssessmentPage() {
     setSubmitError('')
 
     try {
-      // 1. Create Auth User
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
-        password: formData.password,
-        options: {
-          data: { role: 'patient', display_id: `${formData.first_name} ${formData.last_name}` }
-        }
+      const passwordError = validatePasswordStrength(formData.password)
+      if (passwordError) throw new Error(passwordError)
+
+      const signupResponse = await fetch('/api/auth/signup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          firstName: formData.first_name,
+          lastName: formData.last_name,
+        })
       })
+      const signupData = await signupResponse.json()
+      if (!signupResponse.ok) throw new Error(signupData.error || 'Failed to create account.')
 
-      if (authError) throw authError
-      if (!authData.user) throw new Error("No user returned from signup.")
-
-      const userId = authData.user.id
+      const userId = signupData.userId
 
       // 2. Call our secure backend API to bypass RLS and insert health data
       const response = await fetch('/api/assessment', {
@@ -135,22 +250,11 @@ export default function AssessmentPage() {
         throw new Error(responseData.error || 'Failed to submit health assessment securely.')
       }
 
-      // Check if session was created automatically or if confirmation is required
-      const confirmationRequired = !authData.session
+      await supabase.auth.signOut()
+      window.location.href = `/verification-pending?email=${encodeURIComponent(formData.email)}`
 
-      // Redirect or log in directly
-      if (confirmationRequired) {
-        // Force SignOut so they can log in cleanly
-        await supabase.auth.signOut()
-        window.location.href = '/login?success=confirm_email'
-      } else {
-        // Set user_role cookie and redirect straight to dashboard
-        document.cookie = `user_role=patient; path=/; max-age=86400; SameSite=Lax`
-        window.location.href = '/patient'
-      }
-
-    } catch (err: any) {
-      setSubmitError(err.message || "An error occurred during submission.")
+    } catch (err: unknown) {
+      setSubmitError(err instanceof Error ? err.message : "An error occurred during submission.")
     } finally {
       setIsSubmitting(false)
     }
@@ -166,15 +270,19 @@ export default function AssessmentPage() {
     }))
   }
 
-  const handleRadioChange = (field: string, value: string) => {
+  const handleRadioChange = (field: RadioField, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }))
   }
 
-  const handleCheckboxArray = (field: 'comorbidities', value: string) => {
+  const handleCheckboxArray = (field: 'comorbidities' | 'hard_rejections' | 'review_conditions', value: string) => {
     setFormData(prev => {
       const arr = prev[field]
-      if (arr.includes(value)) return { ...prev, [field]: arr.filter(i => i !== value) }
-      return { ...prev, [field]: [...arr, value] }
+      if (value === 'None of the above') {
+        return { ...prev, [field]: arr.includes(value) ? [] : [value] }
+      }
+      const next = arr.filter(i => i !== 'None of the above')
+      if (next.includes(value)) return { ...prev, [field]: next.filter(i => i !== value) }
+      return { ...prev, [field]: [...next, value] }
     })
   }
 
@@ -192,7 +300,7 @@ export default function AssessmentPage() {
   }
 
   const validateStep2 = () => {
-    if (!formData.height_cm || !formData.weight_kg || !formData.goal_weight_kg) {
+    if (!formData.height_cm || !formData.weight_kg || !formData.goal_weight_kg || !formData.blood_pressure_range || !formData.resting_heart_rate) {
       setStepError('Please enter your vitals.')
       return false
     }
@@ -212,11 +320,40 @@ export default function AssessmentPage() {
     return true
   }
 
-  const nextStep = () => {
+  const saveConfirmedStep = async (confirmedStep: number) => {
+    if (!currentUserId) return confirmedStep + 1
+
+    setStepSaving(true)
+    try {
+      const response = await fetch('/api/assessment/progress', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          patientId: currentUserId,
+          step: confirmedStep,
+          formData,
+        }),
+      })
+      const data = await response.json()
+      if (!response.ok) throw new Error(data.error || 'Unable to save progress.')
+      return Number(data.nextStep || confirmedStep + 1)
+    } finally {
+      setStepSaving(false)
+    }
+  }
+
+  const nextStep = async () => {
+    if (stepSaving) return
     if (step === 1 && !validateStep1()) return
     if (step === 2 && !validateStep2()) return
     if (step === 3 && !validateStep3()) return
-    setStep(prev => prev + 1)
+    setStepError('')
+    try {
+      const next = await saveConfirmedStep(step)
+      setStep(next)
+    } catch (error) {
+      setStepError(error instanceof Error ? error.message : 'Unable to save progress.')
+    }
   }
   
   const prevStep = () => setStep(prev => prev - 1)
@@ -227,21 +364,77 @@ export default function AssessmentPage() {
   const btnPrimaryCls = "flex-1 bg-[#D46E53] text-white font-semibold rounded-full px-8 py-4 shadow-lg shadow-[#D46E53]/20 hover:bg-[#A84A33] transition-colors flex items-center justify-center gap-2 group"
   const btnSecondaryCls = "px-8 py-4 rounded-full font-semibold text-[#475569] bg-white border-2 border-[#D46E53]/10 hover:bg-[#F9F6F0] hover:text-[#0F172A] transition-all flex items-center gap-2 group"
 
-  const renderRadioGroup = (field: string, question: string) => (
+  const renderRadioGroup = (field: RadioField, question: string) => (
     <div className="bg-[#F9F6F0]/50 p-5 rounded-2xl border border-[#D46E53]/10">
       <p className="font-semibold text-[#0F172A] mb-4">{question}</p>
       <div className="flex gap-4">
-        <label className={`flex-1 flex items-center justify-center py-3 rounded-xl border-2 cursor-pointer transition-all ${(formData as any)[field] === 'yes' ? 'border-[#D46E53] bg-[#D46E53]/5 text-[#D46E53]' : 'border-slate-200 hover:border-[#D46E53]/30 text-[#475569]'}`}>
-          <input type="radio" name={field} value="yes" checked={(formData as any)[field] === 'yes'} onChange={() => handleRadioChange(field, 'yes')} className="hidden" />
+        <label className={`flex-1 flex items-center justify-center py-3 rounded-xl border-2 cursor-pointer transition-all ${formData[field] === 'yes' ? 'border-[#D46E53] bg-[#D46E53]/5 text-[#D46E53]' : 'border-slate-200 hover:border-[#D46E53]/30 text-[#475569]'}`}>
+          <input type="radio" name={field} value="yes" checked={formData[field] === 'yes'} onChange={() => handleRadioChange(field, 'yes')} className="hidden" />
           <span className="font-bold">Yes</span>
         </label>
-        <label className={`flex-1 flex items-center justify-center py-3 rounded-xl border-2 cursor-pointer transition-all ${(formData as any)[field] === 'no' ? 'border-[#D46E53] bg-[#D46E53]/5 text-[#D46E53]' : 'border-slate-200 hover:border-[#D46E53]/30 text-[#475569]'}`}>
-          <input type="radio" name={field} value="no" checked={(formData as any)[field] === 'no'} onChange={() => handleRadioChange(field, 'no')} className="hidden" />
+        <label className={`flex-1 flex items-center justify-center py-3 rounded-xl border-2 cursor-pointer transition-all ${formData[field] === 'no' ? 'border-[#D46E53] bg-[#D46E53]/5 text-[#D46E53]' : 'border-slate-200 hover:border-[#D46E53]/30 text-[#475569]'}`}>
+          <input type="radio" name={field} value="no" checked={formData[field] === 'no'} onChange={() => handleRadioChange(field, 'no')} className="hidden" />
           <span className="font-bold">No</span>
         </label>
       </div>
     </div>
   )
+
+  const evaluateFormEligibility = () => {
+    const heightM = Number(formData.height_cm) / 100
+    const weightKg = Number(formData.weight_kg)
+    const bmi = heightM > 0 ? Number((weightKg / (heightM * heightM)).toFixed(1)) : 0
+    const age = Number(formData.age)
+    const hasAbsoluteContraindication = [
+      formData.has_mtc_men2,
+      formData.has_severe_gi_disease,
+      formData.has_active_cancer,
+      formData.gender === 'female' ? formData.is_pregnant_nursing : 'no',
+    ].includes('yes') || formData.hard_rejections.length > 0
+
+    if (hasAbsoluteContraindication) {
+      return {
+        status: 'NOT_ELIGIBLE' as EligibilityStatus,
+        bmi,
+        title: "We're Sorry",
+        message: 'Based on your responses, our medical team cannot safely recommend this program at this time.',
+      }
+    }
+
+    if (!Number.isFinite(age) || age < 18 || bmi < 25) {
+      return {
+        status: 'NOT_ELIGIBLE' as EligibilityStatus,
+        bmi,
+        title: "We're Sorry",
+        message: 'Based on your responses, our medical team cannot safely recommend this program at this time.',
+      }
+    }
+
+    const needsDoctorReview = (
+      bmi < 27 ||
+      formData.has_pancreatitis === 'yes' ||
+      formData.review_conditions.some(condition => condition !== 'None of the above') ||
+      formData.comorbidities.some(condition => condition !== 'None of the above') ||
+      formData.blood_pressure_range.includes('Stage') ||
+      formData.resting_heart_rate !== '60-100 bpm'
+    )
+
+    if (needsDoctorReview) {
+      return {
+        status: 'REVIEW_REQUIRED' as EligibilityStatus,
+        bmi,
+        title: 'Doctor Review Required',
+        message: 'Your responses require review by our medical team before treatment recommendations can be provided. You can continue to create your account and book your consultation.',
+      }
+    }
+
+    return {
+      status: 'ELIGIBLE' as EligibilityStatus,
+      bmi,
+      title: "You're Approved!",
+      message: 'Congratulations! You appear to be a strong candidate for our medical weight loss program. Create your account below to secure your consultation.',
+    }
+  }
 
   return (
     <div className="min-h-screen bg-[#F9F6F0] flex flex-col pt-24 pb-12 px-4 sm:px-6 lg:px-8">
@@ -262,6 +455,12 @@ export default function AssessmentPage() {
             />
           </div>
         </div>
+
+        {resumeNotice && (
+          <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-700">
+            {resumeNotice}
+          </div>
+        )}
 
         <div className="bg-white p-8 md:p-12 rounded-[2.5rem] shadow-xl border border-[#D46E53]/10 relative overflow-hidden">
           
@@ -299,8 +498,8 @@ export default function AssessmentPage() {
                   {stepError && <p className="text-rose-600 text-sm font-bold bg-rose-50 border border-rose-100 rounded-2xl px-5 py-4 flex items-center gap-2"><AlertCircle className="w-5 h-5"/> {stepError}</p>}
 
                   <div className="flex gap-4 mt-10">
-                    <a href="/" className={btnSecondaryCls}><ArrowLeft className="w-5 h-5"/> Cancel</a>
-                    <button onClick={nextStep} className={btnPrimaryCls}>Continue <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform"/></button>
+                    <Link href="/" className={btnSecondaryCls}><ArrowLeft className="w-5 h-5"/> Cancel</Link>
+                    <button onClick={nextStep} disabled={stepSaving} className={btnPrimaryCls}>{stepSaving ? 'Saving...' : 'Continue'} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform"/></button>
                   </div>
                 </div>
               </motion.div>
@@ -322,6 +521,27 @@ export default function AssessmentPage() {
                     <div><label className={labelCls}>Current Weight (kg)</label><input type="number" name="weight_kg" value={formData.weight_kg} onChange={handleInputChange} className={inputCls} placeholder="85"/></div>
                   </div>
                   <div><label className={labelCls}>Goal Weight (kg)</label><input type="number" name="goal_weight_kg" value={formData.goal_weight_kg} onChange={handleInputChange} className={inputCls} placeholder="70"/></div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className={labelCls}>Blood Pressure</label>
+                      <select name="blood_pressure_range" value={formData.blood_pressure_range} onChange={handleInputChange} className={inputCls}>
+                        <option value="">Select range</option>
+                        <option value="Normal">Normal</option>
+                        <option value="Elevated">Elevated</option>
+                        <option value="Stage 1 Hypertension">Stage 1 Hypertension</option>
+                        <option value="Stage 2 Hypertension">Stage 2 Hypertension</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Resting Heart Rate</label>
+                      <select name="resting_heart_rate" value={formData.resting_heart_rate} onChange={handleInputChange} className={inputCls}>
+                        <option value="">Select range</option>
+                        <option value="60-100 bpm">60-100 bpm</option>
+                        <option value="Below 60 bpm">Below 60 bpm</option>
+                        <option value="Above 100 bpm">Above 100 bpm</option>
+                      </select>
+                    </div>
+                  </div>
                   
                   <div>
                     <label className={labelCls}>Biological Sex</label>
@@ -335,7 +555,7 @@ export default function AssessmentPage() {
 
                   <div className="flex gap-4 mt-10">
                     <button onClick={prevStep} className={btnSecondaryCls}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Back</button>
-                    <button onClick={nextStep} className={btnPrimaryCls}>Continue <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform"/></button>
+                    <button onClick={nextStep} disabled={stepSaving} className={btnPrimaryCls}>{stepSaving ? 'Saving...' : 'Continue'} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform"/></button>
                   </div>
                 </div>
               </motion.div>
@@ -354,17 +574,28 @@ export default function AssessmentPage() {
 
                 <div className="space-y-4">
                   {renderRadioGroup('has_mtc_men2', 'Do you or a family member have a history of Medullary Thyroid Carcinoma (MTC) or Multiple Endocrine Neoplasia syndrome type 2 (MEN 2)?')}
-                  {renderRadioGroup('has_pancreatitis', 'Have you ever been diagnosed with pancreatitis or severe gallbladder disease?')}
+                  {renderRadioGroup('has_pancreatitis', 'Have you ever been diagnosed with pancreatitis?')}
                   {renderRadioGroup('has_severe_gi_disease', 'Do you have a severe gastrointestinal disease (such as severe gastroparesis or inflammatory bowel disease)?')}
                   {renderRadioGroup('has_active_cancer', 'Do you have active cancer, or are you currently undergoing chemotherapy/radiotherapy?')}
                   {formData.gender === 'female' && renderRadioGroup('is_pregnant_nursing', 'Are you pregnant, planning to become pregnant in the next 2 months, or currently breastfeeding?')}
+                  <div className="bg-[#F9F6F0]/50 p-5 rounded-2xl border border-[#D46E53]/10">
+                    <p className="font-semibold text-[#0F172A] mb-4">Select any additional safety exclusions that apply.</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {hardRejectionOptions.map(condition => (
+                        <label key={condition} className={`flex items-center p-3 rounded-xl border-2 cursor-pointer transition-all ${formData.hard_rejections.includes(condition) ? 'border-rose-500 bg-rose-50' : 'border-slate-200 hover:border-[#D46E53]/30'}`}>
+                          <input type="checkbox" checked={formData.hard_rejections.includes(condition)} onChange={() => handleCheckboxArray('hard_rejections', condition)} className="hidden"/>
+                          <span className={`text-sm font-semibold ${formData.hard_rejections.includes(condition) ? 'text-rose-600' : 'text-[#475569]'}`}>{condition}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 {stepError && <p className="text-rose-600 text-sm font-bold bg-rose-50 border border-rose-100 rounded-2xl px-5 py-4 mt-6 flex items-center gap-2"><AlertCircle className="w-5 h-5"/> {stepError}</p>}
 
                 <div className="flex gap-4 mt-10">
                   <button onClick={prevStep} className={btnSecondaryCls}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Back</button>
-                  <button onClick={nextStep} className={btnPrimaryCls}>Continue <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform"/></button>
+                  <button onClick={nextStep} disabled={stepSaving} className={btnPrimaryCls}>{stepSaving ? 'Saving...' : 'Continue'} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform"/></button>
                 </div>
               </motion.div>
             )}
@@ -383,17 +614,17 @@ export default function AssessmentPage() {
                   <p className="font-bold text-[#0F172A] mb-4">Do you have any of the following conditions? (Select all that apply)</p>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {['Type 2 Diabetes', 'PCOS', 'Hypothyroidism', 'Hypertension', 'High Cholesterol', 'Sleep Apnea', 'Depression', 'None of the above'].map(cond => (
-                      <label key={cond} className={`flex items-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${formData.comorbidities.includes(cond) ? 'border-[#D46E53] bg-[#D46E53]/5' : 'border-[#D46E53]/10 hover:border-[#D46E53]/30'}`}>
-                        <input type="checkbox" checked={formData.comorbidities.includes(cond)} onChange={() => handleCheckboxArray('comorbidities', cond)} className="hidden"/>
-                        <span className={`font-semibold ${formData.comorbidities.includes(cond) ? 'text-[#D46E53]' : 'text-[#475569]'}`}>{cond}</span>
+                    {reviewConditionOptions.map(cond => (
+                      <label key={cond} className={`flex items-center p-4 rounded-2xl border-2 cursor-pointer transition-all ${formData.review_conditions.includes(cond) ? 'border-[#D46E53] bg-[#D46E53]/5' : 'border-[#D46E53]/10 hover:border-[#D46E53]/30'}`}>
+                        <input type="checkbox" checked={formData.review_conditions.includes(cond)} onChange={() => handleCheckboxArray('review_conditions', cond)} className="hidden"/>
+                        <span className={`font-semibold ${formData.review_conditions.includes(cond) ? 'text-[#D46E53]' : 'text-[#475569]'}`}>{cond}</span>
                       </label>
                     ))}
                   </div>
 
                   <div className="flex gap-4 mt-10">
                     <button onClick={prevStep} className={btnSecondaryCls}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Back</button>
-                    <button onClick={nextStep} className={btnPrimaryCls}>Continue <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform"/></button>
+                    <button onClick={nextStep} disabled={stepSaving} className={btnPrimaryCls}>{stepSaving ? 'Saving...' : 'Continue'} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform"/></button>
                   </div>
                 </div>
               </motion.div>
@@ -423,7 +654,7 @@ export default function AssessmentPage() {
 
                   <div className="flex gap-4 mt-10">
                     <button onClick={prevStep} className={btnSecondaryCls}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Back</button>
-                    <button onClick={nextStep} className={btnPrimaryCls}>Complete Assessment <CheckCircle2 className="w-5 h-5"/></button>
+                    <button onClick={nextStep} disabled={stepSaving} className={btnPrimaryCls}>{stepSaving ? 'Saving...' : 'Complete Assessment'} <CheckCircle2 className="w-5 h-5"/></button>
                   </div>
                 </div>
               </motion.div>
@@ -433,22 +664,9 @@ export default function AssessmentPage() {
             {step === 6 && (
               <motion.div key="step6" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
                 {(() => {
-                  // 1. BMI Calculation
-                  const heightM = Number(formData.height_cm) / 100
-                  const weightKg = Number(formData.weight_kg)
-                  const bmi = heightM > 0 ? (weightKg / (heightM * heightM)) : 0
-                  
-                  // 2. Clinical Rules
-                  const isBmiEligible = bmi >= 27
-                  const hasContraindication = [
-                    formData.has_mtc_men2, 
-                    formData.has_pancreatitis, 
-                    formData.has_severe_gi_disease, 
-                    formData.has_active_cancer,
-                    formData.gender === 'female' ? formData.is_pregnant_nursing : 'no'
-                  ].includes('yes')
+                  const eligibility = evaluateFormEligibility()
 
-                  if (hasContraindication || !isBmiEligible) {
+                  if (eligibility.status === 'NOT_ELIGIBLE') {
                     return (
                       <div className="text-center py-12">
                         <div className="w-24 h-24 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-8">
@@ -457,27 +675,26 @@ export default function AssessmentPage() {
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
                           </svg>
                         </div>
-                        <h2 className="text-4xl font-bold font-sora text-[#0F172A] mb-4">We're Sorry</h2>
+                        <h2 className="text-4xl font-bold font-sora text-[#0F172A] mb-4">{eligibility.title}</h2>
                         <p className="text-xl text-[#475569] mb-10 max-w-lg mx-auto">
-                          Based on the clinical information provided, you do not meet the safety guidelines or clinical criteria for our metabolic health protocols at this time.
+                          {eligibility.message}
                         </p>
-                        <a href="/" className="inline-block bg-[#0F172A] text-white font-bold rounded-full px-12 py-5 text-lg hover:bg-[#1E293B] hover:shadow-xl transition-all">
+                        <Link href="/" className="inline-block bg-[#0F172A] text-white font-bold rounded-full px-12 py-5 text-lg hover:bg-[#1E293B] hover:shadow-xl transition-all">
                           Return Home
-                        </a>
+                        </Link>
                       </div>
                     )
                   }
 
                   return (
                     <div className="text-center py-12">
-                      <div className="w-24 h-24 bg-[#D46E53]/10 rounded-full flex items-center justify-center mx-auto mb-8 relative">
-                        <div className="absolute inset-0 bg-[#D46E53]/20 rounded-full animate-ping"></div>
-                        <ShieldCheck className="w-12 h-12 text-[#D46E53] relative z-10" />
+                      <div className={`w-24 h-24 ${eligibility.status === 'REVIEW_REQUIRED' ? 'bg-amber-100' : 'bg-[#D46E53]/10'} rounded-full flex items-center justify-center mx-auto mb-8 relative`}>
+                        <div className={`absolute inset-0 ${eligibility.status === 'REVIEW_REQUIRED' ? 'bg-amber-200/50' : 'bg-[#D46E53]/20'} rounded-full animate-ping`}></div>
+                        <ShieldCheck className={`w-12 h-12 ${eligibility.status === 'REVIEW_REQUIRED' ? 'text-amber-600' : 'text-[#D46E53]'} relative z-10`} />
                       </div>
-                      <h2 className="text-4xl font-bold font-sora text-[#0F172A] mb-4">You're Approved!</h2>
+                      <h2 className="text-4xl font-bold font-sora text-[#0F172A] mb-4">{eligibility.title}</h2>
                       <p className="text-lg text-[#475569] mb-10 max-w-lg mx-auto">
-                        Based on your profile, you are an excellent candidate for our metabolic health protocols. 
-                        Create your account below to secure your consultation.
+                        {eligibility.message}
                       </p>
                       
                       <form onSubmit={handleAssessmentSubmit} className="max-w-sm mx-auto space-y-4 text-left bg-[#F9F6F0] p-6 rounded-[2rem] border border-[#D46E53]/10">

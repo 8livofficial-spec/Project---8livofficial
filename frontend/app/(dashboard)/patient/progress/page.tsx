@@ -9,8 +9,16 @@ import { TrendingDown, Award, Flame, Zap } from 'lucide-react'
 import { usePatientData } from '@/hooks/usePatientData'
 
 export default function ProgressPage() {
-  const { assessment, weightLogs, consultation } = usePatientData()
+  const { assessment, weightLogs, consultation, loading } = usePatientData()
   const [range, setRange] = useState<'1M' | '3M' | '6M' | 'ALL'>('1M')
+
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   // Calculate metrics based on logs
   const currentWeight = weightLogs.length > 0 

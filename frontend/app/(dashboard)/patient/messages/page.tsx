@@ -30,6 +30,14 @@ export default function MessagesPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   const patientName = (profile?.display_id || profile?.first_name || assessment?.first_name || 'Member')
 
   // Build contacts from care team

@@ -1,5 +1,4 @@
 import os
-import httpx
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -16,8 +15,6 @@ load_dotenv(dotenv_path="Security/.env")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-DAILY_API_KEY = os.getenv("DAILY_API_KEY")
 
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
@@ -233,8 +230,10 @@ def assess_patient(data: HealthQuestionnaire):
 @app.post("/api/prescribe")
 def prescribe_medication(data: PrescriptionRequest):
     try:
+        if data.prescription_type.upper() != "INJECTABLE":
+            return {"status": "error", "message": "Only injectable medication is supported for new prescriptions."}
         supabase.table("health_assessments").update({
-            "prescription_type": data.prescription_type
+            "prescription_type": "INJECTABLE"
         }).eq("patient_id", data.patient_id).execute()
         return {"status": "success", "message": "Prescription saved!"}
     except Exception as e:
@@ -610,9 +609,8 @@ async def expire_consultation(patient_id: str, patient_name: str, booking_date: 
         # 2. Free slot in doctor_availability
         if doctor_id:
             supabase.table("doctor_availability")\
-            # Free any matching date/time slot in doctor_availability
-            supabase.table("doctor_availability")\
                 .update({"is_booked": False})\
+                .eq("doctor_id", doctor_id)\
                 .eq("available_date", booking_date)\
                 .eq("time_slot", booking_time)\
                 .execute()
@@ -702,7 +700,8 @@ async def cron_process_bookings(request: Request):
                             supabase.table("doctor_consultations").update({"status": "cancelled", "prescription_notes": "Patient No-Show"}).eq("id", c_id).execute()
                             supabase.table("health_assessments").update({"booking_date": None, "booking_time": None}).eq("patient_id", patient_id).execute()
                             # Free slot
-                            supabase.table("doctor_availability").update({"is_booked": False}).eq("available_date", booking_date).eq("time_slot", booking_time).execute()
+                            if doctor_id:
+                                supabase.table("doctor_availability").update({"is_booked": False}).eq("doctor_id", doctor_id).eq("available_date", booking_date).eq("time_slot", booking_time).execute()
 
                         elif c_status == "scheduled" and age_minutes >= 30:
                             # Appointment time passed and doctor never called within 30 mins -> NO-SHOW (Doctor) -> auto-refund!
@@ -713,7 +712,8 @@ async def cron_process_bookings(request: Request):
                                 "booking_date": None,
                                 "booking_time": None
                             }).eq("patient_id", patient_id).execute()
-                            supabase.table("doctor_availability").update({"is_booked": False}).eq("available_date", booking_date).eq("time_slot", booking_time).execute()
+                            if doctor_id:
+                                supabase.table("doctor_availability").update({"is_booked": False}).eq("doctor_id", doctor_id).eq("available_date", booking_date).eq("time_slot", booking_time).execute()
                             # Send refund notification
                             supabase.table("patient_notifications").insert({
                                 "patient_id": patient_id,
@@ -771,12 +771,11 @@ async def cron_process_bookings(request: Request):
     except Exception as e:
         print(f"[SCHEDULER LOOP ERROR] {e}")
         raise HTTPException(status_code=500, detail=str(e))
-from routers import admin_sessions, sessions, webhooks
+from routers import admin_sessions, doctor
 from services.session_scheduler import start_scheduler
 
 app.include_router(admin_sessions.router)
-app.include_router(sessions.router)
-app.include_router(webhooks.router)
+app.include_router(doctor.router)
 
 @app.on_event("startup")
 async def startup_event():

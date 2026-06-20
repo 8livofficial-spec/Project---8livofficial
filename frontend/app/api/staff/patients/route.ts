@@ -1,33 +1,122 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseServer';
+import { normalizeProviderRole } from '@/lib/providerConsultations';
+
+function displayValue(value: unknown): string | null {
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
+  if (Array.isArray(value)) return value.map(displayValue).filter(Boolean).join(', ') || null;
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([key, entry]) => {
+        const text = displayValue(entry);
+        return text ? `${key}: ${text}` : null;
+      })
+      .filter(Boolean)
+      .join(' | ') || null;
+  }
+  return null;
+}
+
+function getAssessmentField(assessment: any, key: string) {
+  if (assessment?.[key] !== undefined && assessment?.[key] !== null) return assessment[key];
+  if (assessment?.medical_history && typeof assessment.medical_history === 'object') {
+    return assessment.medical_history[key];
+  }
+  return null;
+}
+
+function getRiskFlags(assessment: any) {
+  const flags = [
+    getAssessmentField(assessment, 'hard_rejections'),
+    getAssessmentField(assessment, 'contraindications'),
+    getAssessmentField(assessment, 'review_conditions'),
+    getAssessmentField(assessment, 'comorbidities'),
+    getAssessmentField(assessment, 'has_severe_conditions') ? 'Severe condition flagged' : null,
+    getAssessmentField(assessment, 'high_priority_candidate') ? 'High priority candidate' : null,
+  ]
+    .map(displayValue)
+    .filter(Boolean);
+
+  return Array.from(new Set(flags)).join(' | ') || null;
+}
+
+function getLatestConsultation(consultations: any[]) {
+  return [...consultations].sort((a, b) => {
+    const aTime = new Date(`${a.booking_date || a.created_at || ''} ${a.booking_time || ''}`).getTime() || new Date(a.created_at || 0).getTime();
+    const bTime = new Date(`${b.booking_date || b.created_at || ''} ${b.booking_time || ''}`).getTime() || new Date(b.created_at || 0).getTime();
+    return bTime - aTime;
+  })[0] || null;
+}
+
+function getNextAppointment(consultations: any[]) {
+  const now = Date.now();
+  return consultations
+    .filter((consultation) => ['scheduled', 'calling', 'attended'].includes(String(consultation.status || '').toLowerCase()))
+    .map((consultation) => ({
+      ...consultation,
+      timestamp: new Date(`${consultation.booking_date || ''} ${consultation.booking_time || ''}`).getTime(),
+    }))
+    .filter((consultation) => Number.isFinite(consultation.timestamp) && consultation.timestamp >= now)
+    .sort((a, b) => a.timestamp - b.timestamp)[0] || null;
+}
 
 export async function POST(req: Request) {
   try {
-    const { staffId, role } = await req.json();
+    const { staffId, role: rawRole, page = 1, limit = 25, search = '' } = await req.json();
+    const role = normalizeProviderRole(String(rawRole || ''));
 
     if (!staffId || !role) {
       return NextResponse.json({ error: 'Missing staffId or role' }, { status: 400 });
     }
 
-    if (role !== 'trainer' && role !== 'dietitian' && role !== 'doctor') {
+    if (!['doctor', 'dietitian', 'nutritionist', 'fitness_coach'].includes(role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
     }
 
+    let matchingPatientIds: string[] = [];
+    if (search.trim()) {
+      const [matchedProfiles, matchedAssess] = await Promise.all([
+        supabaseAdmin.from('profiles').select('id').or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%,phone_number.ilike.%${search}%`),
+        supabaseAdmin.from('health_assessments').select('patient_id').or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,phone_number.ilike.%${search}%`)
+      ]);
+      const ids = new Set([
+        ...(matchedProfiles.data || []).map((p: any) => p.id),
+        ...(matchedAssess.data || []).map((a: any) => a.patient_id)
+      ]);
+      matchingPatientIds = Array.from(ids);
+    }
+
     // 1. Fetch care team assignments for this staff member
-    let assignmentsQuery = supabaseAdmin.from('care_team_assignments').select('*');
-    if (role === 'trainer') {
-      assignmentsQuery = assignmentsQuery.eq('trainer_id', staffId);
+    let assignmentsQuery = supabaseAdmin.from('care_team_assignments').select('*', { count: 'exact' });
+    if (role === 'fitness_coach') {
+      assignmentsQuery = assignmentsQuery.or(`fitness_coach_id.eq.${staffId},trainer_id.eq.${staffId}`);
     } else if (role === 'dietitian') {
       assignmentsQuery = assignmentsQuery.eq('dietitian_id', staffId);
+    } else if (role === 'nutritionist') {
+      assignmentsQuery = assignmentsQuery.eq('nutritionist_id', staffId);
     } else if (role === 'doctor') {
       assignmentsQuery = assignmentsQuery.eq('doctor_id', staffId);
     }
 
-    const { data: assignments, error: assignErr } = await assignmentsQuery;
+    if (search.trim()) {
+      if (matchingPatientIds.length > 0) {
+        assignmentsQuery = assignmentsQuery.in('patient_id', matchingPatientIds);
+      } else {
+        return NextResponse.json({ patients: [], totalCount: 0, totalPages: 0 });
+      }
+    }
+
+    const from = (page - 1) * limit;
+    const to = page * limit - 1;
+
+    const { data: assignments, error: assignErr, count } = await assignmentsQuery
+      .range(from, to);
+
     if (assignErr) throw assignErr;
 
     if (!assignments || assignments.length === 0) {
-      return NextResponse.json({ patients: [] });
+      return NextResponse.json({ patients: [], totalCount: 0, totalPages: 0 });
     }
 
     const patientIds = assignments.map(a => a.patient_id);
@@ -69,45 +158,83 @@ export async function POST(req: Request) {
       const pLogs = logs?.filter(l => l.user_id === assign.patient_id) || [];
       const pConsults = consults?.filter(c => c.patient_id === assign.patient_id) || [];
 
-      // Trainer status calculation
+      // Provider status calculation
       const isPaymentDue = !assess.consultation_fee_paid && !assess.membership_tier;
       const hasWeightLogs = pLogs.some(l => {
         const diffDays = (new Date().getTime() - new Date(l.created_at).getTime()) / (1000 * 3600 * 24);
         return diffDays <= 7;
       });
       const isCheckInDue = pLogs.length > 0 && !hasWeightLogs;
-      const isGuidelinesDue = !assign.trainer_notes;
+      const guidance = role === 'dietitian'
+        ? assign.dietitian_notes
+        : role === 'nutritionist'
+          ? assign.nutritionist_notes
+          : assign.trainer_notes;
+      const isGuidelinesDue = !guidance;
       
+      const latestConsultation = getLatestConsultation(pConsults);
+      const nextAppointment = getNextAppointment(pConsults);
+      const completedConsultations = pConsults.filter(c => ['approved', 'rejected', 'completed'].includes(String(c.status || '').toLowerCase()));
+      const prescriptionHistory = pConsults.filter(c => c.prescription_text || c.prescription_type || c.prescription_notes);
+
       let statusLabel = 'Active';
       let statusColor = 'bg-green-50 text-green-700';
 
-      if (isPaymentDue) {
+      if (role === 'doctor') {
+        if (!latestConsultation) {
+          statusLabel = 'Medical Review Pending';
+          statusColor = 'bg-amber-50 text-amber-700';
+        } else if (['scheduled', 'calling', 'attended'].includes(String(latestConsultation.status || '').toLowerCase())) {
+          statusLabel = latestConsultation.status === 'attended' ? 'Medical Review Pending' : 'Follow-up Pending';
+          statusColor = 'bg-amber-50 text-amber-700';
+        } else if (['approved', 'completed'].includes(String(latestConsultation.status || '').toLowerCase())) {
+          statusLabel = 'Clinical Review Complete';
+          statusColor = 'bg-green-50 text-green-700';
+        } else if (String(latestConsultation.status || '').toLowerCase() === 'rejected') {
+          statusLabel = 'Not Approved';
+          statusColor = 'bg-red-50 text-red-700';
+        } else {
+          statusLabel = 'Medical Review Pending';
+          statusColor = 'bg-amber-50 text-amber-700';
+        }
+      } else if (isPaymentDue) {
         statusLabel = 'Awaiting Payment';
         statusColor = 'bg-red-50 text-red-700';
       } else if (isCheckInDue || pLogs.length === 0) {
         statusLabel = 'Awaiting Check-in';
         statusColor = 'bg-amber-50 text-amber-700';
       } else if (isGuidelinesDue) {
-        statusLabel = 'Awaiting Guidelines';
+        statusLabel = 'Pending Guidelines';
         statusColor = 'bg-amber-50 text-amber-700';
-      } else {
-        statusLabel = 'Guidelines Set';
-        statusColor = 'bg-blue-50 text-blue-700';
       }
 
+      const membershipTier = assess.membership_tier || assess.membershipStatus || 'Not selected';
+
       return {
-        id: assign.patient_id,
-        first_name: assess.first_name || prof.first_name || (prof.email ? prof.email.split('@')[0] : null) || prof.display_id || 'Member',
-        last_name: assess.last_name || prof.last_name || '',
-        phone_number: assess.phone_number || prof.phone_number || null,
-        height_cm: assess.height_cm ? parseFloat(assess.height_cm) : null,
-        weight_kg: assess.weight_kg ? parseFloat(assess.weight_kg) : null,
-        goal_weight_kg: assess.goal_weight_kg ? parseFloat(assess.goal_weight_kg) : null,
-        extra_medical_info: assess.extra_medical_info || null,
-        local_food: assess.local_food || null,
-        medical_history: assess.medical_history || null,
+        id: assign.id,
+        patient_id: assign.patient_id,
+        name: prof.first_name || prof.last_name ? `${prof.first_name || ''} ${prof.last_name || ''}`.trim() : prof.email || 'Patient',
+        email: prof.email || '',
+        phone: prof.phone_number || 'No Phone',
+        membershipTier,
+        onboardingCompleted: Boolean(assess.membership_tier),
+        eligibility_status: assess.eligibility_status || getAssessmentField(assess, 'eligibility_status') || (typeof assess.is_eligible === 'boolean' ? (assess.is_eligible ? 'ELIGIBLE' : 'NOT_ELIGIBLE') : null),
+        eligibility_reason: assess.eligibility_reason || getAssessmentField(assess, 'eligibility_reason') || getAssessmentField(assess, 'eligibility_message') || null,
+        medical_risk_flags: getRiskFlags(assess),
+        current_medications: assess.current_medications || assess.medications || getAssessmentField(assess, 'medication_history') || null,
+        medication_history: assess.medication_history || getAssessmentField(assess, 'medication_history') || null,
+        medication_proof_url: assess.medication_proof_url || assess.medication_proof || null,
+        bmi: assess.bmi ? parseFloat(assess.bmi) : (assess.height_cm && assess.weight_kg ? Number((Number(assess.weight_kg) / Math.pow(Number(assess.height_cm) / 100, 2)).toFixed(1)) : null),
+        diagnosis_summary: assess.diagnosis_summary || completedConsultations[0]?.prescription_notes || null,
+        follow_up_notes: assess.follow_up_instruction || assess.follow_up_notes || completedConsultations[0]?.prescription_notes || null,
+        latest_consultation_status: latestConsultation?.status || null,
+        latest_consultation: latestConsultation,
+        next_appointment: nextAppointment,
+        previous_consultations: pConsults,
+        prescription_history: prescriptionHistory,
         trainer_notes: assign.trainer_notes || null,
         dietitian_notes: assign.dietitian_notes || null,
+        nutritionist_notes: assign.nutritionist_notes || null,
         status_label: statusLabel,
         status_color: statusColor,
         weight_logs: pLogs.map(l => ({
@@ -118,7 +245,11 @@ export async function POST(req: Request) {
       };
     });
 
-    return NextResponse.json({ patients: enrichedPatients });
+    return NextResponse.json({
+      patients: enrichedPatients,
+      totalCount: count || 0,
+      totalPages: Math.ceil((count || 0) / limit)
+    });
   } catch (err: any) {
     console.error('Error in POST /api/staff/patients:', err);
     return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });

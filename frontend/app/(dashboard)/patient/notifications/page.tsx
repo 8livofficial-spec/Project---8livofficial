@@ -9,8 +9,16 @@ import { usePatientData } from '@/hooks/usePatientData'
 import { motion, AnimatePresence } from 'framer-motion'
 
 export default function PatientNotificationsPage() {
-  const { user, notifications, reloadData } = usePatientData()
+  const { user, notifications, reloadData, loading } = usePatientData()
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
+
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
 
   // Filter notifications

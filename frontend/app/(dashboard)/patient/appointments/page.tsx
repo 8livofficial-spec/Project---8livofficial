@@ -1,457 +1,537 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Calendar as CalendarIcon, Video, AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, X, Dumbbell, Apple } from 'lucide-react'
-import { usePatientData } from '@/hooks/usePatientData'
+import { AlertCircle, Calendar, Search, Video } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
+type FilterKey = 'all' | 'upcoming' | 'past' | 'cancelled' | 'missed'
+
+type AppointmentRecord = {
+  id: string
+  source: 'doctor' | 'staff'
+  providerId?: string | null
+  providerName: string
+  providerRole: string
+  appointmentType: string
+  bookingDate?: string | null
+  bookingTime?: string | null
+  status: string
+  meetingUrl?: string | null
+  createdAt?: string | null
+}
+
+type DoctorConsultationRow = {
+  id: string
+  doctor_id?: string | null
+  booking_date?: string | null
+  booking_time?: string | null
+  status?: string | null
+  room_url?: string | null
+  meeting_url?: string | null
+  appointment_type?: string | null
+  created_at?: string | null
+}
+
+type StaffConsultationRow = {
+  id: string
+  staff_id?: string | null
+  staff_role?: string | null
+  booking_date?: string | null
+  booking_time?: string | null
+  status?: string | null
+  room_url?: string | null
+  meeting_url?: string | null
+  appointment_type?: string | null
+  created_at?: string | null
+}
+
+const filters: Array<{ key: FilterKey; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'past', label: 'Past' },
+  { key: 'cancelled', label: 'Cancelled' },
+  { key: 'missed', label: 'Missed' },
+]
+
+function normalizeStatus(status?: string | null) {
+  return String(status || 'scheduled').trim().toLowerCase()
+}
+
+function titleCase(value: string) {
+  return value
+    .replaceAll('_', ' ')
+    .toLowerCase()
+    .replace(/\b\w/g, char => char.toUpperCase())
+}
+
+function roleLabel(role?: string | null) {
+  const normalized = String(role || '').toLowerCase()
+  if (normalized === 'doctor') return 'Doctor'
+  if (normalized === 'dietitian') return 'Dietitian'
+  if (normalized === 'nutritionist') return 'Nutritionist'
+  if (normalized === 'trainer' || normalized === 'fitness_coach') return 'Fitness Coach'
+  return 'Provider'
+}
+
+function appointmentTypeLabel(type?: string | null, fallbackRole?: string | null) {
+  const normalized = String(type || '').toUpperCase()
+  if (normalized === 'INITIAL_CONSULTATION') return 'Initial Consultation'
+  if (normalized === 'FOLLOW_UP_CONSULTATION') return 'Follow-up Consultation'
+  if (normalized === 'DIETITIAN_CONSULTATION') return 'Dietitian Consultation'
+  if (normalized === 'NUTRITIONIST_CONSULTATION') return 'Nutritionist Consultation'
+  if (normalized === 'FITNESS_COACH_CONSULTATION') return 'Fitness Coach Consultation'
+  return `${roleLabel(fallbackRole)} Appointment`
+}
+
+function getCategory(appointment: AppointmentRecord): Exclude<FilterKey, 'all'> {
+  const status = normalizeStatus(appointment.status)
+  if (status.includes('cancelled')) return 'cancelled'
+  if (status.includes('missed')) return 'missed'
+  if (['completed', 'approved', 'rejected'].includes(status)) return 'past'
+  return 'upcoming'
+}
+
+function canJoin(appointment: AppointmentRecord) {
+  if (!appointment.meetingUrl || !appointment.bookingDate || !appointment.bookingTime) return false
+  if (getCategory(appointment) !== 'upcoming') return false
+
+  const start = new Date(`${appointment.bookingDate} ${appointment.bookingTime}`).getTime()
+  return Number.isFinite(start) && Date.now() >= start - 15 * 60 * 1000
+}
+
+function canCancel(appointment: AppointmentRecord) {
+  if (appointment.source !== 'doctor') return false
+  return ['scheduled', 'calling'].includes(normalizeStatus(appointment.status))
+}
+
+function formatDate(date?: string | null) {
+  if (!date) return 'Not scheduled'
+  const parsed = new Date(`${date}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) return date
+  return parsed.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+}
+
+function sortAppointments(a: AppointmentRecord, b: AppointmentRecord) {
+  const aTime = new Date(`${a.bookingDate || a.createdAt || ''} ${a.bookingTime || ''}`).getTime()
+  const bTime = new Date(`${b.bookingDate || b.createdAt || ''} ${b.bookingTime || ''}`).getTime()
+  return (Number.isFinite(bTime) ? bTime : 0) - (Number.isFinite(aTime) ? aTime : 0)
+}
+
 export default function AppointmentsPage() {
-  const { assessment, consultation, staffConsultations, reloadData } = usePatientData()
-  const [activeTab, setActiveTab] = useState<'upcoming' | 'past'>('upcoming')
-  const [showCancelModal, setShowCancelModal] = useState(false)
+  const [appointments, setAppointments] = useState<AppointmentRecord[]>([])
+  const [filter, setFilter] = useState<FilterKey>('all')
+  const [search, setSearch] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [cancelTarget, setCancelTarget] = useState<AppointmentRecord | null>(null)
   const [cancelling, setCancelling] = useState(false)
+  const [page, setPage] = useState(1)
+  const limit = 20
 
-  const [pastConsultations, setPastConsultations] = useState<any[]>([
-    { doctor: 'Dr. Priya Sharma', date: 'May 28, 2026', day: '28', month: 'MAY', notes: 'Initial intake completed. Commenced standard therapy program.' }
-  ])
+  const loadAppointments = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const session = sessionData.session
+      if (!session) throw new Error('Please sign in again.')
 
-  // Fetch past completed consultations dynamically
-  React.useEffect(() => {
-    const fetchPastConsultations = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) return
-
-        const { data, error } = await supabase
+      const [doctorRes, staffRes] = await Promise.all([
+        supabase
           .from('doctor_consultations')
-          .select('*, doctor_profiles(full_name)')
+          .select('*')
           .eq('patient_id', session.user.id)
-          .eq('is_completed', true)
-          .order('created_at', { ascending: false })
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('staff_consultations')
+          .select('*')
+          .eq('patient_id', session.user.id)
+          .order('created_at', { ascending: false }),
+      ])
 
-        if (data && data.length > 0) {
-          setPastConsultations(data.map(c => {
-            const dateObj = new Date(c.booking_date || c.created_at)
-            return {
-              doctor: c.doctor_profiles?.full_name || 'Clinician Specialist',
-              date: dateObj.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
-              day: dateObj.getDate().toString(),
-              month: dateObj.toLocaleDateString('en-US', { month: 'short' }).toUpperCase(),
-              notes: c.consultation_notes || 'Metabolic consultation concluded successfully.'
-            }
-          }))
-        }
-      } catch (e) {
-        console.error("Error fetching past consultations:", e)
-      }
+      if (doctorRes.error) throw doctorRes.error
+      if (staffRes.error) throw staffRes.error
+
+      const doctorRows = (doctorRes.data || []) as DoctorConsultationRow[]
+      const staffRows = (staffRes.data || []) as StaffConsultationRow[]
+      const doctorIds = Array.from(new Set(doctorRows.map(row => row.doctor_id).filter(Boolean))) as string[]
+      const staffIds = Array.from(new Set(staffRows.map(row => row.staff_id).filter(Boolean))) as string[]
+
+      const [doctorProfilesRes, providerProfilesRes, profilesRes] = await Promise.all([
+        doctorIds.length
+          ? supabase.from('doctor_profiles').select('id, full_name').in('id', doctorIds)
+          : Promise.resolve({ data: [] }),
+        staffIds.length
+          ? supabase.from('provider_profiles').select('provider_id, full_name, role').in('provider_id', staffIds)
+          : Promise.resolve({ data: [] }),
+        staffIds.length
+          ? supabase.from('profiles').select('id, first_name, last_name, display_id').in('id', staffIds)
+          : Promise.resolve({ data: [] }),
+      ])
+
+      const doctorNames = new Map(
+        ((doctorProfilesRes.data || []) as Array<{ id: string; full_name?: string | null }>).map(profile => [
+          profile.id,
+          profile.full_name || 'Assigned Doctor',
+        ])
+      )
+      const providerNames = new Map(
+        ((providerProfilesRes.data || []) as Array<{ provider_id: string; full_name?: string | null }>).map(profile => [
+          profile.provider_id,
+          profile.full_name || 'Assigned Provider',
+        ])
+      )
+      const profileNames = new Map(
+        ((profilesRes.data || []) as Array<{ id: string; first_name?: string | null; last_name?: string | null; display_id?: string | null }>).map(profile => [
+          profile.id,
+          [profile.first_name, profile.last_name].filter(Boolean).join(' ') || profile.display_id || 'Assigned Provider',
+        ])
+      )
+
+      const doctorAppointments = doctorRows.map((row): AppointmentRecord => ({
+        id: row.id,
+        source: 'doctor',
+        providerId: row.doctor_id,
+        providerName: row.doctor_id ? doctorNames.get(row.doctor_id) || 'Assigned Doctor' : 'Assigned Doctor',
+        providerRole: 'Doctor',
+        appointmentType: appointmentTypeLabel(row.appointment_type, 'doctor'),
+        bookingDate: row.booking_date,
+        bookingTime: row.booking_time,
+        status: normalizeStatus(row.status),
+        meetingUrl: row.meeting_url || row.room_url || null,
+        createdAt: row.created_at,
+      }))
+
+      const staffAppointments = staffRows.map((row): AppointmentRecord => ({
+        id: row.id,
+        source: 'staff',
+        providerId: row.staff_id,
+        providerName: row.staff_id ? providerNames.get(row.staff_id) || profileNames.get(row.staff_id) || `Assigned ${roleLabel(row.staff_role)}` : `Assigned ${roleLabel(row.staff_role)}`,
+        providerRole: roleLabel(row.staff_role),
+        appointmentType: appointmentTypeLabel(row.appointment_type, row.staff_role),
+        bookingDate: row.booking_date,
+        bookingTime: row.booking_time,
+        status: normalizeStatus(row.status),
+        meetingUrl: row.meeting_url || row.room_url || null,
+        createdAt: row.created_at,
+      }))
+
+      setAppointments([...doctorAppointments, ...staffAppointments].sort(sortAppointments))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to load appointments.')
+    } finally {
+      setLoading(false)
     }
-    fetchPastConsultations()
+  }
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadAppointments()
+    }, 0)
+
+    return () => window.clearTimeout(timer)
   }, [])
 
-  const bookingDate = assessment?.booking_date
-  const bookingTime = assessment?.booking_time
+  useEffect(() => {
+    setPage(1)
+  }, [filter, search])
 
-  const physicianName = consultation?.doctor_profiles?.full_name 
-    ? consultation.doctor_profiles.full_name
-    : 'Physician Specialist'
+  const filteredAppointments = useMemo(() => {
+    const query = search.trim().toLowerCase()
+    return appointments.filter(appointment => {
+      const category = getCategory(appointment)
+      const matchesFilter = filter === 'all' || category === filter
+      if (!matchesFilter) return false
+      if (!query) return true
 
-  // Filter staff consultations into upcoming (scheduled) and past (completed)
-  const upcomingStaffSessions = (staffConsultations || []).filter(
-    (s: any) => s.status === 'scheduled'
-  )
-  const pastStaffSessions = (staffConsultations || []).filter(
-    (s: any) => s.status === 'completed'
-  )
+      return [
+        appointment.providerName,
+        appointment.providerRole,
+        appointment.appointmentType,
+        appointment.bookingDate || '',
+        formatDate(appointment.bookingDate),
+      ].some(value => value.toLowerCase().includes(query))
+    })
+  }, [appointments, filter, search])
 
-  const getRoleIcon = (role: string) => {
-    if (role === 'trainer') return <Dumbbell className="w-4 h-4" />
-    if (role === 'dietitian') return <Apple className="w-4 h-4" />
-    return <CalendarIcon className="w-4 h-4" />
-  }
+  const paginatedAppointments = useMemo(() => {
+    const from = (page - 1) * limit
+    return filteredAppointments.slice(from, from + limit)
+  }, [filteredAppointments, page])
 
-  const getRoleLabel = (role: string) => {
-    if (role === 'trainer') return 'Fitness Trainer'
-    if (role === 'dietitian') return 'Dietitian'
-    return 'Staff'
-  }
+  const counts = useMemo(() => {
+    return appointments.reduce<Record<FilterKey, number>>((acc, appointment) => {
+      acc.all += 1
+      acc[getCategory(appointment)] += 1
+      return acc
+    }, { all: 0, upcoming: 0, past: 0, cancelled: 0, missed: 0 })
+  }, [appointments])
 
-  const getRoleColor = (role: string) => {
-    if (role === 'trainer') return { bg: 'bg-[#C4622D]/10', text: 'text-[#C4622D]' }
-    if (role === 'dietitian') return { bg: 'bg-[#5C7A6B]/10', text: 'text-[#5C7A6B]' }
-    return { bg: 'bg-[#8896A4]/10', text: 'text-[#8896A4]' }
-  }
-
-  const handleCancelAppointment = async () => {
+  const handleCancel = async () => {
+    if (!cancelTarget || cancelTarget.source !== 'doctor') return
     setCancelling(true)
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) return
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!sessionData.session || !token) throw new Error('Please sign in again.')
 
-      const { error } = await supabase
-        .from('health_assessments')
-        .update({
-          booking_date: null,
-          booking_time: null
-        })
-        .eq('patient_id', session.user.id)
+      const res = await fetch(`/api/patient/appointments/${cancelTarget.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          patientId: sessionData.session.user.id,
+          action: 'cancel_by_patient',
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Unable to cancel appointment.')
 
-      if (error) throw error
-
-      alert("Appointment cancelled successfully.")
-      setShowCancelModal(false)
-      reloadData()
-    } catch (err: any) {
-      alert("Failed to cancel appointment: " + err.message)
+      setCancelTarget(null)
+      await loadAppointments()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to cancel appointment.')
     } finally {
       setCancelling(false)
     }
   }
 
-  // Calendar render helpers
-  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-  const daysInMonth = Array.from({ length: 30 }, (_, i) => i + 1)
-  
-  // Custom helper to mock active dates on calendar
-  const getDayStatus = (day: number) => {
-    if (bookingDate) {
-      const apptDay = new Date(bookingDate).getDate()
-      const apptMonthIndex = new Date(bookingDate).getMonth()
-      const currentMonthIndex = new Date().getMonth()
-      if (day === apptDay && apptMonthIndex === currentMonthIndex) {
-        return 'appointment'
-      }
+  const renderActions = (appointment: AppointmentRecord) => {
+    const category = getCategory(appointment)
+    const detailsHref = appointment.source === 'doctor' ? `/patient/appointments/${appointment.id}` : '/patient/appointments'
+
+    if (category === 'missed') {
+      return (
+        <Link href="/patient/consultation" className="rounded-lg bg-[#1A1F36] px-3 py-2 text-xs font-bold text-white">
+          Book Follow-up
+        </Link>
+      )
     }
-    
-    // Mock dietitian date: day 10, fitness: day 11
-    if (day === 10 || day === 11) return 'appointment'
-    
-    if (day === new Date().getDate()) return 'today'
-    return 'none'
+
+    if (category === 'past') {
+      return (
+        <Link href={detailsHref} className="rounded-lg border border-[#1A1F36]/12 px-3 py-2 text-xs font-bold text-[#1A1F36]">
+          View Summary
+        </Link>
+      )
+    }
+
+    if (category === 'cancelled') {
+      return (
+        <Link href={detailsHref} className="rounded-lg border border-[#1A1F36]/12 px-3 py-2 text-xs font-bold text-[#1A1F36]">
+          View Details
+        </Link>
+      )
+    }
+
+    return (
+      <>
+        <Link href={detailsHref} className="rounded-lg border border-[#1A1F36]/12 px-3 py-2 text-xs font-bold text-[#1A1F36]">
+          View Details
+        </Link>
+        {canJoin(appointment) ? (
+          <Link
+            href={appointment.meetingUrl || '#'}
+            target={appointment.source === 'staff' ? '_blank' : undefined}
+            className="rounded-lg bg-[#C4622D] px-3 py-2 text-xs font-bold text-white"
+          >
+            Join Meeting
+          </Link>
+        ) : (
+          <span className="rounded-lg bg-[#E8DED4] px-3 py-2 text-xs font-bold text-[#6B7A90]">
+            Opens 15 min before
+          </span>
+        )}
+        {canCancel(appointment) && (
+          <button
+            type="button"
+            onClick={() => setCancelTarget(appointment)}
+            className="rounded-lg border border-rose-500/20 px-3 py-2 text-xs font-bold text-rose-600"
+          >
+            Cancel
+          </button>
+        )}
+      </>
+    )
   }
 
   return (
     <div className="space-y-6 text-[#1A1F36]">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-xl font-bold font-sora">My Consultations</h2>
-          <p className="text-xs text-[#8896A4] font-medium">View calendar schedule and join video clinics.</p>
+          <h2 className="text-xl font-bold font-sora">Appointments</h2>
+          <p className="text-xs font-medium text-[#8896A4]">Manage appointment records and meeting access.</p>
         </div>
         <Link
           href="/patient/consultation"
-          className="bg-[#1A1F36] text-white rounded-full px-6 py-3 hover:bg-[#C4622D] transition-colors font-semibold text-sm flex items-center justify-center gap-1.5 shrink-0"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1A1F36] px-5 py-3 text-sm font-bold text-white"
         >
-          <CalendarIcon className="w-4 h-4" /> Book New Session
+          <Calendar className="h-4 w-4" />
+          Book Follow-up
         </Link>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: Monthly Calendar (col-span-2) */}
-        <div className="lg:col-span-2 bg-white rounded-2xl p-6 shadow-[0_2px_12px_rgba(26,31,54,0.08)] border border-[#1A1F36]/6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="font-bold text-base font-sora">Calendar Overview</h3>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold">June 2026</span>
-              <div className="flex items-center gap-1">
-                <button className="p-1.5 hover:bg-[#F5F0EB] rounded-lg border border-[#1A1F36]/12"><ChevronLeft className="w-4 h-4" /></button>
-                <button className="p-1.5 hover:bg-[#F5F0EB] rounded-lg border border-[#1A1F36]/12"><ChevronRight className="w-4 h-4" /></button>
-              </div>
-            </div>
+      <div className="rounded-2xl border border-[#1A1F36]/8 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex flex-wrap gap-2">
+            {filters.map(item => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setFilter(item.key)}
+                className={`rounded-xl px-4 py-2 text-xs font-bold transition-colors ${
+                  filter === item.key
+                    ? 'bg-[#1A1F36] text-white'
+                    : 'bg-[#F5F0EB] text-[#40516A] hover:bg-[#E8DED4]'
+                }`}
+              >
+                {item.label} ({counts[item.key]})
+              </button>
+            ))}
           </div>
 
-          {/* Calendar Grid */}
-          <div className="space-y-2">
-            <div className="grid grid-cols-7 text-center text-xs font-bold text-[#8896A4] uppercase tracking-wider mb-2">
-              {daysOfWeek.map(d => <div key={d}>{d}</div>)}
-            </div>
-            
-            <div className="grid grid-cols-7 gap-y-3 justify-items-center">
-              {/* Offset days for June 1 2026 starting on Monday (1 offset) */}
-              <div className="text-transparent">0</div>
-              
-              {daysInMonth.map(day => {
-                const status = getDayStatus(day)
-                return (
-                  <button
-                    key={day}
-                    className={`w-9 h-9 rounded-full flex flex-col items-center justify-center text-sm font-semibold transition-all relative group cursor-pointer ${
-                      status === 'today' 
-                        ? 'bg-[#1A1F36] text-white' 
-                        : status === 'appointment'
-                          ? 'ring-2 ring-[#C4622D] text-[#C4622D] bg-[#C4622D]/5 font-extrabold'
-                          : 'hover:bg-[#F5F0EB] text-[#1A1F36]'
-                    }`}
-                  >
-                    <span>{day}</span>
-                    {status === 'appointment' && (
-                      <span className="absolute bottom-1 w-1.5 h-1.5 bg-[#C4622D] rounded-full" />
-                    )}
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-        </div>
-
-        {/* Right: Appointments List (col-span-1) */}
-        <div className="lg:col-span-1 flex flex-col gap-4">
-          {/* Tab Selection */}
-          <div className="bg-white rounded-xl p-1.5 border border-[#1A1F36]/8 shadow-sm flex items-center justify-around">
-            <button
-              onClick={() => setActiveTab('upcoming')}
-              className={`flex-1 text-center py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                activeTab === 'upcoming' 
-                  ? 'bg-[#1A1F36] text-white shadow-sm' 
-                  : 'text-[#8896A4] hover:text-[#1A1F36]'
-              }`}
-            >
-              Upcoming
-            </button>
-            <button
-              onClick={() => setActiveTab('past')}
-              className={`flex-1 text-center py-2.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all cursor-pointer ${
-                activeTab === 'past' 
-                  ? 'bg-[#1A1F36] text-white shadow-sm' 
-                  : 'text-[#8896A4] hover:text-[#1A1F36]'
-              }`}
-            >
-              Past
-            </button>
-          </div>
-
-          {/* List items */}
-          <div className="space-y-4 flex-grow">
-            {activeTab === 'upcoming' ? (
-              <>
-                {/* Doctor Consultation Card */}
-                {bookingDate && bookingTime ? (
-                  <div className="bg-white rounded-2xl p-5 shadow-[0_2px_12px_rgba(26,31,54,0.08)] border border-[#1A1F36]/6 flex flex-col justify-between space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-[#F5F0EB] rounded-xl p-3 text-center shrink-0 w-14 shadow-sm border border-[#1A1F36]/6">
-                          <p className="text-[#1A1F36] font-extrabold text-lg font-sora leading-none">
-                            {new Date(bookingDate).getDate()}
-                          </p>
-                          <p className="text-[#8896A4] text-[9px] font-bold uppercase tracking-wider mt-1">
-                            {new Date(bookingDate).toLocaleDateString('en-IN', { month: 'short' })}
-                          </p>
-                        </div>
-                        <div className="min-w-0">
-                          <h4 className="text-[#1A1F36] font-bold text-sm leading-snug">
-                            {physicianName}
-                          </h4>
-                          <span className="inline-block bg-[#C4622D]/10 text-[#C4622D] text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full mt-1.5">
-                            GLP-1 Consultation
-                          </span>
-                        </div>
-                      </div>
-                      <span className="bg-[#5C7A6B]/10 text-[#5C7A6B] text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider">
-                        Confirmed
-                      </span>
-                    </div>
-
-                    <div className="flex items-center justify-between text-xs border-t border-[#1A1F36]/8 pt-3 text-[#8896A4]">
-                      <span>Time: <strong className="text-[#1A1F36] font-bold">{bookingTime}</strong></span>
-                    </div>
-
-                    <div className="flex flex-col gap-2 pt-2 border-t border-[#1A1F36]/8">
-                      <Link
-                        href="/patient/consultation/room"
-                        className="bg-[#C4622D] hover:bg-[#A8522A] text-white text-center rounded-xl py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md shadow-[#C4622D]/10 cursor-pointer"
-                      >
-                        <Video className="w-4 h-4 shrink-0" /> Join Call
-                      </Link>
-                      <div className="grid grid-cols-2 gap-2">
-                        <Link
-                          href="/patient/consultation"
-                          className="border border-[#1A1F36]/12 text-[#1A1F36] hover:bg-[#1A1F36]/4 text-center rounded-xl py-2.5 text-xs font-bold uppercase tracking-wider cursor-pointer"
-                        >
-                          Reschedule
-                        </Link>
-                        <button
-                          onClick={() => setShowCancelModal(true)}
-                          className="border border-rose-500/20 text-rose-500 hover:bg-rose-50 text-center rounded-xl py-2.5 text-xs font-bold uppercase tracking-wider cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="bg-white rounded-2xl p-8 border border-[#1A1F36]/6 shadow-[0_2px_12px_rgba(26,31,54,0.08)] text-center space-y-4">
-                    <div className="w-12 h-12 rounded-full bg-[#C4622D]/10 text-[#C4622D] flex items-center justify-center mx-auto">
-                      <CalendarIcon className="w-6 h-6" />
-                    </div>
-                    <div className="space-y-1.5">
-                      <h4 className="font-bold text-sm font-sora">No Doctor Session Scheduled</h4>
-                      <p className="text-xs text-[#8896A4] leading-relaxed">Secure your video clinic slot to obtain custom prescription instructions.</p>
-                    </div>
-                    <Link
-                      href="/patient/consultation"
-                      className="block bg-[#1A1F36] text-white font-bold text-xs uppercase tracking-wider rounded-xl py-3 shadow-md transition-colors cursor-pointer"
-                    >
-                      Schedule Consultation
-                    </Link>
-                  </div>
-                )}
-
-                {/* Staff Consultation Cards (Trainer / Dietitian) */}
-                {upcomingStaffSessions.length > 0 && (
-                  <div className="space-y-3 pt-1">
-                    <p className="text-[10px] font-bold text-[#8896A4] uppercase tracking-wider">Staff Sessions</p>
-                    {upcomingStaffSessions.map((session: any) => {
-                      const roleColor = getRoleColor(session.staff_role)
-                      const sessionDate = session.booking_date ? new Date(session.booking_date) : null
-                      return (
-                        <div key={session.id} className="bg-white rounded-2xl p-5 shadow-[0_2px_12px_rgba(26,31,54,0.08)] border border-[#1A1F36]/6 flex flex-col space-y-3">
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="bg-[#F5F0EB] rounded-xl p-3 text-center shrink-0 w-14 shadow-sm border border-[#1A1F36]/6">
-                                {sessionDate ? (
-                                  <>
-                                    <p className="text-[#1A1F36] font-extrabold text-lg font-sora leading-none">
-                                      {sessionDate.getDate()}
-                                    </p>
-                                    <p className="text-[#8896A4] text-[9px] font-bold uppercase tracking-wider mt-1">
-                                      {sessionDate.toLocaleDateString('en-IN', { month: 'short' })}
-                                    </p>
-                                  </>
-                                ) : (
-                                  <div className={`flex items-center justify-center h-full ${roleColor.text}`}>
-                                    {getRoleIcon(session.staff_role)}
-                                  </div>
-                                )}
-                              </div>
-                              <div className="min-w-0">
-                                <h4 className="text-[#1A1F36] font-bold text-sm leading-snug">
-                                  {getRoleLabel(session.staff_role)}
-                                </h4>
-                                <span className={`inline-block ${roleColor.bg} ${roleColor.text} text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full mt-1.5`}>
-                                  {session.staff_role === 'trainer' ? 'Fitness Session' : 'Nutrition Session'}
-                                </span>
-                              </div>
-                            </div>
-                            <span className="bg-[#5C7A6B]/10 text-[#5C7A6B] text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider shrink-0">
-                              Scheduled
-                            </span>
-                          </div>
-
-                          {session.booking_time && (
-                            <div className="flex items-center text-xs border-t border-[#1A1F36]/8 pt-3 text-[#8896A4]">
-                              <span>Time: <strong className="text-[#1A1F36] font-bold">{session.booking_time}</strong></span>
-                            </div>
-                          )}
-
-                          {session.room_url && (
-                            <div className="pt-1 border-t border-[#1A1F36]/8">
-                              <Link
-                                href={session.room_url}
-                                target="_blank"
-                                className="bg-[#1A1F36] hover:bg-[#C4622D] text-white text-center rounded-xl py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md transition-colors cursor-pointer w-full"
-                              >
-                                <Video className="w-4 h-4 shrink-0" /> Join Room
-                              </Link>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </>
-            ) : (
-              /* Past Appointments list view */
-              <div className="space-y-3">
-                {/* Past Doctor Consultations */}
-                {pastConsultations.map((appt, idx) => (
-                  <div key={idx} className="bg-white rounded-2xl p-5 border border-[#1A1F36]/6 shadow-sm flex items-center justify-between opacity-80">
-                    <div className="flex items-center gap-3">
-                      <div className="bg-[#EDE8E3] rounded-xl p-3 text-center shrink-0 w-12 border border-[#1A1F36]/6 text-[#8896A4]">
-                        <p className="font-bold text-sm leading-none">{appt.day}</p>
-                        <p className="text-[8px] font-bold mt-1">{appt.month}</p>
-                      </div>
-                      <div>
-                        <h4 className="text-[#1A1F36] text-xs font-bold">{appt.doctor}</h4>
-                        <p className="text-[10px] text-[#8896A4] mt-0.5">{appt.date} • Concluded</p>
-                      </div>
-                    </div>
-                    <span className="bg-[#5C7A6B]/10 text-[#5C7A6B] text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
-                      Completed
-                    </span>
-                  </div>
-                ))}
-
-                {/* Past Staff Sessions (Trainer / Dietitian) */}
-                {pastStaffSessions.map((session: any) => {
-                  const sessionDate = session.booking_date ? new Date(session.booking_date) : (session.created_at ? new Date(session.created_at) : null)
-                  const roleColor = getRoleColor(session.staff_role)
-                  return (
-                    <div key={session.id} className="bg-white rounded-2xl p-5 border border-[#1A1F36]/6 shadow-sm flex items-center justify-between opacity-80">
-                      <div className="flex items-center gap-3">
-                        <div className="bg-[#EDE8E3] rounded-xl p-3 text-center shrink-0 w-12 border border-[#1A1F36]/6 text-[#8896A4]">
-                          {sessionDate ? (
-                            <>
-                              <p className="font-bold text-sm leading-none">{sessionDate.getDate()}</p>
-                              <p className="text-[8px] font-bold mt-1">{sessionDate.toLocaleDateString('en-US', { month: 'short' }).toUpperCase()}</p>
-                            </>
-                          ) : (
-                            <div className={`flex items-center justify-center ${roleColor.text}`}>
-                              {getRoleIcon(session.staff_role)}
-                            </div>
-                          )}
-                        </div>
-                        <div>
-                          <h4 className="text-[#1A1F36] text-xs font-bold">{getRoleLabel(session.staff_role)}</h4>
-                          <p className="text-[10px] text-[#8896A4] mt-0.5">
-                            {sessionDate ? sessionDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : ''} • Concluded
-                          </p>
-                        </div>
-                      </div>
-                      <span className="bg-[#5C7A6B]/10 text-[#5C7A6B] text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">
-                        Completed
-                      </span>
-                    </div>
-                  )
-                })}
-
-                {pastConsultations.length === 0 && pastStaffSessions.length === 0 && (
-                  <div className="bg-white rounded-2xl p-8 border border-[#1A1F36]/6 shadow-sm text-center opacity-70">
-                    <p className="text-xs text-[#8896A4]">No past sessions found.</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+          <label className="relative block w-full lg:w-80">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8896A4]" />
+            <input
+              value={search}
+              onChange={event => setSearch(event.target.value)}
+              placeholder="Search provider, type, or date"
+              className="w-full rounded-xl border border-[#1A1F36]/10 bg-white py-2.5 pl-9 pr-3 text-sm font-semibold outline-none focus:border-[#C4622D]"
+            />
+          </label>
         </div>
       </div>
 
-      {/* Cancel Appointment Confirmation Modal */}
-      {showCancelModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
-          <div className="bg-white rounded-[2rem] border border-[#1A1F36]/8 p-8 max-w-sm w-full relative overflow-hidden shadow-2xl space-y-6 text-[#1A1F36] text-center">
-            <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-500 flex items-center justify-center mx-auto">
-              <AlertCircle className="w-6 h-6" />
+      {error && (
+        <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm font-semibold text-rose-700">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+          {error}
+        </div>
+      )}
+
+      <div className="overflow-hidden rounded-2xl border border-[#1A1F36]/8 bg-white shadow-sm">
+        <div className="hidden grid-cols-[1.1fr_1fr_1fr_0.8fr_1.4fr] gap-4 border-b border-[#1A1F36]/8 bg-[#F5F0EB] px-5 py-3 text-xs font-black uppercase tracking-wider text-[#6B7A90] lg:grid">
+          <span>Date and Time</span>
+          <span>Provider</span>
+          <span>Appointment</span>
+          <span>Status</span>
+          <span>Actions</span>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center p-12 text-sm font-semibold text-[#8896A4]">
+            Loading appointments...
+          </div>
+        ) : filteredAppointments.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3 p-12 text-center">
+            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#F5F0EB] text-[#8896A4]">
+              <Calendar className="h-6 w-6" />
             </div>
-            <div className="space-y-2">
-              <h3 className="text-lg font-bold font-sora">Cancel Consultation?</h3>
-              <p className="text-xs text-[#8896A4] leading-relaxed">
-                Are you sure you want to cancel your consultation booking? You will need to select a new slot from available clinical slots later.
-              </p>
+            <div>
+              <h3 className="text-sm font-bold">No appointments found</h3>
+              <p className="mt-1 text-xs font-medium text-[#8896A4]">Try another filter or search term.</p>
             </div>
-            <div className="flex flex-col gap-2">
+          </div>
+        ) : (
+          <div className="divide-y divide-[#1A1F36]/8">
+            {paginatedAppointments.map(appointment => {
+              const category = getCategory(appointment)
+              return (
+                <div key={`${appointment.source}-${appointment.id}`} className="grid gap-4 px-5 py-5 lg:grid-cols-[1.1fr_1fr_1fr_0.8fr_1.4fr] lg:items-center">
+                  <div>
+                    <p className="text-sm font-bold">{formatDate(appointment.bookingDate)}</p>
+                    <p className="mt-1 text-xs font-semibold text-[#6B7A90]">{appointment.bookingTime || 'Time unavailable'}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-bold">{appointment.providerName}</p>
+                    <p className="mt-1 text-xs font-semibold text-[#6B7A90]">{appointment.providerRole}</p>
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-bold">{appointment.appointmentType}</p>
+                    <p className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-[#6B7A90]">
+                      <Video className="h-3.5 w-3.5" />
+                      Video (Jitsi)
+                    </p>
+                  </div>
+
+                  <div>
+                    <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-black uppercase tracking-wider ${
+                      category === 'upcoming'
+                        ? 'bg-[#5C7A6B]/10 text-[#5C7A6B]'
+                        : category === 'past'
+                          ? 'bg-[#1A1F36]/8 text-[#40516A]'
+                          : category === 'missed'
+                            ? 'bg-amber-100 text-amber-700'
+                            : 'bg-rose-50 text-rose-600'
+                    }`}>
+                      {titleCase(appointment.status)}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    {renderActions(appointment)}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {filteredAppointments.length > limit && (
+        <div className="mt-6 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setPage(p => Math.max(p - 1, 1))}
+            disabled={page === 1}
+            className="rounded-xl border border-[#1A1F36]/10 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wider text-[#1A1F36] hover:bg-[#F5F0EB] disabled:opacity-50"
+          >
+            Previous
+          </button>
+          <span className="text-xs font-bold text-[#6B7A90]">
+            Page {page} of {Math.ceil(filteredAppointments.length / limit)}
+          </span>
+          <button
+            type="button"
+            onClick={() => setPage(p => Math.min(p + 1, Math.ceil(filteredAppointments.length / limit)))}
+            disabled={page >= Math.ceil(filteredAppointments.length / limit)}
+            className="rounded-xl border border-[#1A1F36]/10 bg-white px-4 py-2.5 text-xs font-black uppercase tracking-wider text-[#1A1F36] hover:bg-[#F5F0EB] disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
+
+      {cancelTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-rose-50 text-rose-600">
+              <AlertCircle className="h-6 w-6" />
+            </div>
+            <h3 className="mt-4 text-lg font-bold">Cancel appointment?</h3>
+            <p className="mt-2 text-sm font-medium text-[#6B7A90]">
+              This will cancel your appointment on {formatDate(cancelTarget.bookingDate)} at {cancelTarget.bookingTime}.
+            </p>
+            <div className="mt-6 flex flex-col gap-2">
               <button
-                onClick={handleCancelAppointment}
+                type="button"
+                onClick={handleCancel}
                 disabled={cancelling}
-                className="w-full bg-rose-600 hover:bg-rose-700 text-white rounded-xl py-3 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer disabled:opacity-50"
+                className="rounded-xl bg-rose-600 px-4 py-3 text-xs font-black uppercase tracking-wider text-white disabled:opacity-60"
               >
-                {cancelling ? "Processing cancellation..." : "Yes, Cancel Booking"}
+                {cancelling ? 'Cancelling...' : 'Cancel Appointment'}
               </button>
               <button
-                onClick={() => setShowCancelModal(false)}
-                className="w-full bg-[#F5F0EB] hover:bg-[#EDE8E3] text-[#1A1F36] rounded-xl py-3 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer"
+                type="button"
+                onClick={() => setCancelTarget(null)}
+                className="rounded-xl bg-[#F5F0EB] px-4 py-3 text-xs font-black uppercase tracking-wider text-[#1A1F36]"
               >
-                Go Back
+                Keep Appointment
               </button>
             </div>
           </div>

@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { EmailService } from '@/lib/emailService'
+import { createToken, getOrigin } from '@/lib/authSecurity'
 
 export async function POST(request: Request) {
   try {
@@ -25,7 +27,7 @@ export async function POST(request: Request) {
     const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
-      email_confirm: true,
+      email_confirm: false,
       user_metadata: {
         display_id: `${firstName} ${lastName}`.trim(),
         role: role
@@ -78,6 +80,27 @@ export async function POST(request: Request) {
       if (walletErr) {
         console.error('Failed to create doctor wallet:', walletErr.message)
       }
+    }
+
+    try {
+      const { token, tokenHash } = createToken()
+      await supabaseAdmin.from('email_verification_tokens').insert({
+        user_id: newUserId,
+        email,
+        token_hash: tokenHash,
+        purpose: 'PROVIDER_INVITATION',
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      })
+      await EmailService.sendProviderInvitation({
+        email,
+        name: `${firstName || ''} ${lastName || ''}`.trim() || email,
+        patientId: newUserId,
+        role,
+        link: `${getOrigin(request)}/verify-email?token=${encodeURIComponent(token)}`,
+        expiresIn: '7 days',
+      })
+    } catch (emailError) {
+      console.error('Failed to send staff invitation:', emailError)
     }
 
     // 5. Log notifications of user registration
@@ -144,9 +167,9 @@ export async function DELETE(request: Request) {
 
     // b. Delete clinician availability slots
     await supabaseAdmin
-      .from('doctor_availability')
+      .from('provider_availability')
       .delete()
-      .eq('doctor_id', targetUserId)
+      .eq('provider_id', targetUserId)
 
     // c. Set doctor consultations doctor_id to NULL to preserve patient booking records
     await supabaseAdmin
@@ -157,6 +180,11 @@ export async function DELETE(request: Request) {
     // d. Delete wallet transactions
     await supabaseAdmin
       .from('doctor_wallet_transactions')
+      .delete()
+      .eq('doctor_id', targetUserId)
+
+    await supabaseAdmin
+      .from('doctor_payout_accounts')
       .delete()
       .eq('doctor_id', targetUserId)
 
@@ -202,4 +230,3 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 })
   }
 }
-

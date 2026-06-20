@@ -1,5 +1,11 @@
-const supabaseUrl = "https://owagvhvypehvvxwdecjn.supabase.co";
-const supabaseKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im93YWd2aHZ5cGVodnZ4d2RlY2puIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3ODc5NTU5OSwiZXhwIjoyMDk0MzcxNTk5fQ.ddQY-7cK5ZWIymfTapku-KBW61dMm9l1NzGKn_7gYK0";
+require('dotenv').config({ path: '.env.local' });
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required in frontend/.env.local');
+}
 
 const headers = {
   'apikey': supabaseKey,
@@ -23,7 +29,7 @@ async function test() {
     booking_date: '2026-06-16',
     booking_time: '10:00 AM',
     status: 'scheduled',
-    room_url: 'https://8liv.daily.co/dietitian-demo'
+    room_url: 'https://meet.jit.si/8liv-dietitian-demo'
   };
 
   const res = await fetch(`${supabaseUrl}/rest/v1/doctor_consultations`, {

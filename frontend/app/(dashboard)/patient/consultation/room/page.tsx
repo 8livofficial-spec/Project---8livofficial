@@ -26,8 +26,16 @@ function ConsultationRoomContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const queryId = searchParams.get('id')
-  const { assessment, reloadData } = usePatientData()
+  const { assessment, reloadData, loading } = usePatientData()
   const [phase, setPhase] = useState<'pre-check' | 'call' | 'post-summary'>('pre-check')
+
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
   
   // Device Check States
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null)
@@ -38,12 +46,11 @@ function ConsultationRoomContent() {
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
 
-  const [doctorName, setDoctorName] = useState('Dr. Priya Sharma')
+  const [doctorName, setDoctorName] = useState('Assigned Doctor')
   const [doctorRole, setDoctorRole] = useState('Physician Specialist')
 
   // Dynamic room URL resolution
   const [roomUrl, setRoomUrl] = useState('')
-  const [creatingRoom, setCreatingRoom] = useState(false)
 
   useEffect(() => {
     if (queryId?.startsWith('https://')) {
@@ -51,20 +58,7 @@ function ConsultationRoomContent() {
     } else if (assessment?.room_url?.startsWith('https://')) {
       setRoomUrl(assessment.room_url)
     } else {
-      // Create a new room dynamically
-      setCreatingRoom(true)
-      fetch('/api/daily/create-room', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roomName: queryId || `8liv-consult-${Date.now()}` })
-      })
-        .then(res => res.json())
-        .then(data => {
-          if (data.url) setRoomUrl(data.url)
-          else setRoomUrl('https://8liv.daily.co/consultation-fallback')
-        })
-        .catch(() => setRoomUrl('https://8liv.daily.co/consultation-fallback'))
-        .finally(() => setCreatingRoom(false))
+      setRoomUrl('')
     }
   }, [queryId, assessment?.room_url])
 
@@ -209,7 +203,7 @@ function ConsultationRoomContent() {
             </span>
             <h2 className="text-2xl font-bold font-sora text-[#1A1F36] mt-2">Ready to join your consultation?</h2>
             <p className="text-xs text-[#8896A4] font-medium max-w-md mx-auto">
-              Please test your microphone and camera settings below to ensure a smooth call experience with {doctorName}.
+              Please test your microphone and camera settings below to ensure a smooth call experience with your assigned clinician.
             </p>
           </div>
 
@@ -332,13 +326,13 @@ function ConsultationRoomContent() {
             </div>
           </div>
 
-          {/* Daily.co Iframe embed */}
+          {/* Jitsi Meet iframe embed */}
           <div className="flex-1 w-full bg-[#111422]">
             <iframe
               src={roomUrl}
               allow="camera; microphone; display-capture; autoplay"
               className="w-full h-full border-none"
-              title="Daily.co Consultation Call"
+              title="Jitsi Consultation Call"
             />
           </div>
         </div>

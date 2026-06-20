@@ -6,6 +6,31 @@ import { motion } from 'framer-motion'
 import { ArrowRight, Lock, Mail, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
+type PatientStatus = {
+  assessmentStatus?: string
+  eligibilityStatus?: string
+  consultationPaymentStatus?: string
+  appointmentStatus?: string
+  consultationStatus?: string
+  membershipStatus?: string
+  firstConsultationCompleted?: boolean
+  bookingId?: string | null
+}
+
+function getPatientJourneyTarget(status: PatientStatus) {
+  if (status.membershipStatus === 'ACTIVE' && status.firstConsultationCompleted === true) return '/patient'
+  if (status.assessmentStatus !== 'COMPLETED') return '/assessment'
+  if (status.eligibilityStatus !== 'ELIGIBLE') return '/assessment'
+  if (status.consultationPaymentStatus !== 'PAID') return '/consultation-payment'
+  if (status.appointmentStatus !== 'SCHEDULED') return '/appointments/select-slot'
+  if (status.consultationStatus !== 'COMPLETED') {
+    return status.bookingId ? `/patient/appointments/${status.bookingId}` : '/patient/appointments'
+  }
+  if (status.membershipStatus === 'NOT_SELECTED') return '/plans'
+  if (status.membershipStatus === 'ACTIVE') return '/patient'
+  return '/membership-payment'
+}
+
 export default function UnifiedLogin() {
   const router = useRouter()
   const [checkingAuth, setCheckingAuth] = useState(true)
@@ -56,12 +81,16 @@ export default function UnifiedLogin() {
             router.push('/admin')
           } else if (role === 'doctor') {
             router.push('/doctor/dashboard')
-          } else if (role === 'dietitian') {
-            router.push('/dietitian/dashboard')
-          } else if (role === 'trainer') {
-            router.push('/trainer/dashboard')
+          } else if (role === 'dietitian' || role === 'trainer' || role === 'fitness_coach' || role === 'nutritionist') {
+            router.push('/provider/dashboard')
           } else {
-            router.push('/patient')
+            const statusRes = await fetch(`/api/patient/status?patientId=${session.user.id}`)
+            if (statusRes.ok) {
+              const statusData = await statusRes.json()
+              router.push(getPatientJourneyTarget(statusData))
+            } else {
+              router.push('/patient')
+            }
           }
         } else {
           setCheckingAuth(false)
@@ -100,40 +129,29 @@ export default function UnifiedLogin() {
     setAuthSuccess('')
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
+      const loginResponse = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
         email,
         password
+        })
       })
-      if (error) throw error
-      if (!data.user) throw new Error("Authentication failed: no user returned.")
-
-      // Determine user role with fallbacks
-      let role = 'patient'
-
-      if (data.user.email === '8livofficial@gmail.com') {
-        role = 'admin'
-      } else {
-        // Check if user is registered in doctor_profiles
-        const { data: docProfile } = await supabase
-          .from('doctor_profiles')
-          .select('id')
-          .eq('id', data.user.id)
-          .maybeSingle()
-
-        if (docProfile) {
-          role = 'doctor'
-        } else {
-          // Fetch user role from general profiles table
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', data.user.id)
-            .maybeSingle()
-
-          role = profile?.role || data.user.user_metadata?.role || 'patient'
+      const loginData = await loginResponse.json()
+      if (!loginResponse.ok) {
+        if (loginData.code === 'EMAIL_NOT_VERIFIED') {
+          window.location.href = `/verification-pending?email=${encodeURIComponent(email)}`
+          return
         }
+        throw new Error(loginData.error || 'Authentication failed.')
       }
 
+      await supabase.auth.setSession({
+        access_token: loginData.session.access_token,
+        refresh_token: loginData.session.refresh_token,
+      })
+
+      const role = loginData.role || 'patient'
       // Set cookie for Next.js middleware
       document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
 
@@ -142,12 +160,16 @@ export default function UnifiedLogin() {
         window.location.href = '/admin'
       } else if (role === 'doctor') {
         window.location.href = '/doctor/dashboard'
-      } else if (role === 'dietitian') {
-        window.location.href = '/dietitian/dashboard'
-      } else if (role === 'trainer') {
-        window.location.href = '/trainer/dashboard'
+      } else if (role === 'dietitian' || role === 'trainer' || role === 'fitness_coach' || role === 'nutritionist') {
+        window.location.href = '/provider/dashboard'
       } else {
-        window.location.href = '/patient'
+        const statusRes = await fetch(`/api/patient/status?patientId=${loginData.user.id}`)
+        if (statusRes.ok) {
+          const statusData = await statusRes.json()
+          window.location.href = getPatientJourneyTarget(statusData)
+        } else {
+          window.location.href = '/patient'
+        }
       }
     } catch (err: any) {
       setAuthError(err.message || 'Authentication failed.')

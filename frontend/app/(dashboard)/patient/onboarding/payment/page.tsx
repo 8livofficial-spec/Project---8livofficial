@@ -71,7 +71,7 @@ export default function OnboardingPaymentPage() {
       // Fetch the latest assessment safely via backend API (bypassing RLS select policies)
       const res = await fetch(`/api/patient/status?patientId=${session.user.id}`)
       if (!res.ok) {
-        router.replace('/patient/onboarding/plan')
+        router.replace('/plans')
         return
       }
       const statusData = await res.json()
@@ -79,11 +79,11 @@ export default function OnboardingPaymentPage() {
 
       // No assessment row or no plan chosen yet → go back to plan selection
       if (!data || !data.membership_tier) {
-        router.replace('/patient/onboarding/plan')
+        router.replace('/plans')
         return
       }
       // Already paid → go straight to dashboard
-      if (data.consultation_fee_paid) { router.replace('/patient'); return }
+      if (statusData.dashboardAccess) { router.replace('/patient'); return }
 
       setAssessment(data)
       setProfile(statusData.profile)
@@ -302,7 +302,7 @@ export default function OnboardingPaymentPage() {
                   Proceed to Payment <ChevronRight size={16} />
                 </button>
                 <button
-                  onClick={() => router.replace('/patient/onboarding/plan')}
+                  onClick={() => router.replace('/plans')}
                   className="w-full mt-3 text-xs text-[#8896A4] hover:text-[#1A1F36] flex items-center justify-center gap-1.5 transition-colors"
                 >
                   <ArrowLeft size={12} /> Change plan

@@ -3,13 +3,26 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Calendar, TrendingDown, MessageCircle, Video, Menu, X, PhoneCall } from 'lucide-react'
-import { usePatientData } from '@/hooks/usePatientData'
+import { LayoutDashboard, Calendar, TrendingDown, MessageCircle, Video, X, PhoneCall } from 'lucide-react'
+import { usePatientData, PatientDataProvider } from '@/hooks/usePatientData'
 import { supabase } from '@/lib/supabaseClient'
 import Sidebar from '@/components/patient/Sidebar'
 import Topbar from '@/components/patient/Topbar'
+import AppointmentOnlyLayout from '@/components/patient/AppointmentOnlyLayout'
 
 export default function DashboardLayout({
+  children
+}: {
+  children: React.ReactNode
+}) {
+  return (
+    <PatientDataProvider>
+      <DashboardLayoutContent>{children}</DashboardLayoutContent>
+    </PatientDataProvider>
+  )
+}
+
+function DashboardLayoutContent({
   children
 }: {
   children: React.ReactNode
@@ -17,7 +30,7 @@ export default function DashboardLayout({
   const pathname = usePathname()
   const router = useRouter()
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
-  const { user, profile, assessment, consultation, notifications, loading, flowStep } = usePatientData()
+  const { user, profile, assessment, consultation, notifications, loading, flowStep, onboardingState } = usePatientData()
 
   // Global real-time doctor calling alert (works on any patient page)
   const [globalCallAlert, setGlobalCallAlert] = useState<{ roomUrl: string; consultationId: string } | null>(null)
@@ -33,7 +46,10 @@ export default function DashboardLayout({
       const channelName = `global-call-alert-${patientId}`
 
       // Remove channel if already cached and subscribed
-      const existingChannel = supabase.getChannels().find((c: any) => c.topic === channelName || c.name === channelName)
+      const existingChannel = supabase.getChannels().find((channel) => {
+        const cachedChannel = channel as { topic?: string; name?: string }
+        return cachedChannel.topic === channelName || cachedChannel.name === channelName
+      })
       if (existingChannel) {
         await supabase.removeChannel(existingChannel)
       }
@@ -48,9 +64,9 @@ export default function DashboardLayout({
           table: 'doctor_consultations',
           filter: `patient_id=eq.${patientId}`,
         }, (payload) => {
-          const rec = payload.new as any
+          const rec = payload.new as { id?: string; room_url?: string; status?: string }
           if (rec.status === 'calling' && rec.room_url) {
-            setGlobalCallAlert({ roomUrl: rec.room_url, consultationId: rec.id })
+            setGlobalCallAlert({ roomUrl: rec.room_url, consultationId: rec.id || '' })
             try {
               if (!callingAudioRef.current) {
                 // Simple inline beep via AudioContext (no external file needed)
@@ -80,17 +96,59 @@ export default function DashboardLayout({
     }
   }, [])
 
-  // Onboarding gate: redirect if the user hasn't completed plan/payment flow
-  // Skip gate on onboarding pages themselves to avoid infinite redirect loops
-  const isOnboardingPage = pathname.startsWith('/patient/onboarding')
+  // Onboarding gate: redirect if the user hasn't completed required flow steps
+  const isStandaloneFlowPage = pathname.startsWith('/patient/onboarding') || pathname.startsWith('/patient/consultation')
+  const isOnboardingPlanPage = pathname.startsWith('/patient/onboarding/plan') || pathname === '/plans'
+  const isOnboardingPaymentPage = pathname.startsWith('/patient/onboarding/payment') || pathname === '/membership-payment'
+  const isConsultationBookingPage = pathname.startsWith('/patient/consultation')
+  const isConsultationRoomPage = pathname.startsWith('/patient/consultation/room')
+  const isAppointmentDetailsPage = /^\/patient\/appointments\/[^/]+/.test(pathname)
+  const appointmentStatus = onboardingState.appointmentStatus || ''
+  const bookingId = onboardingState.bookingId || null
+  const dashboardAccess = onboardingState.dashboardAccess === true
+  const consultationPaymentStatus = onboardingState.consultationPaymentStatus || ''
+
   useEffect(() => {
-    if (loading || isOnboardingPage) return
-    if (flowStep === 'needs_plan') {
-      router.replace('/patient/onboarding/plan')
+    if (loading) return
+
+    let targetPath: string | null = null
+    if (flowStep === 'needs_assessment') {
+      targetPath = '/assessment'
+    } else if (dashboardAccess && pathname.startsWith('/patient/onboarding')) {
+      targetPath = '/patient'
+    } else if (flowStep === 'appointment_scheduled') {
+      const canAccessRescheduleBooking = isConsultationBookingPage && ['MISSED_BY_PATIENT', 'CANCELLED_BY_DOCTOR', 'CANCELLED_BY_PATIENT'].includes(appointmentStatus)
+      if (!isAppointmentDetailsPage && !isConsultationRoomPage && !canAccessRescheduleBooking) {
+        targetPath = bookingId ? `/patient/appointments/${bookingId}` : '/patient/appointments'
+      }
+    } else if (flowStep === 'needs_consultation') {
+      if (!isConsultationBookingPage && !isAppointmentDetailsPage) {
+        targetPath = consultationPaymentStatus === 'PAID' ? '/appointments/select-slot' : '/consultation-payment'
+      }
+    } else if (flowStep === 'needs_plan') {
+      if (!isOnboardingPlanPage) targetPath = '/plans'
     } else if (flowStep === 'needs_payment') {
-      router.replace('/patient/onboarding/payment')
+      if (!isOnboardingPaymentPage) targetPath = '/membership-payment'
     }
-  }, [flowStep, loading, isOnboardingPage, router])
+
+    if (targetPath && pathname !== targetPath) {
+      router.replace(targetPath)
+    }
+  }, [
+    flowStep,
+    loading,
+    isOnboardingPlanPage,
+    isOnboardingPaymentPage,
+    isConsultationBookingPage,
+    isConsultationRoomPage,
+    isAppointmentDetailsPage,
+    appointmentStatus,
+    bookingId,
+    dashboardAccess,
+    consultationPaymentStatus,
+    pathname,
+    router
+  ])
 
   // Determine dynamic title and breadcrumbs based on route
   const getPageMeta = () => {
@@ -181,9 +239,21 @@ export default function DashboardLayout({
     )
   }
 
-  // ── Onboarding pages: full-screen, no sidebar or topbar ──────────────────
-  if (isOnboardingPage) {
+  // ── Onboarding & consultation booking pages: full-screen, no dashboard chrome ──
+  if (isStandaloneFlowPage) {
     return <>{children}</>
+  }
+
+  if (flowStep === 'appointment_scheduled' && isAppointmentDetailsPage) {
+    return <AppointmentOnlyLayout>{children}</AppointmentOnlyLayout>
+  }
+
+  if (flowStep !== 'ready') {
+    return (
+      <div className="min-h-screen bg-[#F5F0EB] flex items-center justify-center text-[#C4622D]">
+        <div className="w-12 h-12 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
   }
 
   return (

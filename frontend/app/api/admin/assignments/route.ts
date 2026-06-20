@@ -43,7 +43,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { adminId, patientId, doctorId, dietitianId, trainerId } = body
+    const { adminId, patientId, doctorId, dietitianId, nutritionistId, fitnessCoachId, trainerId } = body
 
     if (!adminId || !patientId) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
@@ -67,6 +67,8 @@ export async function POST(request: Request) {
         patient_id: patientId,
         doctor_id: doctorId || null,
         dietitian_id: dietitianId || null,
+        nutritionist_id: nutritionistId || null,
+        fitness_coach_id: fitnessCoachId || trainerId || null,
         trainer_id: trainerId || null,
         updated_at: new Date().toISOString()
       }, { onConflict: 'patient_id' })
@@ -76,27 +78,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Database table care_team_assignments is missing. Please run Database/fix_admin.sql in your Supabase SQL Editor first!' }, { status: 400 })
     }
 
-    // 3. Resolve clinician name for notification logs
-    let docNameStr = ''
-    if (doctorId) {
-      const { data: docData } = await supabaseAdmin
-        .from('profiles')
-        .select('first_name, last_name')
-        .eq('id', doctorId)
-        .maybeSingle()
-      if (docData) {
-        docNameStr = `Dr. ${docData.first_name} ${docData.last_name || ''}`.trim()
-      }
-    }
-
-    // 4. Log patient notification update
+    // 3. Log patient notification update without exposing clinician identity
     await supabaseAdmin
       .from('patient_notifications')
       .insert({
         patient_id: patientId,
         type: 'consultation',
         title: 'Care Team Updated',
-        message: `An administrator has updated your Care Team assignments.${docNameStr ? ` Your assigned physician is ${docNameStr}.` : ''}`,
+        message: 'An administrator has updated your Care Team assignments. Your care pathway is up to date.',
         is_read: false
       })
 

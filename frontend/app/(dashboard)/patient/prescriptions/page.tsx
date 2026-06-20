@@ -5,9 +5,17 @@ import { Pill, Package, ArrowRight, CheckCircle2 } from 'lucide-react'
 import { usePatientData } from '@/hooks/usePatientData'
 
 export default function PrescriptionsPage() {
-  const { consultation, assessment } = usePatientData()
+  const { consultation, assessment, loading } = usePatientData()
   const [refillRequested, setRefillRequested] = useState(false)
   const [refillLoading, setRefillLoading] = useState(false)
+
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   const handleRefillRequest = async () => {
     setRefillLoading(true)
@@ -70,7 +78,7 @@ export default function PrescriptionsPage() {
     ? getNextRefillDetails(consultation.created_at) 
     : { date: 'Apr 18', days: 12 }
 
-  const physicianName = consultation?.doctor_profiles?.full_name || '8Liv Clinician'
+  const physicianName = 'Assigned Doctor'
 
   const history = isApproved ? [
     { medication: medicationName, dose: dosage, date: consultation?.created_at ? new Date(consultation.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 01, 2026', duration: '12 Weeks', status: 'Active' }

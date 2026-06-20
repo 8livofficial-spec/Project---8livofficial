@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { Video, Scale, ArrowRight, X } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
@@ -19,6 +19,43 @@ const getGreeting = () =>{
     if(hour >=17 && hour <21) return "Good evening"
     return "Welcome Back!!"
   } ;
+
+type ProviderBookingSlot = {
+  slotId?: string
+  providerId?: string
+  providerRole?: string
+  date?: string
+  startTime?: string
+  endTime?: string
+  status?: string
+  source?: string
+  available_date: string
+  time_slot: string
+}
+
+const getProviderRoleLabel = (role?: 'dietitian' | 'nutritionist' | 'fitness_coach' | null) => {
+  if (role === 'dietitian') return 'Dietitian'
+  if (role === 'nutritionist') return 'Nutritionist'
+  if (role === 'fitness_coach') return 'Fitness Coach'
+  return 'Provider'
+}
+
+const formatSlotDate = (date: string) => {
+  const parsed = new Date(`${date}T00:00:00`)
+  if (Number.isNaN(parsed.getTime())) return date
+  return parsed.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' })
+}
+
+const formatSlotTime = (time: string) => {
+  const [hourText, minuteText] = time.split(':')
+  const hour = Number(hourText)
+  const minute = Number(minuteText)
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return time
+  const parsed = new Date()
+  parsed.setHours(hour, minute, 0, 0)
+  return parsed.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+}
+
 export default function PatientDashboardHome() {
   const { 
     user,
@@ -30,15 +67,30 @@ export default function PatientDashboardHome() {
     staffConsultations,
     notifications, 
     careTeam,
+    loading,
     reloadData 
   } = usePatientData()
+
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
 
   const [showWeightLogModal, setShowWeightLogModal] = useState(false)
   const [newWeight, setNewWeight] = useState('')
   const [logLoading, setLogLoading] = useState(false)
-  const [bookingModal, setBookingModal] = useState<{ isOpen: boolean, type: 'dietitian' | 'trainer' | null }>({ isOpen: false, type: null })
+  const [bookingModal, setBookingModal] = useState<{ isOpen: boolean, type: 'dietitian' | 'nutritionist' | 'fitness_coach' | null }>({ isOpen: false, type: null })
   const [bookingLoading, setBookingLoading] = useState(false)
+  const [providerSlots, setProviderSlots] = useState<ProviderBookingSlot[]>([])
+  const [providerSlotDates, setProviderSlotDates] = useState<string[]>([])
+  const [selectedProviderDate, setSelectedProviderDate] = useState('')
+  const [selectedProviderTime, setSelectedProviderTime] = useState('')
+  const [providerSlotsLoading, setProviderSlotsLoading] = useState(false)
+  const [providerSlotError, setProviderSlotError] = useState('')
 
   const patientName = profile?.first_name 
     ? profile.first_name 
@@ -134,10 +186,10 @@ export default function PatientDashboardHome() {
 
   const unreadMessages = notifications.filter(n => n.type === 'message' && !n.is_read).length
 
-  const physicianName = consultation?.doctor_profiles?.full_name 
-    ? consultation.doctor_profiles.full_name
+  const physicianName = careTeam?.doctor_name !== 'Not Assigned'
+    ? careTeam.doctor_name
     : assessment?.booking_date
-      ? 'Assigning Clinician...'
+      ? 'Assigned Doctor'
       : 'Not Assigned'
 
   // Meeting notification / reminder check
@@ -166,6 +218,94 @@ export default function PatientDashboardHome() {
       meetingReminderText = `You have an upcoming video consultation scheduled on ${formattedDate} at ${bookingTimeStr || 'your slot'}.`
     }
   }
+
+  const availableProviderTimes = useMemo(() => {
+    return providerSlots
+      .filter((slot) => slot.available_date === selectedProviderDate)
+      .map((slot) => slot.time_slot)
+  }, [providerSlots, selectedProviderDate])
+
+  const selectedProviderId = bookingModal.type === 'dietitian'
+    ? careTeam?.dietitian_id
+    : bookingModal.type === 'nutritionist'
+      ? careTeam?.nutritionist_id
+      : bookingModal.type === 'fitness_coach'
+        ? careTeam?.fitness_coach_id || careTeam?.trainer_id
+        : null
+
+  const loadProviderDates = useCallback(async (role: 'dietitian' | 'nutritionist' | 'fitness_coach', providerId: string) => {
+    setProviderSlotsLoading(true)
+    setProviderSlotError('')
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('Please sign in again.')
+      const params = new URLSearchParams({ providerId, role: role.toUpperCase() })
+      const res = await fetch(`/api/appointments/available-dates?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Unable to load available dates.')
+      const dates = ((data.dates || []) as Array<{ date: string }>).map(item => item.date)
+      setProviderSlotDates(dates)
+      setSelectedProviderDate(dates[0] || '')
+      setSelectedProviderTime('')
+    } catch (err) {
+      setProviderSlotDates([])
+      setSelectedProviderDate('')
+      setSelectedProviderTime('')
+      setProviderSlotError(err instanceof Error ? err.message : 'Unable to load available dates.')
+    } finally {
+      setProviderSlotsLoading(false)
+    }
+  }, [])
+
+  const loadProviderSlots = useCallback(async (role: 'dietitian' | 'nutritionist' | 'fitness_coach', providerId: string, date: string) => {
+    setProviderSlotsLoading(true)
+    setProviderSlotError('')
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('Please sign in again.')
+      const params = new URLSearchParams({ providerId, role: role.toUpperCase(), date })
+      const res = await fetch(`/api/appointments/available-slots?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Unable to load available slots.')
+      setProviderSlots((data.slots || []).map((slot: Record<string, string>) => ({
+        ...slot,
+        available_date: slot.date,
+        time_slot: slot.startTime,
+      })))
+      setSelectedProviderTime('')
+    } catch (err) {
+      setProviderSlots([])
+      setSelectedProviderTime('')
+      setProviderSlotError(err instanceof Error ? err.message : 'Unable to load available slots.')
+    } finally {
+      setProviderSlotsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!bookingModal.isOpen || !bookingModal.type) return
+    setProviderSlots([])
+    setProviderSlotDates([])
+    setSelectedProviderDate('')
+    setSelectedProviderTime('')
+    setProviderSlotError('')
+    if (!selectedProviderId) {
+      setProviderSlotError(`No assigned ${getProviderRoleLabel(bookingModal.type).toLowerCase()} found.`)
+      return
+    }
+    loadProviderDates(bookingModal.type, selectedProviderId)
+  }, [bookingModal.isOpen, bookingModal.type, selectedProviderId, loadProviderDates])
+
+  useEffect(() => {
+    if (!bookingModal.isOpen || !bookingModal.type || !selectedProviderDate || !selectedProviderId) return
+    loadProviderSlots(bookingModal.type, selectedProviderId, selectedProviderDate)
+  }, [bookingModal.isOpen, bookingModal.type, selectedProviderDate, selectedProviderId, loadProviderSlots])
 
   const handleLogWeightSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -213,32 +353,39 @@ export default function PatientDashboardHome() {
   const handleBookConsultation = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!bookingModal.type || !user?.id) return
+    if (!selectedProviderDate || !selectedProviderTime) {
+      setProviderSlotError('Please choose an available consultation slot.')
+      return
+    }
     
     setBookingLoading(true)
+    setProviderSlotError('')
     try {
-      const tomorrow = new Date()
-      tomorrow.setDate(tomorrow.getDate() + 1)
-      const dateStr = tomorrow.toISOString().split('T')[0]
-
-      const res = await fetch('/api/patient/consultations', {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('Please sign in again.')
+      const res = await fetch('/api/patient/provider-consultations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           patientId: user.id,
-          staffType: bookingModal.type,
-          bookingDate: dateStr,
-          bookingTime: '10:00 AM'
+          role: bookingModal.type,
+          bookingDate: selectedProviderDate,
+          bookingTime: selectedProviderTime
         })
       })
 
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to book consultation')
 
-      alert(`${bookingModal.type === 'dietitian' ? 'Dietitian' : 'Trainer'} meeting booked successfully for tomorrow at 10:00 AM!`)
+      const roleLabel = getProviderRoleLabel(bookingModal.type)
+      alert(`${roleLabel} meeting booked successfully for ${formatSlotDate(selectedProviderDate)} at ${formatSlotTime(selectedProviderTime)}.`)
       setBookingModal({ isOpen: false, type: null })
-      reloadData()
+      setSelectedProviderDate('')
+      setSelectedProviderTime('')
+      reloadData({ force: true })
     } catch (err: any) {
-      alert(err.message)
+      setProviderSlotError(err.message)
     } finally {
       setBookingLoading(false)
     }
@@ -326,6 +473,8 @@ export default function PatientDashboardHome() {
             bookingTime={assessment?.booking_time}
             physicianName={careTeam?.doctor_name !== 'Not Assigned' ? careTeam.doctor_name : physicianName}
             dietitianName={careTeam?.dietitian_name !== 'Not Assigned' ? careTeam.dietitian_name : ""}
+            nutritionistName={careTeam?.nutritionist_name !== 'Not Assigned' ? careTeam.nutritionist_name : ""}
+            fitnessCoachName={careTeam?.fitness_coach_name !== 'Not Assigned' ? careTeam.fitness_coach_name : ""}
             trainerName={careTeam?.trainer_name !== 'Not Assigned' ? careTeam.trainer_name : ""}
             consultations={consultations || []}
             staffConsultations={staffConsultations || []}
@@ -379,7 +528,7 @@ export default function PatientDashboardHome() {
               </div>
               <h3 className="font-bold text-2xl font-sora mb-2">Unlock Your Full Potential</h3>
               <p className="text-[#8896A4] text-sm leading-relaxed max-w-lg">
-                Upgrade to the <strong className="text-white">Gold Plan</strong> to access personalized Nutrition Guidelines, custom Workout Plans, and 1-on-1 live video consultations with our certified Dietitians and Fitness Trainers.
+                Upgrade to the <strong className="text-white">Gold Plan</strong> to access personalized nutrition guidance, custom workout plans, and 1-on-1 live video consultations with your assigned care team.
               </p>
             </div>
             <Link 
@@ -392,7 +541,7 @@ export default function PatientDashboardHome() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
           <div className="bg-white rounded-3xl p-6 border border-[#1A1F36]/6 shadow-[0_4px_20px_rgba(26,31,54,0.02)]">
             <h3 className="text-[#1A1F36] font-bold text-lg font-sora mb-4 flex items-center gap-2">
               <span className="text-[#5C7A6B]">🥗</span> Nutrition Guidelines
@@ -404,6 +553,20 @@ export default function PatientDashboardHome() {
             ) : (
               <p className="text-[#8896A4] text-sm leading-relaxed">
                 Your dietitian hasn't set any specific guidelines yet. Once assigned, your personalized diet plan will appear here.
+              </p>
+            )}
+          </div>
+          <div className="bg-white rounded-3xl p-6 border border-[#1A1F36]/6 shadow-[0_4px_20px_rgba(26,31,54,0.02)]">
+            <h3 className="text-[#1A1F36] font-bold text-lg font-sora mb-4 flex items-center gap-2">
+              <span className="text-[#D89A3D]">N</span> Nutritionist Guidance
+            </h3>
+            {careTeam?.nutritionist_notes ? (
+              <p className="text-[#1A1F36] text-sm whitespace-pre-line leading-relaxed bg-[#F5F0EB]/50 p-4 rounded-2xl border border-[#1A1F36]/6">
+                {careTeam.nutritionist_notes}
+              </p>
+            ) : (
+              <p className="text-[#8896A4] text-sm leading-relaxed">
+                Your nutritionist guidance will appear here after your assigned nutritionist creates it.
               </p>
             )}
           </div>
@@ -476,7 +639,12 @@ export default function PatientDashboardHome() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
           <div className="bg-white rounded-[2rem] border border-[#1A1F36]/8 p-8 max-w-md w-full relative overflow-hidden shadow-2xl space-y-6 text-[#1A1F36]">
             <button
-              onClick={() => setBookingModal({ isOpen: false, type: null })}
+              onClick={() => {
+                setBookingModal({ isOpen: false, type: null })
+                setSelectedProviderDate('')
+                setSelectedProviderTime('')
+                setProviderSlotError('')
+              }}
               className="absolute top-6 right-6 p-1 bg-[#F5F0EB] hover:bg-[#EDE8E3] rounded-full text-[#1A1F36] transition-all"
             >
               <X className="w-4 h-4" />
@@ -487,20 +655,80 @@ export default function PatientDashboardHome() {
                 <Video className="w-6 h-6" />
               </div>
               <h3 className="text-xl font-bold font-sora">Book Consultation</h3>
-              <p className="text-xs text-[#8896A4] font-medium">Schedule a 1-on-1 meeting with your {bookingModal.type}.</p>
+              <p className="text-xs text-[#8896A4] font-medium">Schedule a 1-on-1 meeting with your {getProviderRoleLabel(bookingModal.type)}.</p>
             </div>
 
             <form onSubmit={handleBookConsultation} className="space-y-4">
-              <div className="space-y-2">
-                <p className="text-sm font-semibold text-center py-2 bg-[#F5F0EB] rounded-xl border border-[rgba(26,31,54,0.06)]">
-                  Next Available Slot: <span className="text-[#C4622D]">Tomorrow at 10:00 AM</span>
-                </p>
+              <div className="space-y-3">
+                <label className="text-xs font-black uppercase tracking-wider text-[#8896A4] ml-1">Choose Date</label>
+                {providerSlotsLoading && !providerSlotDates.length ? (
+                  <div className="rounded-2xl border border-[#1A1F36]/8 bg-[#F5F0EB] p-4 text-center text-sm font-semibold text-[#8896A4]">
+                    Loading available dates...
+                  </div>
+                ) : providerSlotDates.length ? (
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {providerSlotDates.map((date) => (
+                      <button
+                        key={date}
+                        type="button"
+                        onClick={() => setSelectedProviderDate(date)}
+                        className={`shrink-0 rounded-2xl border px-4 py-3 text-left transition-colors ${
+                          selectedProviderDate === date
+                            ? 'border-[#C4622D] bg-[#FFF4EC] text-[#C4622D]'
+                            : 'border-[#1A1F36]/8 bg-[#F5F0EB] text-[#1A1F36] hover:border-[#C4622D]/40'
+                        }`}
+                      >
+                        <span className="block text-xs font-black">{formatSlotDate(date)}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-[#1A1F36]/8 bg-[#F5F0EB] p-4 text-center text-sm font-semibold text-[#8896A4]">
+                    No available dates found for your assigned {getProviderRoleLabel(bookingModal.type).toLowerCase()}.
+                  </div>
+                )}
               </div>
+
+              <div className="space-y-3">
+                <label className="text-xs font-black uppercase tracking-wider text-[#8896A4] ml-1">Choose Time</label>
+                {providerSlotsLoading && selectedProviderDate ? (
+                  <div className="rounded-2xl border border-[#1A1F36]/8 bg-[#F5F0EB] p-4 text-center text-sm font-semibold text-[#8896A4]">
+                    Loading slots...
+                  </div>
+                ) : availableProviderTimes.length ? (
+                  <div className="grid grid-cols-2 gap-2">
+                    {availableProviderTimes.map((time) => (
+                      <button
+                        key={time}
+                        type="button"
+                        onClick={() => setSelectedProviderTime(time)}
+                        className={`rounded-xl border px-4 py-3 text-sm font-black transition-colors ${
+                          selectedProviderTime === time
+                            ? 'border-[#1A1F36] bg-[#1A1F36] text-white'
+                            : 'border-[#1A1F36]/8 bg-white text-[#1A1F36] hover:border-[#C4622D] hover:text-[#C4622D]'
+                        }`}
+                      >
+                        {formatSlotTime(time)}
+                      </button>
+                    ))}
+                  </div>
+                ) : selectedProviderDate ? (
+                  <div className="rounded-2xl border border-[#1A1F36]/8 bg-[#F5F0EB] p-4 text-center text-sm font-semibold text-[#8896A4]">
+                    No slots available on this date.
+                  </div>
+                ) : null}
+              </div>
+
+              {providerSlotError && (
+                <div className="rounded-2xl border border-[#F2C8BE] bg-[#FFF4EC] p-3 text-sm font-bold text-[#A84A33]">
+                  {providerSlotError}
+                </div>
+              )}
 
               <div className="pt-2">
                 <button
                   type="submit"
-                  disabled={bookingLoading}
+                  disabled={bookingLoading || providerSlotsLoading || !selectedProviderDate || !selectedProviderTime}
                   className="w-full bg-[#1A1F36] text-white rounded-full py-4 hover:bg-[#C4622D] font-bold uppercase tracking-wider text-xs transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {bookingLoading ? "Confirming..." : "Confirm Booking"}

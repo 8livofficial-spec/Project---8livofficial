@@ -1,5 +1,4 @@
 import os
-import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -16,8 +15,6 @@ load_dotenv(dotenv_path="Security/.env")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-DAILY_API_KEY = os.getenv("DAILY_API_KEY")
 
 RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID")
 RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET")
@@ -230,8 +227,10 @@ def assess_patient(data: HealthQuestionnaire):
 @app.post("/api/prescribe")
 def prescribe_medication(data: PrescriptionRequest):
     try:
+        if data.prescription_type.upper() != "INJECTABLE":
+            return {"status": "error", "message": "Only injectable medication is supported for new prescriptions."}
         supabase.table("health_assessments").update({
-            "prescription_type": data.prescription_type
+            "prescription_type": "INJECTABLE"
         }).eq("patient_id", data.patient_id).execute()
         return {"status": "success", "message": "Prescription saved!"}
     except Exception as e:
@@ -286,39 +285,16 @@ def update_booking(data: BookingRequest):
 @app.post("/api/create-video-room", response_model=VideoRoomResponse)
 async def create_video_room():
     try:
-        if DAILY_API_KEY and DAILY_API_KEY != "your_daily_api_key_here":
-            async with httpx.AsyncClient() as client:
-                headers = {
-                    "Authorization": f"Bearer {DAILY_API_KEY}",
-                    "Content-Type": "application/json"
-                }
-                import time
-                exp_time = int(time.time()) + 86400  # 24 hours
-                payload = {
-                    "properties": {
-                        "exp": exp_time,
-                        "enable_chat": True,
-                        "enable_people_ui": True
-                    }
-                }
-                resp = await client.post("https://api.daily.co/v1/rooms", headers=headers, json=payload, timeout=10.0)
-                if resp.status_code in [200, 201]:
-                    room_data = resp.json()
-                    room_url = room_data.get("url")
-                    if room_url:
-                        return VideoRoomResponse(room_url=room_url)
-                print(f"[DAILY API RESPONSE ERROR] {resp.status_code} - {resp.text}")
-
         import random
         import string
         part1 = "".join(random.choices(string.ascii_lowercase, k=3))
         part2 = "".join(random.choices(string.ascii_lowercase, k=4))
         part3 = "".join(random.choices(string.ascii_lowercase, k=3))
-        room_url = f"https://8liv.daily.co/consultation-{part1}-{part2}-{part3}"
+        room_url = f"https://meet.jit.si/8liv-consultation-{part1}-{part2}-{part3}"
         return VideoRoomResponse(room_url=room_url)
     except Exception as e:
         print(f"[VIDEO API ERROR] {e}")
-        return VideoRoomResponse(room_url="https://8liv.daily.co/consultation-fallback")
+        return VideoRoomResponse(room_url="https://meet.jit.si/8liv-consultation-fallback")
 
 
 # ── PAYMENT ──────────────────────────────────────────────────────────────────
@@ -565,9 +541,8 @@ async def expire_consultation(patient_id: str, patient_name: str, booking_date: 
         # 2. Free slot in doctor_availability
         if doctor_id:
             supabase.table("doctor_availability")\
-            # Free any matching date/time slot in doctor_availability
-            supabase.table("doctor_availability")\
                 .update({"is_booked": False})\
+                .eq("doctor_id", doctor_id)\
                 .eq("available_date", booking_date)\
                 .eq("time_slot", booking_time)\
                 .execute()

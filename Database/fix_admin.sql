@@ -97,13 +97,83 @@ CREATE TABLE IF NOT EXISTS public.doctor_wallet (
 CREATE TABLE IF NOT EXISTS public.doctor_wallet_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   doctor_id UUID NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
-  type TEXT NOT NULL CHECK (type IN ('credit', 'withdrawal')),
+  appointment_id UUID REFERENCES public.doctor_consultations(id) ON DELETE SET NULL,
+  patient_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  type TEXT NOT NULL CHECK (type IN ('credit', 'withdrawal', 'CONSULTATION_PAYOUT')),
   amount NUMERIC(10,2) NOT NULL,
   description TEXT,
   status TEXT DEFAULT 'pending',
+  payout_status TEXT DEFAULT 'PENDING',
+  razorpay_contact_id TEXT,
+  razorpay_fund_account_id TEXT,
+  razorpay_payout_id TEXT,
+  payout_processed_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+ALTER TABLE public.doctor_wallet_transactions
+  ADD COLUMN IF NOT EXISTS appointment_id UUID REFERENCES public.doctor_consultations(id) ON DELETE SET NULL;
+
+ALTER TABLE public.doctor_wallet_transactions
+  ADD COLUMN IF NOT EXISTS patient_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL;
+
+ALTER TABLE public.doctor_wallet_transactions
+  ADD COLUMN IF NOT EXISTS payout_status TEXT DEFAULT 'PENDING';
+
+ALTER TABLE public.doctor_wallet_transactions
+  ADD COLUMN IF NOT EXISTS razorpay_contact_id TEXT;
+
+ALTER TABLE public.doctor_wallet_transactions
+  ADD COLUMN IF NOT EXISTS razorpay_fund_account_id TEXT;
+
+ALTER TABLE public.doctor_wallet_transactions
+  ADD COLUMN IF NOT EXISTS razorpay_payout_id TEXT;
+
+ALTER TABLE public.doctor_wallet_transactions
+  ADD COLUMN IF NOT EXISTS payout_processed_at TIMESTAMPTZ;
+
+ALTER TABLE public.doctor_wallet_transactions
+  DROP CONSTRAINT IF EXISTS doctor_wallet_transactions_type_check;
+
+ALTER TABLE public.doctor_wallet_transactions
+  ADD CONSTRAINT doctor_wallet_transactions_type_check
+  CHECK (type IN ('credit', 'withdrawal', 'CONSULTATION_PAYOUT'));
+
+CREATE UNIQUE INDEX IF NOT EXISTS doctor_wallet_transactions_unique_consultation_payout
+  ON public.doctor_wallet_transactions (appointment_id)
+  WHERE type = 'CONSULTATION_PAYOUT' AND appointment_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS public.doctor_payout_accounts (
+  doctor_id UUID PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
+  account_type TEXT NOT NULL CHECK (account_type IN ('bank_account', 'vpa')),
+  beneficiary_name TEXT NOT NULL,
+  account_number TEXT,
+  ifsc TEXT,
+  vpa TEXT,
+  razorpay_contact_id TEXT,
+  razorpay_fund_account_id TEXT,
+  is_verified BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT doctor_payout_accounts_bank_or_vpa_check CHECK (
+    (account_type = 'bank_account' AND account_number IS NOT NULL AND ifsc IS NOT NULL)
+    OR
+    (account_type = 'vpa' AND vpa IS NOT NULL)
+  )
+);
+
+ALTER TABLE public.doctor_payout_accounts ENABLE ROW LEVEL SECURITY;
+
+ALTER TABLE public.doctor_consultations
+  ADD COLUMN IF NOT EXISTS meeting_provider TEXT DEFAULT 'JITSI',
+  ADD COLUMN IF NOT EXISTS meeting_room TEXT,
+  ADD COLUMN IF NOT EXISTS meeting_url TEXT;
+
+ALTER TABLE public.staff_consultations
+  ADD COLUMN IF NOT EXISTS meeting_provider TEXT DEFAULT 'JITSI',
+  ADD COLUMN IF NOT EXISTS meeting_room TEXT,
+  ADD COLUMN IF NOT EXISTS meeting_url TEXT;
 
 -- Enable RLS on doctor_wallet tables
 ALTER TABLE public.doctor_wallet ENABLE ROW LEVEL SECURITY;
@@ -150,6 +220,17 @@ DROP POLICY IF EXISTS "Admins can manage all transactions" ON public.doctor_wall
 CREATE POLICY "Admins can manage all transactions"
   ON public.doctor_wallet_transactions FOR ALL TO authenticated
   USING (public.is_admin());
+
+DROP POLICY IF EXISTS "Admins can manage doctor payout accounts" ON public.doctor_payout_accounts;
+CREATE POLICY "Admins can manage doctor payout accounts"
+  ON public.doctor_payout_accounts FOR ALL TO authenticated
+  USING (public.is_admin())
+  WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Doctors can view own payout account" ON public.doctor_payout_accounts;
+CREATE POLICY "Doctors can view own payout account"
+  ON public.doctor_payout_accounts FOR SELECT TO authenticated
+  USING (auth.uid() = doctor_id);
 
 -- 6. Add columns for dietitian and trainer guidelines
 ALTER TABLE public.care_team_assignments 
@@ -199,5 +280,3 @@ CREATE POLICY "Clinicians can view assigned patient progress_logs"
         AND (doctor_id = auth.uid() OR dietitian_id = auth.uid() OR trainer_id = auth.uid())
     )
   );
-
-

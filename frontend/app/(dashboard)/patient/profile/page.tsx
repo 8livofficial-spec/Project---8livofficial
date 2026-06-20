@@ -7,7 +7,7 @@ import { usePatientData } from '@/hooks/usePatientData'
 import { motion } from 'framer-motion'
 
 export default function PatientProfilePage() {
-  const { user, profile, assessment, reloadData } = usePatientData()
+  const { user, profile, assessment, loading, reloadData } = usePatientData()
 
   // Profile fields
   const [firstName, setFirstName] = useState('')
@@ -23,6 +23,14 @@ export default function PatientProfilePage() {
   const [saving, setSaving] = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
+
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   // Populate state when data loads
   useEffect(() => {

@@ -1,6 +1,11 @@
 const { Client } = require('pg');
+require('dotenv').config({ path: '.env.local' });
 
-const db_url = "postgresql://postgres.owagvhvypehvvxwdecjn:Aravindrohith@db.owagvhvypehvvxwdecjn.supabase.co:6543/postgres?sslmode=require";
+const dbUrl = process.env.DATABASE_URL;
+
+if (!dbUrl) {
+  throw new Error('DATABASE_URL is required in frontend/.env.local');
+}
 
 const sql = `
 CREATE TABLE IF NOT EXISTS public.staff_consultations (
@@ -12,6 +17,9 @@ CREATE TABLE IF NOT EXISTS public.staff_consultations (
   booking_time TEXT NOT NULL,
   status TEXT DEFAULT 'scheduled',
   room_url TEXT,
+  meeting_provider TEXT DEFAULT 'JITSI',
+  meeting_room TEXT,
+  meeting_url TEXT,
   is_completed BOOLEAN DEFAULT false,
   consultation_notes TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -40,7 +48,7 @@ END $$;
 
 async function main() {
   const client = new Client({ 
-    connectionString: db_url.replace("?sslmode=require", ""),
+    connectionString: dbUrl,
     ssl: { rejectUnauthorized: false }
   });
   try {

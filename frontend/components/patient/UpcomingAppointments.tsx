@@ -8,10 +8,12 @@ interface UpcomingAppointmentsProps {
   bookingTime?: string
   physicianName: string
   dietitianName: string
+  nutritionistName?: string
+  fitnessCoachName?: string
   trainerName: string
   consultations: any[]
   staffConsultations: any[]
-  onBookClick: (type: 'dietitian' | 'trainer') => void
+  onBookClick: (type: 'dietitian' | 'nutritionist' | 'fitness_coach') => void
 }
 
 export default function UpcomingAppointments({
@@ -19,14 +21,28 @@ export default function UpcomingAppointments({
   bookingTime,
   physicianName,
   dietitianName,
+  nutritionistName,
+  fitnessCoachName,
   trainerName,
   consultations,
   staffConsultations,
   onBookClick
 }: UpcomingAppointmentsProps) {
-  
-  const dietitianConsult = staffConsultations.find(c => c.staff_role === 'dietitian' && c.status === 'scheduled')
-  const trainerConsult = staffConsultations.find(c => c.staff_role === 'trainer' && c.status === 'scheduled')
+  const scheduledStatuses = ['scheduled', 'calling', 'attended']
+  const terminalStatuses = ['completed', 'cancelled', 'cancelled_by_doctor', 'cancelled_by_patient', 'missed_by_patient']
+  const getConsult = (role: string) => staffConsultations.find(c => {
+    const normalized = c.staff_role === 'trainer' ? 'fitness_coach' : c.staff_role
+    return normalized === role && scheduledStatuses.includes(String(c.status || '').toLowerCase())
+  })
+  const canJoin = (date?: string, time?: string, status?: string) => {
+    if (!date || !time || terminalStatuses.includes(String(status || '').toLowerCase())) return false
+    const start = new Date(`${date} ${time}`).getTime()
+    return Number.isFinite(start) && Date.now() >= start - 15 * 60 * 1000
+  }
+
+  const dietitianConsult = getConsult('dietitian')
+  const nutritionistConsult = getConsult('nutritionist')
+  const fitnessConsult = getConsult('fitness_coach')
 
   const appointments = [
     {
@@ -46,17 +62,33 @@ export default function UpcomingAppointments({
       scheduled: !!dietitianConsult,
       date: dietitianConsult?.booking_date || '',
       time: dietitianConsult?.booking_time || '',
-      linkUrl: dietitianConsult?.room_url || '/patient/consultation/room'
+      linkUrl: dietitianConsult?.meeting_url || dietitianConsult?.room_url || '',
+      status: dietitianConsult?.status,
+      canJoin: canJoin(dietitianConsult?.booking_date, dietitianConsult?.booking_time, dietitianConsult?.status)
     },
     {
-      name: trainerName || 'Not Assigned',
-      role: 'Fitness Trainer',
-      type: 'trainer' as const,
-      initials: (trainerName || '').split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase() || '-',
-      scheduled: !!trainerConsult,
-      date: trainerConsult?.booking_date || '',
-      time: trainerConsult?.booking_time || '',
-      linkUrl: trainerConsult?.room_url || '/patient/consultation/room'
+      name: nutritionistName || 'Not Assigned',
+      role: 'Nutritionist',
+      type: 'nutritionist' as const,
+      initials: (nutritionistName || '').split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase() || '-',
+      scheduled: !!nutritionistConsult,
+      date: nutritionistConsult?.booking_date || '',
+      time: nutritionistConsult?.booking_time || '',
+      linkUrl: nutritionistConsult?.meeting_url || nutritionistConsult?.room_url || '',
+      status: nutritionistConsult?.status,
+      canJoin: canJoin(nutritionistConsult?.booking_date, nutritionistConsult?.booking_time, nutritionistConsult?.status)
+    },
+    {
+      name: fitnessCoachName || trainerName || 'Not Assigned',
+      role: 'Fitness Coach',
+      type: 'fitness_coach' as const,
+      initials: (fitnessCoachName || trainerName || '').split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase() || '-',
+      scheduled: !!fitnessConsult,
+      date: fitnessConsult?.booking_date || '',
+      time: fitnessConsult?.booking_time || '',
+      linkUrl: fitnessConsult?.meeting_url || fitnessConsult?.room_url || '',
+      status: fitnessConsult?.status,
+      canJoin: canJoin(fitnessConsult?.booking_date, fitnessConsult?.booking_time, fitnessConsult?.status)
     }
   ]
 
@@ -91,9 +123,11 @@ export default function UpcomingAppointments({
                   <p className="text-[#1A1F36] text-xs font-semibold">{appt.date}</p>
                   <p className="text-[#8896A4] text-[11px]">{appt.time}</p>
                 </div>
-                <Link 
-                  href={appt.linkUrl}
-                  className="bg-[#1A1F36] text-white p-1.5 rounded-full hover:bg-[#C4622D] transition-colors shadow-sm"
+                <Link
+                  href={appt.canJoin && appt.linkUrl ? appt.linkUrl : '#'}
+                  aria-disabled={!appt.canJoin}
+                  className={`p-1.5 rounded-full transition-colors shadow-sm ${appt.canJoin ? 'bg-[#1A1F36] text-white hover:bg-[#C4622D]' : 'bg-[#E8DED4] text-[#8896A4] pointer-events-none'}`}
+                  title={appt.canJoin ? 'Join consultation' : 'Join opens 15 minutes before appointment'}
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 10-4 4 6 6 4-16-18 7 4 2 2 6 3-4"/></svg>
                 </Link>

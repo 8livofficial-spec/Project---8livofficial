@@ -1,79 +1,76 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-import { Resend } from 'resend';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder';
-const resend = new Resend(process.env.RESEND_API_KEY || 're_dummy_key');
-
-const supabase = createClient(supabaseUrl, supabaseServiceKey);
+import { NextResponse } from 'next/server'
+import { EmailService } from '@/lib/emailService'
+import { supabaseAdmin } from '@/lib/supabaseServer'
+import {
+  checkRateLimit,
+  createToken,
+  findUserByEmail,
+  getClientIp,
+  getOrigin,
+  isValidEmail,
+  normalizeEmail,
+  writeAuthAudit,
+} from '@/lib/authSecurity'
 
 export async function POST(req: Request) {
+  const ip = getClientIp(req)
+  const userAgent = req.headers.get('user-agent')
+  const genericMessage = 'If an account exists, a password reset link has been sent.'
+
   try {
-    const { email } = await req.json();
+    const { email: rawEmail } = await req.json()
+    const email = normalizeEmail(rawEmail)
+    const rate = checkRateLimit(`forgot-password:${ip}:${email}`, { limit: 5, windowMs: 15 * 60 * 1000 })
+    if (!rate.allowed) return NextResponse.json({ error: rate.message }, { status: 429 })
 
-    if (!email) {
-      return NextResponse.json({ error: 'Email is required.' }, { status: 400 });
+    if (!isValidEmail(email)) return NextResponse.json({ message: genericMessage })
+
+    const user = await findUserByEmail(email)
+    if (!user) {
+      await writeAuthAudit({ email, event: 'PASSWORD_RESET_REQUEST_UNKNOWN_EMAIL', status: 'FAILED', ip, userAgent })
+      return NextResponse.json({ message: genericMessage })
     }
 
-    // 1. Check if user exists in our profiles
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('id, full_name, email')
-      .eq('email', email)
-      .single();
+    await supabaseAdmin
+      .from('password_reset_tokens')
+      .update({ used_at: new Date().toISOString() })
+      .eq('user_id', user.id)
+      .is('used_at', null)
 
-    if (profileError || !profile) {
-      // Return a success message even if the email doesn't exist to prevent email enumeration attacks
-      return NextResponse.json({ message: 'If an account exists, a verification code has been sent.' });
+    const { token, tokenHash } = createToken()
+    const { error: tokenError } = await supabaseAdmin.from('password_reset_tokens').insert({
+      user_id: user.id,
+      email,
+      token_hash: tokenHash,
+      expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    })
+
+    if (tokenError) {
+      console.error('Failed to create password reset token:', tokenError)
+      await writeAuthAudit({
+        userId: user.id,
+        email,
+        event: 'PASSWORD_RESET_TOKEN_CREATE_FAILED',
+        status: 'FAILED',
+        ip,
+        userAgent,
+        metadata: { error: tokenError.message },
+      })
+      return NextResponse.json({ message: genericMessage })
     }
 
-    // 2. Generate a 6-digit OTP
-    const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiresAt = new Date(Date.now() + 10 * 60000).toISOString(); // 10 minutes
+    const link = `${getOrigin(req)}/reset-password?token=${encodeURIComponent(token)}`
+    await EmailService.sendForgotPassword({
+      email,
+      name: user.user_metadata?.display_id || email.split('@')[0],
+      patientId: user.id,
+      link,
+    })
 
-    // 3. Save OTP in database
-    const { error: insertError } = await supabase
-      .from('password_reset_otps')
-      .insert([
-        {
-          email: profile.email,
-          otp_code: otpCode,
-          expires_at: expiresAt
-        }
-      ]);
-
-    if (insertError) {
-      console.error('Error inserting OTP:', insertError);
-      return NextResponse.json({ error: 'Failed to generate verification code.' }, { status: 500 });
-    }
-
-    // 4. Send email via Resend
-    const { data, error: resendError } = await resend.emails.send({
-      from: '8Liv Medical Team <onboarding@resend.dev>', // You should verify a custom domain in Resend for production
-      to: [profile.email],
-      subject: 'Password Reset Verification Code - 8Liv',
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 10px;">
-          <h2 style="color: #0f172a; text-align: center;">8Liv Password Reset</h2>
-          <p style="color: #475569; font-size: 16px;">Hello ${profile.full_name || 'there'},</p>
-          <p style="color: #475569; font-size: 16px;">We received a request to reset your password. Use the verification code below to proceed. This code is valid for 10 minutes.</p>
-          <div style="background-color: #f1f5f9; padding: 20px; border-radius: 8px; text-align: center; margin: 30px 0;">
-            <span style="font-size: 32px; font-weight: bold; letter-spacing: 5px; color: #d46e53;">${otpCode}</span>
-          </div>
-          <p style="color: #475569; font-size: 14px; text-align: center;">If you did not request a password reset, please ignore this email or contact support if you have concerns.</p>
-        </div>
-      `,
-    });
-
-    if (resendError) {
-      console.error('Resend error:', resendError);
-      return NextResponse.json({ error: 'Failed to send email.' }, { status: 500 });
-    }
-
-    return NextResponse.json({ message: 'If an account exists, a verification code has been sent.' });
-  } catch (err: any) {
-    console.error('Forgot password error:', err);
-    return NextResponse.json({ error: 'An unexpected error occurred.' }, { status: 500 });
+    await writeAuthAudit({ userId: user.id, email, event: 'PASSWORD_RESET_REQUESTED', status: 'SUCCESS', ip, userAgent })
+    return NextResponse.json({ message: genericMessage })
+  } catch (err) {
+    console.error('Forgot password error:', err)
+    return NextResponse.json({ message: genericMessage })
   }
 }

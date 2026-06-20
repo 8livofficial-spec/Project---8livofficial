@@ -193,7 +193,7 @@ graph TD
 
 ### Module 5: Live Video consultation Monitor
 * **Active Sessions List**: Queries `doctor_consultations` where `status = 'scheduled'` and checks if the slot is today.
-* **Room Monitoring Panel**: Connects to the Daily.co API (e.g., `/api/admin/rooms`) to display whether the room is currently active, who is connected (doctor, patient, or both), and duration elapsed.
+* **Room Monitoring Panel**: Tracks stored consultation meeting sessions to display whether the room is currently active, who is connected (doctor, patient, or both), and duration elapsed.
 
 ---
 

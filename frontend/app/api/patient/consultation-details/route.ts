@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseServer';
+import { appointmentTypeForRole, labelForRole, normalizeProviderRole } from '@/lib/providerConsultations';
 
 export async function POST(req: Request) {
   try {
@@ -9,7 +10,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'roomUrl or queryId is required' }, { status: 400 });
     }
 
-    // Target search term: look for matches in room_url
+    // Target search term: look for matches in stored meeting URLs
     const searchTarget = roomUrl || queryId;
 
     // 1. Search in doctor_consultations
@@ -18,9 +19,9 @@ export async function POST(req: Request) {
       .select('*, doctor_profiles(full_name, specialty)');
 
     if (searchTarget.startsWith('https://')) {
-      docQuery = docQuery.eq('room_url', searchTarget);
+      docQuery = docQuery.or(`room_url.eq.${searchTarget},meeting_url.eq.${searchTarget}`);
     } else {
-      docQuery = docQuery.or(`room_url.eq.${searchTarget},room_url.ilike.%${searchTarget}%`);
+      docQuery = docQuery.or(`room_url.eq.${searchTarget},meeting_url.eq.${searchTarget},meeting_room.eq.${searchTarget},room_url.ilike.%${searchTarget}%,meeting_url.ilike.%${searchTarget}%,meeting_room.ilike.%${searchTarget}%`);
     }
 
     const { data: docConsult, error: docErr } = await docQuery.maybeSingle();
@@ -42,7 +43,7 @@ export async function POST(req: Request) {
         patientId: docConsult.patient_id,
         patientName: patientProfile ? `${patientProfile.first_name || ''} ${patientProfile.last_name || ''}`.trim() : 'Patient',
         providerId: docConsult.doctor_id,
-        providerName: docConsult.doctor_profiles?.full_name || 'Dr. Priya Sharma',
+        providerName: 'Assigned Doctor',
         providerRole: docConsult.doctor_profiles?.specialty || 'Physician Specialist',
         status: docConsult.status
       });
@@ -54,9 +55,9 @@ export async function POST(req: Request) {
       .select('*');
 
     if (searchTarget.startsWith('https://')) {
-      staffQuery = staffQuery.eq('room_url', searchTarget);
+      staffQuery = staffQuery.or(`room_url.eq.${searchTarget},meeting_url.eq.${searchTarget}`);
     } else {
-      staffQuery = staffQuery.or(`room_url.eq.${searchTarget},room_url.ilike.%${searchTarget}%`);
+      staffQuery = staffQuery.or(`room_url.eq.${searchTarget},meeting_url.eq.${searchTarget},meeting_room.eq.${searchTarget},room_url.ilike.%${searchTarget}%,meeting_url.ilike.%${searchTarget}%,meeting_room.ilike.%${searchTarget}%`);
     }
 
     const { data: staffConsult, error: staffErr } = await staffQuery.maybeSingle();
@@ -78,28 +79,33 @@ export async function POST(req: Request) {
         .eq('id', staffConsult.patient_id)
         .maybeSingle();
 
-      const roleCapitalized = staffConsult.staff_role.charAt(0).toUpperCase() + staffConsult.staff_role.slice(1);
+      const roleLabel = labelForRole(normalizeProviderRole(staffConsult.staff_role));
       const providerName = staffProfile 
         ? `${staffProfile.first_name || ''} ${staffProfile.last_name || ''}`.trim()
-        : `${roleCapitalized} Specialist`;
+        : `${roleLabel} Specialist`;
 
       return NextResponse.json({
         success: true,
         type: 'staff',
+        appointmentType: staffConsult.appointment_type || appointmentTypeForRole(staffConsult.staff_role),
         consultationId: staffConsult.id,
         patientId: staffConsult.patient_id,
         patientName: patientProfile ? `${patientProfile.first_name || ''} ${patientProfile.last_name || ''}`.trim() : 'Patient',
         providerId: staffConsult.staff_id,
         providerName: providerName,
-        providerRole: `${roleCapitalized} Specialist`,
+        providerRole: `${roleLabel} Specialist`,
+        meetingProvider: staffConsult.meeting_provider || 'JITSI',
+        meetingRoom: staffConsult.meeting_room || null,
+        meetingUrl: staffConsult.meeting_url || staffConsult.room_url || null,
         status: staffConsult.status
       });
     }
 
     return NextResponse.json({ error: 'Consultation not found' }, { status: 404 });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error in POST /api/patient/consultation-details:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    const message = err instanceof Error ? err.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
