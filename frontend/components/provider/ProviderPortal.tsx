@@ -524,15 +524,58 @@ export default function ProviderPortal({ section }: { section: 'dashboard' | 'pa
     setError('')
     setSuccess('')
     try {
-      const res = await authedFetch('/api/provider/availability', {
-        method: 'POST',
-        body: JSON.stringify(submission),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Unable to generate availability.')
-      setSuccess(data.message || 'Availability generated.')
-      clearProviderCache('/api/provider/availability')
-      await loadSectionData('schedule', true)
+      if (submission.scheduleMode === 'MANUAL') {
+        let createdCount = 0;
+        let overlapErrors = 0;
+        const otherErrors: string[] = [];
+
+        for (const slot of submission.slots) {
+          try {
+            const res = await authedFetch('/api/provider/availability', {
+              method: 'POST',
+              body: JSON.stringify({
+                scheduleMode: 'MANUAL',
+                date: slot.available_date,
+                startTime: slot.time_slot,
+                duration: slot.slot_duration
+              })
+            });
+            const data = await res.json()
+            if (!res.ok) {
+              if (res.status === 409) {
+                overlapErrors++
+              } else {
+                otherErrors.push(data.error || 'Unknown error')
+              }
+            } else {
+              createdCount++
+            }
+          } catch (err: any) {
+            otherErrors.push(err.message || 'Network error')
+          }
+        }
+
+        clearProviderCache('/api/provider/availability')
+        await loadSectionData('schedule', true)
+
+        if (otherErrors.length > 0) {
+          setError(`Created ${createdCount} slot(s). Errors: ${otherErrors.join(', ')}`)
+        } else if (overlapErrors > 0) {
+          setSuccess(`Created ${createdCount} slot(s). ${overlapErrors} slot(s) skipped due to overlap.`)
+        } else {
+          setSuccess(`Created all ${createdCount} manual slot(s) successfully.`)
+        }
+      } else {
+        const res = await authedFetch('/api/provider/availability', {
+          method: 'POST',
+          body: JSON.stringify(submission),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Unable to generate availability.')
+        setSuccess(data.message || 'Availability generated.')
+        clearProviderCache('/api/provider/availability')
+        await loadSectionData('schedule', true)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to generate availability.')
       throw err

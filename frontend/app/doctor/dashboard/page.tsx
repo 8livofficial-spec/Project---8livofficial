@@ -847,21 +847,61 @@ export default function DoctorDashboard() {
     if (!doctor) return;
     setGeneratingAvailability(true);
     try {
-      const response = await authedFetch('/api/provider/availability', {
-        method: 'POST',
-        body: JSON.stringify({
-          slots: submission.slots,
-        })
-      });
+      if (submission.scheduleMode === 'MANUAL') {
+        let createdCount = 0;
+        let overlapErrors = 0;
+        const otherErrors: string[] = [];
 
-      const data = await response.json();
+        for (const slot of submission.slots) {
+          try {
+            const response = await authedFetch('/api/provider/availability', {
+              method: 'POST',
+              body: JSON.stringify({
+                scheduleMode: 'MANUAL',
+                date: slot.available_date,
+                startTime: slot.time_slot,
+                duration: slot.slot_duration
+              })
+            });
+            const data = await response.json();
+            if (!response.ok) {
+              if (response.status === 409) {
+                overlapErrors++;
+              } else {
+                otherErrors.push(data.error || 'Unknown error');
+              }
+            } else {
+              createdCount++;
+            }
+          } catch (err: any) {
+            otherErrors.push(err.message || 'Network error');
+          }
+        }
 
-      if (!response.ok) {
-        throw new Error(data.error || 'Unable to generate availability.');
+        await loadAvailability(doctor.id);
+
+        if (otherErrors.length > 0) {
+          alert(`Created ${createdCount} slot(s). Errors: ${otherErrors.join(', ')}`);
+        } else if (overlapErrors > 0) {
+          alert(`Created ${createdCount} slot(s). ${overlapErrors} slot(s) skipped due to overlap conflicts.`);
+        } else {
+          alert(`Created all ${createdCount} manual slot(s) successfully.`);
+        }
+      } else {
+        const response = await authedFetch('/api/provider/availability', {
+          method: 'POST',
+          body: JSON.stringify(submission)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          throw new Error(data.error || 'Unable to generate availability.');
+        }
+
+        await loadAvailability(doctor.id);
+        alert(data.message || `Generated ${data.inserted || 0} new availability slots.`);
       }
-
-      await loadAvailability(doctor.id);
-      alert(data.message || `Generated ${data.inserted || 0} new availability slots. ${data.skipped || 0} duplicate slots were skipped.`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error. Please try again.';
       console.error('Availability generation error:', err);

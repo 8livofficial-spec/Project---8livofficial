@@ -5,11 +5,7 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 const activeStatuses = ['AVAILABLE', 'BOOKED']
 type Source = 'MANUAL' | 'GENERATED'
 
-type IncomingSlot = { available_date?: string; time_slot?: string; end_time?: string; slot_duration?: number | string }
-type CleanedSlot = { available_date: string; start_time: string; end_time: string; slot_duration: number; source: Source }
 type ExistingSlot = { id: string; available_date: string; start_time: string; end_time: string; status?: string }
-type GenerationDay = { enabled?: boolean; startTime?: string; endTime?: string; breakStart?: string; breakEnd?: string }
-type GenerationRules = { startDate?: string; endDate?: string; days?: Record<string, GenerationDay> }
 type StaffConsultation = { patient_id?: string | null; meeting_url?: string | null; [key: string]: unknown }
 type PatientProfile = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null }
 
@@ -29,6 +25,12 @@ function minutesFromTime(value: string) {
   return hour * 60 + minute
 }
 
+function timeFromMinutes(minutes: number) {
+  const h = Math.floor(minutes / 60)
+  const m = minutes % 60
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`
+}
+
 function timesOverlap(firstStart: string, firstEnd: string, secondStart: string, secondEnd: string) {
   return normalizeTime(firstStart) < normalizeTime(secondEnd) && normalizeTime(firstEnd) > normalizeTime(secondStart)
 }
@@ -36,35 +38,6 @@ function timesOverlap(firstStart: string, firstEnd: string, secondStart: string,
 function isPastSlot(date: string, time: string) {
   const timestamp = new Date(`${date}T${normalizeTime(time)}+05:30`).getTime()
   return !Number.isFinite(timestamp) || timestamp <= Date.now()
-}
-
-function validateGeneratedSlot(slot: CleanedSlot, rules: GenerationRules) {
-  const startDate = String(rules.startDate || '')
-  const endDate = String(rules.endDate || '')
-  if (!isDate(startDate) || !isDate(endDate) || endDate < startDate) return 'Invalid recurring schedule date range.'
-  if (slot.available_date < startDate || slot.available_date > endDate) return 'A generated slot is outside the schedule range.'
-
-  const dayNumber = new Date(`${slot.available_date}T00:00:00`).getDay()
-  const day = rules.days?.[String(dayNumber)]
-  if (!day?.enabled) return `Cannot generate availability on an OFF day (${slot.available_date}).`
-
-  const workStart = minutesFromTime(String(day.startTime || ''))
-  const workEnd = minutesFromTime(String(day.endTime || ''))
-  const slotStart = minutesFromTime(slot.start_time)
-  const slotEnd = minutesFromTime(slot.end_time)
-  if (workStart === null || workEnd === null || slotStart === null || slotEnd === null || workEnd <= workStart) return 'Invalid recurring working hours.'
-  if (slotStart < workStart || slotEnd > workEnd) return `A generated slot is outside working hours on ${slot.available_date}.`
-
-  const hasBreakStart = Boolean(day.breakStart)
-  const hasBreakEnd = Boolean(day.breakEnd)
-  if (hasBreakStart !== hasBreakEnd) return 'Both break start and break end are required.'
-  if (hasBreakStart && hasBreakEnd) {
-    const breakStart = minutesFromTime(String(day.breakStart))
-    const breakEnd = minutesFromTime(String(day.breakEnd))
-    if (breakStart === null || breakEnd === null || breakEnd <= breakStart || breakStart < workStart || breakEnd > workEnd) return 'Break time must be inside working hours.'
-    if (slotStart < breakEnd && slotEnd > breakStart) return `Cannot generate a slot during the break on ${slot.available_date}.`
-  }
-  return null
 }
 
 export async function GET(request: Request) {
@@ -130,105 +103,262 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
-  const source: Source = String(body.source || '').toUpperCase() === 'MANUAL' ? 'MANUAL' : 'GENERATED'
-  const incoming = Array.isArray(body.slots) ? body.slots as IncomingSlot[] : []
-  if (!incoming.length || incoming.length > 5000) return NextResponse.json({ error: 'Provide between 1 and 5000 availability slots.' }, { status: 400 })
+  const scheduleMode = String(body.scheduleMode || '').toUpperCase()
 
-  const cleaned: CleanedSlot[] = incoming.map(slot => ({
-    available_date: String(slot.available_date || ''),
-    start_time: normalizeTime(String(slot.time_slot || '')),
-    end_time: normalizeTime(String(slot.end_time || '')),
-    slot_duration: Number(slot.slot_duration),
-    source,
-  }))
+  if (scheduleMode !== 'MANUAL' && scheduleMode !== 'RECURRING') {
+    return NextResponse.json({ error: 'Invalid scheduleMode. Must be MANUAL or RECURRING.' }, { status: 400 })
+  }
 
-  if (source === 'GENERATED') {
-    const rules = body.generationRules as GenerationRules | undefined
-    const rangeStart = new Date(`${String(rules?.startDate || '')}T00:00:00`).getTime()
-    const rangeEnd = new Date(`${String(rules?.endDate || '')}T00:00:00`).getTime()
+  if (scheduleMode === 'MANUAL') {
+    const { date, startTime, duration } = body
+    if (!date || !startTime || duration === undefined) {
+      return NextResponse.json({ error: 'Missing date, startTime, or duration.' }, { status: 400 })
+    }
+
+    const durationNum = Number(duration)
+    if (!isDate(date)) {
+      return NextResponse.json({ error: 'Invalid date format.' }, { status: 400 })
+    }
+
+    const startNorm = normalizeTime(startTime)
+    if (!startNorm) {
+      return NextResponse.json({ error: 'Invalid start time.' }, { status: 400 })
+    }
+
+    if (!Number.isInteger(durationNum) || durationNum < 5 || durationNum > 240) {
+      return NextResponse.json({ error: 'Duration must be between 5 and 240 minutes.' }, { status: 400 })
+    }
+
+    if (isPastSlot(date, startNorm)) {
+      return NextResponse.json({ error: 'Past availability slots cannot be created.' }, { status: 400 })
+    }
+
+    const startMin = minutesFromTime(startNorm)!
+    const endNorm = normalizeTime(timeFromMinutes(startMin + durationNum))
+
+    // Check duplicates or overlaps for SAME provider
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from('provider_availability')
+      .select('id, available_date, start_time, end_time, status')
+      .eq('provider_id', provider.user.id)
+      .eq('provider_role', provider.role)
+      .eq('available_date', date)
+
+    if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 })
+
+    const activeExisting = (existing || []).filter(slot => activeStatuses.includes(String(slot.status)))
+    if (activeExisting.some(item => timesOverlap(item.start_time, item.end_time, startNorm, endNorm))) {
+      return NextResponse.json({ error: 'Slot overlaps with existing availability.' }, { status: 409 })
+    }
+
+    const previous = (existing || []).find(slot => ['CANCELLED', 'EXPIRED'].includes(String(slot.status)) && normalizeTime(slot.start_time) === startNorm)
+    if (previous) {
+      const { error: updateErr } = await supabaseAdmin
+        .from('provider_availability')
+        .update({
+          end_time: endNorm,
+          slot_duration: durationNum,
+          source: 'MANUAL',
+          status: 'AVAILABLE',
+          is_available: true,
+          break_start: null,
+          break_end: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', previous.id)
+        .eq('provider_id', provider.user.id)
+        .eq('provider_role', provider.role)
+
+      if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 })
+    } else {
+      const { error: insertErr } = await supabaseAdmin
+        .from('provider_availability')
+        .insert({
+          provider_id: provider.user.id,
+          provider_role: provider.role,
+          available_date: date,
+          start_time: startNorm,
+          end_time: endNorm,
+          slot_duration: durationNum,
+          source: 'MANUAL',
+          status: 'AVAILABLE',
+          is_available: true,
+        })
+
+      if (insertErr) {
+        const conflict = insertErr.code === '23505' || insertErr.code === '23P01'
+        return NextResponse.json({ error: conflict ? 'Slot overlaps with existing availability.' : insertErr.message }, { status: conflict ? 409 : 500 })
+      }
+    }
+
+    return NextResponse.json({ message: 'Manual slot created successfully.' })
+  }
+
+  if (scheduleMode === 'RECURRING') {
+    const { startDate, endDate, workingDays, startTime, endTime, slotDuration, breakStart, breakEnd } = body
+    if (!startDate || !endDate || !Array.isArray(workingDays) || !startTime || !endTime || slotDuration === undefined) {
+      return NextResponse.json({ error: 'Missing required recurring schedule fields.' }, { status: 400 })
+    }
+
+    if (!isDate(startDate) || !isDate(endDate)) {
+      return NextResponse.json({ error: 'Invalid startDate or endDate format.' }, { status: 400 })
+    }
+
+    const today = new Date().toISOString().split('T')[0]
+    if (startDate < today) {
+      return NextResponse.json({ error: 'Start date cannot be in the past.' }, { status: 400 })
+    }
+    if (endDate < startDate) {
+      return NextResponse.json({ error: 'End date cannot be before start date.' }, { status: 400 })
+    }
+
+    const rangeStart = new Date(`${startDate}T00:00:00`).getTime()
+    const rangeEnd = new Date(`${endDate}T00:00:00`).getTime()
     const rangeDays = (rangeEnd - rangeStart) / 86_400_000
     if (!Number.isFinite(rangeDays) || rangeDays < 0 || rangeDays > 366) {
       return NextResponse.json({ error: 'Recurring schedules must cover no more than 367 calendar days.' }, { status: 400 })
     }
-  }
 
-  for (const slot of cleaned) {
-    const start = minutesFromTime(slot.start_time)
-    const end = minutesFromTime(slot.end_time)
-    if (!isDate(slot.available_date) || !isTime(slot.start_time) || !isTime(slot.end_time) || start === null || end === null || end <= start) {
-      return NextResponse.json({ error: 'Every slot requires a valid date, start time, and end time.' }, { status: 400 })
+    const durationNum = Number(slotDuration)
+    if (!Number.isInteger(durationNum) || durationNum < 5 || durationNum > 240) {
+      return NextResponse.json({ error: 'slotDuration must be between 5 and 240 minutes.' }, { status: 400 })
     }
-    if (!Number.isInteger(slot.slot_duration) || slot.slot_duration < 5 || slot.slot_duration > 240 || end - start !== slot.slot_duration) {
-      return NextResponse.json({ error: 'Slot duration must match the start/end time and be between 5 and 240 minutes.' }, { status: 400 })
+
+    const startNorm = normalizeTime(startTime)
+    const endNorm = normalizeTime(endTime)
+    if (!startNorm || !endNorm) {
+      return NextResponse.json({ error: 'Invalid startTime or endTime.' }, { status: 400 })
     }
-    if (isPastSlot(slot.available_date, slot.start_time)) return NextResponse.json({ error: 'Past availability slots cannot be created.' }, { status: 400 })
-    if (source === 'GENERATED') {
-      const validationError = validateGeneratedSlot(slot, body.generationRules || {})
-      if (validationError) return NextResponse.json({ error: validationError }, { status: 400 })
+
+    const workStart = minutesFromTime(startNorm)!
+    const workEnd = minutesFromTime(endNorm)!
+    if (workEnd <= workStart) {
+      return NextResponse.json({ error: 'End time must be after start time.' }, { status: 400 })
     }
-  }
 
-  const accepted: CleanedSlot[] = []
-  for (const slot of cleaned) {
-    if (accepted.some(item => item.available_date === slot.available_date && timesOverlap(item.start_time, item.end_time, slot.start_time, slot.end_time))) {
-      return NextResponse.json({ error: `Submitted slots overlap on ${slot.available_date}.` }, { status: 400 })
+    if (workEnd - workStart < durationNum) {
+      return NextResponse.json({ error: 'slotDuration is too large for the working hours.' }, { status: 400 })
     }
-    accepted.push(slot)
+
+    let bStartMin: number | null = null
+    let bEndMin: number | null = null
+    if (breakStart && breakEnd) {
+      const bStartNorm = normalizeTime(breakStart)
+      const bEndNorm = normalizeTime(breakEnd)
+      if (!bStartNorm || !bEndNorm) {
+        return NextResponse.json({ error: 'Invalid breakStart or breakEnd.' }, { status: 400 })
+      }
+      bStartMin = minutesFromTime(bStartNorm)
+      bEndMin = minutesFromTime(bEndNorm)
+      if (bStartMin === null || bEndMin === null || bEndMin <= bStartMin || bStartMin < workStart || bEndMin > workEnd) {
+        return NextResponse.json({ error: 'Break time must be inside working hours.' }, { status: 400 })
+      }
+    }
+
+    // Generate slots across date range
+    const generatedSlots: Array<{ available_date: string; start_time: string; end_time: string }> = []
+    const cursor = new Date(`${startDate}T00:00:00`)
+    const finalDate = new Date(`${endDate}T00:00:00`)
+
+    const workingDaysSet = new Set(workingDays.map(Number))
+
+    while (cursor <= finalDate) {
+      const jsDay = cursor.getDay()
+      if (workingDaysSet.has(jsDay)) {
+        const dateStr = cursor.toISOString().split('T')[0]
+        for (let minute = workStart; minute + durationNum <= workEnd; minute += durationNum) {
+          const overlapsBreak = bStartMin !== null && bEndMin !== null && minute < bEndMin && minute + durationNum > bStartMin
+          const startSlotNorm = normalizeTime(timeFromMinutes(minute))
+          const endSlotNorm = normalizeTime(timeFromMinutes(minute + durationNum))
+          if (!overlapsBreak && !isPastSlot(dateStr, startSlotNorm)) {
+            generatedSlots.push({
+              available_date: dateStr,
+              start_time: startSlotNorm,
+              end_time: endSlotNorm,
+            })
+          }
+        }
+      }
+      cursor.setDate(cursor.getDate() + 1)
+    }
+
+    if (!generatedSlots.length) {
+      return NextResponse.json({ error: 'No slots generated. Check working days and date range.' }, { status: 400 })
+    }
+
+    const dates = Array.from(new Set(generatedSlots.map(s => s.available_date)))
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from('provider_availability')
+      .select('id, available_date, start_time, end_time, status')
+      .eq('provider_id', provider.user.id)
+      .eq('provider_role', provider.role)
+      .in('available_date', dates)
+
+    if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 })
+
+    const existingSlots = (existing || []) as ExistingSlot[]
+    const activeExisting = existingSlots.filter(slot => activeStatuses.includes(String(slot.status)))
+    const reusable = new Map(existingSlots.filter(slot => ['CANCELLED', 'EXPIRED'].includes(String(slot.status))).map(slot => [`${slot.available_date}-${normalizeTime(slot.start_time)}`, slot]))
+    const reactivations: Array<{ id: string; end_time: string }> = []
+    const inserts: Array<{ provider_id: string; provider_role: string; available_date: string; start_time: string; end_time: string; slot_duration: number; source: Source; status: string; is_available: boolean }> = []
+
+    for (const slot of generatedSlots) {
+      if (activeExisting.some(item => item.available_date === slot.available_date && timesOverlap(item.start_time, item.end_time, slot.start_time, slot.end_time))) {
+        continue
+      }
+      const previous = reusable.get(`${slot.available_date}-${slot.start_time}`)
+      if (previous) {
+        reactivations.push({ id: previous.id, end_time: slot.end_time })
+      } else {
+        inserts.push({
+          provider_id: provider.user.id,
+          provider_role: provider.role,
+          available_date: slot.available_date,
+          start_time: slot.start_time,
+          end_time: slot.end_time,
+          slot_duration: durationNum,
+          source: 'GENERATED',
+          status: 'AVAILABLE',
+          is_available: true,
+        })
+      }
+    }
+
+    if (reactivations.length > 0) {
+      const reactivationResults = await Promise.all(reactivations.map(item => supabaseAdmin
+        .from('provider_availability')
+        .update({
+          end_time: item.end_time,
+          slot_duration: durationNum,
+          source: 'GENERATED',
+          status: 'AVAILABLE',
+          is_available: true,
+          break_start: null,
+          break_end: null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', item.id)
+        .eq('provider_id', provider.user.id)
+        .eq('provider_role', provider.role)
+      ))
+      const reactivationError = reactivationResults.find(result => result.error)?.error
+      if (reactivationError) return NextResponse.json({ error: reactivationError.message }, { status: 500 })
+    }
+
+    if (inserts.length > 0) {
+      const insertResult = await supabaseAdmin.from('provider_availability').insert(inserts)
+      if (insertResult.error) {
+        const conflict = insertResult.error.code === '23505' || insertResult.error.code === '23P01'
+        return NextResponse.json({ error: conflict ? 'One or more slots overlap existing availability for this provider.' : insertResult.error.message }, { status: conflict ? 409 : 500 })
+      }
+    }
+
+    const totalSaved = inserts.length + reactivations.length
+    return NextResponse.json({
+      inserted: totalSaved,
+      message: `Generated ${totalSaved} availability slots.`
+    })
   }
-
-  const dates = Array.from(new Set(cleaned.map(slot => slot.available_date)))
-  const { data: existing, error: existingError } = await supabaseAdmin
-    .from('provider_availability')
-    .select('id, available_date, start_time, end_time, status')
-    .eq('provider_id', provider.user.id)
-    .eq('provider_role', provider.role)
-    .in('available_date', dates)
-  if (existingError) return NextResponse.json({ error: existingError.message }, { status: 500 })
-
-  const existingSlots = (existing || []) as ExistingSlot[]
-  const activeExisting = existingSlots.filter(slot => activeStatuses.includes(String(slot.status)))
-  const reusable = new Map(existingSlots.filter(slot => ['CANCELLED', 'EXPIRED'].includes(String(slot.status))).map(slot => [`${slot.available_date}-${normalizeTime(slot.start_time)}`, slot]))
-  const reactivations: Array<{ existing: ExistingSlot; slot: CleanedSlot }> = []
-  const inserts: CleanedSlot[] = []
-
-  for (const slot of cleaned) {
-    if (activeExisting.some(item => item.available_date === slot.available_date && timesOverlap(item.start_time, item.end_time, slot.start_time, slot.end_time))) continue
-    const previous = reusable.get(`${slot.available_date}-${slot.start_time}`)
-    if (previous) reactivations.push({ existing: previous, slot })
-    else inserts.push(slot)
-  }
-
-  const reactivationResults = await Promise.all(reactivations.map(item => supabaseAdmin
-    .from('provider_availability')
-    .update({ end_time: item.slot.end_time, slot_duration: item.slot.slot_duration, source, status: 'AVAILABLE', is_available: true, break_start: null, break_end: null, updated_at: new Date().toISOString() })
-    .eq('id', item.existing.id)
-    .eq('provider_id', provider.user.id)
-    .eq('provider_role', provider.role)
-    .in('status', ['CANCELLED', 'EXPIRED'])))
-  const reactivationError = reactivationResults.find(result => result.error)?.error
-  if (reactivationError) return NextResponse.json({ error: reactivationError.message }, { status: 500 })
-
-  const rows = inserts.map(slot => ({
-    provider_id: provider.user.id,
-    provider_role: provider.role,
-    available_date: slot.available_date,
-    start_time: slot.start_time,
-    end_time: slot.end_time,
-    slot_duration: slot.slot_duration,
-    source: slot.source,
-    status: 'AVAILABLE',
-    is_available: true,
-    break_start: null,
-    break_end: null,
-  }))
-  const insertResult = rows.length ? await supabaseAdmin.from('provider_availability').insert(rows) : { error: null }
-  if (insertResult.error) {
-    const conflict = insertResult.error.code === '23505' || insertResult.error.code === '23P01'
-    return NextResponse.json({ error: conflict ? 'One or more slots overlap existing availability for this provider.' : insertResult.error.message }, { status: conflict ? 409 : 500 })
-  }
-
-  const saved = rows.length + reactivations.length
-  return NextResponse.json({ inserted: saved, skipped: cleaned.length - saved, message: saved ? `Saved ${saved} ${source.toLowerCase()} slot${saved === 1 ? '' : 's'}.` : 'These slots already exist for this provider.' })
 }
 
 export async function DELETE(request: Request) {

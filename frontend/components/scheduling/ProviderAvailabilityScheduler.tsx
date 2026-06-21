@@ -16,15 +16,22 @@ export type GeneratedSlot = {
 type DayKey = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday'
 type DaySchedule = { enabled: boolean; startTime: string; endTime: string; breakStart: string; breakEnd: string }
 
-export type AvailabilitySubmission = {
-  source: AvailabilitySource
-  slots: GeneratedSlot[]
-  generationRules?: {
-    startDate: string
-    endDate: string
-    days: Record<number, DaySchedule>
-  }
-}
+export type AvailabilitySubmission =
+  | {
+      scheduleMode: 'MANUAL'
+      slots: GeneratedSlot[]
+    }
+  | {
+      scheduleMode: 'RECURRING'
+      startDate: string
+      endDate: string
+      workingDays: number[]
+      startTime: string
+      endTime: string
+      slotDuration: number
+      breakStart: string | null
+      breakEnd: string | null
+    }
 
 type Props = {
   providerLabel?: string
@@ -112,13 +119,30 @@ export default function ProviderAvailabilityScheduler({ providerLabel = 'provide
     try {
       if (mode === 'MANUAL') {
         if (!manualSlots.length) return setMessage('Add at least one manual slot.')
-        await onGenerate({ source: 'MANUAL', slots: manualSlots })
+        await onGenerate({ scheduleMode: 'MANUAL', slots: manualSlots })
         setManualSlots([])
         return
       }
-      if (generatedResult.error) return setMessage(generatedResult.error)
-      const rules = Object.fromEntries(days.map(day => [day.jsDay, schedules[day.key]])) as Record<number, DaySchedule>
-      await onGenerate({ source: 'GENERATED', slots: generatedResult.slots, generationRules: { startDate, endDate, days: rules } })
+
+      const workingDays = days.filter(day => schedules[day.key].enabled).map(day => day.jsDay)
+      const firstEnabledDay = days.find(day => schedules[day.key].enabled)
+      const sched = firstEnabledDay ? schedules[firstEnabledDay.key] : null
+
+      if (!workingDays.length || !sched) {
+        return setMessage('Enable at least one working day.')
+      }
+
+      await onGenerate({
+        scheduleMode: 'RECURRING',
+        startDate,
+        endDate,
+        workingDays,
+        startTime: sched.startTime,
+        endTime: sched.endTime,
+        slotDuration,
+        breakStart: sched.breakStart || null,
+        breakEnd: sched.breakEnd || null
+      })
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to save availability.')
     }
