@@ -967,7 +967,7 @@ export default function DoctorDashboard() {
     // Update status and record call_started_at in DB securely via API
     try {
       await authedFetch('/api/doctor/consultations', {
-        method: 'POST',
+        method: 'PATCH',
         body: JSON.stringify({
           consultationId: c.id,
           action: 'start_call'
@@ -985,7 +985,7 @@ export default function DoctorDashboard() {
     if (activeCallId) {
       try {
         await authedFetch('/api/doctor/consultations', {
-          method: 'POST',
+          method: 'PATCH',
           body: JSON.stringify({
             consultationId: activeCallId,
             action: 'end_call'
