@@ -38,7 +38,7 @@ export default function HowItWorks() {
   }
 
   return (
-    <section id="how-it-works" className="py-24 relative overflow-hidden bg-transparent">
+    <section id="how-it-works" className="py-16 md:py-24 relative overflow-hidden bg-transparent">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         
         <motion.div 
@@ -68,7 +68,7 @@ export default function HowItWorks() {
 
           {steps.map((step, idx) => (
             <motion.div key={idx} variants={itemVariants} className="relative group">
-              <div className="glass-card p-8 rounded-3xl h-full border border-[#D46E53]/10 hover:border-[#D46E53]/30 transition-colors shadow-lg hover:shadow-xl bg-white/60">
+              <div className="glass-card p-6 sm:p-8 rounded-3xl h-full border border-[#D46E53]/10 hover:border-[#D46E53]/30 transition-colors shadow-lg hover:shadow-xl bg-white/60">
                 <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#D46E53]/10 to-[#A84A33]/5 flex items-center justify-center mb-6 group-hover:scale-110 transition-transform">
                   {step.icon}
                 </div>

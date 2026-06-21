@@ -43,10 +43,10 @@ export default function WhatIsIncluded() {
   }
 
   return (
-    <section id="program" className="py-24 relative overflow-hidden">
+    <section id="program" className="py-16 md:py-24 relative overflow-hidden">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           
           {/* Left: Content */}
           <motion.div
@@ -55,7 +55,7 @@ export default function WhatIsIncluded() {
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-4xl md:text-5xl font-bold font-sora text-[#0F172A] mb-6">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold font-sora text-[#0F172A] mb-6">
               Everything You Need to <span className="teal-gradient-text">Succeed</span>
             </h2>
             <p className="text-[#475569] text-lg mb-10 leading-relaxed">
@@ -92,7 +92,7 @@ export default function WhatIsIncluded() {
             className="relative"
           >
             <div className="absolute inset-0 bg-gradient-to-tr from-[#D46E53]/10 to-transparent rounded-3xl -rotate-6 scale-105"></div>
-            <div className="bg-white p-8 rounded-3xl relative z-10 shadow-2xl border border-gray-100">
+            <div className="bg-white p-4 sm:p-8 rounded-3xl relative z-10 shadow-2xl border border-gray-100">
               <div className="w-full rounded-2xl overflow-hidden shadow-sm bg-white flex items-center justify-center p-4">
                 <img src="/8liv_program_illustration.png" alt="8liv Program Elements - Medication, Coaching, Nutrition" className="w-full h-auto object-contain transform hover:scale-105 transition-transform duration-500 rounded-xl" />
               </div>

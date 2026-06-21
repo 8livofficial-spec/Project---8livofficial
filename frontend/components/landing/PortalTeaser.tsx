@@ -33,13 +33,13 @@ export default function PortalTeaser() {
             className="glass-card rounded-[2.5rem] p-4 md:p-6 relative shadow-[0_20px_50px_-12px_rgba(212,110,83,0.2)]"
           >
             {/* Desktop Mockup Framework */}
-            <div className="bg-[#F9F6F0] rounded-[2rem] overflow-hidden ring-1 ring-[#D46E53]/20 flex flex-col md:flex-row h-[700px] md:h-[600px] shadow-inner relative">
+            <div className="bg-[#F9F6F0] rounded-[2rem] overflow-hidden ring-1 ring-[#D46E53]/20 flex flex-col md:flex-row h-[500px] sm:h-[550px] md:h-[600px] shadow-inner relative">
               
               {/* Background abstract blur */}
               <div className="absolute top-0 right-0 w-96 h-96 bg-[#D46E53]/10 rounded-full blur-[100px] pointer-events-none" />
 
               {/* Sidebar Menu */}
-              <div className="bg-white/60 backdrop-blur-md border-r border-[#D46E53]/10 p-6 w-full md:w-64 flex-shrink-0 flex flex-row md:flex-col justify-between md:justify-start gap-8 border-b md:border-b-0 z-10">
+              <div className="bg-white/60 backdrop-blur-md border-r border-[#D46E53]/10 p-4 sm:p-6 w-full md:w-64 flex-shrink-0 flex flex-row md:flex-col justify-between md:justify-start gap-4 md:gap-8 border-b md:border-b-0 z-10">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#A84A33] to-[#D46E53] shadow-lg flex items-center justify-center">
                     <span className="text-white font-bold font-sora text-lg">8</span>
@@ -47,7 +47,7 @@ export default function PortalTeaser() {
                   <span className="text-[#0F172A] font-bold text-xl tracking-tight hidden md:block font-sora">Portal</span>
                 </div>
                 
-                <div className="flex flex-row md:flex-col gap-2">
+                <div className="flex flex-row md:flex-col gap-2 overflow-x-auto custom-scrollbar py-1 md:py-0 w-full md:w-auto shrink-0 md:shrink">
                   <div className="flex items-center gap-3 text-[#D46E53] bg-white shadow-sm border border-[#D46E53]/10 px-4 py-3 rounded-xl cursor-pointer transition-all hover:shadow-md">
                     <Activity size={20} />
                     <span className="font-semibold hidden md:block">Overview</span>
@@ -80,7 +80,7 @@ export default function PortalTeaser() {
               </div>
 
               {/* Main Content Area */}
-              <div className="flex-1 p-6 md:p-8 flex flex-col overflow-y-auto z-10">
+              <div className="flex-1 p-4 sm:p-6 md:p-8 flex flex-col overflow-y-auto z-10">
                 {/* Header */}
                 <motion.div 
                   initial={{ opacity: 0, x: 20 }}
@@ -176,7 +176,7 @@ export default function PortalTeaser() {
                       </select>
                     </div>
                     {/* CSS-based Line Chart Mockup */}
-                    <div className="flex-1 relative flex items-end justify-between gap-2 pt-4">
+                    <div className="flex-1 relative flex items-end justify-between gap-2 pt-4 min-h-[160px] md:min-h-0">
                       {/* Grid lines */}
                       <div className="absolute inset-0 flex flex-col justify-between pointer-events-none pb-6">
                         <div className="border-b border-gray-100 w-full h-0"></div>

@@ -33,7 +33,7 @@ export default function RealResults() {
   }
 
   return (
-    <section id="outcomes" className="py-24 relative overflow-hidden bg-transparent">
+    <section id="outcomes" className="py-16 md:py-24 relative overflow-hidden bg-transparent">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         
         <motion.div 
@@ -69,10 +69,10 @@ export default function RealResults() {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A]/90 via-[#0F172A]/20 to-transparent"></div>
               </div>
-              <div className="absolute bottom-0 left-0 w-full p-8 translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
+              <div className="absolute bottom-0 left-0 w-full p-6 sm:p-8 translate-y-0 md:translate-y-4 md:group-hover:translate-y-0 transition-transform duration-300">
                 <div className="w-10 h-1 bg-[#D46E53] mb-4 rounded-full"></div>
                 <h3 className="text-2xl font-bold text-white mb-2 font-sora">{outcome.title}</h3>
-                <p className="text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity duration-300 delay-100">
+                <p className="text-gray-300 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 delay-100">
                   {outcome.desc}
                 </p>
               </div>

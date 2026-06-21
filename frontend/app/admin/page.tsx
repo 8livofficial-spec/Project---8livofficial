@@ -4,7 +4,7 @@ import { Suspense, useState, useEffect, useRef, type FormEvent } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
-import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer, Trash2, GitMerge, ClipboardList, DollarSign, Calendar, UserCheck, XCircle, TrendingUp, BadgeCheck } from 'lucide-react';
+import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer, Trash2, GitMerge, ClipboardList, DollarSign, Calendar, UserCheck, XCircle, TrendingUp, BadgeCheck, Menu, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import SessionMonitor from '@/components/admin/SessionMonitor';
 
@@ -50,6 +50,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 function AdminDashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [assessments, setAssessments] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [patientLogs, setPatientLogs] = useState<any[]>([]);
@@ -1646,12 +1647,95 @@ function AdminDashboardContent() {
       
       {/* ── BACKGROUND DECORATIONS ── */}
 
+      {/* Mobile Sidebar Slide-out Drawer */}
+      {mobileSidebarOpen && (
+        <div className="fixed inset-0 z-50 flex lg:hidden">
+          {/* Overlay */}
+          <div 
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            onClick={() => setMobileSidebarOpen(false)}
+          />
+          {/* Sidebar Drawer */}
+          <div className="relative z-55 w-[272px] h-full bg-[#1A1F36] flex flex-col shadow-2xl animate-slide-in">
+            <button
+              onClick={() => setMobileSidebarOpen(false)}
+              className="absolute top-4 right-4 z-50 p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all"
+            >
+              <X className="w-4 h-4" />
+            </button>
+            <div className="p-5 border-b border-white/10 bg-[#11162A]">
+              <h1 className="text-xl font-black tracking-tight flex items-center gap-3"><ShieldCheck className="w-6 h-6 text-[#C4622D]"/> 8liv Admin</h1>
+              <p className="text-[#D8E6DE] text-xs mt-2 font-black tracking-[0.18em] uppercase">Healthcare Operations Center</p>
+            </div>
+
+            {/* Navigation Menu */}
+            <div className="flex-1 flex flex-col py-4 px-3 gap-4 overflow-y-auto custom-scrollbar">
+              {navSections.map((section, sectionIndex) => (
+                <div key={section.title || sectionIndex} className="space-y-1">
+                  {section.title && (
+                    <p className="px-3 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-[#D8E6DE]/60">{section.title}</p>
+                  )}
+                  {section.items.map(item => {
+                    const isActive = adminTab === item.id;
+                    const Icon = item.icon;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => {
+                          openAdminTab(item.id as AdminTab);
+                          setSelectedPatient(null);
+                          if (item.id === 'doctors') setSelectedDoctor(null);
+                          if (item.id === 'appointments' || item.id === 'video-consultations') { setSelectedConnection(null); fetchConnections(); }
+                          setMobileSidebarOpen(false);
+                        }}
+                        className={`w-full flex items-center gap-3 px-3 py-2.5 text-sm font-bold transition-all rounded-xl border-l-4 ${
+                          isActive
+                            ? 'bg-[#F5F0EB] text-[#1A1F36] border-[#C4622D] shadow-sm'
+                            : 'border-transparent text-white/75 hover:bg-white/8 hover:text-white hover:border-[#C4622D]/60'
+                        }`}
+                      >
+                        <Icon className={`w-4 h-4 ${isActive ? 'text-[#C4622D]' : 'text-[#D8E6DE]'}`} />
+                        {item.label}
+                      </button>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+
+            <div className="p-4 border-t border-white/10 bg-[#11162A]">
+              <div className="mb-3 flex items-center gap-3 rounded-2xl bg-white/5 p-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#C4622D] to-[#D89A3D] text-sm font-black text-white">
+                  {(adminUser?.email || 'A').slice(0, 1).toUpperCase()}
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-black text-white">{adminUser?.email?.split('@')[0] || 'Admin'}</p>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#D8E6DE]/70">Administrator</p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setAdminTab('platform-settings'); setMobileSidebarOpen(false); }}
+                className="mb-2 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white/85 hover:bg-white/8 hover:text-white transition-colors border border-white/10"
+              >
+                <GitMerge className="w-4 h-4"/> Settings
+              </button>
+              <button 
+                onClick={handleLogout}
+                className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-sm font-bold text-white hover:bg-[#D96A6A]/20 hover:text-white transition-colors border border-white/10"
+              >
+                <LogOut className="w-4 h-4"/> Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── LEFT SIDEBAR ── */}
       <motion.div 
         initial={{ opacity: 0, x: -20 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.5 }}
-        className="w-[272px] shrink-0 bg-[#1A1F36] text-white border-r border-[#1A1F36] flex flex-col shadow-[10px_0_30px_rgba(26,31,54,0.18)] z-20"
+        className="hidden lg:flex w-[272px] shrink-0 bg-[#1A1F36] text-white border-r border-[#1A1F36] flex flex-col shadow-[10px_0_30px_rgba(26,31,54,0.18)] z-20"
       >
         <div className="p-5 border-b border-white/10 bg-[#11162A]">
           <h1 className="text-xl font-black tracking-tight flex items-center gap-3"><ShieldCheck className="w-6 h-6 text-[#C4622D]"/> 8liv Admin</h1>
@@ -1724,6 +1808,21 @@ function AdminDashboardContent() {
         transition={{ delay: 0.1, duration: 0.5 }}
         className="flex-1 overflow-y-auto relative z-10 custom-scrollbar bg-[#F5F0EB]"
       >
+        {/* Mobile Header Bar */}
+        <div className="lg:hidden flex items-center justify-between bg-[#1A1F36] text-white px-5 py-4 border-b border-white/10 shadow-md">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setMobileSidebarOpen(true)}
+              className="p-1.5 hover:bg-white/10 rounded-xl transition-colors"
+            >
+              <Menu className="w-6 h-6 text-white" />
+            </button>
+            <span className="font-black text-base tracking-tight font-sora">8liv Admin</span>
+          </div>
+          <span className="text-xs font-bold bg-[#C4622D]/20 border border-[#C4622D]/40 text-[#D8E6DE] px-3 py-1 rounded-full capitalize">
+            {adminTab}
+          </span>
+        </div>
         {activeCall && (
           <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 z-50 bg-slate-950 flex flex-col">
             <div className="bg-slate-900 text-white p-6 flex justify-between items-center shadow-2xl border-b border-slate-800">

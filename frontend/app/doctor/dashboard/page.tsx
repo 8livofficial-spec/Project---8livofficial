@@ -8,7 +8,7 @@ import {
   Activity, Users, CheckCircle2, XCircle, Video, Calendar, Wallet,
   ArrowDownToLine, Pill, FileText, Clock, AlertCircle, LogOut,
   Stethoscope, ChevronRight, Plus, X, TrendingUp, BadgeCheck, Bell, BellRing, UserCheck, Check, PhoneOff, MessageCircle,
-  Eye, Printer, Download,
+  Eye, Printer, Download, Menu,
 } from 'lucide-react';
 import StaffChat from '@/components/StaffChat';
 import ProviderAvailabilityScheduler, { GeneratedSlot, AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler';
@@ -414,6 +414,7 @@ export default function DoctorDashboard() {
   const [doctorProfile, setDoctorProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Consultations
   const [consultations, setConsultations] = useState<Consultation[]>([]);
@@ -1667,11 +1668,93 @@ export default function DoctorDashboard() {
 
       {/* ── SIDEBAR ── */}
       <div className="flex h-screen overflow-hidden">
+        {/* Mobile Sidebar Slide-out Drawer */}
+        {mobileSidebarOpen && (
+          <div className="fixed inset-0 z-50 flex lg:hidden">
+            {/* Overlay */}
+            <div 
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+              onClick={() => setMobileSidebarOpen(false)}
+            />
+            {/* Sidebar Drawer */}
+            <div className="relative z-55 w-64 h-full bg-[#1A1F36] flex flex-col shadow-2xl animate-slide-in">
+              <button
+                onClick={() => setMobileSidebarOpen(false)}
+                className="absolute top-4 right-4 z-50 p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all"
+              >
+                <X className="w-4 h-4" />
+              </button>
+              <div className="p-6 border-b border-white/10">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 bg-gradient-to-br from-[#C4622D] to-[#E7A06A] rounded-2xl flex items-center justify-center shadow-lg shadow-[#C4622D]/25">
+                    <Stethoscope className="w-6 h-6 text-white"/>
+                  </div>
+                  <div className="flex-1 col-span-1">
+                    <p className="font-black text-white text-sm leading-tight">{doctorProfile?.full_name || doctor?.email?.split('@')[0] || 'Doctor'}</p>
+                    <p className="text-xs text-white/55 font-semibold">Endocrinologist</p>
+                  </div>
+                </div>
+                {/* Online Indicator */}
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-[#5C7A6B]/15 rounded-full border border-[#5C7A6B]/25">
+                  <span className="relative flex w-2 h-2">
+                    <span className="absolute inline-flex w-full h-full bg-[#5C7A6B] rounded-full opacity-75 animate-ping"></span>
+                    <span className="relative inline-flex w-2 h-2 bg-[#5C7A6B] rounded-full"></span>
+                  </span>
+                  <span className="text-xs font-medium text-[#DCE8E0]">Online</span>
+                </div>
+              </div>
+
+              {/* Nav */}
+              <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+                {tabs.map(t => (
+                  <button key={t.key} onClick={() => { setActiveTab(t.key); setMobileSidebarOpen(false); }}
+                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-r-2xl text-sm transition-all ${activeTab === t.key
+                      ? 'bg-[#F5F0EB] text-[#C4622D] font-bold border-l-4 border-[#C4622D] shadow-sm'
+                      : 'text-white/70 hover:bg-white/10 hover:text-white'}`}>
+                    {t.icon} {t.label}
+                    {t.key === 'consultations' && pendingCases > 0 && (
+                      <span className="ml-auto bg-[#D89A3D] text-white text-[10px] font-black px-2 py-0.5 rounded-full">{pendingCases}</span>
+                    )}
+                  </button>
+                ))}
+              </nav>
+
+              {/* Wallet quick view */}
+              <div className="p-4 border-t border-white/10">
+                {wallet.balance > 0 ? (
+                  <div className="bg-[#F5F0EB] rounded-2xl p-4 text-[#1A1F36] shadow-lg shadow-black/10 border border-white/10">
+                    <p className="text-xs text-[#40516A] font-bold uppercase tracking-wider mb-1">Wallet Balance</p>
+                    <p className="text-2xl font-black">₹{wallet.balance.toLocaleString('en-IN')}</p>
+                  </div>
+                ) : (
+                  <div className="bg-[#F5F0EB] rounded-2xl p-4 text-[#1A1F36] shadow-lg shadow-black/10 border border-white/10">
+                    <p className="text-xs text-[#40516A] font-bold uppercase tracking-wider mb-1">Wallet Status</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <div className="w-8 h-8 rounded-full bg-[#1A1F36] flex items-center justify-center">
+                        <Wallet className="w-4 h-4 text-white/50" />
+                      </div>
+                      <p className="text-xs font-medium text-white/60">Complete a consult to earn</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Logout */}
+              <div className="p-4 pt-0">
+                <button onClick={handleLogout}
+                  className="w-full flex items-center justify-center gap-2 text-sm text-white/55 hover:text-white transition-colors py-2 px-3 rounded-xl hover:bg-[#D96A6A]/20">
+                  <LogOut className="w-5 h-5"/> Sign Out
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <motion.aside
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="w-64 bg-[#1A1F36] text-white flex flex-col shadow-2xl shadow-[#1A1F36]/20 flex-shrink-0">
+          className="hidden lg:flex w-64 bg-[#1A1F36] text-white flex flex-col shadow-2xl shadow-[#1A1F36]/20 flex-shrink-0">
           {/* Doctor info */}
           <div className="p-6 border-b border-white/10">
             <div className="flex items-center gap-3 mb-4">
@@ -1758,7 +1841,23 @@ export default function DoctorDashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="flex-1 overflow-y-auto bg-[#F5F0EB] p-8">
+          className="flex-1 overflow-y-auto bg-[#F5F0EB] p-4 sm:p-8">
+
+          {/* Mobile Header Bar */}
+          <div className="lg:hidden flex items-center justify-between bg-[#1A1F36] text-white px-5 py-4 border-b border-white/10 shadow-md mb-6 rounded-2xl">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setMobileSidebarOpen(true)}
+                className="p-1.5 hover:bg-white/10 rounded-xl transition-colors"
+              >
+                <Menu className="w-6 h-6 text-white" />
+              </button>
+              <span className="font-black text-base tracking-tight font-sora">8liv Doctor</span>
+            </div>
+            <span className="text-xs font-bold bg-[#C4622D]/20 border border-[#C4622D]/40 text-[#D8E6DE] px-3 py-1 rounded-full capitalize">
+              {activeTab}
+            </span>
+          </div>
 
           {/* ── TAB: OVERVIEW ── */}
           {activeTab === 'overview' && (
@@ -1773,7 +1872,7 @@ export default function DoctorDashboard() {
 
               {/* FIX: Bug 3 — Doctor Overview stats dynamically computed from consultations array */}
               {/* Quick stats */}
-              <div className="grid grid-cols-2 xl:grid-cols-6 gap-6">
+              <div className="grid grid-cols-2 xl:grid-cols-6 gap-4 sm:gap-6">
                 {[
                   { label: 'Assigned Cases', value: consultations.length, icon: <Users className="w-6 h-6"/> },
                   { label: "Today's Consults", value: todayCases, icon: <Calendar className="w-6 h-6"/> },
@@ -1787,7 +1886,7 @@ export default function DoctorDashboard() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.1 }}
-                    className="bg-white p-6 border border-[#1A1F36]/8 rounded-[20px] shadow-[0_12px_32px_rgba(26,31,54,0.08)] flex items-center gap-4 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(26,31,54,0.12)] transition-all duration-300"
+                    className="bg-white p-4 sm:p-6 border border-[#1A1F36]/8 rounded-[20px] shadow-[0_12px_32px_rgba(26,31,54,0.08)] flex items-center gap-2 sm:gap-4 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(26,31,54,0.12)] transition-all duration-300"
                   >
                     <div className="bg-[#C4622D]/10 text-[#C4622D] p-4 rounded-2xl">{s.icon}</div>
                     <div>
@@ -1799,7 +1898,7 @@ export default function DoctorDashboard() {
               </div>
 
               {/* Cases table: Today / Week / Month */}
-              <div className="bg-white rounded-[20px] p-8 shadow-[0_12px_32px_rgba(26,31,54,0.08)] border border-[#1A1F36]/8">
+              <div className="bg-white rounded-[20px] p-4 sm:p-8 shadow-[0_12px_32px_rgba(26,31,54,0.08)] border border-[#1A1F36]/8">
                 <h3 className="text-lg font-black text-[#1A1F36] mb-6 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-[#C4622D]"/> Cases Overview</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full">

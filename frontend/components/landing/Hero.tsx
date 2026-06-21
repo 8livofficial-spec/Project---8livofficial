@@ -7,7 +7,7 @@ import { ArrowRight, Star } from 'lucide-react'
 
 export default function Hero() {
   return (
-    <section className="relative min-h-[90vh] flex items-center overflow-hidden bg-transparent pt-20">
+    <section className="relative min-h-[90vh] flex items-center overflow-hidden bg-transparent pt-28 pb-12 sm:pt-32 md:pt-20 md:pb-0">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
           
@@ -18,7 +18,7 @@ export default function Hero() {
             transition={{ duration: 0.8, ease: "easeOut" }}
             className="max-w-2xl"
           >
-            <h1 className="text-5xl md:text-6xl lg:text-7xl font-bold font-sora leading-[1.1] text-[#0F172A] mb-6">
+            <h1 className="text-3.5xl sm:text-5xl md:text-6xl lg:text-7xl font-bold font-sora leading-[1.1] text-[#0F172A] mb-6">
               Transform your <br/>
               <span className="teal-gradient-text">health</span> <br/>
               from home.
@@ -52,7 +52,7 @@ export default function Hero() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 1, ease: "easeOut" }}
-            className="relative lg:h-[700px] flex items-center justify-center"
+            className="relative h-[350px] sm:h-[450px] lg:h-[700px] flex items-center justify-center"
           >
             {/* Main Image Container */}
             <div className="relative w-full max-w-md mx-auto aspect-[3/4] rounded-[2.5rem] overflow-hidden shadow-2xl ring-1 ring-[#D46E53]/20 group">

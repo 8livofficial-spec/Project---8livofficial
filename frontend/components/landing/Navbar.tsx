@@ -50,14 +50,14 @@ export default function Navbar() {
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
-        className="fixed top-0 left-0 right-0 z-50 flex justify-center px-4 pt-6 pointer-events-none"
+        className="fixed top-0 left-0 right-0 z-50 flex justify-center px-4 pt-4 sm:pt-6 pointer-events-none"
       >
         {/* Floating Capsule */}
         <div 
           className={`pointer-events-auto flex items-center justify-between w-full max-w-5xl rounded-full transition-all duration-500 border
             ${scrolled 
-              ? 'bg-[#F9F6F0]/80 backdrop-blur-2xl border-[#D46E53]/20 shadow-[0_8px_30px_rgb(0,0,0,0.08)] py-3 px-6' 
-              : 'bg-white/40 backdrop-blur-md border-white/50 shadow-sm py-4 px-8'
+              ? 'bg-[#F9F6F0]/80 backdrop-blur-2xl border-[#D46E53]/20 shadow-[0_8px_30px_rgb(0,0,0,0.08)] py-2.5 px-4 sm:py-3 sm:px-6' 
+              : 'bg-white/40 backdrop-blur-md border-white/50 shadow-sm py-3 px-4 sm:py-4 sm:px-8'
             }`}
         >
           {/* Logo */}
@@ -65,7 +65,7 @@ export default function Navbar() {
             <img 
               src="/images/logo loss.png" 
               alt="8Liv Logo" 
-              className="h-24 object-contain cursor-pointer -my-4"
+              className="h-14 sm:h-16 md:h-24 object-contain cursor-pointer -my-2 md:-my-4"
             />
           </div>
 
@@ -122,7 +122,7 @@ export default function Navbar() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-x-4 top-24 z-40 md:hidden"
+            className="fixed inset-x-4 top-20 sm:top-24 z-40 md:hidden"
           >
             <div className="bg-[#F9F6F0]/95 backdrop-blur-3xl border border-[#D46E53]/20 rounded-3xl p-6 shadow-2xl flex flex-col space-y-4">
               <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">How It Works</a>

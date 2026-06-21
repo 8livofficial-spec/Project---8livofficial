@@ -28,9 +28,9 @@ export default function MealNutrition() {
   }
 
   return (
-    <section className="py-24 relative overflow-hidden bg-transparent">
+    <section className="py-16 md:py-24 relative overflow-hidden bg-transparent">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-16 items-center">
+        <div className="grid lg:grid-cols-2 gap-10 lg:gap-16 items-center">
           
           {/* Left: Images */}
           <div className="relative">
@@ -60,7 +60,7 @@ export default function MealNutrition() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true, margin: "-100px" }}
                 transition={{ duration: 0.8, delay: 0.2 }}
-                className="glass-card p-3 animate-float ring-1 ring-[#D46E53]/20 rounded-3xl mt-12 shadow-xl" 
+                className="glass-card p-3 animate-float ring-1 ring-[#D46E53]/20 rounded-3xl mt-6 sm:mt-12 shadow-xl" 
                 style={{ animationDelay: '1s' }}
               >
                 <div className="rounded-2xl overflow-hidden bg-white">
@@ -83,7 +83,7 @@ export default function MealNutrition() {
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.6 }}
           >
-            <h2 className="text-4xl md:text-5xl font-bold font-sora text-[#0F172A] mb-6">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold font-sora text-[#0F172A] mb-6">
               Eat What You <span className="teal-gradient-text">Love</span>
             </h2>
             <p className="text-[#475569] text-lg mb-10 leading-relaxed">

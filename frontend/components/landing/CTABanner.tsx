@@ -5,7 +5,7 @@ import { motion } from 'framer-motion'
 
 export default function CTABanner() {
   return (
-    <section className="py-24 relative overflow-hidden">
+    <section className="py-16 md:py-24 relative overflow-hidden">
       <div className="absolute inset-0 bg-gradient-to-br from-[#D46E53]/5 via-[#F9F6F0] to-[#D46E53]/10" />
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10 text-center">
         
@@ -14,7 +14,7 @@ export default function CTABanner() {
           whileInView={{ opacity: 1, scale: 1, y: 0 }}
           viewport={{ once: true, margin: "-100px" }}
           transition={{ duration: 0.8, ease: "easeOut" }}
-          className="glass-card p-12 md:p-16 rounded-[3rem] border border-[#D46E53]/20 shadow-2xl relative overflow-hidden"
+          className="glass-card p-6 sm:p-12 md:p-16 rounded-[3rem] border border-[#D46E53]/20 shadow-2xl relative overflow-hidden"
         >
           <div className="absolute top-0 right-0 w-64 h-64 bg-[#D46E53]/10 rounded-full blur-[80px]" />
           <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#D46E53]/10 rounded-full blur-[80px]" />
@@ -24,7 +24,7 @@ export default function CTABanner() {
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ delay: 0.2, duration: 0.6 }}
-            className="text-4xl md:text-6xl font-bold font-sora text-[#0F172A] mb-6 relative z-10 leading-tight"
+            className="text-3xl sm:text-4xl md:text-6xl font-bold font-sora text-[#0F172A] mb-6 relative z-10 leading-tight"
           >
             Ready to change your <br className="hidden md:block"/>
             <span className="teal-gradient-text">metabolic health?</span>
