@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { EmailService } from '@/lib/emailService'
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { APP_CONFIG } from '@/lib/appConfig'
 import {
   checkRateLimit,
   createToken,
@@ -10,6 +11,7 @@ import {
   isValidEmail,
   normalizeEmail,
   writeAuthAudit,
+  rateLimitResponse,
 } from '@/lib/authSecurity'
 
 export async function POST(req: Request) {
@@ -20,8 +22,8 @@ export async function POST(req: Request) {
   try {
     const { email: rawEmail } = await req.json()
     const email = normalizeEmail(rawEmail)
-    const rate = checkRateLimit(`forgot-password:${ip}:${email}`, { limit: 5, windowMs: 15 * 60 * 1000 })
-    if (!rate.allowed) return NextResponse.json({ error: rate.message }, { status: 429 })
+    const rate = checkRateLimit(`forgot-password:${ip}:${email}`, APP_CONFIG.rateLimits.forgotPassword)
+    if (!rate.allowed) return rateLimitResponse(rate.retryAfter || 60, rate.message)
 
     if (!isValidEmail(email)) return NextResponse.json({ message: genericMessage })
 

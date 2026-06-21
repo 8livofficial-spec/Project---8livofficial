@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedPatient } from '@/lib/appointmentAvailability'
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { APP_CONFIG } from '@/lib/appConfig'
+import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/authSecurity'
 
 type RouteContext = { params: Promise<{ bookingId: string }> }
 
@@ -30,7 +32,8 @@ export async function GET(request: Request, context: RouteContext) {
     const { bookingId } = await context.params
     const consultation = await getCompletedConsultation(bookingId, patient.user.id)
     if (!consultation) return NextResponse.json({ error: 'Consultation not found.' }, { status: 404 })
-    if (!completedStatuses.includes(String(consultation.status || '').toLowerCase())) {
+    const statusLower = String(consultation.status || '').toLowerCase()
+    if (!completedStatuses.includes(statusLower)) {
       return NextResponse.json({ rating: null, canRate: false })
     }
 
@@ -57,6 +60,13 @@ export async function POST(request: Request, context: RouteContext) {
     const patient = await getAuthenticatedPatient(request)
     if ('error' in patient) return NextResponse.json({ error: patient.error }, { status: patient.status })
 
+    // Rate Limiting
+    const ip = getClientIp(request)
+    const rate = checkRateLimit(`rating:${ip}:${patient.user.id}`, APP_CONFIG.rateLimits.ratings)
+    if (!rate.allowed) {
+      return rateLimitResponse(rate.retryAfter || 60, rate.message)
+    }
+
     const { bookingId } = await context.params
     const consultation = await getCompletedConsultation(bookingId, patient.user.id)
     if (!consultation) return NextResponse.json({ error: 'Consultation not found.' }, { status: 404 })
@@ -64,6 +74,10 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'The consultation must be completed before it can be rated.' }, { status: 409 })
     }
     if (!consultation.doctor_id) return NextResponse.json({ error: 'This consultation has no assigned doctor.' }, { status: 409 })
+
+    if (patient.user.id === consultation.doctor_id) {
+      return NextResponse.json({ error: 'Self-rating is not allowed.' }, { status: 400 })
+    }
 
     const body = await request.json()
     const rating = Number(body.rating)

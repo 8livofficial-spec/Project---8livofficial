@@ -50,12 +50,14 @@ export function getClientIp(request: Request) {
     || 'unknown'
 }
 
+import { NextResponse } from 'next/server'
+
 export function checkRateLimit(key: string, options: { limit: number; windowMs: number; lockMs?: number }) {
   const now = Date.now()
   const existing = rateLimits.get(key)
   if (existing?.lockedUntil && existing.lockedUntil > now) {
     const seconds = Math.ceil((existing.lockedUntil - now) / 1000)
-    return { allowed: false, message: `Too many attempts. Try again in ${seconds} seconds.` }
+    return { allowed: false, message: `Too many attempts. Try again in ${seconds} seconds.`, retryAfter: seconds }
   }
 
   if (!existing || existing.resetAt <= now) {
@@ -65,14 +67,31 @@ export function checkRateLimit(key: string, options: { limit: number; windowMs: 
 
   existing.count += 1
   if (existing.count > options.limit) {
-    existing.lockedUntil = now + (options.lockMs || options.windowMs)
+    const lockDuration = options.lockMs || options.windowMs
+    existing.lockedUntil = now + lockDuration
     rateLimits.set(key, existing)
-    return { allowed: false, message: 'Too many attempts. Please try again later.' }
+    const seconds = Math.ceil(lockDuration / 1000)
+    return { allowed: false, message: 'Too many attempts. Please try again later.', retryAfter: seconds }
   }
 
   rateLimits.set(key, existing)
   return { allowed: true }
 }
+
+export function rateLimitResponse(retryAfterSeconds: number, message?: string) {
+  const msg = message || 'Too many attempts. Please try again later.'
+  return new NextResponse(
+    JSON.stringify({ error: msg }),
+    {
+      status: 429,
+      headers: {
+        'Content-Type': 'application/json',
+        'Retry-After': String(retryAfterSeconds)
+      }
+    }
+  )
+}
+
 
 export async function findUserByEmail(email: string) {
   const { data, error } = await supabaseAdmin.auth.admin.listUsers()

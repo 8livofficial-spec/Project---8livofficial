@@ -28,14 +28,27 @@ export default function BillingPage() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
 
-      const { error } = await supabase
-        .from('health_assessments')
-        .update({
-          membership_tier: planName
+      const res = await fetch('/api/payment/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          patientId: session.user.id,
+          paymentType: 'membership',
+          membershipTier: planName,
+          amount: planName === 'Silver Plan' ? 999 : 1999,
+          paymentMethod: 'upi',
+          razorpay_order_id: 'order_mock_' + Math.floor(Math.random() * 100000),
+          razorpay_payment_id: 'pay_mock_' + Date.now(),
+          razorpay_signature: 'mock_signature'
         })
-        .eq('patient_id', session.user.id)
+      })
 
-      if (error) throw error
+      const result = await res.json()
+      if (!res.ok || result.error) {
+        throw new Error(result.error || 'Failed to upgrade membership plan.')
+      }
 
       alert(`Successfully upgraded to ${planName}! 🎉`)
       reloadData()

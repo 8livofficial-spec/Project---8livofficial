@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { APP_CONFIG } from '@/lib/appConfig'
 import {
   checkRateLimit,
   createSupabasePasswordClient,
@@ -7,6 +8,7 @@ import {
   isValidEmail,
   normalizeEmail,
   writeAuthAudit,
+  rateLimitResponse,
 } from '@/lib/authSecurity'
 
 export async function POST(request: Request) {
@@ -19,8 +21,8 @@ export async function POST(request: Request) {
     email = normalizeEmail(body.email)
     const password = String(body.password || '')
 
-    const rate = checkRateLimit(`login:${ip}:${email}`, { limit: 6, windowMs: 15 * 60 * 1000, lockMs: 30 * 60 * 1000 })
-    if (!rate.allowed) return NextResponse.json({ error: rate.message }, { status: 429 })
+    const rate = checkRateLimit(`login:${ip}:${email}`, APP_CONFIG.rateLimits.login)
+    if (!rate.allowed) return rateLimitResponse(rate.retryAfter || 60, rate.message)
     if (!isValidEmail(email) || !password) {
       return NextResponse.json({ error: 'Enter a valid email and password.' }, { status: 400 })
     }

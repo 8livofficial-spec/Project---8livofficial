@@ -44,7 +44,9 @@ export async function GET(request: Request) {
       membershipValidity,
       weightLogsRes,
       consultationsRes,
-      notificationsRes
+      notificationsRes,
+      dietPlanRes,
+      fitnessPlanRes
     ] = await Promise.all([
       supabaseAdmin
         .from('profiles')
@@ -105,7 +107,21 @@ export async function GET(request: Request) {
         .from('patient_notifications')
         .select('*')
         .eq('patient_id', patientId)
+        .order('created_at', { ascending: false }),
+      supabaseAdmin
+        .from('diet_plans')
+        .select('*')
+        .eq('patient_id', patientId)
         .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('fitness_plans')
+        .select('*')
+        .eq('patient_id', patientId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
     ])
 
     if (profileRes.error) throw profileRes.error
@@ -122,6 +138,8 @@ export async function GET(request: Request) {
     const weightLogs = weightLogsRes.data || []
     const consultations = consultationsRes.data || []
     const notifications = notificationsRes.data || []
+    const dietPlan = dietPlanRes.data || null
+    const fitnessPlan = fitnessPlanRes.data || null
 
     // Care Team formatting
     const careTeam: CareTeamStatus = {
@@ -226,7 +244,9 @@ export async function GET(request: Request) {
       // Aggregated dashboard extensions
       weightLogs,
       consultations,
-      notifications
+      notifications,
+      dietPlan,
+      fitnessPlan
     })
   } catch (err: unknown) {
     console.error("API Error in /api/patient/dashboard:", err)

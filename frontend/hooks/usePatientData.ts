@@ -127,6 +127,44 @@ export interface StaffConsultation {
   created_at?: string
 }
 
+export interface DietPlan {
+  id: string
+  patient_id: string
+  dietitian_id?: string
+  calories_per_day?: number
+  meal_schedule?: string
+  food_restrictions?: string
+  hydration_goal?: string
+  notes?: string
+  status?: string
+  appointment_id?: string
+  title?: string
+  description?: string
+  attachment_url?: string
+  attachment_type?: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface FitnessPlan {
+  id: string
+  patient_id: string
+  fitness_coach_id?: string
+  workout_type?: string
+  weekly_frequency?: number
+  daily_step_goal?: number
+  exercise_restrictions?: string
+  notes?: string
+  status?: string
+  appointment_id?: string
+  title?: string
+  description?: string
+  attachment_url?: string
+  attachment_type?: string
+  created_at?: string
+  updated_at?: string
+}
+
 export interface PatientOnboardingState {
   onboardingCompleted: boolean
   appointmentBooked: boolean
@@ -170,6 +208,8 @@ export interface PatientDataContextValue {
   error: string | null
   flowStep: FlowStep
   reloadData: (options?: { force?: boolean }) => Promise<void>
+  dietPlan: DietPlan | null
+  fitnessPlan: FitnessPlan | null
 }
 
 const PatientDataContext = createContext<PatientDataContextValue | null>(null)
@@ -213,6 +253,8 @@ function usePatientDataInternal() {
     nutritionist_notes: null,
     trainer_notes: null
   })
+  const [dietPlan, setDietPlan] = useState<DietPlan | null>(null)
+  const [fitnessPlan, setFitnessPlan] = useState<FitnessPlan | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [flowStep, setFlowStep] = useState<FlowStep>('loading')
@@ -223,6 +265,8 @@ function usePatientDataInternal() {
       if (!session) {
         setLoading(false)
         setFlowStep('ready') // will be handled by auth redirect elsewhere
+        setDietPlan(null)
+        setFitnessPlan(null)
         return
       }
 
@@ -272,6 +316,8 @@ function usePatientDataInternal() {
           setConsultation(dashboardData.consultations[0])
         }
         setNotifications(dashboardData.notifications || [])
+        setDietPlan(dashboardData.dietPlan || null)
+        setFitnessPlan(dashboardData.fitnessPlan || null)
 
         // Set Flow Step
         const assessRow = dashboardData.assessment
@@ -508,6 +554,8 @@ function usePatientDataInternal() {
     loading,
     error,
     flowStep,
-    reloadData
+    reloadData,
+    dietPlan,
+    fitnessPlan
   }
 }

@@ -438,10 +438,56 @@ export default function ProviderPortal({ section }: { section: 'dashboard' | 'pa
     setSuccess('')
 
     const form = new FormData(event.currentTarget)
+    const attachmentFile = form.get('attachmentFile') as File | null
     const payload: Record<string, unknown> = { patientId: selectedPatientId }
-    for (const [key, value] of form.entries()) payload[key] = value
 
     try {
+      let attachmentUrl = null
+      let attachmentType = null
+
+      if (attachmentFile && attachmentFile.size > 0) {
+        // 1. Upload File Attachment
+        const uploadForm = new FormData()
+        uploadForm.append('file', attachmentFile)
+        uploadForm.append('patientId', selectedPatientId)
+        uploadForm.append('planType', provider?.role === 'dietitian' ? 'diet' : 'fitness')
+
+        const { data: sessionData } = await supabase.auth.getSession()
+        const token = sessionData.session?.access_token
+        if (!token) throw new Error('Session expired. Please log in again.')
+
+        const uploadRes = await fetch('/api/provider/plans/upload', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`
+          },
+          body: uploadForm
+        })
+
+        const uploadResult = await uploadRes.json()
+        if (!uploadRes.ok || uploadResult.error) {
+          throw new Error(uploadResult.error || 'Failed to upload attachment file.')
+        }
+
+        attachmentUrl = uploadResult.attachmentUrl
+        attachmentType = uploadResult.attachmentType
+      }
+
+      // 2. Build Plan Payload
+      for (const [key, value] of form.entries()) {
+        if (key !== 'attachmentFile') {
+          payload[key] = value
+        }
+      }
+
+      if (attachmentUrl) {
+        payload.attachmentUrl = attachmentUrl
+        payload.attachmentType = attachmentType
+        payload.title = form.get('attachmentTitle') || 'Plan Attachment'
+        payload.description = form.get('attachmentDescription') || ''
+      }
+
+      // 3. Save Care Plan
       const res = await authedFetch('/api/provider/plans', {
         method: 'POST',
         body: JSON.stringify(payload),
@@ -449,7 +495,12 @@ export default function ProviderPortal({ section }: { section: 'dashboard' | 'pa
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Unable to save plan.')
       setSuccess(provider?.role === 'dietitian' ? 'Diet plan saved.' : provider?.role === 'nutritionist' ? 'Nutrition guidance saved.' : 'Workout plan saved.')
+      
+      // Reset form and UI
       event.currentTarget.reset()
+      const removeBtn = document.getElementById('remove-attachment-btn') as HTMLButtonElement
+      if (removeBtn) removeBtn.click()
+
       clearProviderCache('/api/provider/plans')
       clearProviderCache('/api/provider/dashboard')
       await loadSectionData('plans', true)
@@ -1359,6 +1410,26 @@ function Plans(props: {
   const isDietitian = props.provider?.role === 'dietitian'
   const isNutritionist = props.provider?.role === 'nutritionist'
 
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0] || null
+    setUploadedFile(file)
+    if (file && file.type.startsWith('image/')) {
+      setPreviewUrl(URL.createObjectURL(file))
+    } else {
+      setPreviewUrl(null)
+    }
+  }
+
+  const handleRemoveFile = () => {
+    setUploadedFile(null)
+    setPreviewUrl(null)
+    const fileInput = document.getElementById('attachmentFile') as HTMLInputElement
+    if (fileInput) fileInput.value = ''
+  }
+
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
       <div className="rounded-[28px] border border-[#E8DED4] bg-white p-6 shadow-sm">
@@ -1386,7 +1457,72 @@ function Plans(props: {
               </div>
             )}
 
-            {isDietitian ? <DietForm /> : isNutritionist ? <NutritionGuidanceForm /> : <FitnessForm />}
+            {/* Document Upload Section */}
+            {(isDietitian || props.provider?.role === 'fitness_coach') && (
+              <div className="rounded-2xl border-2 border-dashed border-[#E8DED4] p-5 bg-[#F9F6F0]/40 space-y-4">
+                <p className="text-xs font-black uppercase tracking-[0.18em] text-[#6B7A90]">Document Attachment</p>
+                <div className="flex items-center gap-4">
+                  <input
+                    id="attachmentFile"
+                    name="attachmentFile"
+                    type="file"
+                    accept="application/pdf,image/jpeg,image/png,image/webp,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                    onChange={handleFileChange}
+                    className="hidden"
+                  />
+                  <label
+                    htmlFor="attachmentFile"
+                    className="cursor-pointer rounded-full border border-[#1A1F36]/15 bg-white px-5 py-2.5 text-xs font-bold text-[#1A1F36] hover:bg-[#1A1F36]/5 transition"
+                  >
+                    Select Document
+                  </label>
+                  {uploadedFile && (
+                    <button
+                      id="remove-attachment-btn"
+                      type="button"
+                      onClick={handleRemoveFile}
+                      className="rounded-full bg-red-50 border border-red-200 px-4 py-2.5 text-xs font-bold text-red-700 hover:bg-red-100 transition"
+                    >
+                      Remove
+                    </button>
+                  )}
+                </div>
+
+                {uploadedFile && (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between text-xs text-[#6B7A90] font-semibold border-t border-[#E8DED4] pt-3">
+                      <span className="truncate max-w-[250px]">{uploadedFile.name}</span>
+                      <span>{(uploadedFile.size / (1024 * 1024)).toFixed(2)} MB</span>
+                    </div>
+
+                    {previewUrl && (
+                      <div className="relative w-full max-h-40 rounded-xl overflow-hidden border border-[#E8DED4]">
+                        <img src={previewUrl} alt="Preview" className="w-full h-full object-cover" />
+                      </div>
+                    )}
+
+                    <div className="grid gap-3">
+                      <label className="block">
+                        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#6B7A90]">Document Title <span className="text-[#C4622D]">*</span></span>
+                        <input name="attachmentTitle" required placeholder="e.g. Diet Chart June 2026" className="input mt-1.5" />
+                      </label>
+                      <label className="block">
+                        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#6B7A90]">Document Description</span>
+                        <textarea name="attachmentDescription" placeholder="Provide notes or usage guidance for the attachment" className="input mt-1.5 min-h-16" />
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {isDietitian ? (
+              <DietForm hasFile={Boolean(uploadedFile)} />
+            ) : isNutritionist ? (
+              <NutritionGuidanceForm />
+            ) : (
+              <FitnessForm hasFile={Boolean(uploadedFile)} />
+            )}
 
             <button disabled={props.saving} className="rounded-full bg-[#1A1F36] px-6 py-3 text-sm font-black text-white disabled:opacity-60">
               {props.saving ? 'Saving...' : isDietitian ? 'Save Diet Plan' : isNutritionist ? 'Save Nutrition Guidance' : 'Save Workout Plan'}
@@ -1413,6 +1549,12 @@ function Plans(props: {
                             ? plan.guidance_focus
                             : `${plan.workout_type} | ${plan.weekly_frequency}x/week`}
                       </p>
+                      {plan.attachment_url && (
+                        <div className="mt-2 flex items-center gap-1.5 text-xs text-[#C4622D] font-bold">
+                          <FileText className="w-3.5 h-3.5" />
+                          <span className="truncate max-w-[200px]">{plan.title || 'Attached Document'}</span>
+                        </div>
+                      )}
                     </div>
                     <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: props.copy.soft, color: props.copy.accent }}>{plan.status}</span>
                   </div>
@@ -1426,23 +1568,35 @@ function Plans(props: {
   )
 }
 
-function Field({ label, children }: { label: string, children: React.ReactNode }) {
+function Field({ label, children, required = true }: { label: string, children: React.ReactNode, required?: boolean }) {
   return (
     <label className="block">
-      <span className="text-xs font-black uppercase tracking-[0.18em] text-[#6B7A90]">{label} <span className="text-[#C4622D]">*</span></span>
+      <span className="text-xs font-black uppercase tracking-[0.18em] text-[#6B7A90]">
+        {label} {required && <span className="text-[#C4622D]">*</span>}
+      </span>
       <div className="mt-2">{children}</div>
     </label>
   )
 }
 
-function DietForm() {
+function DietForm({ hasFile }: { hasFile: boolean }) {
   return (
     <>
-      <Field label="Calories per day"><input name="caloriesPerDay" type="number" min="800" max="6000" required className="input" /></Field>
-      <Field label="Meal schedule"><textarea name="mealSchedule" required className="input min-h-28" placeholder="Breakfast, lunch, snacks, dinner structure" /></Field>
-      <Field label="Food restrictions"><textarea name="foodRestrictions" className="input min-h-24" placeholder="Allergies, restrictions, foods to avoid" /></Field>
-      <Field label="Hydration goal"><input name="hydrationGoal" className="input" placeholder="Example: 2.5L water per day" /></Field>
-      <Field label="Notes"><textarea name="notes" className="input min-h-28" placeholder="Diet follow-up notes and adherence guidance" /></Field>
+      <Field label="Calories per day" required={!hasFile}>
+        <input name="caloriesPerDay" type="number" min="800" max="6000" required={!hasFile} className="input" />
+      </Field>
+      <Field label="Meal schedule" required={!hasFile}>
+        <textarea name="mealSchedule" required={!hasFile} className="input min-h-28" placeholder="Breakfast, lunch, snacks, dinner structure" />
+      </Field>
+      <Field label="Food restrictions" required={false}>
+        <textarea name="foodRestrictions" className="input min-h-24" placeholder="Allergies, restrictions, foods to avoid" />
+      </Field>
+      <Field label="Hydration goal" required={false}>
+        <input name="hydrationGoal" className="input" placeholder="Example: 2.5L water per day" />
+      </Field>
+      <Field label="Notes" required={false}>
+        <textarea name="notes" className="input min-h-28" placeholder="Diet follow-up notes and adherence guidance" />
+      </Field>
     </>
   )
 }
@@ -1450,23 +1604,43 @@ function DietForm() {
 function NutritionGuidanceForm() {
   return (
     <>
-      <Field label="Guidance focus"><input name="guidanceFocus" required className="input" placeholder="Metabolic nutrition, meal timing, protein target" /></Field>
-      <Field label="Calorie strategy"><textarea name="calorieStrategy" className="input min-h-24" placeholder="Deficit, maintenance, macro balance, protein/fiber focus" /></Field>
-      <Field label="Meal timing"><textarea name="mealTiming" className="input min-h-24" placeholder="Timing guidance for meals, snacks, workouts, and medication support" /></Field>
-      <Field label="Supplement notes"><textarea name="supplementNotes" className="input min-h-24" placeholder="Only clinically appropriate supplement guidance, if applicable" /></Field>
-      <Field label="Notes"><textarea name="notes" className="input min-h-28" placeholder="Nutrition follow-up notes and adherence guidance" /></Field>
+      <Field label="Guidance focus">
+        <input name="guidanceFocus" required className="input" placeholder="Metabolic nutrition, meal timing, protein target" />
+      </Field>
+      <Field label="Calorie strategy" required={false}>
+        <textarea name="calorieStrategy" className="input min-h-24" placeholder="Deficit, maintenance, macro balance, protein/fiber focus" />
+      </Field>
+      <Field label="Meal timing" required={false}>
+        <textarea name="mealTiming" className="input min-h-24" placeholder="Timing guidance for meals, snacks, workouts, and medication support" />
+      </Field>
+      <Field label="Supplement notes" required={false}>
+        <textarea name="supplementNotes" className="input min-h-24" placeholder="Only clinically appropriate supplement guidance, if applicable" />
+      </Field>
+      <Field label="Notes" required={false}>
+        <textarea name="notes" className="input min-h-28" placeholder="Nutrition follow-up notes and adherence guidance" />
+      </Field>
     </>
   )
 }
 
-function FitnessForm() {
+function FitnessForm({ hasFile }: { hasFile: boolean }) {
   return (
     <>
-      <Field label="Workout type"><input name="workoutType" required className="input" placeholder="Walking, strength, mobility, cardio" /></Field>
-      <Field label="Weekly frequency"><input name="weeklyFrequency" type="number" min="1" max="14" required className="input" /></Field>
-      <Field label="Daily step goal"><input name="dailyStepGoal" type="number" min="0" max="100000" className="input" /></Field>
-      <Field label="Exercise restrictions"><textarea name="exerciseRestrictions" className="input min-h-24" placeholder="Pain, injury, mobility, safety limits" /></Field>
-      <Field label="Notes"><textarea name="notes" className="input min-h-28" placeholder="Progress notes, check-in target, coaching guidance" /></Field>
+      <Field label="Workout type" required={!hasFile}>
+        <input name="workoutType" required={!hasFile} className="input" placeholder="Walking, strength, mobility, cardio" />
+      </Field>
+      <Field label="Weekly frequency" required={!hasFile}>
+        <input name="weeklyFrequency" type="number" min="1" max="14" required={!hasFile} className="input" />
+      </Field>
+      <Field label="Daily step goal" required={false}>
+        <input name="dailyStepGoal" type="number" min="0" max="100000" className="input" />
+      </Field>
+      <Field label="Exercise restrictions" required={false}>
+        <textarea name="exerciseRestrictions" className="input min-h-24" placeholder="Pain, injury, mobility, safety limits" />
+      </Field>
+      <Field label="Notes" required={false}>
+        <textarea name="notes" className="input min-h-28" placeholder="Progress notes, check-in target, coaching guidance" />
+      </Field>
     </>
   )
 }

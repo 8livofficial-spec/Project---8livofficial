@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Video, Scale, ArrowRight, X } from 'lucide-react'
+import { Video, Scale, ArrowRight, X, FileText, Download } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
 import { usePatientData } from '@/hooks/usePatientData'
@@ -68,7 +68,9 @@ export default function PatientDashboardHome() {
     notifications, 
     careTeam,
     loading,
-    reloadData 
+    reloadData,
+    dietPlan,
+    fitnessPlan
   } = usePatientData()
 
   if (loading) {
@@ -81,6 +83,33 @@ export default function PatientDashboardHome() {
 
 
   const [showWeightLogModal, setShowWeightLogModal] = useState(false)
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null)
+
+  const handleDownloadFile = async (attachmentUrl: string) => {
+    if (!attachmentUrl) return
+    setDownloadingFile(attachmentUrl)
+    try {
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('Please sign in again.')
+      
+      const res = await fetch(`/api/patient/plans/download?url=${encodeURIComponent(attachmentUrl)}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to download file.')
+      
+      if (data.url) {
+        window.open(data.url, '_blank')
+      } else {
+        throw new Error('Download URL not found in response.')
+      }
+    } catch (err: any) {
+      alert("Error: " + err.message)
+    } finally {
+      setDownloadingFile(null)
+    }
+  }
   const [newWeight, setNewWeight] = useState('')
   const [logLoading, setLogLoading] = useState(false)
   const [bookingModal, setBookingModal] = useState<{ isOpen: boolean, type: 'dietitian' | 'nutritionist' | 'fitness_coach' | null }>({ isOpen: false, type: null })
@@ -542,46 +571,108 @@ export default function PatientDashboardHome() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="bg-white rounded-3xl p-6 border border-[#1A1F36]/6 shadow-[0_4px_20px_rgba(26,31,54,0.02)]">
-            <h3 className="text-[#1A1F36] font-bold text-lg font-sora mb-4 flex items-center gap-2">
-              <span className="text-[#5C7A6B]">🥗</span> Nutrition Guidelines
-            </h3>
-            {careTeam?.dietitian_notes ? (
-              <p className="text-[#1A1F36] text-sm whitespace-pre-line leading-relaxed bg-[#F5F0EB]/50 p-4 rounded-2xl border border-[#1A1F36]/6">
-                {careTeam.dietitian_notes}
-              </p>
-            ) : (
-              <p className="text-[#8896A4] text-sm leading-relaxed">
-                Your dietitian hasn't set any specific guidelines yet. Once assigned, your personalized diet plan will appear here.
-              </p>
+          <div className="bg-white rounded-3xl p-6 border border-[#1A1F36]/6 shadow-[0_4px_20px_rgba(26,31,54,0.02)] flex flex-col justify-between">
+            <div>
+              <h3 className="text-[#1A1F36] font-bold text-lg font-sora mb-4 flex items-center gap-2">
+                <span className="text-[#5C7A6B]">🥗</span> Nutrition Guidelines
+              </h3>
+              {careTeam?.dietitian_notes ? (
+                <p className="text-[#1A1F36] text-sm whitespace-pre-line leading-relaxed bg-[#F5F0EB]/50 p-4 rounded-2xl border border-[#1A1F36]/6">
+                  {careTeam.dietitian_notes}
+                </p>
+              ) : (
+                <p className="text-[#8896A4] text-sm leading-relaxed">
+                  Your dietitian hasn't set any specific guidelines yet. Once assigned, your personalized diet plan will appear here.
+                </p>
+              )}
+            </div>
+            {dietPlan?.attachment_url && (
+              <div className="mt-4 border border-[#5C7A6B]/15 bg-[#5C7A6B]/5 rounded-2xl p-4 flex flex-col gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#5C7A6B]/10 flex items-center justify-center text-[#5C7A6B] shrink-0">
+                    <FileText size={20} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-black text-[#1A1F36] truncate">
+                      {dietPlan.title || 'Diet Plan File'}
+                    </p>
+                    <p className="text-[11px] text-[#8896A4] font-medium line-clamp-2 mt-0.5">
+                      {dietPlan.description || "View your dietitian's uploaded plan guide."}
+                    </p>
+                    <span className="inline-block text-[10px] font-bold text-[#5C7A6B] bg-[#5C7A6B]/10 px-2 py-0.5 rounded mt-1.5 truncate max-w-full">
+                      📎 {dietPlan.attachment_url.split('/').pop() || 'document.pdf'}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleDownloadFile(dietPlan.attachment_url!)}
+                  disabled={downloadingFile === dietPlan.attachment_url}
+                  className="w-full mt-1 bg-[#5C7A6B] hover:bg-[#4A6356] text-white py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-[#5C7A6B]/10 disabled:opacity-50"
+                >
+                  <Download size={14} />
+                  <span>{downloadingFile === dietPlan.attachment_url ? 'Securing Link...' : 'View / Download'}</span>
+                </button>
+              </div>
             )}
           </div>
-          <div className="bg-white rounded-3xl p-6 border border-[#1A1F36]/6 shadow-[0_4px_20px_rgba(26,31,54,0.02)]">
-            <h3 className="text-[#1A1F36] font-bold text-lg font-sora mb-4 flex items-center gap-2">
-              <span className="text-[#D89A3D]">N</span> Nutritionist Guidance
-            </h3>
-            {careTeam?.nutritionist_notes ? (
-              <p className="text-[#1A1F36] text-sm whitespace-pre-line leading-relaxed bg-[#F5F0EB]/50 p-4 rounded-2xl border border-[#1A1F36]/6">
-                {careTeam.nutritionist_notes}
-              </p>
-            ) : (
-              <p className="text-[#8896A4] text-sm leading-relaxed">
-                Your nutritionist guidance will appear here after your assigned nutritionist creates it.
-              </p>
-            )}
+          <div className="bg-white rounded-3xl p-6 border border-[#1A1F36]/6 shadow-[0_4px_20px_rgba(26,31,54,0.02)] flex flex-col justify-between">
+            <div>
+              <h3 className="text-[#1A1F36] font-bold text-lg font-sora mb-4 flex items-center gap-2">
+                <span className="text-[#D89A3D]">N</span> Nutritionist Guidance
+              </h3>
+              {careTeam?.nutritionist_notes ? (
+                <p className="text-[#1A1F36] text-sm whitespace-pre-line leading-relaxed bg-[#F5F0EB]/50 p-4 rounded-2xl border border-[#1A1F36]/6">
+                  {careTeam.nutritionist_notes}
+                </p>
+              ) : (
+                <p className="text-[#8896A4] text-sm leading-relaxed">
+                  Your nutritionist guidance will appear here after your assigned nutritionist creates it.
+                </p>
+              )}
+            </div>
           </div>
-          <div className="bg-white rounded-3xl p-6 border border-[#1A1F36]/6 shadow-[0_4px_20px_rgba(26,31,54,0.02)]">
-            <h3 className="text-[#1A1F36] font-bold text-lg font-sora mb-4 flex items-center gap-2">
-              <span className="text-[#C4622D]">🏋️</span> Workout Plan
-            </h3>
-            {careTeam?.trainer_notes ? (
-              <p className="text-[#1A1F36] text-sm whitespace-pre-line leading-relaxed bg-[#F5F0EB]/50 p-4 rounded-2xl border border-[#1A1F36]/6">
-                {careTeam.trainer_notes}
-              </p>
-            ) : (
-              <p className="text-[#8896A4] text-sm leading-relaxed">
-                Your fitness trainer hasn't set any specific guidelines yet. Once assigned, your personalized workout plan will appear here.
-              </p>
+          <div className="bg-white rounded-3xl p-6 border border-[#1A1F36]/6 shadow-[0_4px_20px_rgba(26,31,54,0.02)] flex flex-col justify-between">
+            <div>
+              <h3 className="text-[#1A1F36] font-bold text-lg font-sora mb-4 flex items-center gap-2">
+                <span className="text-[#C4622D]">🏋️</span> Workout Plan
+              </h3>
+              {careTeam?.trainer_notes ? (
+                <p className="text-[#1A1F36] text-sm whitespace-pre-line leading-relaxed bg-[#F5F0EB]/50 p-4 rounded-2xl border border-[#1A1F36]/6">
+                  {careTeam.trainer_notes}
+                </p>
+              ) : (
+                <p className="text-[#8896A4] text-sm leading-relaxed">
+                  Your fitness trainer hasn't set any specific guidelines yet. Once assigned, your personalized workout plan will appear here.
+                </p>
+              )}
+            </div>
+            {fitnessPlan?.attachment_url && (
+              <div className="mt-4 border border-[#C4622D]/15 bg-[#C4622D]/5 rounded-2xl p-4 flex flex-col gap-3">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-[#C4622D]/10 flex items-center justify-center text-[#C4622D] shrink-0">
+                    <FileText size={20} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-black text-[#1A1F36] truncate">
+                      {fitnessPlan.title || 'Workout Plan File'}
+                    </p>
+                    <p className="text-[11px] text-[#8896A4] font-medium line-clamp-2 mt-0.5">
+                      {fitnessPlan.description || "View your trainer's uploaded routine guide."}
+                    </p>
+                    <span className="inline-block text-[10px] font-bold text-[#C4622D] bg-[#C4622D]/10 px-2 py-0.5 rounded mt-1.5 truncate max-w-full">
+                      📎 {fitnessPlan.attachment_url.split('/').pop() || 'document.pdf'}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => handleDownloadFile(fitnessPlan.attachment_url!)}
+                  disabled={downloadingFile === fitnessPlan.attachment_url}
+                  className="w-full mt-1 bg-[#C4622D] hover:bg-[#A8522A] text-white py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm shadow-[#C4622D]/10 disabled:opacity-50"
+                >
+                  <Download size={14} />
+                  <span>{downloadingFile === fitnessPlan.attachment_url ? 'Securing Link...' : 'View / Download'}</span>
+                </button>
+              </div>
             )}
           </div>
         </div>

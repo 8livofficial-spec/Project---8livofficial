@@ -89,23 +89,39 @@ export async function POST(request: Request) {
   const assigned = await verifyAssignment(patientId, provider.user.id, provider.role)
   if (!assigned) return NextResponse.json({ error: 'You are not assigned to this patient.' }, { status: 403 })
 
+  const hasAttachment = !!body.attachmentUrl
+
   if (provider.role === 'dietitian') {
-    const calories = boundedNumber(body.caloriesPerDay, 'Calories per day', 800, 6000)
-    const mealSchedule = requiredString(body.mealSchedule, 'Meal schedule')
-    if (calories.error) return NextResponse.json({ error: calories.error }, { status: 400 })
-    if (mealSchedule.error) return NextResponse.json({ error: mealSchedule.error }, { status: 400 })
+    let caloriesVal = 2000
+    if (!hasAttachment || (body.caloriesPerDay !== undefined && body.caloriesPerDay !== null && body.caloriesPerDay !== '')) {
+      const calories = boundedNumber(body.caloriesPerDay, 'Calories per day', 800, 6000)
+      if (calories.error) return NextResponse.json({ error: calories.error }, { status: 400 })
+      caloriesVal = calories.value!
+    }
+
+    let mealScheduleVal = 'See attached file'
+    if (!hasAttachment || (body.mealSchedule !== undefined && body.mealSchedule !== null && body.mealSchedule !== '')) {
+      const mealSchedule = requiredString(body.mealSchedule, 'Meal schedule')
+      if (mealSchedule.error) return NextResponse.json({ error: mealSchedule.error }, { status: 400 })
+      mealScheduleVal = mealSchedule.value!
+    }
 
     const { data, error } = await supabaseAdmin
       .from('diet_plans')
       .insert({
         patient_id: patientId,
         dietitian_id: provider.user.id,
-        calories_per_day: calories.value,
-        meal_schedule: mealSchedule.value,
+        calories_per_day: caloriesVal,
+        meal_schedule: mealScheduleVal,
         food_restrictions: String(body.foodRestrictions || '').trim() || null,
         hydration_goal: String(body.hydrationGoal || '').trim() || null,
         notes: String(body.notes || '').trim() || null,
         status: 'active',
+        appointment_id: body.appointmentId || null,
+        title: String(body.title || '').trim() || null,
+        description: String(body.description || '').trim() || null,
+        attachment_url: String(body.attachmentUrl || '').trim() || null,
+        attachment_type: String(body.attachmentType || '').trim() || null,
       })
       .select()
       .single()
@@ -114,7 +130,7 @@ export async function POST(request: Request) {
 
     await supabaseAdmin
       .from('care_team_assignments')
-      .update({ dietitian_notes: body.notes || mealSchedule.value, updated_at: new Date().toISOString() })
+      .update({ dietitian_notes: body.notes || mealScheduleVal, updated_at: new Date().toISOString() })
       .eq('patient_id', patientId)
 
     return NextResponse.json({ plan: data })
@@ -149,24 +165,44 @@ export async function POST(request: Request) {
     return NextResponse.json({ plan: data })
   }
 
-  const workoutType = requiredString(body.workoutType, 'Workout type')
-  const weeklyFrequency = boundedNumber(body.weeklyFrequency, 'Weekly frequency', 1, 14)
-  const dailyStepGoal = boundedNumber(body.dailyStepGoal, 'Daily step goal', 0, 100000, false)
-  if (workoutType.error) return NextResponse.json({ error: workoutType.error }, { status: 400 })
-  if (weeklyFrequency.error) return NextResponse.json({ error: weeklyFrequency.error }, { status: 400 })
-  if (dailyStepGoal.error) return NextResponse.json({ error: dailyStepGoal.error }, { status: 400 })
+  // Fitness coach role
+  let workoutTypeVal = 'See attached file'
+  if (!hasAttachment || (body.workoutType !== undefined && body.workoutType !== null && body.workoutType !== '')) {
+    const workoutType = requiredString(body.workoutType, 'Workout type')
+    if (workoutType.error) return NextResponse.json({ error: workoutType.error }, { status: 400 })
+    workoutTypeVal = workoutType.value!
+  }
+
+  let weeklyFrequencyVal = 3
+  if (!hasAttachment || (body.weeklyFrequency !== undefined && body.weeklyFrequency !== null && body.weeklyFrequency !== '')) {
+    const weeklyFrequency = boundedNumber(body.weeklyFrequency, 'Weekly frequency', 1, 14)
+    if (weeklyFrequency.error) return NextResponse.json({ error: weeklyFrequency.error }, { status: 400 })
+    weeklyFrequencyVal = weeklyFrequency.value!
+  }
+
+  let dailyStepGoalVal = null
+  if (body.dailyStepGoal !== undefined && body.dailyStepGoal !== null && body.dailyStepGoal !== '') {
+    const dailyStepGoal = boundedNumber(body.dailyStepGoal, 'Daily step goal', 0, 100000, false)
+    if (dailyStepGoal.error) return NextResponse.json({ error: dailyStepGoal.error }, { status: 400 })
+    dailyStepGoalVal = dailyStepGoal.value
+  }
 
   const { data, error } = await supabaseAdmin
     .from('fitness_plans')
     .insert({
       patient_id: patientId,
       fitness_coach_id: provider.user.id,
-      workout_type: workoutType.value,
-      weekly_frequency: weeklyFrequency.value,
-      daily_step_goal: dailyStepGoal.value,
+      workout_type: workoutTypeVal,
+      weekly_frequency: weeklyFrequencyVal,
+      daily_step_goal: dailyStepGoalVal,
       exercise_restrictions: String(body.exerciseRestrictions || '').trim() || null,
       notes: String(body.notes || '').trim() || null,
       status: 'active',
+      appointment_id: body.appointmentId || null,
+      title: String(body.title || '').trim() || null,
+      description: String(body.description || '').trim() || null,
+      attachment_url: String(body.attachmentUrl || '').trim() || null,
+      attachment_type: String(body.attachmentType || '').trim() || null,
     })
     .select()
     .single()
@@ -175,7 +211,7 @@ export async function POST(request: Request) {
 
   await supabaseAdmin
     .from('care_team_assignments')
-    .update({ trainer_notes: body.notes || workoutType.value, updated_at: new Date().toISOString() })
+    .update({ trainer_notes: body.notes || workoutTypeVal, updated_at: new Date().toISOString() })
     .eq('patient_id', patientId)
 
   return NextResponse.json({ plan: data })

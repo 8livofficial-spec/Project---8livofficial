@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { EmailService } from '@/lib/emailService'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { updatePatientJourneyState } from '@/lib/patientJourneyServer'
+import { APP_CONFIG } from '@/lib/appConfig'
 import {
   checkRateLimit,
   createToken,
@@ -12,6 +13,7 @@ import {
   validatePasswordStrength,
   writeAuthAudit,
   findUserByEmail,
+  rateLimitResponse,
 } from '@/lib/authSecurity'
 
 export async function POST(request: Request) {
@@ -25,8 +27,8 @@ export async function POST(request: Request) {
     const lastName = String(body.lastName || '').trim()
     const role = 'patient'
 
-    const rate = checkRateLimit(`signup:${ip}:${email}`, { limit: 5, windowMs: 15 * 60 * 1000, lockMs: 30 * 60 * 1000 })
-    if (!rate.allowed) return NextResponse.json({ error: rate.message }, { status: 429 })
+    const rate = checkRateLimit(`signup:${ip}:${email}`, APP_CONFIG.rateLimits.signup)
+    if (!rate.allowed) return rateLimitResponse(rate.retryAfter || 60, rate.message)
     if (!isValidEmail(email)) return NextResponse.json({ error: 'Enter a valid email address.' }, { status: 400 })
     const passwordError = validatePasswordStrength(password)
     if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 })

@@ -166,6 +166,7 @@ export default function ConsultationSchedulingPage() {
   const { reloadData, onboardingState, loading: patientDataLoading } = usePatientData()
   const reusePaymentFromBookingId = searchParams.get('rescheduleFrom') || ''
   const isActiveMemberFollowUp = onboardingState.membershipStatus === 'ACTIVE' && onboardingState.firstConsultationCompleted === true
+  const isBookingPending = onboardingState.appointmentStatus === 'BOOKING_PENDING' || onboardingState.consultationPaymentStatus === 'PAID'
 
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [selectedDateSlots, setSelectedDateSlots] = useState<AvailableDoctorSlot[]>([])
@@ -351,7 +352,7 @@ export default function ConsultationSchedulingPage() {
       return
     }
 
-    if (reusePaymentFromBookingId || isActiveMemberFollowUp) {
+    if (reusePaymentFromBookingId || isActiveMemberFollowUp || isBookingPending) {
       void handlePaidBooking()
       return
     }
@@ -383,11 +384,18 @@ export default function ConsultationSchedulingPage() {
         body: JSON.stringify({
           patientId: session.user.id,
           paymentMethod: isActiveMemberFollowUp ? undefined : paymentMethod,
-          reusePaymentFromBookingId: reusePaymentFromBookingId || undefined,
+          reusePaymentFromBookingId: reusePaymentFromBookingId || (isBookingPending ? 'pending' : undefined),
           selectedDate: selectedSlot.available_date,
           selectedTime: selectedSlot.time_slot
         })
       })
+
+      if (res.status === 429) {
+        const retryAfter = res.headers.get('Retry-After')
+        const data = await res.json().catch(() => ({}))
+        const errorMsg = data.error || `Too many attempts. Please try again in ${retryAfter || '60'} seconds.`
+        throw new Error(errorMsg)
+      }
 
       const data = await res.json()
       if (!res.ok || data.error) {
@@ -407,7 +415,7 @@ export default function ConsultationSchedulingPage() {
       const message = err instanceof Error ? err.message : 'Unable to schedule consultation.'
       setPaymentError(message)
       setPaymentStage('method')
-      if (reusePaymentFromBookingId) {
+      if (reusePaymentFromBookingId || isBookingPending) {
         alert(message)
       }
     } finally {
@@ -654,6 +662,19 @@ export default function ConsultationSchedulingPage() {
 
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        {isBookingPending && (
+          <div className="mb-8 p-4 rounded-2xl border-2 bg-amber-50 border-amber-200 text-amber-900 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 mt-0.5 shrink-0 text-amber-600" />
+            <div>
+              <h4 className="font-bold text-sm">Complete Your Consultation Booking</h4>
+              <p className="text-xs mt-1 leading-relaxed">
+                Your payment was processed successfully, but the consultation slot could not be finalized. 
+                Please choose any available time below to complete your appointment scheduling. 
+                <strong> You do not need to pay again.</strong>
+              </p>
+            </div>
+          </div>
+        )}
         <div className="mb-12">
           <div className="flex items-center justify-between mb-4">
             <div>

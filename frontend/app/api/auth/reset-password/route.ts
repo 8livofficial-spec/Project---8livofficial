@@ -1,11 +1,13 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { APP_CONFIG } from '@/lib/appConfig'
 import {
   checkRateLimit,
   getClientIp,
   hashToken,
   validatePasswordStrength,
   writeAuthAudit,
+  rateLimitResponse,
 } from '@/lib/authSecurity'
 
 export async function POST(req: Request) {
@@ -18,8 +20,8 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Missing reset token or password.' }, { status: 400 })
     }
 
-    const rate = checkRateLimit(`reset-password:${ip}`, { limit: 8, windowMs: 15 * 60 * 1000 })
-    if (!rate.allowed) return NextResponse.json({ error: rate.message }, { status: 429 })
+    const rate = checkRateLimit(`reset-password:${ip}`, APP_CONFIG.rateLimits.forgotPassword)
+    if (!rate.allowed) return rateLimitResponse(rate.retryAfter || 60, rate.message)
 
     const passwordError = validatePasswordStrength(newPassword)
     if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 })

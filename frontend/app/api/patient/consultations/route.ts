@@ -156,10 +156,14 @@ export async function GET(request: Request) {
   }
 }
 
+import { APP_CONFIG } from '@/lib/appConfig'
+import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/authSecurity'
+
 export async function POST(request: Request) {
   try {
     const authenticatedPatient = await getAuthenticatedPatient(request)
     if ('error' in authenticatedPatient) return NextResponse.json({ error: authenticatedPatient.error }, { status: authenticatedPatient.status })
+    
     const body = await request.json()
     const { patientId, paymentMethod, selectedDate, selectedTime, reusePaymentFromBookingId, followUpOfBookingId } = body
 
@@ -169,6 +173,14 @@ export async function POST(request: Request) {
     if (patientId !== authenticatedPatient.user.id) {
       return NextResponse.json({ error: 'Patient identity does not match the authenticated session.' }, { status: 403 })
     }
+
+    // Rate Limiting
+    const ip = getClientIp(request)
+    const rate = checkRateLimit(`booking:${ip}:${patientId}`, APP_CONFIG.rateLimits.booking)
+    if (!rate.allowed) {
+      return rateLimitResponse(rate.retryAfter || 60, rate.message)
+    }
+
     if (!selectedDate || !selectedTime) {
       return NextResponse.json({ error: 'Please select a consultation time before confirming.' }, { status: 400 })
     }
@@ -304,6 +316,64 @@ export async function POST(request: Request) {
     } catch (assignmentError) {
       const message = assignmentError instanceof Error ? assignmentError.message : 'Unable to assign a doctor for this slot.'
       console.error('Smart consultation assignment failed:', assignmentError)
+
+      // --- BOOKING SAFETY RECOVERY FLOW ---
+      const hasPaid = patientContext.assessment?.consultation_fee_paid || !!paymentMethod || !!reusedPayment
+
+      if (isInitialConsultation && hasPaid) {
+        // Set appointmentStatus to BOOKING_PENDING in journey state
+        await updatePatientJourneyState(patientId, {
+          appointmentStatus: 'BOOKING_PENDING',
+          currentJourneyStep: 'INITIAL_CONSULTATION_BOOKING_FAILED',
+        })
+
+        // If it was a new payment in this request (not reuse), record it so they don't lose it.
+        if (paymentMethod && !reusedPayment) {
+          const txnId = generateTxnId()
+          await supabaseAdmin
+            .from('health_assessments')
+            .update({ consultation_fee_paid: true })
+            .eq('patient_id', patientId)
+
+          await supabaseAdmin
+            .from('payment_transactions')
+            .insert({
+              patient_id: patientId,
+              amount: CONSULTATION_FEE,
+              currency: 'INR',
+              payment_method: paymentMethod,
+              payment_provider: 'razorpay_sim',
+              transaction_id: txnId,
+              status: 'success',
+              membership_tier: null,
+              payment_type: 'consultation',
+              metadata: {
+                booking_failed: true,
+                failed_reason: message,
+                selected_date: selectedDate,
+                selected_time: selectedTime,
+                recorded_at: new Date().toISOString()
+              }
+            })
+
+          await supabaseAdmin
+            .from('patient_notifications')
+            .insert({
+              patient_id: patientId,
+              type: 'billing',
+              title: 'Payment Successful (Booking Pending)',
+              message: `Your payment of INR ${CONSULTATION_FEE} was successful, but the slot ${selectedDate} ${selectedTime} is no longer available. Please select another slot.`,
+              is_read: false
+            })
+        }
+
+        return NextResponse.json({
+          error: 'This slot is no longer available, but your payment was successful. Please select another slot to complete your booking.',
+          appointmentStatus: 'BOOKING_PENDING',
+          recoveryFlow: true
+        }, { status: 409 })
+      }
+
       return NextResponse.json({ error: message }, { status: message.includes('No qualified') ? 409 : 500 })
     }
 
