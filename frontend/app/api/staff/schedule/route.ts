@@ -4,14 +4,29 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 import { createJitsiMeeting } from '@/lib/jitsi'
 import { EmailService } from '@/lib/emailService'
 import { appointmentTypeForRole, assertAssignedProvider, labelForRole, normalizeProviderRole } from '@/lib/providerConsultations'
+import { getAuthenticatedUser } from '@/lib/apiSecurity'
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { staffId, role: rawRole, patientId, bookingDate, bookingTime, consultationNotes } = body
-    const role = normalizeProviderRole(String(rawRole || ''))
+    const authUser = await getAuthenticatedUser(request)
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-    if (!staffId || !role || !patientId || !bookingDate || !bookingTime) {
+    const body = await request.json().catch(() => ({}))
+    const { staffId, role: rawRole, patientId, bookingDate, bookingTime, consultationNotes } = body
+
+    const isAdminAction = authUser.role === 'admin'
+    const resolvedRole = isAdminAction ? normalizeProviderRole(String(rawRole || '')) : authUser.role
+
+    if (!['doctor', 'dietitian', 'nutritionist', 'fitness_coach', 'trainer'].includes(resolvedRole)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const role = (resolvedRole === 'trainer' ? 'fitness_coach' : resolvedRole) as 'doctor' | 'dietitian' | 'nutritionist' | 'fitness_coach'
+    const targetStaffId = isAdminAction ? (staffId || authUser.user.id) : authUser.user.id
+
+    if (!patientId || !bookingDate || !bookingTime) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
     }
 
@@ -19,7 +34,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Unsupported provider consultation role.' }, { status: 400 })
     }
 
-    const assigned = await assertAssignedProvider(patientId, staffId, role)
+    const assigned = await assertAssignedProvider(patientId, targetStaffId, role)
     if (!assigned) {
       return NextResponse.json({ error: 'Provider is not assigned to this patient.' }, { status: 403 })
     }
@@ -32,7 +47,7 @@ export async function POST(request: Request) {
       .from('staff_consultations')
       .insert({
         id: consultationId,
-        staff_id: staffId,
+        staff_id: targetStaffId,
         staff_role: role,
         appointment_type: appointmentTypeForRole(role),
         patient_id: patientId,
@@ -53,7 +68,7 @@ export async function POST(request: Request) {
         .from('staff_consultations')
         .insert({
           id: consultationId,
-          staff_id: staffId,
+          staff_id: targetStaffId,
           staff_role: role,
           patient_id: patientId,
           booking_date: bookingDate,

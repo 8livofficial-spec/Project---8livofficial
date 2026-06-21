@@ -1,50 +1,73 @@
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { getAuthenticatedUser } from './apiSecurity'
 
 export type ProviderRole = 'doctor' | 'dietitian' | 'fitness_coach' | 'nutritionist' | 'trainer'
 
-export async function getAuthenticatedProvider(request: Request) {
-  const authHeader = request.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice('Bearer '.length).trim() : ''
-
-  if (!token) {
-    return { error: 'Unauthorized', status: 401 as const }
+export async function getCurrentProvider(request: Request) {
+  const auth = await getAuthenticatedUser(request)
+  if (!auth) {
+    const err = new Error('Unauthorized')
+    ;(err as any).status = 401
+    ;(err as any).reason = 'no session found'
+    throw err
   }
 
-  const { data, error } = await supabaseAdmin.auth.getUser(token)
-  if (error || !data.user) {
-    return { error: 'Invalid session', status: 401 as const }
+  const allowedRoles = ['doctor', 'dietitian', 'fitness_coach', 'nutritionist', 'trainer']
+  if (!allowedRoles.includes(auth.role)) {
+    const err = new Error('Forbidden')
+    ;(err as any).status = 403
+    ;(err as any).reason = 'role not allowed'
+    throw err
   }
 
   const [profileRes, providerRes] = await Promise.all([
     supabaseAdmin
       .from('profiles')
       .select('id, first_name, last_name, email, role')
-      .eq('id', data.user.id)
+      .eq('id', auth.user.id)
       .maybeSingle(),
     supabaseAdmin
       .from('provider_profiles')
-      .select('provider_id, full_name, specialization, qualification, status, profile_photo_url')
-      .eq('provider_id', data.user.id)
+      .select('provider_id, full_name, specialization, qualification, status, profile_photo_url, email, payout_amount')
+      .eq('provider_id', auth.user.id)
       .maybeSingle()
   ])
 
   if (profileRes.error) {
-    return { error: profileRes.error.message, status: 500 as const }
+    const err = new Error(profileRes.error.message)
+    ;(err as any).status = 500
+    throw err
   }
 
   const profile = profileRes.data
-  const role = profile?.role || data.user.user_metadata?.role
-  if (!['doctor', 'dietitian', 'fitness_coach', 'nutritionist', 'trainer'].includes(role)) {
-    return { error: 'Provider access only', status: 403 as const }
-  }
-
+  const role = profile?.role || auth.role
   const providerProfile = providerRes.data
 
+  if (!providerProfile) {
+    const err = new Error('Provider profile missing')
+    ;(err as any).status = 404
+    ;(err as any).reason = 'provider profile missing'
+    throw err
+  }
+
   return {
-    user: data.user,
+    user: auth.user,
     profile: profile || null,
     providerProfile,
     role: (role === 'trainer' ? 'fitness_coach' : role) as ProviderRole,
+  }
+}
+
+export async function getAuthenticatedProvider(request: Request) {
+  try {
+    const provider = await getCurrentProvider(request)
+    return provider
+  } catch (err: any) {
+    return {
+      error: err.message || 'Unauthorized',
+      status: err.status || 401,
+      reason: err.reason || 'invalid session'
+    }
   }
 }
 

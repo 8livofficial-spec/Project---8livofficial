@@ -7,6 +7,7 @@ import { Activity, Apple, CalendarDays, Dumbbell, FileText, LayoutDashboard, Log
 import { supabase } from '@/lib/supabaseClient'
 import StaffChat from '@/components/StaffChat'
 import ProviderAvailabilityScheduler, { AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler'
+import { authedFetch } from '@/lib/apiClient'
 
 type ProviderRole = 'doctor' | 'dietitian' | 'fitness_coach' | 'nutritionist'
 
@@ -37,20 +38,6 @@ export function ProviderDataProvider({ children }: { children: React.ReactNode }
   const [provider, setProvider] = useState<Provider | null>(null)
   const [providerLoading, setProviderLoading] = useState(true)
   const [error, setError] = useState('')
-
-  const authedFetch = useCallback(async (url: string, options: RequestInit = {}) => {
-    const { data } = await supabase.auth.getSession()
-    const token = data.session?.access_token
-    if (!token) throw new Error('Please sign in again.')
-    return fetch(url, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...(options.headers || {}),
-      },
-    })
-  }, [])
 
   const loadProvider = useCallback(async () => {
     setProviderLoading(true)

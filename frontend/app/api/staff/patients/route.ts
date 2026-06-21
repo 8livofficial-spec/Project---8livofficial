@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseServer';
 import { normalizeProviderRole } from '@/lib/providerConsultations';
+import { getAuthenticatedUser } from '@/lib/apiSecurity';
 
 function displayValue(value: unknown): string | null {
   if (value === null || value === undefined || value === '') return null;
@@ -63,16 +64,23 @@ function getNextAppointment(consultations: any[]) {
 
 export async function POST(req: Request) {
   try {
-    const { staffId, role: rawRole, page = 1, limit = 25, search = '' } = await req.json();
-    const role = normalizeProviderRole(String(rawRole || ''));
-
-    if (!staffId || !role) {
-      return NextResponse.json({ error: 'Missing staffId or role' }, { status: 400 });
+    const authUser = await getAuthenticatedUser(req);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    if (!['doctor', 'dietitian', 'nutritionist', 'fitness_coach'].includes(role)) {
-      return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
+    const body = await req.json().catch(() => ({}));
+    const { staffId, role: rawRole, page = 1, limit = 25, search = '' } = body;
+
+    const isAdminAction = authUser.role === 'admin';
+    const resolvedRole = isAdminAction ? normalizeProviderRole(String(rawRole || '')) : authUser.role;
+
+    if (!['doctor', 'dietitian', 'nutritionist', 'fitness_coach', 'trainer'].includes(resolvedRole)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
+
+    const role = (resolvedRole === 'trainer' ? 'fitness_coach' : resolvedRole) as 'doctor' | 'dietitian' | 'nutritionist' | 'fitness_coach';
+    const targetStaffId = isAdminAction ? (staffId || authUser.user.id) : authUser.user.id;
 
     let matchingPatientIds: string[] = [];
     if (search.trim()) {
@@ -90,13 +98,13 @@ export async function POST(req: Request) {
     // 1. Fetch care team assignments for this staff member
     let assignmentsQuery = supabaseAdmin.from('care_team_assignments').select('*', { count: 'exact' });
     if (role === 'fitness_coach') {
-      assignmentsQuery = assignmentsQuery.or(`fitness_coach_id.eq.${staffId},trainer_id.eq.${staffId}`);
+      assignmentsQuery = assignmentsQuery.or(`fitness_coach_id.eq.${targetStaffId},trainer_id.eq.${targetStaffId}`);
     } else if (role === 'dietitian') {
-      assignmentsQuery = assignmentsQuery.eq('dietitian_id', staffId);
+      assignmentsQuery = assignmentsQuery.eq('dietitian_id', targetStaffId);
     } else if (role === 'nutritionist') {
-      assignmentsQuery = assignmentsQuery.eq('nutritionist_id', staffId);
+      assignmentsQuery = assignmentsQuery.eq('nutritionist_id', targetStaffId);
     } else if (role === 'doctor') {
-      assignmentsQuery = assignmentsQuery.eq('doctor_id', staffId);
+      assignmentsQuery = assignmentsQuery.eq('doctor_id', targetStaffId);
     }
 
     if (search.trim()) {

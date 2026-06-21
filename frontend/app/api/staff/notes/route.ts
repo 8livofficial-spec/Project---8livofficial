@@ -1,14 +1,29 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { labelForRole, normalizeProviderRole } from '@/lib/providerConsultations'
+import { getAuthenticatedUser } from '@/lib/apiSecurity'
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { staffId, patientId, role: rawRole, notes } = body
-    const role = normalizeProviderRole(String(rawRole || ''))
+    const authUser = await getAuthenticatedUser(request)
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-    if (!staffId || !patientId || !role) {
+    const body = await request.json().catch(() => ({}))
+    const { staffId, patientId, role: rawRole, notes } = body
+
+    const isAdminAction = authUser.role === 'admin'
+    const resolvedRole = isAdminAction ? normalizeProviderRole(String(rawRole || '')) : authUser.role
+
+    if (!['doctor', 'dietitian', 'nutritionist', 'fitness_coach', 'trainer'].includes(resolvedRole)) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const role = (resolvedRole === 'trainer' ? 'fitness_coach' : resolvedRole) as 'doctor' | 'dietitian' | 'nutritionist' | 'fitness_coach'
+    const targetStaffId = isAdminAction ? (staffId || authUser.user.id) : authUser.user.id
+
+    if (!patientId) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
     }
 
@@ -27,15 +42,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'No care team assignment found for this patient.' }, { status: 404 })
     }
 
-    if (role === 'dietitian' && assignment.dietitian_id !== staffId) {
+    if (role === 'dietitian' && assignment.dietitian_id !== targetStaffId) {
       return NextResponse.json({ error: 'Unauthorized. You are not the assigned dietitian for this patient.' }, { status: 403 })
     }
 
-    if (role === 'nutritionist' && assignment.nutritionist_id !== staffId) {
+    if (role === 'nutritionist' && assignment.nutritionist_id !== targetStaffId) {
       return NextResponse.json({ error: 'Unauthorized. You are not the assigned nutritionist for this patient.' }, { status: 403 })
     }
 
-    if (role === 'fitness_coach' && assignment.fitness_coach_id !== staffId && assignment.trainer_id !== staffId) {
+    if (role === 'fitness_coach' && assignment.fitness_coach_id !== targetStaffId && assignment.trainer_id !== targetStaffId) {
       return NextResponse.json({ error: 'Unauthorized. You are not the assigned fitness coach for this patient.' }, { status: 403 })
     }
 

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { createJitsiMeeting } from '@/lib/jitsi'
-import { assertDoctor } from '@/lib/apiSecurity'
+import { getAuthenticatedUser } from '@/lib/apiSecurity'
 
 function isLegacyVideoUrl(url?: string | null) {
   return Boolean(url && /daily\.co|8liv\.daily/i.test(url))
@@ -13,19 +13,29 @@ function getErrorMessage(err: unknown) {
 
 export async function POST(request: Request) {
   try {
-    const { doctorId, consultationId } = await request.json()
-
-    if (!doctorId || !consultationId) {
-      return NextResponse.json({ error: 'doctorId and consultationId are required' }, { status: 400 })
+    const authUser = await getAuthenticatedUser(request)
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    await assertDoctor(request, doctorId)
+    const { doctorId, consultationId } = await request.json().catch(() => ({}))
+
+    if (!consultationId) {
+      return NextResponse.json({ error: 'consultationId is required' }, { status: 400 })
+    }
+
+    const isAdminAction = authUser.role === 'admin'
+    if (!isAdminAction && authUser.role !== 'doctor') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const targetDoctorId = isAdminAction ? (doctorId || authUser.user.id) : authUser.user.id
 
     const { data: consultation, error: lookupError } = await supabaseAdmin
       .from('doctor_consultations')
       .select('id, doctor_id, room_url, meeting_provider, meeting_room, meeting_url')
       .eq('id', consultationId)
-      .eq('doctor_id', doctorId)
+      .eq('doctor_id', targetDoctorId)
       .maybeSingle()
 
     if (lookupError) {
@@ -34,7 +44,7 @@ export async function POST(request: Request) {
         .from('doctor_consultations')
         .select('id, doctor_id, room_url')
         .eq('id', consultationId)
-        .eq('doctor_id', doctorId)
+        .eq('doctor_id', targetDoctorId)
         .maybeSingle()
 
       if (legacyLookupError) throw legacyLookupError
@@ -47,7 +57,7 @@ export async function POST(request: Request) {
         .from('doctor_consultations')
         .update({ room_url: meeting.meetingUrl, updated_at: new Date().toISOString() })
         .eq('id', legacyConsultation.id)
-        .eq('doctor_id', doctorId)
+        .eq('doctor_id', targetDoctorId)
 
       if (legacyUpdateError) throw legacyUpdateError
       return NextResponse.json({ success: true, meetingUrl: meeting.meetingUrl, meetingRoom: meeting.meetingRoom, meetingProvider: meeting.meetingProvider })
@@ -80,14 +90,14 @@ export async function POST(request: Request) {
       .from('doctor_consultations')
       .update(fullPayload)
       .eq('id', consultation.id)
-      .eq('doctor_id', doctorId)
+      .eq('doctor_id', targetDoctorId)
 
     if (updateError) {
       const { error: fallbackError } = await supabaseAdmin
         .from('doctor_consultations')
         .update({ room_url: meeting.meetingUrl, updated_at: new Date().toISOString() })
         .eq('id', consultation.id)
-        .eq('doctor_id', doctorId)
+        .eq('doctor_id', targetDoctorId)
 
       if (fallbackError) throw fallbackError
     }

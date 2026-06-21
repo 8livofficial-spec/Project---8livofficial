@@ -4,7 +4,33 @@ import { getAssignedProviderForRole } from './providerConsultations'
 
 export async function getAuthenticatedUser(request: Request) {
   const authHeader = request.headers.get('authorization') || ''
-  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : ''
+  let token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : ''
+
+  if (!token) {
+    const cookieHeader = request.headers.get('cookie') || ''
+    const cookies = cookieHeader.split(';').map(c => c.trim())
+    
+    // 1. Search for Supabase project-specific auth token
+    const sbTokenCookie = cookies.find(c => c.startsWith('sb-') && c.includes('-auth-token'))
+    if (sbTokenCookie) {
+      try {
+        const decoded = decodeURIComponent(sbTokenCookie.split('=')[1] || '')
+        const parsed = JSON.parse(decoded)
+        token = parsed?.access_token || ''
+      } catch (e) {
+        // Safe to ignore
+      }
+    }
+    
+    // 2. Search for generic/custom tokens in cookie
+    if (!token) {
+      const accessTokenCookie = cookies.find(c => c.startsWith('sb-access-token=') || c.startsWith('supabase-access-token='))
+      if (accessTokenCookie) {
+        token = accessTokenCookie.split('=')[1] || ''
+      }
+    }
+  }
+
   if (!token) return null
 
   const { data, error } = await supabaseAdmin.auth.getUser(token)
@@ -49,6 +75,20 @@ export async function assertAdmin(request: Request) {
     throw new Error('Forbidden')
   }
   return auth.user
+}
+
+export async function assertProvider(request: Request) {
+  const auth = await getAuthenticatedUser(request)
+  if (!auth) {
+    throw new Error('Unauthorized')
+  }
+
+  const allowedRoles = ['doctor', 'dietitian', 'nutritionist', 'fitness_coach', 'trainer']
+  if (!allowedRoles.includes(auth.role)) {
+    throw new Error('Forbidden')
+  }
+
+  return auth
 }
 
 export async function assertDoctor(request: Request, doctorId?: string | null) {

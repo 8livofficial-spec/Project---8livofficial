@@ -1,22 +1,24 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || 'placeholder'
-);
+import { supabaseAdmin } from '@/lib/supabaseServer';
+import { getAuthenticatedUser } from '@/lib/apiSecurity';
 
 export async function POST(req: Request) {
   try {
-    const { userId } = await req.json();
-    if (!userId) {
-      return NextResponse.json({ error: 'User ID required' }, { status: 400 });
+    const authUser = await getAuthenticatedUser(req);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    const body = await req.json().catch(() => ({}));
+    const { userId } = body;
+
+    const isAdminAction = authUser.role === 'admin';
+    const targetUserId = isAdminAction ? (userId || authUser.user.id) : authUser.user.id;
 
     const { data: profile, error } = await supabaseAdmin
       .from('profiles')
       .select('*')
-      .eq('id', userId)
+      .eq('id', targetUserId)
       .maybeSingle();
 
     if (error) {
@@ -27,7 +29,7 @@ export async function POST(req: Request) {
 
     if (!finalProfile) {
       // Auto-heal profiles if user exists in auth metadata but missing in database profiles
-      const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.getUserById(userId);
+      const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.getUserById(targetUserId);
       if (!authErr && authData?.user) {
         const user = authData.user;
         const role = user.user_metadata?.role || (user.email === '8livofficial@gmail.com' ? 'admin' : null);
@@ -40,7 +42,7 @@ export async function POST(req: Request) {
           const { data: newProfile, error: insertErr } = await supabaseAdmin
             .from('profiles')
             .insert({
-              id: userId,
+              id: targetUserId,
               role: role,
               first_name: first_name,
               last_name: last_name,

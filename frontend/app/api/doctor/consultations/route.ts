@@ -176,14 +176,20 @@ async function creditDoctorWalletOnce(doctorId: string, patientId: string, appoi
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-    const { doctorId, page = 1, limit = 25, search = '', status = '' } = body;
-
-    if (!doctorId) {
-      return NextResponse.json({ error: 'doctorId is required' }, { status: 400 });
+    const authUser = await getAuthenticatedUser(req);
+    if (!authUser) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    await assertDoctor(req, doctorId);
+    const body = await req.json().catch(() => ({}));
+    const { doctorId, page = 1, limit = 25, search = '', status = '' } = body;
+
+    const isAdminAction = authUser.role === 'admin';
+    if (!isAdminAction && authUser.role !== 'doctor') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const targetDoctorId = isAdminAction ? (doctorId || authUser.user.id) : authUser.user.id;
 
     let matchingPatientIds: string[] = [];
     if (search.trim()) {
@@ -202,7 +208,7 @@ export async function POST(req: Request) {
     let query = supabaseAdmin
       .from('doctor_consultations')
       .select('id, doctor_id, patient_id, booking_date, booking_time, status, room_url, is_completed, consultation_notes, prescription_type, created_at, call_started_at, call_ended_at, prescription_text, prescription_notes, updated_at, appointment_type, meeting_provider, meeting_room, meeting_url, completed_at', { count: 'exact' })
-      .eq('doctor_id', doctorId);
+      .eq('doctor_id', targetDoctorId);
 
     if (status) {
       query = query.eq('status', status);
@@ -313,16 +319,13 @@ export async function PATCH(req: Request) {
       if (authUser.role !== 'doctor') {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
-      if (doctorId && authUser.user.id !== doctorId) {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-      }
     }
 
     if (!consultationId) {
       return NextResponse.json({ error: 'consultationId is required' }, { status: 400 });
     }
 
-    const targetDoctorId = doctorId || authUser.user.id;
+    const targetDoctorId = isAdminAction ? (doctorId || authUser.user.id) : authUser.user.id;
 
     let lookupQuery = supabaseAdmin
       .from('doctor_consultations')

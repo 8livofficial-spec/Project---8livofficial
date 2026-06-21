@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react'
 import { createClient } from '@supabase/supabase-js';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
+import { authedFetch } from '@/lib/apiClient';
 import {
   Activity, Users, CheckCircle2, XCircle, Video, Calendar, Wallet,
   ArrowDownToLine, Pill, FileText, Clock, AlertCircle, LogOut,
@@ -505,10 +506,8 @@ export default function DoctorDashboard() {
         setDoctor(session.user);
 
         // Fetch user profile securely via our backend to bypass any RLS limitations on Profiles
-        const profileRes = await fetch('/api/staff/profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ userId: session.user.id })
+        const profileRes = await authedFetch('/api/staff/profile', {
+          method: 'POST'
         });
         const profileData = await profileRes.json();
         const userProfile = profileData.profile;
@@ -526,12 +525,9 @@ export default function DoctorDashboard() {
         // Ensure doctor profile exists in profiles table (required for doctor_availability FK constraint)
         // This calls the backend which has service-role permissions to bypass RLS
         try {
-          const profileInitRes = await fetch('/api/doctor/ensure-profile', {
+          const profileInitRes = await authedFetch('/api/provider/ensure-profile', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              doctor_id: session.user.id,
-              email: session.user.email || '',
               first_name: userProfile?.first_name || 'Dr',
               last_name: userProfile?.last_name || 'Unknown'
             })
@@ -570,11 +566,9 @@ export default function DoctorDashboard() {
           }
         }
 
-        const loadDashboardAggregated = async (token: string) => {
+        const loadDashboardAggregated = async () => {
           try {
-            const res = await fetch('/api/provider/dashboard', {
-              headers: { 'Authorization': `Bearer ${token}` }
-            });
+            const res = await authedFetch('/api/provider/dashboard');
             if (res.ok) {
               const data = await res.json();
               if (data.consultations) setConsultations(data.consultations);
@@ -586,9 +580,7 @@ export default function DoctorDashboard() {
           }
         };
 
-        if (session.access_token) {
-          await loadDashboardAggregated(session.access_token);
-        }
+        await loadDashboardAggregated();
         setLoading(false);
       } catch (err) {
         console.error('Doctor dashboard initialization failed:', err);
@@ -603,13 +595,8 @@ export default function DoctorDashboard() {
   useEffect(() => {
     if (!doctor) return;
     const loadTabDetails = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || '';
-
       if (activeTab === 'overview') {
-        const res = await fetch('/api/provider/dashboard', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const res = await authedFetch('/api/provider/dashboard');
         if (res.ok) {
           const data = await res.json();
           if (data.consultations) setConsultations(data.consultations);
@@ -664,13 +651,8 @@ export default function DoctorDashboard() {
   useEffect(() => {
     if (!doctor) return;
     const pollInterval = setInterval(async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      const token = session?.access_token || '';
-
-      if (activeTab === 'overview' && token) {
-        const res = await fetch('/api/provider/dashboard', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
+      if (activeTab === 'overview') {
+        const res = await authedFetch('/api/provider/dashboard');
         if (res.ok) {
           const data = await res.json();
           if (data.consultations) setConsultations(data.consultations);
@@ -767,10 +749,9 @@ export default function DoctorDashboard() {
     status: string = consultationsStatusFilter
   ) => {
     try {
-      const res = await fetch('/api/doctor/consultations', {
+      const res = await authedFetch('/api/doctor/consultations', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ doctorId, page, limit: 20, search, status })
+        body: JSON.stringify({ page, limit: 20, search, status })
       });
       const data = await res.json();
       if (data.consultations) setConsultations(data.consultations);
@@ -787,10 +768,9 @@ export default function DoctorDashboard() {
     search: string = patientsSearch
   ) => {
     try {
-      const res = await fetch('/api/staff/patients', {
+      const res = await authedFetch('/api/staff/patients', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ staffId: doctorId, role: 'doctor', page, limit: 20, search })
+        body: JSON.stringify({ page, limit: 20, search })
       });
       const data = await res.json();
       if (data.patients) {
@@ -813,29 +793,29 @@ export default function DoctorDashboard() {
   };
 
   const loadAvailability = async (doctorId: string) => {
-    const { data } = await supabase
-      .from('provider_availability')
-      .select('*')
-      .eq('provider_id', doctorId)
-      .eq('provider_role', 'doctor')
-      .order('available_date', { ascending: true });
-    if (data) {
-      const mapped = data.map((row: any) => ({
-        id: row.id,
-        doctor_id: row.provider_id,
-        available_date: row.available_date,
-        time_slot: row.start_time,
-        is_booked: row.status === 'BOOKED' || !row.is_available,
-        created_at: row.created_at,
-        updated_at: row.updated_at
-      }));
-      setAvailSlots(
-        [...mapped].sort((a, b) => {
-          const aTime = getSlotTimestamp(a.available_date, a.time_slot) || 0;
-          const bTime = getSlotTimestamp(b.available_date, b.time_slot) || 0;
-          return aTime - bTime;
-        })
-      );
+    try {
+      const res = await authedFetch('/api/provider/availability');
+      const data = await res.json();
+      if (data.availability) {
+        const mapped = data.availability.map((row: any) => ({
+          id: row.id,
+          doctor_id: row.provider_id,
+          available_date: row.available_date,
+          time_slot: row.start_time,
+          is_booked: row.status === 'BOOKED' || !row.is_available,
+          created_at: row.created_at,
+          updated_at: row.updated_at
+        }));
+        setAvailSlots(
+          [...mapped].sort((a, b) => {
+            const aTime = getSlotTimestamp(a.available_date, a.time_slot) || 0;
+            const bTime = getSlotTimestamp(b.available_date, b.time_slot) || 0;
+            return aTime - bTime;
+          })
+        );
+      }
+    } catch (err) {
+      console.error('Failed to load availability:', err);
     }
   };
 
@@ -867,12 +847,9 @@ export default function DoctorDashboard() {
     if (!doctor) return;
     setGeneratingAvailability(true);
     try {
-      const response = await fetch('/api/doctor/availability', {
+      const response = await authedFetch('/api/provider/availability', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          doctorId: doctor.id,
-          email: doctor.email || '',
           slots: submission.slots,
         })
       });
@@ -900,8 +877,18 @@ export default function DoctorDashboard() {
       alert('Booked slots cannot be deleted from availability. Cancel the consultation first if needed.');
       return;
     }
-    await supabase.from('provider_availability').delete().eq('id', id);
-    loadAvailability(doctor.id);
+    try {
+      const response = await authedFetch(`/api/provider/availability?id=${id}`, {
+        method: 'DELETE',
+      });
+      const data = await response.json();
+      if (!response.ok || data.error) {
+        throw new Error(data.error || 'Unable to delete slot.');
+      }
+      await loadAvailability(doctor.id);
+    } catch (err: any) {
+      alert('Error: ' + err.message);
+    }
   };
 
   const joinCall = async (c: Consultation) => {
@@ -914,10 +901,9 @@ export default function DoctorDashboard() {
     let finalLink = c.meeting_url || c.room_url;
 
     if (!finalLink || isLegacyVideoUrl(finalLink)) {
-      const res = await fetch('/api/doctor/consultations/meeting', {
+      const res = await authedFetch('/api/doctor/consultations/meeting', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ doctorId: doctor.id, consultationId: c.id })
+        body: JSON.stringify({ consultationId: c.id })
       });
       const data = await res.json();
       if (!res.ok || data.error || !data.meetingUrl) {
@@ -1097,11 +1083,9 @@ export default function DoctorDashboard() {
       const finalType = isNoPrescription ? 'none' : prescriptionType;
       const finalText = isNoPrescription ? null : prescriptionText;
 
-      const res = await fetch('/api/doctor/consultations', {
+      const res = await authedFetch('/api/doctor/consultations', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          doctorId: doctor.id,
           consultationId: prescribeCase.id,
           action: 'complete_consultation',
           decision: 'approved',
@@ -1136,11 +1120,9 @@ export default function DoctorDashboard() {
     if (!rejectCase || !doctor) return;
     setRejecting(true);
     try {
-      const res = await fetch('/api/doctor/consultations', {
+      const res = await authedFetch('/api/doctor/consultations', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          doctorId: doctor.id,
           consultationId: rejectCase.id,
           action: 'complete_consultation',
           decision: 'rejected',
@@ -1171,11 +1153,9 @@ export default function DoctorDashboard() {
     if (!confirm('Are you sure you want to cancel this scheduled appointment?')) return;
     if (!doctor) return;
     try {
-      const res = await fetch('/api/doctor/consultations', {
+      const res = await authedFetch('/api/doctor/consultations', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          doctorId: doctor.id,
           consultationId: c.id
         })
       });
@@ -1332,11 +1312,9 @@ export default function DoctorDashboard() {
     if (!confirm('Mark this appointment as missed by patient? This is allowed only 10 minutes after the appointment start time.')) return;
     if (!doctor) return;
     try {
-      const res = await fetch('/api/doctor/consultations', {
+      const res = await authedFetch('/api/doctor/consultations', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          doctorId: doctor.id,
           consultationId: c.id,
           action: 'mark_missed_by_patient'
         })

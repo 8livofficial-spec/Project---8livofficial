@@ -250,3 +250,32 @@ export async function DELETE(request: Request) {
   if (!data?.id) return NextResponse.json({ error: 'Only an available slot can be cancelled.' }, { status: 409 })
   return NextResponse.json({ success: true })
 }
+
+export async function PUT(request: Request) {
+  const provider = await getAuthenticatedProvider(request)
+  if ('error' in provider) return NextResponse.json({ error: provider.error }, { status: provider.status })
+
+  const body = await request.json()
+  const { id, status, is_available } = body
+
+  if (!id) return NextResponse.json({ error: 'Availability id is required.' }, { status: 400 })
+
+  const updatePayload: any = {}
+  if (status !== undefined) updatePayload.status = status
+  if (is_available !== undefined) updatePayload.is_available = is_available
+  updatePayload.updated_at = new Date().toISOString()
+
+  const { data, error } = await supabaseAdmin
+    .from('provider_availability')
+    .update(updatePayload)
+    .eq('id', id)
+    .eq('provider_id', provider.user.id)
+    .eq('provider_role', provider.role)
+    .select('id')
+    .maybeSingle()
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  if (!data?.id) return NextResponse.json({ error: 'Slot not found or unauthorized.' }, { status: 404 })
+
+  return NextResponse.json({ success: true })
+}
