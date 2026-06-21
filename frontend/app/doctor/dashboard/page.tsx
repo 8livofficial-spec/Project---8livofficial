@@ -964,24 +964,36 @@ export default function DoctorDashboard() {
     setActiveCallStatus('calling');
     setActiveCallId(c.id);
 
-    // Update status and record call_started_at in DB
-    await supabase.from('doctor_consultations').update({
-      status: 'calling',
-      call_started_at: new Date().toISOString(),
-      updated_at: new Date().toISOString()
-    }).eq('id', c.id);
+    // Update status and record call_started_at in DB securely via API
+    try {
+      await authedFetch('/api/doctor/consultations', {
+        method: 'POST',
+        body: JSON.stringify({
+          consultationId: c.id,
+          action: 'start_call'
+        })
+      });
+    } catch (err) {
+      console.error('Failed to start call via API:', err);
+    }
 
     loadConsultations(doctor.id);
   };
 
   const endCall = async () => {
-    // Record call_ended_at and status: attended in DB
+    // Record call_ended_at and status: attended in DB securely via API
     if (activeCallId) {
-      await supabase.from('doctor_consultations').update({
-        status: 'attended',
-        call_ended_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq('id', activeCallId);
+      try {
+        await authedFetch('/api/doctor/consultations', {
+          method: 'POST',
+          body: JSON.stringify({
+            consultationId: activeCallId,
+            action: 'end_call'
+          })
+        });
+      } catch (err) {
+        console.error('Failed to end call via API:', err);
+      }
 
       const endingCons = consultations.find(c => c.id === activeCallId);
       if (endingCons) {
