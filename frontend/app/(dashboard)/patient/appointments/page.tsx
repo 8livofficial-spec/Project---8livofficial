@@ -137,53 +137,34 @@ export default function AppointmentsPage() {
       const session = sessionData.session
       if (!session) throw new Error('Please sign in again.')
 
-      const [doctorRes, staffRes] = await Promise.all([
-        supabase
-          .from('doctor_consultations')
-          .select('*')
-          .eq('patient_id', session.user.id)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('staff_consultations')
-          .select('*')
-          .eq('patient_id', session.user.id)
-          .order('created_at', { ascending: false }),
-      ])
+      const response = await fetch('/api/patient/appointments', {
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      })
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}))
+        throw new Error(errData.error || 'Failed to fetch appointments.')
+      }
+      const data = await response.json()
 
-      if (doctorRes.error) throw doctorRes.error
-      if (staffRes.error) throw staffRes.error
+      const doctorRows = (data.doctorConsultations || []) as DoctorConsultationRow[]
+      const staffRows = (data.staffConsultations || []) as StaffConsultationRow[]
 
-      const doctorRows = (doctorRes.data || []) as DoctorConsultationRow[]
-      const staffRows = (staffRes.data || []) as StaffConsultationRow[]
-      const doctorIds = Array.from(new Set(doctorRows.map(row => row.doctor_id).filter(Boolean))) as string[]
-      const staffIds = Array.from(new Set(staffRows.map(row => row.staff_id).filter(Boolean))) as string[]
-
-      const [doctorProfilesRes, providerProfilesRes, profilesRes] = await Promise.all([
-        doctorIds.length
-          ? supabase.from('doctor_profiles').select('id, full_name').in('id', doctorIds)
-          : Promise.resolve({ data: [] }),
-        staffIds.length
-          ? supabase.from('provider_profiles').select('provider_id, full_name, role').in('provider_id', staffIds)
-          : Promise.resolve({ data: [] }),
-        staffIds.length
-          ? supabase.from('profiles').select('id, first_name, last_name, display_id').in('id', staffIds)
-          : Promise.resolve({ data: [] }),
-      ])
-
-      const doctorNames = new Map(
-        ((doctorProfilesRes.data || []) as Array<{ id: string; full_name?: string | null }>).map(profile => [
+      const doctorNames = new Map<string, string>(
+        (data.doctorProfiles || []).map((profile: any) => [
           profile.id,
           profile.full_name || 'Assigned Doctor',
         ])
       )
-      const providerNames = new Map(
-        ((providerProfilesRes.data || []) as Array<{ provider_id: string; full_name?: string | null }>).map(profile => [
+      const providerNames = new Map<string, string>(
+        (data.providerProfiles || []).map((profile: any) => [
           profile.provider_id,
           profile.full_name || 'Assigned Provider',
         ])
       )
-      const profileNames = new Map(
-        ((profilesRes.data || []) as Array<{ id: string; first_name?: string | null; last_name?: string | null; display_id?: string | null }>).map(profile => [
+      const profileNames = new Map<string, string>(
+        (data.profiles || []).map((profile: any) => [
           profile.id,
           [profile.first_name, profile.last_name].filter(Boolean).join(' ') || profile.display_id || 'Assigned Provider',
         ])
