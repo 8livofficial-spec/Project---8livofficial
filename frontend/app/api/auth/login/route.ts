@@ -30,8 +30,17 @@ export async function POST(request: Request) {
     const authClient = createSupabasePasswordClient()
     const { data, error } = await authClient.auth.signInWithPassword({ email, password })
 
-    if (error || !data.user || !data.session) {
-      await writeAuthAudit({ email, event: 'LOGIN', status: 'FAILED', ip, userAgent, metadata: { error: error?.message } })
+    if (error) {
+      const msg = error.message.toLowerCase()
+      if (msg.includes('confirm') || msg.includes('verify')) {
+        return NextResponse.json({ error: 'Please verify your email before signing in.', code: 'EMAIL_NOT_VERIFIED' }, { status: 403 })
+      }
+      await writeAuthAudit({ email, event: 'LOGIN', status: 'FAILED', ip, userAgent, metadata: { error: error.message } })
+      return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 })
+    }
+
+    if (!data.user || !data.session) {
+      await writeAuthAudit({ email, event: 'LOGIN', status: 'FAILED', ip, userAgent })
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 })
     }
 
