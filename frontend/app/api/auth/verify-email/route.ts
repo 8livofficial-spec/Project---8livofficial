@@ -48,7 +48,7 @@ export async function POST(request: Request) {
     }
 
     // Set email_confirm: true, and clear verification token from user_metadata
-    const updatedMetadata = {
+    const updatedMetadata: Record<string, any> = {
       ...metadata,
       verification_token_hash: null,
       verification_expires_at: null,
