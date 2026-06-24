@@ -479,14 +479,14 @@ export default function AssessmentPage() {
 
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div><label className={labelCls}>First Name</label><input type="text" name="first_name" value={formData.first_name} onChange={handleInputChange} className={inputCls} placeholder="John"/></div>
-                    <div><label className={labelCls}>Last Name</label><input type="text" name="last_name" value={formData.last_name} onChange={handleInputChange} className={inputCls} placeholder="Doe"/></div>
+                    <div><label className={labelCls}>First Name</label><input type="text" name="first_name" value={formData.first_name} onChange={handleInputChange} className={inputCls} placeholder="First Name"/></div>
+                    <div><label className={labelCls}>Last Name</label><input type="text" name="last_name" value={formData.last_name} onChange={handleInputChange} className={inputCls} placeholder="Last Name"/></div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div><label className={labelCls}>Age</label><input type="number" name="age" value={formData.age} onChange={handleInputChange} className={inputCls} placeholder="35"/></div>
-                    <div><label className={labelCls}>Phone Number</label><input type="tel" name="phone_number" value={formData.phone_number} onChange={handleInputChange} className={inputCls} placeholder="(555) 000-0000"/></div>
+                    <div><label className={labelCls}>Phone Number</label><input type="tel" name="phone_number" value={formData.phone_number} onChange={handleInputChange} className={inputCls} placeholder="+91 9090909090"/></div>
                   </div>
-                  <div><label className={labelCls}>Address</label><textarea name="address" value={formData.address} onChange={handleInputChange} rows={3} className={inputCls} placeholder="123 Wellness Ave..."></textarea></div>
+                  <div><label className={labelCls}>Address</label><textarea name="address" value={formData.address} onChange={handleInputChange} rows={3} className={inputCls} placeholder="Address 10/7 Avenue Street..."></textarea></div>
 
                   <div className="bg-[#D46E53]/5 p-6 rounded-3xl border border-[#D46E53]/10">
                     <label className="flex items-start space-x-4 cursor-pointer group">

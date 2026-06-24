@@ -280,7 +280,7 @@ export default function AppointmentDetailsPage() {
     { label: 'Meeting Type', value: appointment.meetingType },
     { label: 'Meeting Provider', value: appointment.meetingProvider || 'JITSI' },
     { label: 'Status', value: appointment.status },
-    { label: 'Consultation Fee', value: `₹${appointment.paymentAmount.toLocaleString('en-IN')}` },
+    { label: 'Consultation Fee', value: `₹${(appointment.paymentAmount ?? 0).toLocaleString('en-IN')}` },
     { label: 'Payment Status', value: appointment.paymentStatus },
     { label: 'Payment ID', value: appointment.paymentId || 'Not recorded' },
     { label: 'Payment Method', value: appointment.paymentMethod || 'Not recorded' },
@@ -410,7 +410,7 @@ export default function AppointmentDetailsPage() {
           <div className="mt-5 space-y-3 border-t border-[#1A1F36]/8 pt-5">
             <div className="flex justify-between gap-4 text-sm">
               <span className="text-[#8896A4]">Amount</span>
-              <span className="font-bold">₹{appointment.paymentAmount.toLocaleString('en-IN')}</span>
+              <span className="font-bold">₹{(appointment.paymentAmount ?? 0).toLocaleString('en-IN')}</span>
             </div>
             <div className="flex justify-between gap-4 text-sm">
               <span className="text-[#8896A4]">Payment ID</span>

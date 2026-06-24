@@ -621,7 +621,7 @@ export default function ConsultationSchedulingPage() {
                     { label: 'Booking ID', value: assignment.bookingId || assignment.consultationId },
                     { label: 'Meeting Type', value: assignment.meetingType },
                     { label: 'Status', value: assignment.appointmentStatus || 'SCHEDULED' },
-                    { label: 'Payment Amount', value: `INR ${(assignment.paymentAmount || CONSULTATION_FEE).toLocaleString('en-IN')}` },
+                    { label: 'Payment Amount', value: `INR ${Number(assignment.paymentAmount || CONSULTATION_FEE).toLocaleString('en-IN')}` },
                     { label: 'Payment Status', value: assignment.paymentStatus || 'PAID' },
                     { label: 'Payment ID', value: assignment.paymentId || 'Recorded' },
                   ].map((row) => (

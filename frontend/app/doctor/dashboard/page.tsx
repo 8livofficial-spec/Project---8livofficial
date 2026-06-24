@@ -1259,7 +1259,7 @@ export default function DoctorDashboard() {
   const pendingStatuses = ['scheduled', 'calling', 'attended'];
   const cancelledStatuses = ['cancelled', 'cancelled_by_doctor', 'cancelled_by_patient'];
 
-  const todayCases = consultations.filter(c => c.booking_date === todayIso || new Date(c.created_at).toLocaleDateString('en-IN') === today).length;
+  const todayCases = consultations.filter(c => c.booking_date === todayIso || (c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '') === today).length;
   const weekCases = consultations.filter(c => new Date(c.created_at) >= thisWeekStart).length;
   const monthCases = consultations.filter(c => new Date(c.created_at) >= thisMonthStart).length;
   const approvedCases = consultations.filter(c => c.status === 'approved').length;
@@ -1754,7 +1754,7 @@ export default function DoctorDashboard() {
                 {wallet.balance > 0 ? (
                   <div className="bg-[#F5F0EB] rounded-2xl p-4 text-[#1A1F36] shadow-lg shadow-black/10 border border-white/10">
                     <p className="text-xs text-[#40516A] font-bold uppercase tracking-wider mb-1">Wallet Balance</p>
-                    <p className="text-2xl font-black">₹{wallet.balance.toLocaleString('en-IN')}</p>
+                    <p className="text-2xl font-black">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
                   </div>
                 ) : (
                   <div className="bg-[#F5F0EB] rounded-2xl p-4 text-[#1A1F36] shadow-lg shadow-black/10 border border-white/10">
@@ -1840,7 +1840,7 @@ export default function DoctorDashboard() {
             {wallet.balance > 0 ? (
               <div className="bg-[#F5F0EB] rounded-2xl p-4 text-[#1A1F36] shadow-lg shadow-black/10 border border-white/10">
                 <p className="text-xs text-[#40516A] font-bold uppercase tracking-wider mb-1">Wallet Balance</p>
-                <p className="text-2xl font-black">₹{wallet.balance.toLocaleString('en-IN')}</p>
+                <p className="text-2xl font-black">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
                 <button onClick={() => setActiveTab('wallet')}
                   className="mt-3 w-full bg-[#1A1F36] hover:bg-[#0D101C] text-white text-xs font-bold py-2 rounded-xl transition-all flex items-center justify-center gap-1">
                   <ArrowDownToLine className="w-3.5 h-3.5"/> Withdraw
@@ -1941,7 +1941,7 @@ export default function DoctorDashboard() {
                     </thead>
                     <tbody>
                       {[
-                        { period: 'Today', cases: todayCases, app: consultations.filter(c => new Date(c.created_at).toLocaleDateString('en-IN') === today && c.status === 'approved').length, rej: consultations.filter(c => new Date(c.created_at).toLocaleDateString('en-IN') === today && c.status === 'rejected').length, att: consultations.filter(c => new Date(c.created_at).toLocaleDateString('en-IN') === today && ['attended','approved','rejected'].includes(c.status)).length },
+                        { period: 'Today', cases: todayCases, app: consultations.filter(c => (c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '') === today && c.status === 'approved').length, rej: consultations.filter(c => (c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '') === today && c.status === 'rejected').length, att: consultations.filter(c => (c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '') === today && ['attended','approved','rejected'].includes(c.status)).length },
                         { period: 'This Week', cases: weekCases, app: consultations.filter(c => new Date(c.created_at) >= thisWeekStart && c.status === 'approved').length, rej: consultations.filter(c => new Date(c.created_at) >= thisWeekStart && c.status === 'rejected').length, att: consultations.filter(c => new Date(c.created_at) >= thisWeekStart && ['attended','approved','rejected'].includes(c.status)).length },
                         { period: 'This Month', cases: monthCases, app: approvedCases, rej: rejectedCases, att: attendedCalls },
                       ].map(row => (
@@ -2443,17 +2443,17 @@ export default function DoctorDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="bg-[#1A1F36] p-8 rounded-[20px] text-white shadow-2xl shadow-[#1A1F36]/20">
                   <p className="text-xs text-white/55 font-black uppercase tracking-widest mb-3">Available Balance</p>
-                  <p className="text-5xl font-black">₹{wallet.balance.toLocaleString('en-IN')}</p>
+                  <p className="text-5xl font-black">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
                   <p className="text-xs text-white/50 mt-2 font-semibold">Ready to withdraw</p>
                 </div>
                 <div className="bg-[#5C7A6B]/10 border border-[#5C7A6B]/20 p-8 rounded-[20px] text-center shadow-[0_12px_32px_rgba(26,31,54,0.06)]">
                   <p className="text-xs text-[#5C7A6B] font-black uppercase tracking-widest mb-3">Total Earned</p>
-                  <p className="text-4xl font-black text-[#5C7A6B]">₹{wallet.total_earned.toLocaleString('en-IN')}</p>
+                  <p className="text-4xl font-black text-[#5C7A6B]">₹{Number(wallet?.total_earned ?? 0).toLocaleString('en-IN')}</p>
                   <p className="text-xs text-[#5C7A6B]/75 mt-2 font-semibold">From {approvedCases} consultations</p>
                 </div>
                 <div className="bg-[#40516A]/10 border border-[#40516A]/18 p-8 rounded-[20px] text-center shadow-[0_12px_32px_rgba(26,31,54,0.06)]">
                   <p className="text-xs text-[#40516A] font-black uppercase tracking-widest mb-3">Total Withdrawn</p>
-                  <p className="text-4xl font-black text-[#40516A]">₹{wallet.total_withdrawn.toLocaleString('en-IN')}</p>
+                  <p className="text-4xl font-black text-[#40516A]">₹{Number(wallet?.total_withdrawn ?? 0).toLocaleString('en-IN')}</p>
                   <p className="text-xs text-[#40516A]/75 mt-2 font-semibold">To bank account</p>
                 </div>
               </div>
@@ -2514,7 +2514,7 @@ export default function DoctorDashboard() {
                           <div>
                             <p className="font-bold text-[#1A1F36] text-sm">{tx.description}</p>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <p className="text-xs text-[#8896A4] font-semibold">{new Date(tx.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                              <p className="text-xs text-[#8896A4] font-semibold">{tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}</p>
                               {tx.type === 'withdrawal' && (
                                 <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${tx.status === 'completed' || tx.status === 'approved' || tx.status === 'paid' ? 'bg-[#5C7A6B]/12 text-[#5C7A6B]' : 'bg-[#D89A3D]/12 text-[#B7792F]'}`}>
                                   {tx.status === 'completed' || tx.status === 'approved' || tx.status === 'paid' ? 'Paid' : 'Pending'}
@@ -2524,7 +2524,7 @@ export default function DoctorDashboard() {
                           </div>
                         </div>
                         <p className={`font-black text-base ${tx.type === 'credit' ? 'text-[#5C7A6B]' : 'text-[#40516A]'}`}>
-                          {tx.type === 'credit' ? '+' : '-'}₹{tx.amount.toLocaleString('en-IN')}
+                          {tx.type === 'credit' ? '+' : '-'}₹{Number(tx.amount ?? 0).toLocaleString('en-IN')}
                         </p>
                       </motion.div>
                     ))}

@@ -1536,7 +1536,7 @@ function AdminDashboardContent() {
     },
   ];
   const reportCards = [
-    { title: 'Revenue Report', metric: `Rs ${monthlyRevenue.toLocaleString('en-IN')}`, detail: 'Collections, refunds, plan revenue, and platform earnings.', icon: Wallet, tone: 'blue' },
+    { title: 'Revenue Report', metric: `Rs ${Number(monthlyRevenue ?? 0).toLocaleString('en-IN')}`, detail: 'Collections, refunds, plan revenue, and platform earnings.', icon: Wallet, tone: 'blue' },
     { title: 'Consultation Report', metric: consultationRows.length || todaysConsultations, detail: 'Scheduled, completed, missed, cancelled, and active consultations.', icon: Calendar, tone: 'orange' },
     { title: 'Doctor Performance', metric: displayTotalDoctors, detail: 'Assigned cases, completion rate, no-shows, and payout readiness.', icon: Stethoscope, tone: 'green' },
     { title: 'Membership Report', metric: goldMembers + silverMembers, detail: 'Gold, Silver, conversion rate, and membership payment health.', icon: BadgeCheck, tone: 'amber' },
@@ -1575,9 +1575,9 @@ function AdminDashboardContent() {
     { label: 'Pending Consultations', value: pendingConsultations, icon: Clock, tone: 'amber' },
     { label: 'Missed Consultations', value: missedConsultations, icon: AlertCircle, tone: 'red' },
     { label: 'Cancelled Consultations', value: cancelledConsultations, icon: XCircle, tone: 'red' },
-    { label: 'Monthly Revenue', value: `₹${monthlyRevenue.toLocaleString('en-IN')}`, icon: Wallet, tone: 'blue' },
-    { label: 'Platform Earnings', value: `₹${platformEarnings.toLocaleString('en-IN')}`, icon: TrendingUp, tone: 'green' },
-    { label: 'Pending Payouts', value: `₹${pendingPayouts.toLocaleString('en-IN')}`, icon: DollarSign, tone: 'amber' },
+    { label: 'Monthly Revenue', value: `₹${Number(monthlyRevenue ?? 0).toLocaleString('en-IN')}`, icon: Wallet, tone: 'blue' },
+    { label: 'Platform Earnings', value: `₹${Number(platformEarnings ?? 0).toLocaleString('en-IN')}`, icon: TrendingUp, tone: 'green' },
+    { label: 'Pending Payouts', value: `₹${Number(pendingPayouts ?? 0).toLocaleString('en-IN')}`, icon: DollarSign, tone: 'amber' },
     { label: 'Gold Members', value: goldMembers, icon: BadgeCheck, tone: 'orange' },
     { label: 'Silver Members', value: silverMembers, icon: ShieldCheck, tone: 'blue' },
   ];
@@ -2197,15 +2197,15 @@ function AdminDashboardContent() {
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
               {[
-                { label: 'Total Revenue', value: `Rs ${totalRevenue.toLocaleString('en-IN')}`, icon: Wallet, tone: 'blue' },
-                { label: "Today's Revenue", value: `Rs ${todayRevenue.toLocaleString('en-IN')}`, icon: TrendingUp, tone: 'green' },
-                { label: 'Monthly Revenue', value: `Rs ${monthlyRevenue.toLocaleString('en-IN')}`, icon: Calendar, tone: 'orange' },
+                { label: 'Total Revenue', value: `Rs ${Number(totalRevenue ?? 0).toLocaleString('en-IN')}`, icon: Wallet, tone: 'blue' },
+                { label: "Today's Revenue", value: `Rs ${Number(todayRevenue ?? 0).toLocaleString('en-IN')}`, icon: TrendingUp, tone: 'green' },
+                { label: 'Monthly Revenue', value: `Rs ${Number(monthlyRevenue ?? 0).toLocaleString('en-IN')}`, icon: Calendar, tone: 'orange' },
                 { label: 'Successful Payments', value: successfulPaymentsCount, icon: CheckCircle2, tone: 'green' },
                 { label: 'Pending Payments', value: pendingPaymentsCount, icon: Clock, tone: 'amber' },
                 { label: 'Failed Payments', value: failedPaymentsCount, icon: XCircle, tone: 'red' },
                 { label: 'Refunds', value: refundsCount, icon: RefreshCw, tone: 'red' },
-                { label: 'Consultation Revenue', value: `Rs ${consultationRevenue.toLocaleString('en-IN')}`, icon: Stethoscope, tone: 'blue' },
-                { label: 'Membership Revenue', value: `Rs ${membershipRevenue.toLocaleString('en-IN')}`, icon: BadgeCheck, tone: 'orange' },
+                { label: 'Consultation Revenue', value: `Rs ${Number(consultationRevenue ?? 0).toLocaleString('en-IN')}`, icon: Stethoscope, tone: 'blue' },
+                { label: 'Membership Revenue', value: `Rs ${Number(membershipRevenue ?? 0).toLocaleString('en-IN')}`, icon: BadgeCheck, tone: 'orange' },
               ].map(card => {
                 const Icon = card.icon;
                 return (
@@ -2307,10 +2307,10 @@ function AdminDashboardContent() {
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
               {[
-                { label: 'Total Provider Earnings', value: `Rs ${totalProviderEarnings.toLocaleString('en-IN')}`, icon: DollarSign, tone: 'blue' },
-                { label: 'Pending Payouts', value: `Rs ${pendingPayouts.toLocaleString('en-IN')}`, icon: Clock, tone: 'amber' },
-                { label: 'Processed Payouts', value: `Rs ${processedPayouts.toLocaleString('en-IN')}`, icon: CheckCircle2, tone: 'green' },
-                { label: 'Wallet Balance', value: `Rs ${walletBalance.toLocaleString('en-IN')}`, icon: Wallet, tone: 'orange' },
+                { label: 'Total Provider Earnings', value: `Rs ${Number(totalProviderEarnings ?? 0).toLocaleString('en-IN')}`, icon: DollarSign, tone: 'blue' },
+                { label: 'Pending Payouts', value: `Rs ${Number(pendingPayouts ?? 0).toLocaleString('en-IN')}`, icon: Clock, tone: 'amber' },
+                { label: 'Processed Payouts', value: `Rs ${Number(processedPayouts ?? 0).toLocaleString('en-IN')}`, icon: CheckCircle2, tone: 'green' },
+                { label: 'Wallet Balance', value: `Rs ${Number(walletBalance ?? 0).toLocaleString('en-IN')}`, icon: Wallet, tone: 'orange' },
                 { label: 'Awaiting Settlement', value: providersAwaitingSettlement, icon: Users, tone: 'amber' },
                 { label: 'Failed Payouts', value: failedPayouts, icon: XCircle, tone: 'red' },
               ].map(card => {
@@ -2426,7 +2426,7 @@ function AdminDashboardContent() {
                           <span className="font-black text-[#1A1F36]">{providerName}</span>
                           <span className="capitalize">{String(role).replace('_', ' ')}</span>
                           <span>{payout.initiated_at ? new Date(payout.initiated_at).toLocaleString('en-IN') : 'N/A'}</span>
-                          <span className="font-black text-[#1A1F36]">Rs {Number(payout.payout_amount).toLocaleString('en-IN')}</span>
+                          <span className="font-black text-[#1A1F36]">Rs {Number(payout.payout_amount ?? 0).toLocaleString('en-IN')}</span>
                           <div>
                             <span className={`inline-block rounded-full px-3 py-1 text-xs font-black ${statusColors[status] || statusColors.PENDING}`}>
                               {status}
@@ -2514,11 +2514,11 @@ function AdminDashboardContent() {
                           <span className="font-bold text-[#1A1F36]">{providerName}</span>
                           <span className="font-black text-xs text-[#C4622D]">{log.event_type}</span>
                           <span className={log.amount < 0 ? 'text-[#B94D4D]' : log.amount > 0 ? 'text-[#5C7A6B]' : ''}>
-                            {log.amount !== null ? `Rs ${Number(log.amount).toLocaleString('en-IN')}` : '—'}
+                            {log.amount !== null ? `Rs ${Number(log.amount ?? 0).toLocaleString('en-IN')}` : '—'}
                           </span>
                           <span>
                             {log.old_balance !== null && log.new_balance !== null 
-                              ? `Rs ${Number(log.old_balance).toLocaleString('en-IN')} → Rs ${Number(log.new_balance).toLocaleString('en-IN')}`
+                              ? `Rs ${Number(log.old_balance ?? 0).toLocaleString('en-IN')} → Rs ${Number(log.new_balance ?? 0).toLocaleString('en-IN')}`
                               : '—'}
                           </span>
                           <span>{initiatorName}</span>
@@ -2634,7 +2634,7 @@ function AdminDashboardContent() {
                 { label: 'Active Plans', value: plans.filter(plan => plan.is_active !== false).length, icon: BadgeCheck, tone: 'blue' },
                 { label: 'Gold Members', value: goldMembers, icon: ShieldCheck, tone: 'orange' },
                 { label: 'Silver Members', value: silverMembers, icon: Users, tone: 'blue' },
-                { label: 'Membership Revenue', value: `Rs ${membershipRevenue.toLocaleString('en-IN')}`, icon: Wallet, tone: 'green' },
+                { label: 'Membership Revenue', value: `Rs ${Number(membershipRevenue ?? 0).toLocaleString('en-IN')}`, icon: Wallet, tone: 'green' },
                 { label: 'New This Month', value: newMembershipsThisMonth, icon: Calendar, tone: 'amber' },
                 { label: 'Conversion Rate', value: `${conversionRate}%`, icon: TrendingUp, tone: 'red' },
               ].map(card => {
@@ -2820,12 +2820,12 @@ function AdminDashboardContent() {
                           <h4 className="font-black text-slate-800 text-lg leading-tight">{doc?.full_name || 'Dr. Doctor'}</h4>
                           <p className="text-xs text-slate-500 font-bold mt-1.5">Appointment: {tx.appointment_id || 'Not linked'}</p>
                           <p className="text-xs text-slate-400 font-bold mt-1 flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5"/> Credited: {new Date(tx.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            <Clock className="w-3.5 h-3.5"/> Credited: {tx.created_at ? tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A' : 'N/A'}
                           </p>
                           <span className="text-[10px] font-black text-indigo-700 bg-indigo-100 uppercase tracking-widest px-2.5 py-1 rounded-md mt-3 inline-block">RazorpayX Pending</span>
                         </div>
                         <div className="flex items-center gap-6 self-end md:self-auto">
-                          <p className="text-3xl font-black text-slate-900">₹{Number(tx.amount).toLocaleString('en-IN')}</p>
+                          <p className="text-3xl font-black text-slate-900">₹{Number(tx.amount ?? 0).toLocaleString('en-IN')}</p>
                           <button
                             onClick={() => handleProcessRazorpayPayout(tx.id, doc?.full_name, tx.amount)}
                             className="bg-[#1A1F36] hover:bg-[#11162A] text-white font-black py-4 px-6 rounded-2xl text-xs transition-all shadow-md flex items-center gap-2 hover:-translate-y-0.5 active:scale-95"
@@ -2865,11 +2865,11 @@ function AdminDashboardContent() {
                       >
                         <div>
                           <h4 className="font-black text-slate-800 text-lg leading-tight">{doc?.full_name || 'Dr. Doctor'}</h4>
-                          <p className="text-xs text-slate-400 font-bold mt-1.5 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> Requested: {new Date(tx.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                          <p className="text-xs text-slate-400 font-bold mt-1.5 flex items-center gap-1.5"><Clock className="w-3.5 h-3.5"/> Requested: {tx.created_at ? tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A' : 'N/A'}</p>
                           <span className="text-[10px] font-black text-amber-700 bg-amber-100 uppercase tracking-widest px-2.5 py-1 rounded-md mt-3 inline-block">Pending Payout</span>
                         </div>
                         <div className="flex items-center gap-6 self-end md:self-auto">
-                          <p className="text-3xl font-black text-slate-900">₹{tx.amount.toLocaleString('en-IN')}</p>
+                          <p className="text-3xl font-black text-slate-900">₹{Number(tx.amount ?? 0).toLocaleString('en-IN')}</p>
                           <button 
                             onClick={() => handleMarkAsPaid(tx.id, doc?.full_name, tx.amount)}
                             className="bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 px-6 rounded-2xl text-xs transition-all shadow-md flex items-center gap-2 hover:-translate-y-0.5 active:scale-95"
@@ -2926,7 +2926,7 @@ function AdminDashboardContent() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="font-black text-xl text-slate-900">₹{Number(tx.amount).toLocaleString('en-IN')}</p>
+                          <p className="font-black text-xl text-slate-900">₹{Number(tx.amount ?? 0).toLocaleString('en-IN')}</p>
                           <span className={`text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md mt-1.5 inline-block ${badgeClass}`}>{status}</span>
                         </div>
                       </motion.div>
@@ -2967,11 +2967,11 @@ function AdminDashboardContent() {
                           </div>
                           <div>
                             <p className="font-black text-slate-800 text-base">Payout to {doc?.full_name || 'Dr. Doctor'}</p>
-                            <p className="text-xs text-slate-400 font-bold mt-1">{new Date(tx.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p>
+                            <p className="text-xs text-slate-400 font-bold mt-1">{tx.created_at ? new Date(tx.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'N/A'}</p>
                           </div>
                         </div>
                         <div className="text-right">
-                          <p className="font-black text-xl text-emerald-600">-₹{tx.amount.toLocaleString('en-IN')}</p>
+                          <p className="font-black text-xl text-emerald-600">-₹{Number(tx.amount ?? 0).toLocaleString('en-IN')}</p>
                           <span className="text-[9px] font-black uppercase tracking-wider px-2.5 py-1 rounded-md bg-emerald-100 text-emerald-700 mt-1.5 inline-block">Paid Offline</span>
                         </div>
                       </motion.div>
@@ -3103,7 +3103,7 @@ function AdminDashboardContent() {
                         required
                         value={staffFirstName}
                         onChange={(e) => setStaffFirstName(e.target.value)}
-                        placeholder="John"
+                        placeholder="First name"
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                       />
                     </div>
@@ -3114,7 +3114,7 @@ function AdminDashboardContent() {
                         required
                         value={staffLastName}
                         onChange={(e) => setStaffLastName(e.target.value)}
-                        placeholder="Doe"
+                        placeholder="Last name"
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                       />
                     </div>
@@ -3541,9 +3541,9 @@ function AdminDashboardContent() {
               <div className="rounded-[20px] border border-[#1A1F36]/8 bg-white p-6 shadow-[0_12px_32px_rgba(26,31,54,0.07)]">
                 <h3 className="text-sm font-black uppercase tracking-widest text-[#1A1F36]">Financial Snapshot</h3>
                 <div className="mt-5 space-y-3 text-sm font-bold text-[#40516A]">
-                  <p className="flex justify-between"><span>Monthly Revenue</span><span>₹{monthlyRevenue.toLocaleString('en-IN')}</span></p>
-                  <p className="flex justify-between"><span>Platform Earnings</span><span>₹{platformEarnings.toLocaleString('en-IN')}</span></p>
-                  <p className="flex justify-between"><span>Pending Payouts</span><span>₹{pendingPayouts.toLocaleString('en-IN')}</span></p>
+                  <p className="flex justify-between"><span>Monthly Revenue</span><span>₹{Number(monthlyRevenue ?? 0).toLocaleString('en-IN')}</span></p>
+                  <p className="flex justify-between"><span>Platform Earnings</span><span>₹{Number(platformEarnings ?? 0).toLocaleString('en-IN')}</span></p>
+                  <p className="flex justify-between"><span>Pending Payouts</span><span>₹{Number(pendingPayouts ?? 0).toLocaleString('en-IN')}</span></p>
                 </div>
               </div>
             </div>
@@ -3588,7 +3588,7 @@ function AdminDashboardContent() {
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                           <p className="text-sm font-black text-[#1A1F36]">{activity.title}</p>
-                          <p className="text-xs font-bold text-[#8896A4]">{new Date(activity.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                          <p className="text-xs font-bold text-[#8896A4]">{activity.at ? new Date(activity.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'N/A'}</p>
                         </div>
                         <p className="mt-1 text-sm font-semibold text-[#40516A]">{activity.detail}</p>
                       </div>
@@ -3772,7 +3772,7 @@ function AdminDashboardContent() {
                           <span className={`w-fit rounded-full px-3 py-1 text-xs font-black ${toneClasses[row.tone] || toneClasses.blue}`}>{row.category}</span>
                           <div><p className="text-sm font-black text-[#1A1F36]">{row.event}</p><p className="text-xs font-bold text-[#8896A4]">{row.actor}</p></div>
                           <p className="text-sm font-bold text-[#40516A]">{row.detail}</p>
-                          <p className="text-xs font-bold text-[#8896A4] lg:col-span-2">{new Date(row.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</p>
+                          <p className="text-xs font-bold text-[#8896A4] lg:col-span-2">{row.at ? new Date(row.at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) : 'N/A'}</p>
                         </div>
                       ))}
                     </div>
@@ -3839,7 +3839,7 @@ function AdminDashboardContent() {
                       <div className="bg-orange-50 text-orange-500 p-4 rounded-full"><Wallet className="w-6 h-6"/></div>
                       <h3 className="text-sm font-black text-[#5C7A6B] uppercase tracking-widest">Monthly Revenue</h3>
                     </div>
-                    <p className="text-4xl font-black text-[#1A1F36]">₹{monthlyRevenue.toLocaleString('en-IN')}</p>
+                    <p className="text-4xl font-black text-[#1A1F36]">₹{Number(monthlyRevenue ?? 0).toLocaleString('en-IN')}</p>
                   </motion.div>
 
                   <motion.div variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }} className="bg-white p-6 rounded-2xl hover:scale-105 transition-transform duration-300 hover:shadow-lg shadow-[0_4px_20px_rgba(26,31,54,0.05)] border border-[#F5F0EB]">
