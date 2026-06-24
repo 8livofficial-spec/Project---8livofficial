@@ -33,7 +33,7 @@ function validatePasswordStrength(password: string) {
 function getPatientJourneyTarget(status: PatientStatus) {
   if (status.membershipStatus === 'ACTIVE' && status.firstConsultationCompleted === true) return '/patient'
   if (status.assessmentStatus !== 'COMPLETED') return '/assessment'
-  if (status.eligibilityStatus !== 'ELIGIBLE') return '/assessment'
+  if (status.eligibilityStatus !== 'ELIGIBLE' && status.eligibilityStatus !== 'REVIEW_REQUIRED') return '/assessment'
   if (status.consultationPaymentStatus !== 'PAID') return '/consultation-payment'
   if (status.appointmentStatus !== 'SCHEDULED') return '/appointments/select-slot'
   if (status.consultationStatus !== 'COMPLETED') {

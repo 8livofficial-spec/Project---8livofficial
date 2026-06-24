@@ -39,7 +39,7 @@ export async function POST(request: Request) {
         // Delete the existing unverified user to allow recreation
         await supabaseAdmin.auth.admin.deleteUser(existing.id)
         await supabaseAdmin.from('profiles').delete().eq('id', existing.id)
-        await supabaseAdmin.from('patient_journey_state').delete().eq('id', existing.id)
+        await supabaseAdmin.from('patient_journey_state').delete().eq('patient_id', existing.id)
       } else {
         await writeAuthAudit({ email, event: 'SIGNUP_DUPLICATE_EMAIL', status: 'FAILED', ip, userAgent })
         return NextResponse.json({ error: 'An account with this email already exists.' }, { status: 409 })
