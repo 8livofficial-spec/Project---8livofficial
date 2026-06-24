@@ -8,13 +8,14 @@ import {
   validatePasswordStrength,
   writeAuthAudit,
   rateLimitResponse,
+  findUserByEmail,
 } from '@/lib/authSecurity'
 
 export async function POST(req: Request) {
   const ip = getClientIp(req)
   const userAgent = req.headers.get('user-agent')
   try {
-    const { token: rawToken, newPassword } = await req.json()
+    const { token: rawToken, newPassword, email } = await req.json()
     const token = String(rawToken || '').trim()
     if (!token || !newPassword) {
       return NextResponse.json({ error: 'Missing reset token or password.' }, { status: 400 })
@@ -27,15 +28,21 @@ export async function POST(req: Request) {
     if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 })
 
     const tokenHash = hashToken(token)
-    const { data: resetToken, error } = await supabaseAdmin
-      .from('password_reset_tokens')
-      .select('*')
-      .eq('token_hash', tokenHash)
-      .is('used_at', null)
-      .gt('expires_at', new Date().toISOString())
-      .maybeSingle()
+    let user;
 
-    if (error || !resetToken) {
+    if (email) {
+      user = await findUserByEmail(email)
+    }
+
+    if (!user) {
+      // Fallback: search all users for the matching reset_token_hash in their metadata
+      const { data: usersData, error: listError } = await supabaseAdmin.auth.admin.listUsers()
+      if (!listError && usersData?.users) {
+        user = usersData.users.find(u => u.user_metadata?.reset_token_hash === tokenHash)
+      }
+    }
+
+    if (!user) {
       await writeAuthAudit({
         event: 'PASSWORD_RESET_INVALID_TOKEN',
         status: 'FAILED',
@@ -44,19 +51,41 @@ export async function POST(req: Request) {
         metadata: {
           hasToken: Boolean(token),
           tokenLength: token.length,
-          error: error?.message,
         },
       })
       return NextResponse.json({ error: 'Invalid or expired reset link.' }, { status: 400 })
     }
 
-    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(resetToken.user_id, {
+    const metadata = user.user_metadata || {}
+    const storedHash = metadata.reset_token_hash
+    const expiresAt = metadata.reset_expires_at
+
+    if (!storedHash || storedHash !== tokenHash || new Date(expiresAt).getTime() < Date.now()) {
+      await writeAuthAudit({
+        userId: user.id,
+        email: user.email,
+        event: 'PASSWORD_RESET_INVALID_TOKEN',
+        status: 'FAILED',
+        ip,
+        userAgent,
+      })
+      return NextResponse.json({ error: 'Invalid or expired reset link.' }, { status: 400 })
+    }
+
+    const updatedMetadata = {
+      ...metadata,
+      reset_token_hash: null,
+      reset_expires_at: null,
+    }
+
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
       password: newPassword,
+      user_metadata: updatedMetadata,
     })
     if (updateError) {
       await writeAuthAudit({
-        userId: resetToken.user_id,
-        email: resetToken.email,
+        userId: user.id,
+        email: user.email,
         event: 'PASSWORD_RESET_UPDATE_FAILED',
         status: 'FAILED',
         ip,
@@ -66,14 +95,9 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: updateError.message }, { status: 400 })
     }
 
-    await supabaseAdmin
-      .from('password_reset_tokens')
-      .update({ used_at: new Date().toISOString() })
-      .eq('id', resetToken.id)
-
     await writeAuthAudit({
-      userId: resetToken.user_id,
-      email: resetToken.email,
+      userId: user.id,
+      email: user.email,
       event: 'PASSWORD_RESET_COMPLETED',
       status: 'SUCCESS',
       ip,

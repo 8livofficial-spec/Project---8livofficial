@@ -182,19 +182,26 @@ export async function POST(request: Request) {
 
     try {
       const { token, tokenHash } = createToken()
-      await supabaseAdmin.from('email_verification_tokens').insert({
-        user_id: providerId,
-        email,
-        token_hash: tokenHash,
-        purpose: 'PROVIDER_INVITATION',
-        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+
+      const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(providerId, {
+        user_metadata: {
+          role: role.toUpperCase(),
+          display_id: fullName,
+          verification_token_hash: tokenHash,
+          verification_expires_at: expiresAt,
+          verification_purpose: 'PROVIDER_INVITATION',
+        }
       })
+
+      if (updateError) throw updateError
+
       await EmailService.sendProviderInvitation({
         email,
         name: fullName,
         patientId: providerId,
         role,
-        link: `${getOrigin(request)}/verify-email?token=${encodeURIComponent(token)}`,
+        link: `${getOrigin(request)}/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`,
         expiresIn: '7 days',
       })
     } catch (emailError) {

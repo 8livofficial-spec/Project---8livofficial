@@ -35,9 +35,19 @@ export async function POST(request: Request) {
 
     const existing = await findUserByEmail(email)
     if (existing) {
-      await writeAuthAudit({ email, event: 'SIGNUP_DUPLICATE_EMAIL', status: 'FAILED', ip, userAgent })
-      return NextResponse.json({ error: 'An account with this email already exists.' }, { status: 409 })
+      if (!existing.email_confirmed_at && !existing.confirmed_at) {
+        // Delete the existing unverified user to allow recreation
+        await supabaseAdmin.auth.admin.deleteUser(existing.id)
+        await supabaseAdmin.from('profiles').delete().eq('id', existing.id)
+        await supabaseAdmin.from('patient_journey_state').delete().eq('id', existing.id)
+      } else {
+        await writeAuthAudit({ email, event: 'SIGNUP_DUPLICATE_EMAIL', status: 'FAILED', ip, userAgent })
+        return NextResponse.json({ error: 'An account with this email already exists.' }, { status: 409 })
+      }
     }
+
+    const { token, tokenHash } = createToken()
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
 
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
@@ -46,6 +56,9 @@ export async function POST(request: Request) {
       user_metadata: {
         role: role.toUpperCase(),
         display_id: `${firstName} ${lastName}`.trim(),
+        verification_token_hash: tokenHash,
+        verification_expires_at: expiresAt,
+        verification_purpose: 'EMAIL_VERIFICATION',
       },
     })
     if (error || !data.user) {
@@ -74,21 +87,7 @@ export async function POST(request: Request) {
       lastCompletedStep: 'ACCOUNT_CREATED',
     })
 
-    const { token, tokenHash } = createToken()
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-    const { error: tokenError } = await supabaseAdmin.from('email_verification_tokens').insert({
-      user_id: data.user.id,
-      email,
-      token_hash: tokenHash,
-      purpose: 'EMAIL_VERIFICATION',
-      expires_at: expiresAt,
-    })
-
-    if (tokenError) {
-      throw new Error(`Unable to create email verification link: ${tokenError.message}`)
-    }
-
-    const link = `${getOrigin(request)}/verify-email?token=${encodeURIComponent(token)}`
+    const link = `${getOrigin(request)}/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`
     await EmailService.sendEmailVerification({
       email,
       name: `${firstName} ${lastName}`.trim() || email.split('@')[0],

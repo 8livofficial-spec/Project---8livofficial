@@ -30,21 +30,25 @@ export async function POST(request: Request) {
     if (!user || user.email_confirmed_at) return NextResponse.json({ message: genericMessage })
 
     const { token, tokenHash } = createToken()
-    const { error: tokenError } = await supabaseAdmin.from('email_verification_tokens').insert({
-      user_id: user.id,
-      email,
-      token_hash: tokenHash,
-      purpose: 'EMAIL_VERIFICATION',
-      expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+    const currentMetadata = user.user_metadata || {}
+
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+      user_metadata: {
+        ...currentMetadata,
+        verification_token_hash: tokenHash,
+        verification_expires_at: expiresAt,
+        verification_purpose: 'EMAIL_VERIFICATION',
+      }
     })
 
-    if (tokenError) throw tokenError
+    if (updateError) throw updateError
 
     await EmailService.sendEmailVerification({
       email,
       patientId: user.id,
       name: email.split('@')[0],
-      link: `${getOrigin(request)}/verify-email?token=${encodeURIComponent(token)}`,
+      link: `${getOrigin(request)}/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`,
     })
 
     await writeAuthAudit({ userId: user.id, email, event: 'EMAIL_VERIFICATION_RESENT', status: 'SUCCESS', ip, userAgent })

@@ -24,10 +24,11 @@ function VerifyEmailContent() {
         return
       }
       try {
+        const email = searchParams.get('email')
         const res = await fetch('/api/auth/verify-email', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ token }),
+          body: JSON.stringify({ token, email }),
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data.error || 'Unable to verify email.')

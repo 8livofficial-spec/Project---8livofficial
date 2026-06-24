@@ -15,7 +15,8 @@ function passwordError(password: string) {
 }
 
 function ResetPasswordContent() {
-  const token = useSearchParams().get('token') || ''
+  const searchParams = useSearchParams()
+  const token = searchParams.get('token') || ''
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -34,10 +35,11 @@ function ResetPasswordContent() {
 
     setLoading(true)
     try {
+      const email = searchParams.get('email')
       const res = await fetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, newPassword: password }),
+        body: JSON.stringify({ token, newPassword: password, email }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Unable to reset password.')

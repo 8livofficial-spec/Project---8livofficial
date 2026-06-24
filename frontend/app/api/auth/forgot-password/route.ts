@@ -33,22 +33,20 @@ export async function POST(req: Request) {
       return NextResponse.json({ message: genericMessage })
     }
 
-    await supabaseAdmin
-      .from('password_reset_tokens')
-      .update({ used_at: new Date().toISOString() })
-      .eq('user_id', user.id)
-      .is('used_at', null)
-
     const { token, tokenHash } = createToken()
-    const { error: tokenError } = await supabaseAdmin.from('password_reset_tokens').insert({
-      user_id: user.id,
-      email,
-      token_hash: tokenHash,
-      expires_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000).toISOString()
+    const currentMetadata = user.user_metadata || {}
+
+    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(user.id, {
+      user_metadata: {
+        ...currentMetadata,
+        reset_token_hash: tokenHash,
+        reset_expires_at: expiresAt,
+      }
     })
 
-    if (tokenError) {
-      console.error('Failed to create password reset token:', tokenError)
+    if (updateError) {
+      console.error('Failed to create password reset token:', updateError)
       await writeAuthAudit({
         userId: user.id,
         email,
@@ -56,12 +54,12 @@ export async function POST(req: Request) {
         status: 'FAILED',
         ip,
         userAgent,
-        metadata: { error: tokenError.message },
+        metadata: { error: updateError.message },
       })
       return NextResponse.json({ message: genericMessage })
     }
 
-    const link = `${getOrigin(req)}/reset-password?token=${encodeURIComponent(token)}`
+    const link = `${getOrigin(req)}/reset-password?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`
     await EmailService.sendForgotPassword({
       email,
       name: user.user_metadata?.display_id || email.split('@')[0],
