@@ -6,20 +6,10 @@ import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight, ArrowLeft, User, Scale, Activity, ShieldCheck, Pill, CheckCircle2, AlertCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { getPatientJourneyTarget } from '@/lib/patientJourney'
 
 type EligibilityStatus = 'ELIGIBLE' | 'REVIEW_REQUIRED' | 'NOT_ELIGIBLE'
 type RadioField = 'has_mtc_men2' | 'is_pregnant_nursing' | 'has_pancreatitis' | 'has_active_cancer' | 'has_severe_gi_disease'
-
-type PatientStatus = {
-  assessmentStatus?: string
-  eligibilityStatus?: string
-  consultationPaymentStatus?: string
-  appointmentStatus?: string
-  consultationStatus?: string
-  membershipStatus?: string
-  firstConsultationCompleted?: boolean
-  bookingId?: string | null
-}
 
 function validatePasswordStrength(password: string) {
   if (password.length < 8) return 'Password must be at least 8 characters.'
@@ -28,20 +18,6 @@ function validatePasswordStrength(password: string) {
   if (!/\d/.test(password)) return 'Password must include at least one number.'
   if (!/[^A-Za-z0-9]/.test(password)) return 'Password must include at least one special character.'
   return null
-}
-
-function getPatientJourneyTarget(status: PatientStatus) {
-  if (status.membershipStatus === 'ACTIVE' && status.firstConsultationCompleted === true) return '/patient'
-  if (status.assessmentStatus !== 'COMPLETED') return '/assessment'
-  if (status.eligibilityStatus !== 'ELIGIBLE' && status.eligibilityStatus !== 'REVIEW_REQUIRED') return '/assessment'
-  if (status.consultationPaymentStatus !== 'PAID') return '/consultation-payment'
-  if (status.appointmentStatus !== 'SCHEDULED') return '/appointments/select-slot'
-  if (status.consultationStatus !== 'COMPLETED') {
-    return status.bookingId ? `/patient/appointments/${status.bookingId}` : '/patient/appointments'
-  }
-  if (status.membershipStatus === 'NOT_SELECTED') return '/plans'
-  if (status.membershipStatus === 'ACTIVE') return '/patient'
-  return '/membership-payment'
 }
 
 const hardRejectionOptions = [
@@ -140,6 +116,7 @@ export default function AssessmentPage() {
 
   useEffect(() => {
     const checkRedirect = async () => {
+      const explicitRetake = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('retake') === 'true'
       const { data: { session } } = await supabase.auth.getSession()
       if (session?.user) {
         let role = 'patient'
@@ -174,16 +151,30 @@ export default function AssessmentPage() {
         } else if (role === 'doctor') {
           router.replace('/doctor/dashboard')
         } else {
-          const res = await fetch(`/api/patient/status?patientId=${session.user.id}`)
+          const res = await fetch(`/api/patient/status?patientId=${session.user.id}`, {
+            headers: { Authorization: `Bearer ${session.access_token}` },
+          })
           if (!res.ok) {
             setCheckingAuth(false)
             return
           }
           const statusData = await res.json()
           const targetPath = getPatientJourneyTarget(statusData)
-          if (targetPath !== '/assessment') {
+          console.info('[assessment-gate]', {
+            patientId: session.user.id,
+            assessmentFound: Boolean(statusData.assessment),
+            assessmentStatus: statusData.assessmentStatus,
+            eligibilityStatus: statusData.eligibilityStatus,
+            currentJourneyStep: statusData.currentJourneyStep,
+            redirectTarget: targetPath,
+            reason: targetPath === '/assessment' ? 'assessment required or explicit retake' : 'assessment already completed',
+          })
+          if (targetPath !== '/assessment' && !explicitRetake) {
             router.replace(targetPath)
             return
+          }
+          if (explicitRetake && targetPath !== '/assessment') {
+            setResumeNotice('Retake mode is active. Submitting this form will replace your latest assessment status.')
           }
           setCurrentUserId(session.user.id)
           if (statusData.assessmentProgress && statusData.assessmentProgress > 1) {
@@ -220,26 +211,32 @@ export default function AssessmentPage() {
       const passwordError = validatePasswordStrength(formData.password)
       if (passwordError) throw new Error(passwordError)
 
-      const signupResponse = await fetch('/api/auth/signup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          password: formData.password,
-          firstName: formData.first_name,
-          lastName: formData.last_name,
-        })
-      })
-      const signupData = await signupResponse.json()
-      if (!signupResponse.ok) throw new Error(signupData.error || 'Failed to create account.')
+      const { data: { session } } = await supabase.auth.getSession()
+      let userId = session?.user.id || currentUserId
+      const accessToken = session?.access_token || null
 
-      const userId = signupData.userId
+      if (!userId) {
+        const signupResponse = await fetch('/api/auth/signup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: formData.email,
+            password: formData.password,
+            firstName: formData.first_name,
+            lastName: formData.last_name,
+          })
+        })
+        const signupData = await signupResponse.json()
+        if (!signupResponse.ok) throw new Error(signupData.error || 'Failed to create account.')
+        userId = signupData.userId
+      }
 
       // 2. Call our secure backend API to bypass RLS and insert health data
       const response = await fetch('/api/assessment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
         },
         body: JSON.stringify({ userId, formData })
       })
@@ -248,6 +245,12 @@ export default function AssessmentPage() {
 
       if (!response.ok) {
         throw new Error(responseData.error || 'Failed to submit health assessment securely.')
+      }
+
+      if (accessToken) {
+        const target = responseData.status === 'NOT_ELIGIBLE' ? '/not-eligible' : '/consultation-payment'
+        window.location.href = target
+        return
       }
 
       await supabase.auth.signOut()
@@ -325,13 +328,18 @@ export default function AssessmentPage() {
 
     setStepSaving(true)
     try {
+      const { data: { session } } = await supabase.auth.getSession()
       const response = await fetch('/api/assessment/progress', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
         body: JSON.stringify({
           patientId: currentUserId,
           step: confirmedStep,
           formData,
+          retake: typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('retake') === 'true',
         }),
       })
       const data = await response.json()

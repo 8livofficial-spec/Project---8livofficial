@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { updatePatientJourneyState } from '@/lib/patientJourneyServer'
+import { getAuthenticatedUser } from '@/lib/apiSecurity'
 
 type EligibilityStatus = 'ELIGIBLE' | 'REVIEW_REQUIRED' | 'NOT_ELIGIBLE'
 
@@ -187,20 +188,51 @@ function evaluateEligibility(formData: Record<string, unknown>): EligibilityResu
   return { status: 'ELIGIBLE', reason: null, message: ELIGIBLE_MESSAGE, bmi, highPriority: Boolean(bmi && bmi >= 30) }
 }
 
+async function resolveAssessmentPatientId(request: Request, submittedUserId: unknown) {
+  const auth = await getAuthenticatedUser(request)
+  if (auth?.user?.id) {
+    return auth.user.id
+  }
+
+  const userId = String(submittedUserId || '').trim()
+  if (!userId) throw new Error('Missing userId.')
+
+  const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId)
+  if (error || !data.user) throw new Error('Invalid assessment account.')
+
+  if (data.user.email_confirmed_at || data.user.confirmed_at) {
+    throw new Error('Authentication is required to submit assessment for this account.')
+  }
+
+  return data.user.id
+}
+
+function getNextJourneyStep(eligibilityStatus: EligibilityStatus) {
+  if (eligibilityStatus === 'NOT_ELIGIBLE') return 'NOT_ELIGIBLE'
+  return 'INITIAL_CONSULTATION_PAYMENT'
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json()
     const { userId, formData } = body
 
-    if (!userId || !formData) {
-      return NextResponse.json({ error: 'Missing userId or formData' }, { status: 400 })
+    if (!formData) {
+      return NextResponse.json({ error: 'Missing formData' }, { status: 400 })
     }
 
+    const patientId = await resolveAssessmentPatientId(request, userId)
     const eligibility = evaluateEligibility(formData)
+    console.info('[assessment-submit]', {
+      patientId,
+      eligibilityStatus: eligibility.status,
+      currentJourneyStep: getNextJourneyStep(eligibility.status),
+      reason: 'persist completed assessment',
+    })
 
     // 1. Create Profile (using upsert in case a DB trigger already created a basic profile row on auth signup)
     const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
-      id: userId,
+      id: patientId,
       role: 'patient',
       display_id: `${formData.first_name} ${formData.last_name}`,
       first_name: formData.first_name,
@@ -214,9 +246,8 @@ export async function POST(request: Request) {
       // but ideally we should log this in an error tracking system.
     }
 
-    // 2. Create Health Assessment
-    const { error: assessmentError } = await supabaseAdmin.from('health_assessments').insert({
-      patient_id: userId,
+    const assessmentPayload = {
+      patient_id: patientId,
       first_name: formData.first_name,
       last_name: formData.last_name,
       age: parseInt(formData.age) || null,
@@ -252,14 +283,47 @@ export async function POST(request: Request) {
           type: formData.medication_history_choice
         }
       },
-      is_eligible: eligibility.status !== 'NOT_ELIGIBLE'
-    })
+      is_eligible: eligibility.status !== 'NOT_ELIGIBLE',
+      updated_at: new Date().toISOString(),
+    }
+
+    const { data: latestAssessment, error: lookupError } = await supabaseAdmin
+      .from('health_assessments')
+      .select('id, medical_history')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (lookupError) throw lookupError
+
+    const previousMedicalHistory = latestAssessment?.medical_history && typeof latestAssessment.medical_history === 'object'
+      ? latestAssessment.medical_history as Record<string, unknown>
+      : null
+
+    const shouldUpdateDraft = Boolean(
+      latestAssessment?.id
+      && previousMedicalHistory
+      && previousMedicalHistory.draft_form
+      && !previousMedicalHistory.eligibility_status
+    )
+
+    const assessmentWrite = shouldUpdateDraft
+      ? await supabaseAdmin
+          .from('health_assessments')
+          .update(assessmentPayload)
+          .eq('id', latestAssessment!.id)
+      : await supabaseAdmin
+          .from('health_assessments')
+          .insert(assessmentPayload)
+
+    const assessmentError = assessmentWrite.error
 
     if (assessmentError) {
       return NextResponse.json({ error: assessmentError.message }, { status: 500 })
     }
 
-    await updatePatientJourneyState(userId, {
+    await updatePatientJourneyState(patientId, {
       assessmentStatus: 'COMPLETED',
       assessmentProgress: 5,
       eligibilityStatus: eligibility.status,
@@ -268,6 +332,7 @@ export async function POST(request: Request) {
       consultationStatus: 'PENDING',
       membershipStatus: 'NOT_SELECTED',
       dashboardAccess: false,
+      currentJourneyStep: getNextJourneyStep(eligibility.status),
       lastCompletedStep: 'ASSESSMENT',
     })
 

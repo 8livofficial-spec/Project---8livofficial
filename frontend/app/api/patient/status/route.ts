@@ -1,8 +1,9 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-import { loadPatientJourneyState } from '@/lib/patientJourneyServer'
+import { loadPatientJourneyState, updatePatientJourneyState } from '@/lib/patientJourneyServer'
 import { getMembershipValidity } from '@/lib/membershipServer'
 import { assertPatientOrAssignedProvider } from '@/lib/apiSecurity'
+import { getPatientJourneyTarget } from '@/lib/patientJourney'
 
 type CareTeamStatus = {
   doctor_name: string
@@ -18,6 +19,23 @@ type CareTeamStatus = {
   dietitian_notes?: string | null
   nutritionist_notes?: string | null
   trainer_notes?: string | null
+}
+
+function getCurrentJourneyStep(state: {
+  assessmentStatus: string
+  eligibilityStatus: string
+  consultationPaymentStatus: string
+  appointmentStatus: string
+  consultationStatus: string
+  membershipStatus: string
+}) {
+  if (state.assessmentStatus !== 'COMPLETED') return 'ASSESSMENT'
+  if (state.eligibilityStatus === 'NOT_ELIGIBLE') return 'NOT_ELIGIBLE'
+  if (state.consultationPaymentStatus !== 'PAID') return 'INITIAL_CONSULTATION_PAYMENT'
+  if (state.appointmentStatus !== 'SCHEDULED') return 'APPOINTMENT_SELECTION'
+  if (state.consultationStatus !== 'COMPLETED') return 'INITIAL_CONSULTATION'
+  if (state.membershipStatus !== 'ACTIVE') return 'MEMBERSHIP_SELECTION'
+  return 'DASHBOARD'
 }
 
 export async function GET(request: Request) {
@@ -219,14 +237,17 @@ export async function GET(request: Request) {
     const paymentPaid = assessment?.consultation_fee_paid === true || latestPayment?.status === 'success' || latestPayment?.status === 'paid'
     const consultationCompleted = completedConsultationStatuses.includes(rawConsultationStatus)
     const membershipActive = membershipValidity.active
-    const assessmentStatus = persistedJourney?.assessment_status || (assessment ? 'COMPLETED' : 'NOT_STARTED')
+    const assessmentStatus = assessment ? 'COMPLETED' : (persistedJourney?.assessment_status || 'NOT_STARTED')
     const medicalHistory = assessment?.medical_history && typeof assessment.medical_history === 'object'
       ? assessment.medical_history as Record<string, unknown>
       : null
     const inferredEligibilityStatus = String(
       medicalHistory?.eligibility_status || (assessment?.is_eligible ? 'ELIGIBLE' : 'NOT_ELIGIBLE')
     ).toUpperCase()
-    const eligibilityStatus = persistedJourney?.eligibility_status || inferredEligibilityStatus
+    const persistedEligibilityStatus = persistedJourney?.eligibility_status
+    const eligibilityStatus = assessment
+      ? (!persistedEligibilityStatus || ['NOT_STARTED', 'IN_PROGRESS'].includes(persistedEligibilityStatus) ? inferredEligibilityStatus : persistedEligibilityStatus)
+      : (persistedEligibilityStatus || 'NOT_STARTED')
     const firstConsultationCompleted = Boolean(
       persistedJourney?.first_consultation_completed === true
       || assessment?.first_consultation_completed === true
@@ -237,12 +258,12 @@ export async function GET(request: Request) {
       || assessment?.onboarding_completed === true
       || (firstConsultationCompleted && membershipActive)
     )
-    const consultationPaymentStatus = persistedJourney?.consultation_payment_status || (paymentPaid ? 'PAID' : 'NOT_PAID')
+    const consultationPaymentStatus = paymentPaid ? 'PAID' : (persistedJourney?.consultation_payment_status || 'NOT_PAID')
     const inferredAppointmentStatus = appointmentBooked
       ? (consultationCompleted ? 'COMPLETED' : scheduledConsultationStatuses.includes(rawConsultationStatus) ? 'SCHEDULED' : rawConsultationStatus.toUpperCase())
       : 'NOT_BOOKED'
-    const appointmentStatus = persistedJourney?.appointment_status || inferredAppointmentStatus
-    const consultationStatus = persistedJourney?.consultation_status || (consultationCompleted ? 'COMPLETED' : 'PENDING')
+    const appointmentStatus = appointmentBooked ? inferredAppointmentStatus : (persistedJourney?.appointment_status || 'NOT_BOOKED')
+    const consultationStatus = consultationCompleted ? 'COMPLETED' : (persistedJourney?.consultation_status || 'PENDING')
     const membershipStatus = membershipActive
       ? 'ACTIVE'
       : membershipValidity.expiresAt
@@ -251,7 +272,68 @@ export async function GET(request: Request) {
           ? 'SELECTED'
           : 'NOT_SELECTED'
     const effectiveDashboardAccess = membershipActive && firstConsultationCompleted
-    const currentJourneyStep = persistedJourney?.current_journey_step || persistedJourney?.last_completed_step || null
+    const currentJourneyStep = getCurrentJourneyStep({
+      assessmentStatus,
+      eligibilityStatus,
+      consultationPaymentStatus,
+      appointmentStatus,
+      consultationStatus,
+      membershipStatus,
+    })
+    const redirectTarget = getPatientJourneyTarget({
+      assessmentStatus,
+      eligibilityStatus,
+      consultationPaymentStatus,
+      appointmentStatus,
+      consultationStatus,
+      membershipStatus,
+      firstConsultationCompleted,
+      dashboardAccess: effectiveDashboardAccess,
+      bookingId: persistedJourney?.booking_id || latestAppointment?.id || null,
+    })
+    const shouldRecoverJourney = Boolean(
+      assessment
+      && (
+        !persistedJourney
+        || persistedJourney.assessment_status !== 'COMPLETED'
+        || ['NOT_STARTED', 'IN_PROGRESS'].includes(String(persistedJourney.eligibility_status || ''))
+        || persistedJourney.current_journey_step !== currentJourneyStep
+      )
+    )
+
+    if (shouldRecoverJourney) {
+      await updatePatientJourneyState(patientId, {
+        assessmentStatus: 'COMPLETED',
+        assessmentProgress: 5,
+        eligibilityStatus,
+        consultationPaymentStatus,
+        appointmentStatus,
+        consultationStatus,
+        membershipStatus,
+        dashboardAccess: effectiveDashboardAccess,
+        firstConsultationCompleted,
+        onboardingCompleted,
+        currentJourneyStep,
+        bookingId: persistedJourney?.booking_id || latestAppointment?.id || null,
+        paymentId: persistedJourney?.payment_id || latestPayment?.transaction_id || null,
+        lastCompletedStep: 'ASSESSMENT',
+        metadata: {
+          recoveredFromAssessment: true,
+          assessmentId: assessment?.id,
+          recoveredAt: new Date().toISOString(),
+        },
+      })
+    }
+
+    console.info('[patient-status]', {
+      patientId,
+      assessmentFound: Boolean(assessment),
+      journeyStateFound: Boolean(persistedJourney),
+      recoveredJourneyState: shouldRecoverJourney,
+      currentJourneyStep,
+      redirectTarget,
+      reason: assessmentStatus !== 'COMPLETED' ? 'assessment incomplete' : 'journey state resolved',
+    })
 
     return NextResponse.json({
       profile,
@@ -278,6 +360,7 @@ export async function GET(request: Request) {
       resumeMessage: persistedJourney ? "Welcome back! We've restored your progress. Continue where you left off." : null,
       latestAppointment: latestAppointment || null,
       latestPayment: latestPayment || null,
+      redirectTarget,
       latestMembershipPayment: membershipValidity.startedAt
         ? {
             created_at: membershipValidity.startedAt,

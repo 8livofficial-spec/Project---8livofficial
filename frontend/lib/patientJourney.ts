@@ -18,6 +18,7 @@ export type PatientJourneyState = {
 export function getPatientJourneyTarget(state: PatientJourneyState) {
   if (state.membershipStatus === 'ACTIVE' && state.firstConsultationCompleted === true) return '/patient'
   if (state.assessmentStatus !== 'COMPLETED') return '/assessment'
+  if (state.eligibilityStatus === 'NOT_ELIGIBLE') return '/not-eligible'
   if (state.eligibilityStatus !== 'ELIGIBLE' && state.eligibilityStatus !== 'REVIEW_REQUIRED') return '/assessment'
   if (state.consultationPaymentStatus !== 'PAID') return '/consultation-payment'
   if (state.appointmentStatus !== 'SCHEDULED') return '/appointments/select-slot'
@@ -32,6 +33,7 @@ export function getPatientJourneyTarget(state: PatientJourneyState) {
 export function getPatientFlowStep(state: PatientJourneyState) {
   if (state.dashboardAccess || (state.membershipStatus === 'ACTIVE' && state.firstConsultationCompleted === true)) return 'ready'
   if (state.assessmentStatus !== 'COMPLETED') return 'needs_assessment'
+  if (state.eligibilityStatus === 'NOT_ELIGIBLE') return 'not_eligible'
   if (state.eligibilityStatus !== 'ELIGIBLE' && state.eligibilityStatus !== 'REVIEW_REQUIRED') return 'needs_assessment'
   if (state.consultationPaymentStatus === 'PAID' && state.appointmentStatus === 'SCHEDULED' && state.consultationStatus !== 'COMPLETED') {
     return 'appointment_scheduled'

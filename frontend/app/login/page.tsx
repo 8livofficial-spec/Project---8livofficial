@@ -5,31 +5,7 @@ import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowRight, Lock, Mail, AlertCircle, CheckCircle2 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
-
-type PatientStatus = {
-  assessmentStatus?: string
-  eligibilityStatus?: string
-  consultationPaymentStatus?: string
-  appointmentStatus?: string
-  consultationStatus?: string
-  membershipStatus?: string
-  firstConsultationCompleted?: boolean
-  bookingId?: string | null
-}
-
-function getPatientJourneyTarget(status: PatientStatus) {
-  if (status.membershipStatus === 'ACTIVE' && status.firstConsultationCompleted === true) return '/patient'
-  if (status.assessmentStatus !== 'COMPLETED') return '/assessment'
-  if (status.eligibilityStatus !== 'ELIGIBLE' && status.eligibilityStatus !== 'REVIEW_REQUIRED') return '/assessment'
-  if (status.consultationPaymentStatus !== 'PAID') return '/consultation-payment'
-  if (status.appointmentStatus !== 'SCHEDULED') return '/appointments/select-slot'
-  if (status.consultationStatus !== 'COMPLETED') {
-    return status.bookingId ? `/patient/appointments/${status.bookingId}` : '/patient/appointments'
-  }
-  if (status.membershipStatus === 'NOT_SELECTED') return '/plans'
-  if (status.membershipStatus === 'ACTIVE') return '/patient'
-  return '/membership-payment'
-}
+import { getPatientJourneyTarget } from '@/lib/patientJourney'
 
 export default function UnifiedLogin() {
   const router = useRouter()
@@ -38,7 +14,17 @@ export default function UnifiedLogin() {
   const [password, setPassword] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [authError, setAuthError] = useState('')
-  const [authSuccess, setAuthSuccess] = useState('')
+  const [authSuccess, setAuthSuccess] = useState(() => {
+    if (typeof window === 'undefined') return ''
+    const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('success') === 'account_created') {
+      return 'Account created successfully! Please sign in with your new credentials.'
+    }
+    if (urlParams.get('success') === 'confirm_email') {
+      return 'Account created successfully! Please check your email inbox to confirm your account, then sign in here.'
+    }
+    return ''
+  })
 
   useEffect(() => {
     const checkRedirect = async () => {
@@ -84,10 +70,22 @@ export default function UnifiedLogin() {
           } else if (role === 'dietitian' || role === 'trainer' || role === 'fitness_coach' || role === 'nutritionist') {
             router.push('/provider/dashboard')
           } else {
-            const statusRes = await fetch(`/api/patient/status?patientId=${session.user.id}`)
+            const statusRes = await fetch(`/api/patient/status?patientId=${session.user.id}`, {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            })
             if (statusRes.ok) {
               const statusData = await statusRes.json()
-              router.push(getPatientJourneyTarget(statusData))
+              const target = getPatientJourneyTarget(statusData)
+              console.info('[patient-login-redirect]', {
+                patientId: session.user.id,
+                assessmentFound: Boolean(statusData.assessment),
+                assessmentStatus: statusData.assessmentStatus,
+                eligibilityStatus: statusData.eligibilityStatus,
+                currentJourneyStep: statusData.currentJourneyStep,
+                redirectTarget: target,
+                reason: 'existing session',
+              })
+              router.push(target)
             } else {
               router.push('/patient')
             }
@@ -101,18 +99,7 @@ export default function UnifiedLogin() {
       }
     }
     checkRedirect()
-  }, [])
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const urlParams = new URLSearchParams(window.location.search)
-      if (urlParams.get('success') === 'account_created') {
-        setAuthSuccess("Account created successfully! Please sign in with your new credentials.")
-      } else if (urlParams.get('success') === 'confirm_email') {
-        setAuthSuccess("Account created successfully! Please check your email inbox to confirm your account, then sign in here.")
-      }
-    }
-  }, [])
+  }, [router])
 
   if (checkingAuth) {
     return (
@@ -163,16 +150,28 @@ export default function UnifiedLogin() {
       } else if (role === 'dietitian' || role === 'trainer' || role === 'fitness_coach' || role === 'nutritionist') {
         window.location.href = '/provider/dashboard'
       } else {
-        const statusRes = await fetch(`/api/patient/status?patientId=${loginData.user.id}`)
+        const statusRes = await fetch(`/api/patient/status?patientId=${loginData.user.id}`, {
+          headers: { Authorization: `Bearer ${loginData.session.access_token}` },
+        })
         if (statusRes.ok) {
           const statusData = await statusRes.json()
-          window.location.href = getPatientJourneyTarget(statusData)
+          const target = getPatientJourneyTarget(statusData)
+          console.info('[patient-login-redirect]', {
+            patientId: loginData.user.id,
+            assessmentFound: Boolean(statusData.assessment),
+            assessmentStatus: statusData.assessmentStatus,
+            eligibilityStatus: statusData.eligibilityStatus,
+            currentJourneyStep: statusData.currentJourneyStep,
+            redirectTarget: target,
+            reason: 'password login',
+          })
+          window.location.href = target
         } else {
           window.location.href = '/patient'
         }
       }
-    } catch (err: any) {
-      setAuthError(err.message || 'Authentication failed.')
+    } catch (err: unknown) {
+      setAuthError(err instanceof Error ? err.message : 'Authentication failed.')
     } finally {
       setIsLoading(false)
     }
@@ -206,7 +205,7 @@ export default function UnifiedLogin() {
               transition={{ duration: 0.8, delay: 0.2 }}
             >
               <h1 className="text-4xl lg:text-5xl font-bold font-sora leading-tight mb-6">
-                "Real transformation begins when expert care meets daily consistency."
+                &ldquo;Real transformation begins when expert care meets daily consistency.&rdquo;
               </h1>
               <div className="flex items-center gap-4">
                 <div className="w-12 h-1 bg-[#F9F6F0] rounded-full opacity-80"></div>
@@ -297,7 +296,7 @@ export default function UnifiedLogin() {
 
           <div className="mt-10 text-center">
             <p className="text-[#475569] text-sm mb-4">
-              Don't have an account? {' '}
+              Don&apos;t have an account? {' '}
               <a href="/assessment" className="font-semibold text-[#D46E53] hover:text-[#A84A33] transition-colors">
                 Take the Assessment
               </a>

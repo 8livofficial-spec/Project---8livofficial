@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-import { updatePatientJourneyState } from '@/lib/patientJourneyServer'
+import { loadPatientJourneyState, updatePatientJourneyState } from '@/lib/patientJourneyServer'
+import { getAuthenticatedUser } from '@/lib/apiSecurity'
 
 type AssessmentDraft = Record<string, unknown>
 
@@ -138,12 +139,29 @@ async function saveAssessmentDraft(patientId: string, step: number, data: Assess
 export async function PATCH(request: Request) {
   try {
     const body = await request.json()
-    const patientId = String(body.patientId || '')
+    const auth = await getAuthenticatedUser(request)
+    if (!auth?.user?.id) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const submittedPatientId = String(body.patientId || '')
+    const patientId = auth.user.id
     const step = Number(body.step)
     const formData = body.formData || {}
+    const retake = body.retake === true
 
-    if (!patientId) return NextResponse.json({ error: 'Missing patientId.' }, { status: 400 })
+    if (submittedPatientId && submittedPatientId !== patientId) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
     validateStep(step, formData)
+
+    const existingJourney = await loadPatientJourneyState(patientId)
+    if (existingJourney?.assessment_status === 'COMPLETED' && !retake) {
+      return NextResponse.json({
+        success: true,
+        nextStep: 6,
+        skipped: true,
+        message: 'Assessment is already completed.',
+      })
+    }
 
     const savedDraft = await saveAssessmentDraft(patientId, step, formData)
     const nextStep = Math.min(step + 1, 6)
