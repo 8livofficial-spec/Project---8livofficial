@@ -114,6 +114,8 @@ function DashboardLayoutContent({
     let targetPath: string | null = null
     if (flowStep === 'needs_assessment') {
       targetPath = '/assessment'
+    } else if (flowStep === 'not_eligible') {
+      targetPath = '/not-eligible'
     } else if (dashboardAccess && pathname.startsWith('/patient/onboarding')) {
       targetPath = '/patient'
     } else if (flowStep === 'appointment_scheduled') {

@@ -191,7 +191,7 @@ export interface PatientOnboardingState {
  *   'needs_payment'      - plan chosen but consultation_fee_paid=false → redirect to payment
  *   'ready'              - fully onboarded, show dashboard
  */
-export type FlowStep = 'loading' | 'needs_assessment' | 'needs_consultation' | 'appointment_scheduled' | 'needs_plan' | 'needs_payment' | 'ready'
+export type FlowStep = 'loading' | 'needs_assessment' | 'not_eligible' | 'needs_consultation' | 'appointment_scheduled' | 'needs_plan' | 'needs_payment' | 'ready'
 
 export interface PatientDataContextValue {
   user: any
@@ -350,7 +350,9 @@ function usePatientDataInternal() {
           ? 'ready'
           : assessmentStatus !== 'COMPLETED'
             ? 'needs_assessment'
-            : eligibilityStatus !== 'ELIGIBLE'
+            : eligibilityStatus === 'NOT_ELIGIBLE'
+              ? 'not_eligible'
+              : eligibilityStatus !== 'ELIGIBLE' && eligibilityStatus !== 'REVIEW_REQUIRED'
               ? 'needs_assessment'
               : consultationPaymentStatus === 'PAID' && appointmentStatus === 'SCHEDULED' && consultationStatus !== 'COMPLETED'
                 ? 'appointment_scheduled'
@@ -431,7 +433,9 @@ function usePatientDataInternal() {
           ? 'ready'
           : assessmentStatus !== 'COMPLETED'
             ? 'needs_assessment'
-            : eligibilityStatus !== 'ELIGIBLE'
+            : eligibilityStatus === 'NOT_ELIGIBLE'
+              ? 'not_eligible'
+              : eligibilityStatus !== 'ELIGIBLE' && eligibilityStatus !== 'REVIEW_REQUIRED'
               ? 'needs_assessment'
               : consultationPaymentStatus === 'PAID' && appointmentStatus === 'SCHEDULED' && consultationStatus !== 'COMPLETED'
                 ? 'appointment_scheduled'
