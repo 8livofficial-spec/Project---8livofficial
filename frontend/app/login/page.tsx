@@ -21,7 +21,7 @@ export default function UnifiedLogin() {
       return 'Account created successfully! Please sign in with your new credentials.'
     }
     if (urlParams.get('success') === 'confirm_email') {
-      return 'Account created successfully! Please check your email inbox to confirm your account, then sign in here.'
+      return 'Account created successfully! Please check your email inbox, Spam, Junk, or Promotions folder to confirm your account, then sign in here.'
     }
     return ''
   })

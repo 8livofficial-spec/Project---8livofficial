@@ -42,6 +42,9 @@ function VerificationPendingContent() {
         <p className="mt-3 text-sm leading-6 text-[#475569]">
           We sent a verification link to {email ? <strong>{email}</strong> : 'your email address'}. Verify your email before signing in.
         </p>
+        <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-800">
+          If you do not see the confirmation email, please check your Spam, Junk, or Promotions folder.
+        </p>
         {message && <p className="mt-5 rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-700"><CheckCircle2 className="mr-2 inline h-4 w-4" />{message}</p>}
         {error && <p className="mt-5 rounded-xl bg-rose-50 p-3 text-sm font-semibold text-rose-700"><AlertCircle className="mr-2 inline h-4 w-4" />{error}</p>}
         <button
