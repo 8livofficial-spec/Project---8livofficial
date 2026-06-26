@@ -86,8 +86,8 @@ export async function GET(request: Request) {
       patientName,
       roleLabel: labelForRole(session.staff_role),
       canJoin: canJoinConsultation(session.booking_date, session.booking_time, session.status),
-      meetingUrl: session.meeting_url || session.room_url,
-      meetingProvider: session.meeting_provider || 'JITSI',
+      meetingUrl: null,
+      meetingProvider: session.meeting_provider || 'STREAM',
       appointmentType: session.appointment_type || `${String(session.staff_role || provider.role).toUpperCase()}_CONSULTATION`,
     }
   })

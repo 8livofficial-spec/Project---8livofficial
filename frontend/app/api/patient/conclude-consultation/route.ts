@@ -1,12 +1,19 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseServer';
+import { getAuthenticatedUser } from '@/lib/apiSecurity';
 
 export async function POST(req: Request) {
   try {
-    const { patientId, roomUrl, forceStatus } = await req.json();
+    const auth = await getAuthenticatedUser(req);
+    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    const { patientId, roomUrl, appointmentId, forceStatus } = await req.json();
 
     if (!patientId) {
       return NextResponse.json({ error: 'patientId is required' }, { status: 400 });
+    }
+    if (auth.user.id !== patientId && auth.role !== 'admin') {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
     // Clear active booking details in health_assessments immediately so the patient does not see the "Join Call" overlay
@@ -21,7 +28,7 @@ export async function POST(req: Request) {
       .eq('patient_id', patientId);
 
     // Now look for active consultation and update its status
-    let matchTarget = roomUrl;
+    const matchTarget = appointmentId || roomUrl;
     if (matchTarget) {
       // 1. Search in doctor_consultations
       let docQuery = supabaseAdmin
@@ -33,7 +40,7 @@ export async function POST(req: Request) {
       if (matchTarget.startsWith('https://')) {
         docQuery = docQuery.or(`room_url.eq.${matchTarget},meeting_url.eq.${matchTarget}`);
       } else {
-        docQuery = docQuery.or(`room_url.eq.${matchTarget},meeting_url.eq.${matchTarget},meeting_room.eq.${matchTarget},room_url.ilike.%${matchTarget}%,meeting_url.ilike.%${matchTarget}%,meeting_room.ilike.%${matchTarget}%`);
+        docQuery = docQuery.or(`id.eq.${matchTarget},call_id.eq.${matchTarget},room_url.eq.${matchTarget},meeting_url.eq.${matchTarget},meeting_room.eq.${matchTarget},room_url.ilike.%${matchTarget}%,meeting_url.ilike.%${matchTarget}%,meeting_room.ilike.%${matchTarget}%`);
       }
 
       const { data: docConsult } = await docQuery.maybeSingle();
@@ -47,6 +54,8 @@ export async function POST(req: Request) {
           .from('doctor_consultations')
           .update({
             status: nextStatus,
+            meeting_status: nextStatus === 'completed' ? 'COMPLETED' : 'WAITING',
+            call_ended_at: forceStatus === 'completed' ? new Date().toISOString() : null,
             updated_at: new Date().toISOString()
           })
           .eq('id', docConsult.id);
@@ -57,12 +66,12 @@ export async function POST(req: Request) {
         .from('staff_consultations')
         .select('*')
         .eq('patient_id', patientId)
-        .in('status', ['scheduled', 'attended']);
+        .in('status', ['scheduled', 'calling', 'attended']);
 
       if (matchTarget.startsWith('https://')) {
         staffQuery = staffQuery.or(`room_url.eq.${matchTarget},meeting_url.eq.${matchTarget}`);
       } else {
-        staffQuery = staffQuery.or(`room_url.eq.${matchTarget},meeting_url.eq.${matchTarget},meeting_room.eq.${matchTarget},room_url.ilike.%${matchTarget}%,meeting_url.ilike.%${matchTarget}%,meeting_room.ilike.%${matchTarget}%`);
+        staffQuery = staffQuery.or(`id.eq.${matchTarget},call_id.eq.${matchTarget},room_url.eq.${matchTarget},meeting_url.eq.${matchTarget},meeting_room.eq.${matchTarget},room_url.ilike.%${matchTarget}%,meeting_url.ilike.%${matchTarget}%,meeting_room.ilike.%${matchTarget}%`);
       }
 
       const { data: staffConsult } = await staffQuery.maybeSingle();
@@ -74,6 +83,7 @@ export async function POST(req: Request) {
           .from('staff_consultations')
           .update({
             status: nextStatus,
+            meeting_status: nextStatus === 'completed' ? 'COMPLETED' : 'WAITING',
             is_completed: nextStatus === 'completed',
             completed_at: nextStatus === 'completed' ? new Date().toISOString() : null,
             updated_at: new Date().toISOString()
@@ -84,8 +94,9 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true });
 
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error('Error in POST /api/patient/conclude-consultation:', err);
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+    const message = err instanceof Error ? err.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

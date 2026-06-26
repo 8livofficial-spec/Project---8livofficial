@@ -851,7 +851,7 @@ function Dashboard({ summary, patients, consultations, stats, wallet, copy, onCo
       <div className="rounded-[28px] border border-[#E8DED4] bg-white p-6 shadow-sm">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#C4622D]">Jitsi video</p>
+            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#C4622D]">Stream video</p>
             <h3 className="mt-1 text-xl font-black">Assigned Consultations</h3>
           </div>
           <Link href="/provider/plans" className="rounded-full border border-[#1A1F36]/15 bg-white px-4 py-2 text-sm font-bold text-[#1A1F36]">Care plans</Link>
@@ -868,16 +868,15 @@ function Dashboard({ summary, patients, consultations, stats, wallet, copy, onCo
                       <p className="text-sm font-semibold text-[#6B7A90]">{session.roleLabel} | {session.booking_date || '-'} at {session.booking_time || '-'}</p>
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <a
-                        href={session.canJoin && session.meetingUrl ? session.meetingUrl : undefined}
-                        target="_blank"
+                      <Link
+                        href={session.canJoin ? `/video/room?id=${encodeURIComponent(session.id)}` : '#'}
                         className={classNames(
                           'rounded-full px-4 py-2 text-xs font-black',
-                          session.canJoin && session.meetingUrl ? 'bg-[#1A1F36] text-white' : 'pointer-events-none bg-[#E8DED4] text-[#6B7A90]'
+                          session.canJoin ? 'bg-[#1A1F36] text-white' : 'pointer-events-none bg-[#E8DED4] text-[#6B7A90]'
                         )}
                       >
-                        {terminal ? 'Join Disabled' : session.canJoin ? 'Join Jitsi' : 'Opens 15 min before'}
-                      </a>
+                        {terminal ? 'Join Disabled' : session.canJoin ? 'Join Stream' : 'Opens 15 min before'}
+                      </Link>
                       {!terminal && (
                         <button onClick={() => onComplete(session.id)} className="rounded-full border border-[#1A1F36]/15 bg-white px-4 py-2 text-xs font-black text-[#1A1F36]">
                           Complete

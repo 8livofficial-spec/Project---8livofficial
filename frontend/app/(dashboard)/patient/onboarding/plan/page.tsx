@@ -8,6 +8,7 @@ import {
   UserCheck, Star, Zap
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { authedFetch } from '@/lib/apiClient'
 import { motion, AnimatePresence } from 'framer-motion'
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -90,11 +91,9 @@ export default function PlanSelectionPage() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) { router.push('/login'); return }
 
-      const response = await fetch('/api/plan', {
+      const response = await authedFetch('/api/plan', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          patientId: session.user.id,
           membershipTier: selected
         })
       })

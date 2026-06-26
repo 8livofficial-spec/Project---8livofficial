@@ -7,6 +7,7 @@ import {
   ChevronRight, CheckCircle2, ArrowLeft, AlertCircle, QrCode
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import { authedFetch } from '@/lib/apiClient'
 import { motion, AnimatePresence } from 'framer-motion'
 
 // ── Types ───────────────────────────────────────────────────────────────────
@@ -69,7 +70,7 @@ export default function OnboardingPaymentPage() {
       if (!session) { router.push('/login'); return }
 
       // Fetch the latest assessment safely via backend API (bypassing RLS select policies)
-      const res = await fetch(`/api/patient/status?patientId=${session.user.id}`)
+      const res = await authedFetch(`/api/patient/status?patientId=${session.user.id}`)
       if (!res.ok) {
         router.replace('/plans')
         return
@@ -151,9 +152,8 @@ export default function OnboardingPaymentPage() {
         metadata.bank = selectedBank
       }
 
-      const res = await fetch('/api/payment', {
+      const res = await authedFetch('/api/payment', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           patientId: session.user.id,
           paymentType: 'combined',

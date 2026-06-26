@@ -9,6 +9,7 @@ import {
   normalizeEmail,
   writeAuthAudit,
   rateLimitResponse,
+  findUserByEmail,
 } from '@/lib/authSecurity'
 
 export async function POST(request: Request) {
@@ -32,9 +33,28 @@ export async function POST(request: Request) {
 
     if (error) {
       const msg = error.message.toLowerCase()
+      if (msg.includes('invalid api key') || msg.includes('api key') || msg.includes('project not found')) {
+        await writeAuthAudit({ email, event: 'LOGIN_CONFIG_ERROR', status: 'FAILED', ip, userAgent, metadata: { error: error.message } })
+        return NextResponse.json({ error: 'Authentication service is not configured correctly.' }, { status: 500 })
+      }
       if (msg.includes('confirm') || msg.includes('verify')) {
         return NextResponse.json({ error: 'Please verify your email before signing in.', code: 'EMAIL_NOT_VERIFIED' }, { status: 403 })
       }
+
+      const user = await findUserByEmail(email)
+      if (user && !user.email_confirmed_at && !user.confirmed_at) {
+        await writeAuthAudit({ userId: user.id, email, event: 'LOGIN_UNVERIFIED_EMAIL', status: 'FAILED', ip, userAgent })
+        return NextResponse.json({ error: 'Please verify your email before signing in.', code: 'EMAIL_NOT_VERIFIED' }, { status: 403 })
+      }
+
+      if (user?.user_metadata?.reset_token_hash) {
+        await writeAuthAudit({ userId: user.id, email, event: 'LOGIN_PASSWORD_RESET_REQUIRED', status: 'FAILED', ip, userAgent })
+        return NextResponse.json({
+          error: 'Please set your password using the invitation or password reset link before signing in.',
+          code: 'RESET_PASSWORD_REQUIRED',
+        }, { status: 403 })
+      }
+
       await writeAuthAudit({ email, event: 'LOGIN', status: 'FAILED', ip, userAgent, metadata: { error: error.message } })
       return NextResponse.json({ error: 'Invalid email or password.' }, { status: 401 })
     }

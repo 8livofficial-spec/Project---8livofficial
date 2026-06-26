@@ -118,6 +118,7 @@ export default function UnifiedLogin() {
     try {
       const loginResponse = await fetch('/api/auth/login', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
         email,
@@ -128,6 +129,10 @@ export default function UnifiedLogin() {
       if (!loginResponse.ok) {
         if (loginData.code === 'EMAIL_NOT_VERIFIED') {
           window.location.href = `/verification-pending?email=${encodeURIComponent(email)}`
+          return
+        }
+        if (loginData.code === 'RESET_PASSWORD_REQUIRED') {
+          setAuthError('Please set your password using the invitation link, or use Forgot password to create a new password.')
           return
         }
         throw new Error(loginData.error || 'Authentication failed.')

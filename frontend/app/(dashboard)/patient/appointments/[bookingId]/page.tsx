@@ -22,6 +22,8 @@ type AppointmentDetails = {
   meetingProvider?: string | null
   meetingRoom?: string | null
   roomUrl?: string | null
+  callId?: string | null
+  callType?: string | null
   paymentAmount: number
   paymentStatus: string
   paymentId?: string | null
@@ -176,7 +178,7 @@ export default function AppointmentDetailsPage() {
   const needsMembershipPayment = isInitialConsultation && consultationCompleted && appointment?.membershipStatus === 'SELECTED'
   const canReschedule = Boolean(appointment?.freeRescheduleEligible)
   const requiresNewConsultationPayment = Boolean(appointment?.requiresNewPayment)
-  const canJoin = Boolean(appointment?.roomUrl && joinWindowOpen && !terminalStatus)
+  const canJoin = Boolean(appointment?.bookingId && joinWindowOpen && !terminalStatus)
   const canCancel = appointment?.status === 'SCHEDULED' && !consultationCompleted
   const joinUnlocksIn = appointmentStart ? formatCountdown(appointmentStart.getTime() - 15 * 60 * 1000 - now) : null
 
@@ -278,7 +280,7 @@ export default function AppointmentDetailsPage() {
     { label: 'Time', value: formatTime(appointment.time) },
     { label: 'Booking ID', value: appointment.bookingId },
     { label: 'Meeting Type', value: appointment.meetingType },
-    { label: 'Meeting Provider', value: appointment.meetingProvider || 'JITSI' },
+    { label: 'Meeting Provider', value: appointment.meetingProvider || 'STREAM' },
     { label: 'Status', value: appointment.status },
     { label: 'Consultation Fee', value: `₹${(appointment.paymentAmount ?? 0).toLocaleString('en-IN')}` },
     { label: 'Payment Status', value: appointment.paymentStatus },
@@ -422,8 +424,8 @@ export default function AppointmentDetailsPage() {
             type="button"
             disabled={!canJoin}
             onClick={() => {
-              if (canJoin && appointment.roomUrl) {
-                window.open(appointment.roomUrl, '_blank', 'noopener,noreferrer')
+              if (canJoin) {
+                router.push(`/patient/consultation/room?id=${encodeURIComponent(appointment.bookingId)}`)
               }
             }}
             className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#C4622D] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#A8522A] disabled:cursor-not-allowed disabled:bg-[#8896A4]"
@@ -435,13 +437,9 @@ export default function AppointmentDetailsPage() {
             <p className="mt-3 text-center text-xs font-semibold text-[#8896A4]">
               Join is no longer available for completed, cancelled, or missed consultations.
             </p>
-          ) : appointment.roomUrl && !canJoin ? (
+          ) : !canJoin ? (
             <p className="mt-3 text-center text-xs font-semibold text-[#8896A4]">
               Join button will be available 15 minutes before consultation{joinUnlocksIn ? ` (${joinUnlocksIn})` : ''}.
-            </p>
-          ) : !appointment.roomUrl ? (
-            <p className="mt-3 text-center text-xs font-semibold text-[#8896A4]">
-              Meeting link is not available yet. Please contact support if this persists.
             </p>
           ) : null}
 

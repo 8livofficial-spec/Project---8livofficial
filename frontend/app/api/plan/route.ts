@@ -1,14 +1,24 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { updatePatientJourneyState } from '@/lib/patientJourneyServer'
+import { getAuthenticatedUser } from '@/lib/apiSecurity'
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { patientId, membershipTier } = body
+    const auth = await getAuthenticatedUser(request)
+    if (!auth?.user?.id) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    if (auth.role !== 'patient') {
+      return NextResponse.json({ error: 'Only patients can select a membership plan.' }, { status: 403 })
+    }
 
-    if (!patientId || !membershipTier) {
-      return NextResponse.json({ error: 'Missing patientId or membershipTier' }, { status: 400 })
+    const body = await request.json()
+    const { membershipTier } = body
+    const patientId = auth.user.id
+
+    if (!membershipTier) {
+      return NextResponse.json({ error: 'Missing membershipTier' }, { status: 400 })
     }
 
     // 1. Fetch latest assessment for the patient

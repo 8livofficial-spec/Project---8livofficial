@@ -1,11 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-import { createJitsiMeeting } from '@/lib/jitsi'
 import { getAuthenticatedUser } from '@/lib/apiSecurity'
-
-function isLegacyVideoUrl(url?: string | null) {
-  return Boolean(url && /daily\.co|8liv\.daily/i.test(url))
-}
+import { createStreamMeeting } from '@/services/video/meeting.service'
 
 function getErrorMessage(err: unknown) {
   return err instanceof Error ? err.message : 'Internal Server Error'
@@ -33,7 +29,7 @@ export async function POST(request: Request) {
 
     const { data: consultation, error: lookupError } = await supabaseAdmin
       .from('doctor_consultations')
-      .select('id, doctor_id, room_url, meeting_provider, meeting_room, meeting_url')
+      .select('id, doctor_id, patient_id, room_url, meeting_provider, call_id, call_type, created_by, meeting_status')
       .eq('id', consultationId)
       .eq('doctor_id', targetDoctorId)
       .maybeSingle()
@@ -42,7 +38,7 @@ export async function POST(request: Request) {
       // Some deployments may not have meeting_* columns yet. Retry with legacy columns.
       const { data: legacyConsultation, error: legacyLookupError } = await supabaseAdmin
         .from('doctor_consultations')
-        .select('id, doctor_id, room_url')
+        .select('id, doctor_id, patient_id, room_url')
         .eq('id', consultationId)
         .eq('doctor_id', targetDoctorId)
         .maybeSingle()
@@ -52,37 +48,62 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: 'Consultation not found for this doctor.' }, { status: 404 })
       }
 
-      const meeting = createJitsiMeeting(legacyConsultation.id)
+      const meeting = createStreamMeeting({
+        appointmentId: legacyConsultation.id,
+        providerRole: 'doctor',
+        patientId: legacyConsultation.patient_id,
+        providerId: targetDoctorId,
+        createdBy: authUser.user.id,
+      })
       const { error: legacyUpdateError } = await supabaseAdmin
         .from('doctor_consultations')
-        .update({ room_url: meeting.meetingUrl, updated_at: new Date().toISOString() })
+        .update({
+          meeting_provider: meeting.meetingProvider,
+          call_id: meeting.callId,
+          call_type: meeting.callType,
+          created_by: meeting.createdBy,
+          meeting_status: meeting.meetingStatus,
+          room_url: null,
+          meeting_url: null,
+          meeting_room: null,
+          updated_at: new Date().toISOString()
+        })
         .eq('id', legacyConsultation.id)
         .eq('doctor_id', targetDoctorId)
 
       if (legacyUpdateError) throw legacyUpdateError
-      return NextResponse.json({ success: true, meetingUrl: meeting.meetingUrl, meetingRoom: meeting.meetingRoom, meetingProvider: meeting.meetingProvider })
+      return NextResponse.json({ success: true, callId: meeting.callId, callType: meeting.callType, meetingProvider: meeting.meetingProvider })
     }
 
     if (!consultation) {
       return NextResponse.json({ error: 'Consultation not found for this doctor.' }, { status: 404 })
     }
 
-    const existingMeetingUrl = consultation.meeting_url || consultation.room_url
-    if (existingMeetingUrl && !isLegacyVideoUrl(existingMeetingUrl)) {
+    if (consultation.call_id && consultation.meeting_provider === 'STREAM') {
       return NextResponse.json({
         success: true,
-        meetingUrl: existingMeetingUrl,
-        meetingRoom: consultation.meeting_room || null,
-        meetingProvider: consultation.meeting_provider || 'JITSI',
+        callId: consultation.call_id,
+        callType: consultation.call_type,
+        meetingProvider: consultation.meeting_provider,
       })
     }
 
-    const meeting = createJitsiMeeting(consultation.id)
+    const meeting = createStreamMeeting({
+      appointmentId: consultation.id,
+      providerRole: 'doctor',
+      patientId: consultation.patient_id,
+      providerId: targetDoctorId,
+      createdBy: authUser.user.id,
+    })
     const fullPayload = {
       meeting_provider: meeting.meetingProvider,
-      meeting_room: meeting.meetingRoom,
-      meeting_url: meeting.meetingUrl,
-      room_url: meeting.meetingUrl,
+      call_id: meeting.callId,
+      call_type: meeting.callType,
+      created_by: meeting.createdBy,
+      meeting_status: meeting.meetingStatus,
+      meeting_room: null,
+      meeting_url: null,
+      room_url: null,
       updated_at: new Date().toISOString(),
     }
 
@@ -95,7 +116,7 @@ export async function POST(request: Request) {
     if (updateError) {
       const { error: fallbackError } = await supabaseAdmin
         .from('doctor_consultations')
-        .update({ room_url: meeting.meetingUrl, updated_at: new Date().toISOString() })
+        .update({ room_url: null, updated_at: new Date().toISOString() })
         .eq('id', consultation.id)
         .eq('doctor_id', targetDoctorId)
 
@@ -104,8 +125,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      meetingUrl: meeting.meetingUrl,
-      meetingRoom: meeting.meetingRoom,
+      callId: meeting.callId,
+      callType: meeting.callType,
       meetingProvider: meeting.meetingProvider,
     })
   } catch (err: unknown) {

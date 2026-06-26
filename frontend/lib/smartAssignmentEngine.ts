@@ -1,6 +1,6 @@
 import { randomUUID } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-import { createJitsiMeeting } from '@/lib/jitsi'
+import { createStreamMeeting } from '@/services/video/meeting.service'
 import { getIndiaSlotTimestamp } from '@/lib/appointmentAvailability'
 
 type ProviderRole = 'doctor' | 'dietitian' | 'nutritionist' | 'fitness_coach' | 'trainer'
@@ -553,6 +553,12 @@ export async function assignMembershipCareTeam(patientId: string, rawPlanType?: 
 export function createAppointmentMeeting(appointmentId = randomUUID()) {
   return {
     appointmentId,
-    meeting: createJitsiMeeting(appointmentId),
+    meeting: createStreamMeeting({
+      appointmentId,
+      providerRole: 'doctor',
+      patientId: '',
+      providerId: '',
+      createdBy: '',
+    }),
   }
 }

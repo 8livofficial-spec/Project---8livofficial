@@ -10,7 +10,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'roomUrl or queryId is required' }, { status: 400 });
     }
 
-    // Target search term: look for matches in stored meeting URLs
+    // Target search term: prefer provider-independent appointment/call IDs; tolerate legacy URLs during migration.
     const searchTarget = roomUrl || queryId;
 
     // 1. Search in doctor_consultations
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     if (searchTarget.startsWith('https://')) {
       docQuery = docQuery.or(`room_url.eq.${searchTarget},meeting_url.eq.${searchTarget}`);
     } else {
-      docQuery = docQuery.or(`room_url.eq.${searchTarget},meeting_url.eq.${searchTarget},meeting_room.eq.${searchTarget},room_url.ilike.%${searchTarget}%,meeting_url.ilike.%${searchTarget}%,meeting_room.ilike.%${searchTarget}%`);
+      docQuery = docQuery.or(`id.eq.${searchTarget},call_id.eq.${searchTarget},room_url.eq.${searchTarget},meeting_url.eq.${searchTarget},meeting_room.eq.${searchTarget},room_url.ilike.%${searchTarget}%,meeting_url.ilike.%${searchTarget}%,meeting_room.ilike.%${searchTarget}%`);
     }
 
     const { data: docConsult, error: docErr } = await docQuery.maybeSingle();
@@ -45,6 +45,9 @@ export async function POST(req: Request) {
         providerId: docConsult.doctor_id,
         providerName: 'Assigned Doctor',
         providerRole: docConsult.doctor_profiles?.specialty || 'Physician Specialist',
+        meetingProvider: docConsult.meeting_provider || 'STREAM',
+        callId: docConsult.call_id || null,
+        callType: docConsult.call_type || null,
         status: docConsult.status
       });
     }
@@ -57,7 +60,7 @@ export async function POST(req: Request) {
     if (searchTarget.startsWith('https://')) {
       staffQuery = staffQuery.or(`room_url.eq.${searchTarget},meeting_url.eq.${searchTarget}`);
     } else {
-      staffQuery = staffQuery.or(`room_url.eq.${searchTarget},meeting_url.eq.${searchTarget},meeting_room.eq.${searchTarget},room_url.ilike.%${searchTarget}%,meeting_url.ilike.%${searchTarget}%,meeting_room.ilike.%${searchTarget}%`);
+      staffQuery = staffQuery.or(`id.eq.${searchTarget},call_id.eq.${searchTarget},room_url.eq.${searchTarget},meeting_url.eq.${searchTarget},meeting_room.eq.${searchTarget},room_url.ilike.%${searchTarget}%,meeting_url.ilike.%${searchTarget}%,meeting_room.ilike.%${searchTarget}%`);
     }
 
     const { data: staffConsult, error: staffErr } = await staffQuery.maybeSingle();
@@ -94,9 +97,11 @@ export async function POST(req: Request) {
         providerId: staffConsult.staff_id,
         providerName: providerName,
         providerRole: `${roleLabel} Specialist`,
-        meetingProvider: staffConsult.meeting_provider || 'JITSI',
+        meetingProvider: staffConsult.meeting_provider || 'STREAM',
         meetingRoom: staffConsult.meeting_room || null,
-        meetingUrl: staffConsult.meeting_url || staffConsult.room_url || null,
+        meetingUrl: null,
+        callId: staffConsult.call_id || null,
+        callType: staffConsult.call_type || null,
         status: staffConsult.status
       });
     }

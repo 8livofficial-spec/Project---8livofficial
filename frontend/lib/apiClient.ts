@@ -6,6 +6,7 @@ export async function authedFetch(url: string, options: RequestInit = {}) {
   if (!token) throw new Error('Please sign in again.')
   return fetch(url, {
     ...options,
+    credentials: options.credentials || 'include',
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${token}`,

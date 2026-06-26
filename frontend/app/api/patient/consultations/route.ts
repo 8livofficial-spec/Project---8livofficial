@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-import { createJitsiMeeting } from '@/lib/jitsi'
 import { EmailService } from '@/lib/emailService'
 import { loadPatientJourneyState, updatePatientJourneyState } from '@/lib/patientJourneyServer'
 import { finalizeConsultationAssignment, reserveDoctorForInitialConsultation } from '@/lib/smartAssignmentEngine'
 import { getAuthenticatedPatient, getIndiaSlotTimestamp, isFutureIndiaSlot } from '@/lib/appointmentAvailability'
 import { FOLLOW_UP_CONSULTATION, INITIAL_CONSULTATION } from '@/lib/providerConsultations'
 import { getMembershipValidity } from '@/lib/membershipServer'
+import { createStreamMeeting } from '@/services/video/meeting.service'
 
 const CONSULTATION_FEE = 499
 
@@ -384,7 +384,13 @@ export async function POST(request: Request) {
       specialty: smartAssignment.provider.specialization,
     }
     const appointmentId = randomUUID()
-    const meeting = createJitsiMeeting(appointmentId)
+    const meeting = createStreamMeeting({
+      appointmentId,
+      providerRole: 'doctor',
+      patientId,
+      providerId: slot.doctor_id,
+      createdBy: patientId,
+    })
 
     const consultationPayload: Record<string, unknown> = {
       id: appointmentId,
@@ -393,17 +399,20 @@ export async function POST(request: Request) {
       booking_date: slot.available_date,
       booking_time: slot.time_slot,
       status: 'scheduled',
-      room_url: meeting.meetingUrl,
       meeting_provider: meeting.meetingProvider,
-      meeting_room: meeting.meetingRoom,
-      meeting_url: meeting.meetingUrl,
+      call_id: meeting.callId,
+      call_type: meeting.callType,
+      created_by: meeting.createdBy,
+      meeting_status: meeting.meetingStatus,
       appointment_type: patientContext.appointmentType,
       is_completed: false,
     }
     const optionalSchemaColumns = new Set([
       'meeting_provider',
-      'meeting_room',
-      'meeting_url',
+      'call_id',
+      'call_type',
+      'created_by',
+      'meeting_status',
       'appointment_type',
       'is_completed',
     ])
@@ -490,7 +499,6 @@ export async function POST(request: Request) {
         const assessmentUpdate: Record<string, unknown> = {
           booking_date: slot.available_date,
           booking_time: slot.time_slot,
-          room_url: meeting.meetingUrl,
         }
         if (isInitialConsultation) assessmentUpdate.consultation_fee_paid = true
 
@@ -529,8 +537,8 @@ export async function POST(request: Request) {
                 membership_status: 'NOT_SELECTED',
                 dashboard_access: false,
                 meeting_provider: meeting.meetingProvider,
-                meeting_room: meeting.meetingRoom,
-                meeting_url: meeting.meetingUrl,
+                call_id: meeting.callId,
+                call_type: meeting.callType,
                 reused_payment_id: reusedPayment?.transaction_id || null,
                 free_reschedule_from: freeRescheduleFrom,
                 rescheduled_from: reusePaymentFromBookingId || null,

@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabaseClient'
 import Sidebar from '@/components/patient/Sidebar'
 import Topbar from '@/components/patient/Topbar'
 import AppointmentOnlyLayout from '@/components/patient/AppointmentOnlyLayout'
+import PointerCaptureGuard from '@/components/PointerCaptureGuard'
 
 export default function DashboardLayout({
   children
@@ -17,6 +18,7 @@ export default function DashboardLayout({
 }) {
   return (
     <PatientDataProvider>
+      <PointerCaptureGuard />
       <DashboardLayoutContent>{children}</DashboardLayoutContent>
     </PatientDataProvider>
   )
@@ -64,9 +66,9 @@ function DashboardLayoutContent({
           table: 'doctor_consultations',
           filter: `patient_id=eq.${patientId}`,
         }, (payload) => {
-          const rec = payload.new as { id?: string; room_url?: string; status?: string }
-          if (rec.status === 'calling' && rec.room_url) {
-            setGlobalCallAlert({ roomUrl: rec.room_url, consultationId: rec.id || '' })
+          const rec = payload.new as { id?: string; status?: string }
+          if (rec.status === 'calling' && rec.id) {
+            setGlobalCallAlert({ roomUrl: rec.id, consultationId: rec.id })
             try {
               if (!callingAudioRef.current) {
                 // Simple inline beep via AudioContext (no external file needed)
@@ -281,7 +283,7 @@ function DashboardLayoutContent({
             <div className="flex flex-col gap-3">
               <button
                 onClick={() => {
-                  router.push(`/patient/consultation/room?id=${encodeURIComponent(globalCallAlert.roomUrl)}`)
+                  router.push(`/patient/consultation/room?id=${encodeURIComponent(globalCallAlert.consultationId)}`)
                   setGlobalCallAlert(null)
                 }}
                 className="w-full bg-[#C4622D] hover:bg-[#A8522A] text-white font-bold py-4 rounded-2xl text-sm transition-all shadow-lg shadow-[#C4622D]/30 flex items-center justify-center gap-2"

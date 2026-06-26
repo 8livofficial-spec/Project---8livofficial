@@ -11,8 +11,14 @@ interface UpcomingAppointmentsProps {
   nutritionistName?: string
   fitnessCoachName?: string
   trainerName: string
-  consultations: any[]
-  staffConsultations: any[]
+  consultations: Array<{ id?: string; status?: string | null }>
+  staffConsultations: Array<{
+    id?: string
+    staff_role?: string | null
+    booking_date?: string | null
+    booking_time?: string | null
+    status?: string | null
+  }>
   onBookClick: (type: 'dietitian' | 'nutritionist' | 'fitness_coach') => void
 }
 
@@ -28,21 +34,23 @@ export default function UpcomingAppointments({
   staffConsultations,
   onBookClick
 }: UpcomingAppointmentsProps) {
+  const [now] = React.useState(() => Date.now())
   const scheduledStatuses = ['scheduled', 'calling', 'attended']
   const terminalStatuses = ['completed', 'cancelled', 'cancelled_by_doctor', 'cancelled_by_patient', 'missed_by_patient']
   const getConsult = (role: string) => staffConsultations.find(c => {
     const normalized = c.staff_role === 'trainer' ? 'fitness_coach' : c.staff_role
     return normalized === role && scheduledStatuses.includes(String(c.status || '').toLowerCase())
   })
-  const canJoin = (date?: string, time?: string, status?: string) => {
+  const canJoin = (date?: string | null, time?: string | null, status?: string | null) => {
     if (!date || !time || terminalStatuses.includes(String(status || '').toLowerCase())) return false
     const start = new Date(`${date} ${time}`).getTime()
-    return Number.isFinite(start) && Date.now() >= start - 15 * 60 * 1000
+    return Number.isFinite(start) && now >= start - 15 * 60 * 1000
   }
 
   const dietitianConsult = getConsult('dietitian')
   const nutritionistConsult = getConsult('nutritionist')
   const fitnessConsult = getConsult('fitness_coach')
+  const doctorConsult = consultations.find(c => scheduledStatuses.includes(String(c.status || '').toLowerCase()))
 
   const appointments = [
     {
@@ -52,7 +60,9 @@ export default function UpcomingAppointments({
       scheduled: !!(bookingDate && bookingTime),
       date: bookingDate || '',
       time: bookingTime || '',
-      linkUrl: `/patient/consultation/room`
+      linkUrl: doctorConsult?.id ? `/patient/consultation/room?id=${encodeURIComponent(doctorConsult.id)}` : '',
+      status: doctorConsult?.status,
+      canJoin: canJoin(bookingDate, bookingTime, doctorConsult?.status)
     },
     {
       name: dietitianName || 'Not Assigned',
@@ -62,7 +72,7 @@ export default function UpcomingAppointments({
       scheduled: !!dietitianConsult,
       date: dietitianConsult?.booking_date || '',
       time: dietitianConsult?.booking_time || '',
-      linkUrl: dietitianConsult?.meeting_url || dietitianConsult?.room_url || '',
+      linkUrl: dietitianConsult?.id ? `/patient/consultation/room?id=${encodeURIComponent(dietitianConsult.id)}` : '',
       status: dietitianConsult?.status,
       canJoin: canJoin(dietitianConsult?.booking_date, dietitianConsult?.booking_time, dietitianConsult?.status)
     },
@@ -74,7 +84,7 @@ export default function UpcomingAppointments({
       scheduled: !!nutritionistConsult,
       date: nutritionistConsult?.booking_date || '',
       time: nutritionistConsult?.booking_time || '',
-      linkUrl: nutritionistConsult?.meeting_url || nutritionistConsult?.room_url || '',
+      linkUrl: nutritionistConsult?.id ? `/patient/consultation/room?id=${encodeURIComponent(nutritionistConsult.id)}` : '',
       status: nutritionistConsult?.status,
       canJoin: canJoin(nutritionistConsult?.booking_date, nutritionistConsult?.booking_time, nutritionistConsult?.status)
     },
@@ -86,7 +96,7 @@ export default function UpcomingAppointments({
       scheduled: !!fitnessConsult,
       date: fitnessConsult?.booking_date || '',
       time: fitnessConsult?.booking_time || '',
-      linkUrl: fitnessConsult?.meeting_url || fitnessConsult?.room_url || '',
+      linkUrl: fitnessConsult?.id ? `/patient/consultation/room?id=${encodeURIComponent(fitnessConsult.id)}` : '',
       status: fitnessConsult?.status,
       canJoin: canJoin(fitnessConsult?.booking_date, fitnessConsult?.booking_time, fitnessConsult?.status)
     }
@@ -123,14 +133,23 @@ export default function UpcomingAppointments({
                   <p className="text-[#1A1F36] text-xs font-semibold">{appt.date}</p>
                   <p className="text-[#8896A4] text-[11px]">{appt.time}</p>
                 </div>
-                <Link
-                  href={appt.canJoin && appt.linkUrl ? appt.linkUrl : '#'}
-                  aria-disabled={!appt.canJoin}
-                  className={`p-1.5 rounded-full transition-colors shadow-sm ${appt.canJoin ? 'bg-[#1A1F36] text-white hover:bg-[#C4622D]' : 'bg-[#E8DED4] text-[#8896A4] pointer-events-none'}`}
-                  title={appt.canJoin ? 'Join consultation' : 'Join opens 15 minutes before appointment'}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 10-4 4 6 6 4-16-18 7 4 2 2 6 3-4"/></svg>
-                </Link>
+                {appt.canJoin && appt.linkUrl ? (
+                  <Link
+                    href={appt.linkUrl}
+                    className="p-1.5 rounded-full transition-colors shadow-sm bg-[#1A1F36] text-white hover:bg-[#C4622D]"
+                    title="Join consultation"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 10-4 4 6 6 4-16-18 7 4 2 2 6 3-4"/></svg>
+                  </Link>
+                ) : (
+                  <span
+                    aria-disabled="true"
+                    className="p-1.5 rounded-full transition-colors shadow-sm bg-[#E8DED4] text-[#8896A4]"
+                    title="Join opens 15 minutes before appointment"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 10-4 4 6 6 4-16-18 7 4 2 2 6 3-4"/></svg>
+                  </span>
+                )}
               </div>
             ) : (
               <button 

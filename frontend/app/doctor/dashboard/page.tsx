@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import StaffChat from '@/components/StaffChat';
 import ProviderAvailabilityScheduler, { GeneratedSlot, AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler';
+import StreamConsultationCall from '@/components/video/StreamConsultationCall';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
@@ -171,7 +172,7 @@ function handlePrintPrescription(c: any) {
 }
 
 
-// Helper: check if scheduled time is within the allowed Jitsi join window
+// Helper: check if scheduled time is within the allowed secure video join window
 function isCallTimeNow(bookingDate: string, bookingTime: string): boolean {
   if (bookingDate.startsWith('mock_') || bookingTime === 'Consultation' || bookingTime === 'Dietician' || bookingTime === 'Fitness') return true;
   try {
@@ -307,6 +308,14 @@ function consultationLabel(status?: string | null): string {
   return safeDisplayValue(status).replace(/_/g, ' ');
 }
 
+function normalizedConsultationStatus(status?: string | null): string {
+  return String(status || '').trim().toLowerCase();
+}
+
+function canShowDoctorJoin(status?: string | null): boolean {
+  return ['scheduled', 'booked', 'confirmed', 'calling', 'attended'].includes(normalizedConsultationStatus(status));
+}
+
 function isLegacyVideoUrl(url?: string | null): boolean {
   return Boolean(url && /daily\.co|8liv\.daily/i.test(url));
 }
@@ -409,7 +418,6 @@ type AvailabilitySlot = {
 
 export default function DoctorDashboard() {
   const router = useRouter();
-  const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const [doctor, setDoctor] = useState<any>(null);
   const [doctorProfile, setDoctorProfile] = useState<any>(null);
@@ -934,32 +942,22 @@ export default function DoctorDashboard() {
   const joinCall = async (c: Consultation) => {
     // Check if within allowed call window: 15 mins before start up to 1.30h after start
     if (!isCallTimeNow(c.booking_date, c.booking_time)) {
-      setWarningMessage(`Advance joining is not allowed. You can launch the Jitsi session between 15 minutes before and 1 hour 30 minutes after the scheduled time.\n\nScheduled time: ${c.booking_date} at ${c.booking_time}`);
+      setWarningMessage(`Advance joining is not allowed. You can launch the secure video session between 15 minutes before and 1 hour 30 minutes after the scheduled time.\n\nScheduled time: ${c.booking_date} at ${c.booking_time}`);
       return;
     }
 
-    let finalLink = c.meeting_url || c.room_url;
-
-    if (!finalLink || isLegacyVideoUrl(finalLink)) {
-      const res = await authedFetch('/api/doctor/consultations/meeting', {
-        method: 'POST',
-        body: JSON.stringify({ consultationId: c.id })
-      });
-      const data = await res.json();
-      if (!res.ok || data.error || !data.meetingUrl) {
-        console.error('Failed to replace legacy meeting URL:', data);
-        alert(data.error || 'Unable to prepare the Jitsi room for this consultation. Please refresh and try again.');
-        return;
-      }
-      finalLink = data.meetingUrl;
-    }
-
-    if (!finalLink) {
-      alert("Error: No stored Jitsi room was found for this consultation.");
+    const res = await authedFetch('/api/doctor/consultations/meeting', {
+      method: 'POST',
+      body: JSON.stringify({ consultationId: c.id })
+    });
+    const data = await res.json();
+    if (!res.ok || data.error || !data.callId) {
+      console.error('Failed to prepare Stream video call:', data);
+      alert(data.error || 'Unable to prepare the secure video session. Please refresh and try again.');
       return;
     }
 
-    setActiveCallUrl(finalLink);
+    setActiveCallUrl(c.id);
     setActiveCallPatient(c.patient_name || 'Member');
     setActiveCallStatus('calling');
     setActiveCallId(c.id);
@@ -1293,8 +1291,7 @@ export default function DoctorDashboard() {
   ];
 
   const activeRejoinableConsultation = consultations.find(c =>
-    (c.meeting_url || c.room_url) &&
-    ['scheduled', 'calling', 'attended'].includes(c.status) &&
+    canShowDoctorJoin(c.status) &&
     isCallTimeNow(c.booking_date, c.booking_time)
   );
 
@@ -1403,7 +1400,7 @@ export default function DoctorDashboard() {
         </div>
       )}
 
-      {/* ACTIVE VIDEO CALL OVERLAY (Embedded Jitsi Meet) */}
+      {/* ACTIVE VIDEO CALL OVERLAY (Stream Video) */}
       {activeCallUrl && (
         <div className="fixed inset-0 z-[100] bg-[#0D101C] flex flex-col">
           {/* Top Control Bar */}
@@ -1435,15 +1432,8 @@ export default function DoctorDashboard() {
               </button>
             </div>
           </div>
-          {/* Jitsi Meet Embedded Video Call */}
           <div className="flex-1 w-full bg-[#0D101C]">
-            <iframe
-              src={activeCallUrl}
-              allow="camera; microphone; display-capture; autoplay; fullscreen"
-              className="w-full h-full border-none"
-              title="8Liv Consultation Call"
-              ref={iframeRef}
-            />
+            <StreamConsultationCall appointmentId={activeCallUrl} onLeave={endCall} />
           </div>
         </div>
       )}
@@ -2258,7 +2248,7 @@ export default function DoctorDashboard() {
                           </div>
                           <div className="flex gap-2 flex-wrap">
                             {/* Join call */}
-                            {(c.meeting_url || c.room_url) && ['scheduled', 'calling', 'attended'].includes(c.status) && (() => {
+                            {canShowDoctorJoin(c.status) && (() => {
                               const active = isCallTimeNow(c.booking_date, c.booking_time);
                               return (
                                 <button onClick={() => joinCall(c)}

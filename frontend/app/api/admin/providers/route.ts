@@ -2,10 +2,41 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { EmailService } from '@/lib/emailService'
 import { createToken, getOrigin } from '@/lib/authSecurity'
-import { assertAdmin } from '@/lib/apiSecurity'
+import { getAuthenticatedUser } from '@/lib/apiSecurity'
 
 const providerRoles = ['doctor', 'dietitian', 'nutritionist', 'fitness_coach']
 const fallbackProviderRoles = ['doctor', 'dietitian', 'nutritionist', 'fitness_coach', 'trainer']
+const isDev = process.env.NODE_ENV !== 'production'
+
+function authError(message: string, status: 401 | 403) {
+  return NextResponse.json(
+    { error: status === 401 ? 'Unauthorized' : 'Forbidden', ...(isDev ? { reason: message } : {}) },
+    { status }
+  )
+}
+
+async function requireAdmin(request: Request) {
+  const auth = await getAuthenticatedUser(request)
+  if (!auth?.user?.id) {
+    return { error: authError('no session found', 401) }
+  }
+
+  const { data: profile, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, role')
+    .eq('id', auth.user.id)
+    .maybeSingle()
+
+  if (error || !profile) {
+    return { error: authError('admin profile missing', 403) }
+  }
+
+  if (String(profile.role || '').toLowerCase() !== 'admin') {
+    return { error: authError('role not admin', 403) }
+  }
+
+  return { user: auth.user, profile }
+}
 
 function isMissingProviderProfilesTable(error?: { message?: string; code?: string } | null) {
   const message = String(error?.message || '').toLowerCase()
@@ -52,7 +83,8 @@ async function loadFallbackProviders(search = '', from = 0, to = 24) {
 
 export async function GET(request: Request) {
   try {
-    await assertAdmin(request)
+    const admin = await requireAdmin(request)
+    if ('error' in admin) return admin.error
     const { searchParams } = new URL(request.url)
 
     const page = Number(searchParams.get('page') || '1')
@@ -99,7 +131,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    await assertAdmin(request)
+    const admin = await requireAdmin(request)
+    if ('error' in admin) return admin.error
     const body = await request.json()
     const {
       fullName,
@@ -223,7 +256,8 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    await assertAdmin(request)
+    const admin = await requireAdmin(request)
+    if ('error' in admin) return admin.error
     const body = await request.json()
     const { providerId, updates } = body
     if (!providerId || !updates) {

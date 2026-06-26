@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-import { createJitsiMeeting } from '@/lib/jitsi'
 import { appointmentTypeForRole, getAssignedProviderForRole, labelForRole, normalizeProviderRole } from '@/lib/providerConsultations'
 import { getAuthenticatedPatient, isFutureIndiaSlot } from '@/lib/appointmentAvailability'
+import { createStreamMeeting } from '@/services/video/meeting.service'
 
 type ProviderAvailability = {
   id: string
@@ -313,7 +313,13 @@ export async function POST(request: Request) {
     }
 
     const consultationId = randomUUID()
-    const meeting = createJitsiMeeting(consultationId)
+    const meeting = createStreamMeeting({
+      appointmentId: consultationId,
+      providerRole: role,
+      patientId,
+      providerId,
+      createdBy: patientId,
+    })
     const roleLabel = labelForRole(role)
 
     let { data: consultation, error } = await supabaseAdmin
@@ -327,10 +333,11 @@ export async function POST(request: Request) {
         booking_date: bookingDate,
         booking_time: bookingTime,
         status: 'scheduled',
-        room_url: meeting.meetingUrl,
         meeting_provider: meeting.meetingProvider,
-        meeting_room: meeting.meetingRoom,
-        meeting_url: meeting.meetingUrl,
+        call_id: meeting.callId,
+        call_type: meeting.callType,
+        created_by: meeting.createdBy,
+        meeting_status: meeting.meetingStatus,
         is_completed: false,
       })
       .select()
@@ -347,7 +354,6 @@ export async function POST(request: Request) {
           booking_date: bookingDate,
           booking_time: bookingTime,
           status: 'scheduled',
-          room_url: meeting.meetingUrl,
         })
         .select()
         .single()

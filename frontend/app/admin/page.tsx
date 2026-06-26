@@ -7,6 +7,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer, Trash2, GitMerge, ClipboardList, DollarSign, Calendar, UserCheck, XCircle, TrendingUp, BadgeCheck, Menu, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import SessionMonitor from '@/components/admin/SessionMonitor';
+import { authedFetch } from '@/lib/apiClient';
 
 type AdminTab =
   | 'dashboard'
@@ -79,6 +80,26 @@ function AdminDashboardContent() {
   const [adminUser, setAdminUser] = useState<any>(null);
   const [authChecking, setAuthChecking] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+
+  const handleAdminSessionExpired = () => {
+    setAuthError('Session expired. Please login again.');
+    router.push('/login');
+  };
+
+  const adminFetch = async (url: string, options?: RequestInit) => {
+    try {
+      const response = await authedFetch(url, options);
+      if (response.status === 401) {
+        handleAdminSessionExpired();
+      }
+      return response;
+    } catch (error) {
+      if (error instanceof Error && error.message.toLowerCase().includes('sign in')) {
+        handleAdminSessionExpired();
+      }
+      throw error;
+    }
+  };
 
   // ── New Tab state ──────────────────────────────────────────────────────
   const [allStaff, setAllStaff] = useState<any[]>([]);
@@ -172,7 +193,7 @@ function AdminDashboardContent() {
     if (!adminId) return;
     setDashboardLoading(true);
     try {
-      const res = await fetch(`/api/admin/dashboard?adminId=${adminId}`);
+      const res = await adminFetch(`/api/admin/dashboard?adminId=${adminId}`);
       if (res.ok) {
         const data = await res.json();
         setDashboardSummary(data.summary || {});
@@ -278,12 +299,22 @@ function AdminDashboardContent() {
   const fetchProviders = async () => {
     if (!adminUser?.id) return;
     try {
-      const res = await fetch(`/api/admin/providers?adminId=${adminUser.id}`);
+      const res = await adminFetch(`/api/admin/providers?adminId=${adminUser.id}`);
+      if (res.status === 401) {
+        setAuthError('Session expired. Please login again.');
+        router.push('/login');
+        return;
+      }
       if (!res.ok) return;
       const data = await res.json();
       setProviders(data.providers || []);
       setProvidersWarning(data.warning || '');
     } catch (err) {
+      if (err instanceof Error && err.message.includes('sign in')) {
+        setAuthError('Session expired. Please login again.');
+        router.push('/login');
+        return;
+      }
       console.error('[Providers Fetch Error]', err);
     }
   };
@@ -337,12 +368,16 @@ function AdminDashboardContent() {
           bankAccountDetails: providerBankDetails ? { notes: providerBankDetails } : {},
           upiId: providerUpi,
         };
-      const res = await fetch('/api/admin/providers', {
+      const res = await adminFetch('/api/admin/providers', {
         method: selectedProvider ? 'PATCH' : 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       const data = await res.json();
+      if (res.status === 401) {
+        setAuthError('Session expired. Please login again.');
+        router.push('/login');
+        return;
+      }
       if (!res.ok) throw new Error(data.error || 'Failed to save provider.');
       alert(selectedProvider ? 'Provider updated successfully.' : 'Provider created successfully.');
       resetProviderForm();
@@ -357,12 +392,16 @@ function AdminDashboardContent() {
   const handleProviderStatus = async (provider: any, status: 'active' | 'inactive') => {
     if (!adminUser?.id) return;
     try {
-      const res = await fetch('/api/admin/providers', {
+      const res = await adminFetch('/api/admin/providers', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ adminId: adminUser.id, providerId: provider.provider_id, updates: { status } }),
       });
       const data = await res.json();
+      if (res.status === 401) {
+        setAuthError('Session expired. Please login again.');
+        router.push('/login');
+        return;
+      }
       if (!res.ok) throw new Error(data.error || 'Failed to update provider.');
       await fetchProviders();
     } catch (err: any) {
@@ -432,9 +471,8 @@ function AdminDashboardContent() {
     const confirmed = window.confirm(`Request refund for Rs ${Number(payment.amount || 0).toLocaleString('en-IN')}?`);
     if (!confirmed) return;
     try {
-      const res = await fetch('/api/admin/payments/refund', {
+      const res = await adminFetch('/api/admin/payments/refund', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ adminId: adminUser.id, paymentId: payment.id, reason: 'Admin requested refund' }),
       });
       const data = await res.json();
@@ -459,9 +497,8 @@ function AdminDashboardContent() {
   const updatePayoutStatus = async (transactionId: string, payoutStatus: string) => {
     if (!adminUser?.id || !transactionId) return;
     try {
-      const res = await fetch('/api/admin/provider-payouts', {
+      const res = await adminFetch('/api/admin/provider-payouts', {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ adminId: adminUser.id, transactionId, payoutStatus }),
       });
       const data = await res.json();
@@ -477,9 +514,8 @@ function AdminDashboardContent() {
     const name = updates.name || plan.name;
     const priceMonthly = updates.priceMonthly ?? plan.price_monthly ?? 0;
     const features = updates.features ?? plan.features ?? [];
-    const res = await fetch('/api/admin/plans', {
+    const res = await adminFetch('/api/admin/plans', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         adminId: adminUser.id,
         name,
@@ -518,7 +554,7 @@ function AdminDashboardContent() {
 
     setStaffDeleting(true);
     try {
-      const res = await fetch(`/api/admin/users?adminId=${adminUser.id}&userId=${staffMember.id}`, {
+      const res = await adminFetch(`/api/admin/users?adminId=${adminUser.id}&userId=${staffMember.id}`, {
         method: 'DELETE'
       });
       const data = await res.json();
@@ -566,7 +602,7 @@ function AdminDashboardContent() {
           return;
         }
 
-        const profileRes = await fetch(`/api/admin/profile?userId=${session.user.id}`);
+        const profileRes = await adminFetch(`/api/admin/profile?userId=${session.user.id}`);
         if (!profileRes.ok) {
           setAuthError('Access Denied. You do not have permission to view the admin control center.');
           setAuthChecking(false);
@@ -650,7 +686,7 @@ function AdminDashboardContent() {
   // ── Fetch plans from backend API ───────────────────────────────────────
   const fetchPlans = async () => {
     try {
-      const res = await fetch('/api/admin/plans');
+      const res = await adminFetch('/api/admin/plans');
       if (res.ok) {
         const data = await res.json();
         setPlans(data.plans || []);
@@ -665,7 +701,7 @@ function AdminDashboardContent() {
     if (!adminUser) return;
     setAssignmentLoading(true);
     try {
-      const res = await fetch(`/api/admin/assignments?patientId=${patientId}&adminId=${adminUser.id}`);
+      const res = await adminFetch(`/api/admin/assignments?patientId=${patientId}&adminId=${adminUser.id}`);
       if (res.ok) {
         const data = await res.json();
         if (data.assignment) {
@@ -698,9 +734,8 @@ function AdminDashboardContent() {
         trainerId: roleType === 'trainer' ? value : currentAssignment?.trainer_id,
       };
 
-      const res = await fetch('/api/admin/assignments', {
+      const res = await adminFetch('/api/admin/assignments', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
 
@@ -1082,15 +1117,8 @@ function AdminDashboardContent() {
     if (!confirmed) return;
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Session expired. Please log in again.');
-
-      const res = await fetch('/api/admin/payouts/process', {
+      const res = await adminFetch('/api/admin/payouts/process', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
         body: JSON.stringify({ payoutId }),
       });
       const data = await res.json();
@@ -1117,15 +1145,8 @@ function AdminDashboardContent() {
     }
     setAdjustSubmitting(true);
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('Session expired. Please log in again.');
-
-      const res = await fetch('/api/admin/wallet/adjust', {
+      const res = await adminFetch('/api/admin/wallet/adjust', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
-        },
         body: JSON.stringify({
           providerId: adjustingProvider.provider_id,
           amount: amountVal,
@@ -1521,7 +1542,7 @@ function AdminDashboardContent() {
       items: [
         { label: 'SMTP', value: 'Email delivery', helper: 'Host, port, sender identity, and transactional email credentials.' },
         { label: 'Razorpay', value: 'Payments + RazorpayX', helper: 'Patient collections, refunds, doctor payouts, and webhooks.' },
-        { label: 'Jitsi', value: 'Video provider', helper: 'Meeting room provider for patient-doctor consultations.' },
+        { label: 'Stream Video', value: 'Video provider', helper: 'Secure meeting provider for patient-provider consultations.' },
       ],
     },
     {
@@ -1529,7 +1550,7 @@ function AdminDashboardContent() {
       description: 'Reusable message templates for appointments, payments, plans, and operational alerts.',
       items: [
         { label: 'Booking Confirmed', value: 'Patient + Doctor', helper: 'Appointment details, receipt link, and calendar prompt.' },
-        { label: 'Join Reminder', value: '15 minutes before', helper: 'Sent before Jitsi join access opens.' },
+        { label: 'Join Reminder', value: '15 minutes before', helper: 'Sent before secure video join access opens.' },
         { label: 'Plan Selection', value: 'Post consultation', helper: 'Prompt after doctor completes the consultation.' },
         { label: 'Payout Update', value: 'Doctor', helper: 'Wallet credit, RazorpayX processing, and payout status changes.' },
       ],
@@ -2153,7 +2174,7 @@ function AdminDashboardContent() {
               <div className="divide-y divide-[#1A1F36]/8">
                 {filteredAppointments.map(item => (
                   <div key={item.id} className="grid grid-cols-1 gap-3 px-5 py-4 text-sm font-bold text-[#40516A] lg:grid-cols-[1fr_1fr_0.7fr_0.8fr_0.8fr_0.8fr_0.7fr] lg:items-center">
-                    <span className="font-black text-[#1A1F36]">{item.patient_name}</span><span>{item.doctor_name}</span><span className="uppercase">{item.status}</span><span>Paid</span><span>Jitsi</span><span>{fmtDuration(item.call_started_at, item.call_ended_at)}</span><span>{item.booking_date} {item.booking_time}</span>
+                    <span className="font-black text-[#1A1F36]">{item.patient_name}</span><span>{item.doctor_name}</span><span className="uppercase">{item.status}</span><span>Paid</span><span>Stream</span><span>{fmtDuration(item.call_started_at, item.call_ended_at)}</span><span>{item.booking_date} {item.booking_time}</span>
                   </div>
                 ))}
               </div>
@@ -3065,9 +3086,8 @@ function AdminDashboardContent() {
                     }
                     setStaffSubmitting(true);
                     try {
-                      const res = await fetch('/api/admin/users', {
+                      const res = await adminFetch('/api/admin/users', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
                           adminId: adminUser.id,
                           email: staffEmail,
@@ -3218,9 +3238,8 @@ function AdminDashboardContent() {
                   setPlanSubmitting(true);
                   try {
                     const parsedFeatures = planFeatures.split(',').map(f => f.trim()).filter(f => f.length > 0);
-                    const res = await fetch('/api/admin/plans', {
+                    const res = await adminFetch('/api/admin/plans', {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
                         adminId: adminUser.id,
                         name: planName,

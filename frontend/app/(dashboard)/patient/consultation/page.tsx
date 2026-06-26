@@ -326,9 +326,9 @@ export default function ConsultationSchedulingPage() {
             filter: `patient_id=eq.${patientId}`,
           },
           (payload) => {
-            const updated = payload.new as { id?: string; room_url?: string; status?: string }
-            if (updated.status === 'calling' && updated.room_url && updated.id) {
-              setDoctorCallingAlert({ roomUrl: updated.room_url, consultationId: updated.id })
+            const updated = payload.new as { id?: string; status?: string }
+            if (updated.status === 'calling' && updated.id) {
+              setDoctorCallingAlert({ roomUrl: updated.id, consultationId: updated.id })
             } else if (updated.status === 'attended' || updated.status === 'completed') {
               setDoctorCallingAlert(null)
             }
@@ -466,7 +466,7 @@ export default function ConsultationSchedulingPage() {
               <div className="flex flex-col gap-3 pt-4">
                 <button
                   onClick={() => {
-                    router.push(`/patient/consultation/room?id=${encodeURIComponent(doctorCallingAlert.roomUrl)}`)
+                    router.push(`/patient/consultation/room?id=${encodeURIComponent(doctorCallingAlert.consultationId)}`)
                     setDoctorCallingAlert(null)
                   }}
                   className="w-full py-3 px-4 rounded-lg font-semibold text-white transition-all flex items-center justify-center gap-2"

@@ -345,7 +345,7 @@ export async function PATCH(req: Request) {
 
     if (action === 'start_call') {
       const currentStatus = String(consultation.status || '').trim().toLowerCase();
-      if (!['scheduled', 'calling', 'attended'].includes(currentStatus)) {
+      if (!['scheduled', 'booked', 'confirmed', 'calling', 'attended'].includes(currentStatus)) {
         return NextResponse.json({ error: 'This consultation can no longer be joined.' }, { status: 409 });
       }
       const now = new Date().toISOString();
@@ -421,7 +421,7 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ error: `A ${currentStatus.replaceAll('_', ' ')} consultation cannot be completed.` }, { status: 409 });
       }
 
-      // A Jitsi iframe cannot reliably report whether both participants joined.
+      // The consultation is marked attended when the provider starts the secure video session.
       // The server-side start/end timestamps are therefore the durable attendance
       // evidence. `completed` is also accepted because legacy conclude endpoints
       // used it before the doctor submitted the clinical decision.

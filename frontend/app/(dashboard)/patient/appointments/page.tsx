@@ -17,7 +17,6 @@ type AppointmentRecord = {
   bookingDate?: string | null
   bookingTime?: string | null
   status: string
-  meetingUrl?: string | null
   createdAt?: string | null
 }
 
@@ -45,6 +44,10 @@ type StaffConsultationRow = {
   appointment_type?: string | null
   created_at?: string | null
 }
+
+type DoctorProfileRow = { id: string; full_name?: string | null }
+type ProviderProfileRow = { provider_id: string; full_name?: string | null; role?: string | null }
+type ProfileRow = { id: string; first_name?: string | null; last_name?: string | null; display_id?: string | null }
 
 const filters: Array<{ key: FilterKey; label: string }> = [
   { key: 'all', label: 'All' },
@@ -93,7 +96,7 @@ function getCategory(appointment: AppointmentRecord): Exclude<FilterKey, 'all'> 
 }
 
 function canJoin(appointment: AppointmentRecord) {
-  if (!appointment.meetingUrl || !appointment.bookingDate || !appointment.bookingTime) return false
+  if (!appointment.bookingDate || !appointment.bookingTime) return false
   if (getCategory(appointment) !== 'upcoming') return false
 
   const start = new Date(`${appointment.bookingDate} ${appointment.bookingTime}`).getTime()
@@ -152,19 +155,19 @@ export default function AppointmentsPage() {
       const staffRows = (data.staffConsultations || []) as StaffConsultationRow[]
 
       const doctorNames = new Map<string, string>(
-        (data.doctorProfiles || []).map((profile: any) => [
+        ((data.doctorProfiles || []) as DoctorProfileRow[]).map((profile) => [
           profile.id,
           profile.full_name || 'Assigned Doctor',
         ])
       )
       const providerNames = new Map<string, string>(
-        (data.providerProfiles || []).map((profile: any) => [
+        ((data.providerProfiles || []) as ProviderProfileRow[]).map((profile) => [
           profile.provider_id,
           profile.full_name || 'Assigned Provider',
         ])
       )
       const profileNames = new Map<string, string>(
-        (data.profiles || []).map((profile: any) => [
+        ((data.profiles || []) as ProfileRow[]).map((profile) => [
           profile.id,
           [profile.first_name, profile.last_name].filter(Boolean).join(' ') || profile.display_id || 'Assigned Provider',
         ])
@@ -180,7 +183,6 @@ export default function AppointmentsPage() {
         bookingDate: row.booking_date,
         bookingTime: row.booking_time,
         status: normalizeStatus(row.status),
-        meetingUrl: row.meeting_url || row.room_url || null,
         createdAt: row.created_at,
       }))
 
@@ -194,7 +196,6 @@ export default function AppointmentsPage() {
         bookingDate: row.booking_date,
         bookingTime: row.booking_time,
         status: normalizeStatus(row.status),
-        meetingUrl: row.meeting_url || row.room_url || null,
         createdAt: row.created_at,
       }))
 
@@ -213,10 +214,6 @@ export default function AppointmentsPage() {
 
     return () => window.clearTimeout(timer)
   }, [])
-
-  useEffect(() => {
-    setPage(1)
-  }, [filter, search])
 
   const filteredAppointments = useMemo(() => {
     const query = search.trim().toLowerCase()
@@ -315,8 +312,7 @@ export default function AppointmentsPage() {
         </Link>
         {canJoin(appointment) ? (
           <Link
-            href={appointment.meetingUrl || '#'}
-            target={appointment.source === 'staff' ? '_blank' : undefined}
+            href={`/patient/consultation/room?id=${encodeURIComponent(appointment.id)}`}
             className="rounded-lg bg-[#C4622D] px-3 py-2 text-xs font-bold text-white"
           >
             Join Meeting
@@ -362,7 +358,10 @@ export default function AppointmentsPage() {
               <button
                 key={item.key}
                 type="button"
-                onClick={() => setFilter(item.key)}
+                onClick={() => {
+                  setFilter(item.key)
+                  setPage(1)
+                }}
                 className={`rounded-xl px-4 py-2 text-xs font-bold transition-colors ${
                   filter === item.key
                     ? 'bg-[#1A1F36] text-white'
@@ -378,7 +377,10 @@ export default function AppointmentsPage() {
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#8896A4]" />
             <input
               value={search}
-              onChange={event => setSearch(event.target.value)}
+              onChange={event => {
+                setSearch(event.target.value)
+                setPage(1)
+              }}
               placeholder="Search provider, type, or date"
               className="w-full rounded-xl border border-[#1A1F36]/10 bg-white py-2.5 pl-9 pr-3 text-sm font-semibold outline-none focus:border-[#C4622D]"
             />
@@ -436,7 +438,7 @@ export default function AppointmentsPage() {
                     <p className="text-sm font-bold">{appointment.appointmentType}</p>
                     <p className="mt-1 inline-flex items-center gap-1 text-xs font-semibold text-[#6B7A90]">
                       <Video className="h-3.5 w-3.5" />
-                      Video (Jitsi)
+                      Secure Stream Video
                     </p>
                   </div>
 

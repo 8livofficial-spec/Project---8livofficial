@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getMembershipValidity } from '@/lib/membershipServer'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-import { createJitsiMeeting } from '@/lib/jitsi'
+import { createStreamMeeting } from '@/services/video/meeting.service'
 
 type RouteContext = {
   params: Promise<{ bookingId: string }>
@@ -18,6 +18,10 @@ type ConsultationRow = {
   meeting_provider?: string | null
   meeting_room?: string | null
   meeting_url?: string | null
+  call_id?: string | null
+  call_type?: string | null
+  created_by?: string | null
+  meeting_status?: string | null
   appointment_type?: string | null
 }
 
@@ -67,7 +71,7 @@ async function requireAuthenticatedPatient(request: Request, patientId: string) 
 }
 
 async function loadAppointment(bookingId: string, patientId: string) {
-  const fullSelect = 'id, patient_id, doctor_id, booking_date, booking_time, status, room_url, meeting_provider, meeting_room, meeting_url, appointment_type'
+  const fullSelect = 'id, patient_id, doctor_id, booking_date, booking_time, status, room_url, meeting_provider, meeting_room, meeting_url, call_id, call_type, created_by, meeting_status, appointment_type'
   const legacySelect = 'id, patient_id, doctor_id, booking_date, booking_time, status, room_url'
 
   const { data, error } = await supabaseAdmin
@@ -94,10 +98,6 @@ function getSlotTimestamp(slotDate?: string | null, slotTime?: string | null): n
   if (!slotDate || !slotTime) return null
   const parsed = new Date(`${slotDate} ${slotTime}`).getTime()
   return Number.isNaN(parsed) ? null : parsed
-}
-
-function isLegacyVideoUrl(url?: string | null) {
-  return Boolean(url && /daily\.co|8liv\.daily/i.test(url))
 }
 
 export async function GET(request: Request, context: RouteContext) {
@@ -198,23 +198,33 @@ export async function GET(request: Request, context: RouteContext) {
       || rawStatus === 'cancelled_by_patient'
       || (rawStatus === 'missed_by_patient' && !missedFreeRescheduleUsed)
 
-    let meetingProvider = appointment.meeting_provider || 'JITSI'
-    let meetingRoom = appointment.meeting_room || null
-    let meetingUrl = appointment.meeting_url || appointment.room_url || null
+    let meetingProvider = appointment.meeting_provider || 'STREAM'
+    let callId = appointment.call_id || null
+    let callType = appointment.call_type || null
 
-    if (!joinDisabled && (!meetingUrl || isLegacyVideoUrl(meetingUrl))) {
-      const jitsiMeeting = createJitsiMeeting(appointment.id)
-      meetingProvider = jitsiMeeting.meetingProvider
-      meetingRoom = jitsiMeeting.meetingRoom
-      meetingUrl = jitsiMeeting.meetingUrl
+    if (!joinDisabled && (!callId || meetingProvider !== 'STREAM')) {
+      const streamMeeting = createStreamMeeting({
+        appointmentId: appointment.id,
+        providerRole: 'doctor',
+        patientId,
+        providerId: appointment.doctor_id || '',
+        createdBy: patientId,
+      })
+      meetingProvider = streamMeeting.meetingProvider
+      callId = streamMeeting.callId
+      callType = streamMeeting.callType
 
       const { error: meetingUpdateError } = await supabaseAdmin
         .from('doctor_consultations')
         .update({
           meeting_provider: meetingProvider,
-          meeting_room: meetingRoom,
-          meeting_url: meetingUrl,
-          room_url: meetingUrl,
+          call_id: callId,
+          call_type: callType,
+          created_by: streamMeeting.createdBy,
+          meeting_status: streamMeeting.meetingStatus,
+          meeting_room: null,
+          meeting_url: null,
+          room_url: null,
           updated_at: new Date().toISOString()
         })
         .eq('id', appointment.id)
@@ -241,8 +251,10 @@ export async function GET(request: Request, context: RouteContext) {
         membershipExpiresAt: membershipValidity.expiresAt,
         dashboardAccess: membershipActive,
         meetingProvider,
-        meetingRoom,
-        roomUrl: joinDisabled ? null : meetingUrl,
+        meetingRoom: null,
+        roomUrl: null,
+        callId: joinDisabled ? null : callId,
+        callType: joinDisabled ? null : callType,
         paymentAmount: 499,
         paymentStatus: payment?.status === 'success' || payment?.status === 'paid' ? 'PAID' : (payment?.status || 'PENDING').toUpperCase(),
         paymentId: payment?.transaction_id || null,

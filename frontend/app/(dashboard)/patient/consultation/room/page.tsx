@@ -1,11 +1,12 @@
 'use client'
 
-import React, { useState, useEffect, useRef, Suspense } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { Video, Mic, MicOff, Camera, CameraOff, PhoneOff, Calendar, FileText, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react'
 import { usePatientData } from '@/hooks/usePatientData'
 import { supabase } from '@/lib/supabaseClient'
 import Link from 'next/link'
+import StreamConsultationCall from '@/components/video/StreamConsultationCall'
 
 export default function ConsultationRoomPage() {
   return (
@@ -23,21 +24,10 @@ export default function ConsultationRoomPage() {
 }
 
 function ConsultationRoomContent() {
-  const router = useRouter()
   const searchParams = useSearchParams()
   const queryId = searchParams.get('id')
   const { assessment, reloadData, loading } = usePatientData()
   const [phase, setPhase] = useState<'pre-check' | 'call' | 'post-summary'>('pre-check')
-
-  if (loading) {
-    return (
-      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
-        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-  
-  // Device Check States
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null)
   const [hasMicPermission, setHasMicPermission] = useState<boolean | null>(null)
   const [cameraEnabled, setCameraEnabled] = useState(true)
@@ -49,28 +39,64 @@ function ConsultationRoomContent() {
   const [doctorName, setDoctorName] = useState('Assigned Doctor')
   const [doctorRole, setDoctorRole] = useState('Physician Specialist')
 
-  // Dynamic room URL resolution
-  const [roomUrl, setRoomUrl] = useState('')
+  const appointmentId = queryId || ''
 
-  useEffect(() => {
-    if (queryId?.startsWith('https://')) {
-      setRoomUrl(queryId)
-    } else if (assessment?.room_url?.startsWith('https://')) {
-      setRoomUrl(assessment.room_url)
-    } else {
-      setRoomUrl('')
+  const stopCameraStream = useCallback(() => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop())
+      streamRef.current = null
     }
-  }, [queryId, assessment?.room_url])
+    if (videoRef.current) {
+      videoRef.current.srcObject = null
+    }
+  }, [])
+
+  const requestDevicePermissions = useCallback(async () => {
+    setCheckingDevices(true)
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+      streamRef.current = stream
+      setHasCameraPermission(true)
+      setHasMicPermission(true)
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream
+      }
+    } catch (err) {
+      console.warn("Could not obtain full media devices:", err)
+      try {
+        const videoStream = await navigator.mediaDevices.getUserMedia({ video: true })
+        streamRef.current = videoStream
+        setHasCameraPermission(true)
+        setHasMicPermission(false)
+        if (videoRef.current) {
+          videoRef.current.srcObject = videoStream
+        }
+      } catch {
+        setHasCameraPermission(false)
+        try {
+          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
+          streamRef.current = audioStream
+          setHasMicPermission(true)
+          setHasCameraPermission(false)
+        } catch {
+          setHasMicPermission(false)
+          setHasCameraPermission(false)
+        }
+      }
+    } finally {
+      setCheckingDevices(false)
+    }
+  }, [])
 
   useEffect(() => {
-    if (!roomUrl && !queryId) return;
+    if (!queryId) return;
 
     const resolveConsultationDetails = async () => {
       try {
         const res = await fetch('/api/patient/consultation-details', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ roomUrl: roomUrl || null, queryId: queryId || null })
+          body: JSON.stringify({ queryId })
         });
         const data = await res.json();
         if (data.success) {
@@ -83,68 +109,25 @@ function ConsultationRoomContent() {
     };
 
     resolveConsultationDetails();
-  }, [roomUrl, queryId]);
+  }, [queryId]);
 
   // Pre-call Device Permission logic
   useEffect(() => {
     if (phase === 'pre-check') {
-      requestDevicePermissions()
+      const timer = window.setTimeout(() => {
+        void requestDevicePermissions()
+      }, 0)
+      return () => {
+        window.clearTimeout(timer)
+        stopCameraStream()
+      }
     } else {
       stopCameraStream()
     }
     return () => {
       stopCameraStream()
     }
-  }, [phase])
-
-  const requestDevicePermissions = async () => {
-    setCheckingDevices(true)
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-      streamRef.current = stream
-      setHasCameraPermission(true)
-      setHasMicPermission(true)
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream
-      }
-    } catch (err) {
-      console.warn("Could not obtain full media devices:", err)
-      // Attempt camera only
-      try {
-        const videoStream = await navigator.mediaDevices.getUserMedia({ video: true })
-        streamRef.current = videoStream
-        setHasCameraPermission(true)
-        setHasMicPermission(false)
-        if (videoRef.current) {
-          videoRef.current.srcObject = videoStream
-        }
-      } catch (camErr) {
-        setHasCameraPermission(false)
-        // Attempt mic only
-        try {
-          const audioStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-          streamRef.current = audioStream
-          setHasMicPermission(true)
-          setHasCameraPermission(false)
-        } catch (micErr) {
-          setHasMicPermission(false)
-          setHasCameraPermission(false)
-        }
-      }
-    } finally {
-      setCheckingDevices(false)
-    }
-  }
-
-  const stopCameraStream = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(track => track.stop())
-      streamRef.current = null
-    }
-    if (videoRef.current) {
-      videoRef.current.srcObject = null
-    }
-  }
+  }, [phase, requestDevicePermissions, stopCameraStream])
 
   const toggleCamera = () => {
     if (streamRef.current) {
@@ -180,8 +163,11 @@ function ConsultationRoomContent() {
       if (patientId) {
         await fetch('/api/patient/conclude-consultation', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ patientId, roomUrl })
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({ patientId, appointmentId })
         });
         if (reloadData) {
           reloadData();
@@ -191,6 +177,14 @@ function ConsultationRoomContent() {
       console.error("Failed to conclude consultation:", err);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="h-full min-h-[calc(100vh-10rem)] flex flex-col items-center justify-center p-2 sm:p-6 text-[#1A1F36]">
@@ -326,14 +320,17 @@ function ConsultationRoomContent() {
             </div>
           </div>
 
-          {/* Jitsi Meet iframe embed */}
           <div className="flex-1 w-full bg-[#111422]">
-            <iframe
-              src={roomUrl}
-              allow="camera; microphone; display-capture; autoplay"
-              className="w-full h-full border-none"
-              title="Jitsi Consultation Call"
-            />
+            {appointmentId ? (
+              <StreamConsultationCall appointmentId={appointmentId} onLeave={leaveCall} />
+            ) : (
+              <div className="flex h-full items-center justify-center p-6 text-white">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+                  <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-300" />
+                  <p className="text-sm font-semibold">Missing consultation identifier. Please return to appointments and join again.</p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
