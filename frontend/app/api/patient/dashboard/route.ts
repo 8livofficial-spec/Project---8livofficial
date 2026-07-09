@@ -101,7 +101,8 @@ export async function GET(request: Request) {
         .from('staff_consultations')
         .select('id, staff_id, staff_role, booking_date, booking_time, status, room_url, meeting_url, created_at')
         .eq('patient_id', patientId)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(20),
       supabaseAdmin
         .from('payment_transactions')
         .select('transaction_id, amount, status, metadata, created_at')
@@ -115,17 +116,20 @@ export async function GET(request: Request) {
         .from('progress_logs')
         .select('*')
         .eq('user_id', patientId)
-        .order('created_at', { ascending: true }),
+        .order('created_at', { ascending: false })
+        .limit(180),
       supabaseAdmin
         .from('doctor_consultations')
         .select('id, patient_id, doctor_id, booking_date, booking_time, status, prescription_text, room_url, created_at, updated_at')
         .eq('patient_id', patientId)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(25),
       supabaseAdmin
         .from('patient_notifications')
         .select('*')
         .eq('patient_id', patientId)
-        .order('created_at', { ascending: false }),
+        .order('created_at', { ascending: false })
+        .limit(50),
       supabaseAdmin
         .from('diet_plans')
         .select('*')
@@ -153,7 +157,7 @@ export async function GET(request: Request) {
     const latestAppointment = latestRes.data
     const staffConsults = staffRes.data || []
     const paymentsList = paymentsRes.data || []
-    const weightLogs = weightLogsRes.data || []
+    const weightLogs = [...(weightLogsRes.data || [])].reverse()
     const consultations = consultationsRes.data || []
     const notifications = notificationsRes.data || []
     const dietPlan = dietPlanRes.data || null
