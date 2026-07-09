@@ -44,6 +44,15 @@ async function fetchPatientDashboard(userId: string, accessToken: string) {
   return res.json()
 }
 
+async function fetchPatientNotifications(userId: string, accessToken: string) {
+  const res = await fetch(`/api/patient/notifications?patientId=${userId}`, {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  })
+  if (!res.ok) throw new Error("Failed to fetch patient notifications from backend API")
+  const data = await res.json()
+  return data.notifications || []
+}
+
 
 export interface PatientProfile {
   id: string
@@ -447,6 +456,13 @@ function usePatientDataInternal() {
 
         setFlowStep(journeyFlowStep)
 
+        // Lazy load notifications independently so older notifications still show
+        // even when the user does not currently have a health assessment row.
+        if (pathname === '/patient/notifications') {
+          const notifs = await fetchPatientNotifications(session.user.id, session.access_token)
+          setNotifications(notifs)
+        }
+
         // Lazy load module-specific collections only when matching pages are opened
         if (assessRow) {
           if (pathname === '/patient/progress') {
@@ -467,13 +483,6 @@ function usePatientDataInternal() {
             if (consultsRes.data && consultsRes.data.length > 0) {
               setConsultation(consultsRes.data[0])
             }
-          } else if (pathname === '/patient/notifications') {
-            const { data: notifs } = await supabase
-              .from('patient_notifications')
-              .select('*')
-              .eq('patient_id', session.user.id)
-              .order('created_at', { ascending: false })
-            setNotifications(notifs || [])
           } else if (pathname === '/patient/appointments') {
             const [consultsRes, staffConsultsRes] = await Promise.all([
               supabase

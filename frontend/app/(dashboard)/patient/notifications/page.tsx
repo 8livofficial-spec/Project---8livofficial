@@ -2,15 +2,17 @@
 
 import React, { useState } from 'react'
 import { 
-  Bell, CheckCircle2, Video, CreditCard, Scale, Lock, 
-  MessageSquare, Calendar, ChevronRight, Inbox, MailOpen
+  Bell, Video, CreditCard, Scale, Lock, 
+  MessageSquare, Inbox, MailOpen
 } from 'lucide-react'
 import { usePatientData } from '@/hooks/usePatientData'
 import { motion, AnimatePresence } from 'framer-motion'
+import { supabase } from '@/lib/supabaseClient'
 
 export default function PatientNotificationsPage() {
   const { user, notifications, reloadData, loading } = usePatientData()
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
+  const [loadingAction, setLoadingAction] = useState<string | null>(null)
 
   if (loading) {
     return (
@@ -19,7 +21,6 @@ export default function PatientNotificationsPage() {
       </div>
     )
   }
-  const [loadingAction, setLoadingAction] = useState<string | null>(null)
 
   // Filter notifications
   const displayedNotifications = notifications.filter(n => {
@@ -50,9 +51,13 @@ export default function PatientNotificationsPage() {
     if (!user) return
     setLoadingAction(id)
     try {
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/patient/notifications', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+        },
         body: JSON.stringify({
           patientId: user.id,
           notificationId: id
@@ -72,9 +77,13 @@ export default function PatientNotificationsPage() {
     if (!user || unreadCount === 0) return
     setLoadingAction('all')
     try {
+      const { data: { session } } = await supabase.auth.getSession()
       const res = await fetch('/api/patient/notifications', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {})
+        },
         body: JSON.stringify({
           patientId: user.id,
           markAll: true
