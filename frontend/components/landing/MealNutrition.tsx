@@ -51,6 +51,8 @@ export default function MealNutrition() {
                     width={400} 
                     height={500} 
                     className="w-full h-64 object-cover"
+                    sizes="(max-width: 768px) 45vw, 320px"
+                    quality={72}
                   />
                 </div>
               </motion.div>
@@ -70,6 +72,8 @@ export default function MealNutrition() {
                     width={400} 
                     height={500} 
                     className="w-full h-64 object-cover"
+                    sizes="(max-width: 768px) 45vw, 320px"
+                    quality={72}
                   />
                 </div>
               </motion.div>
@@ -87,7 +91,7 @@ export default function MealNutrition() {
               Eat What You <span className="teal-gradient-text">Love</span>
             </h2>
             <p className="text-[#475569] text-lg mb-10 leading-relaxed">
-              We don't believe in starvation. Your dedicated dietitian will build a protocol that incorporates your favorite foods while optimizing for metabolic health and fat loss.
+              We don&apos;t believe in starvation. Your dedicated dietitian will build a protocol that incorporates your favorite foods while optimizing for metabolic health and fat loss.
             </p>
 
             <motion.ul 

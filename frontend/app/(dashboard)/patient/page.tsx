@@ -73,15 +73,6 @@ export default function PatientDashboardHome() {
     fitnessPlan
   } = usePatientData()
 
-  if (loading) {
-    return (
-      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
-        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
-
   const [showWeightLogModal, setShowWeightLogModal] = useState(false)
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null)
 
@@ -422,6 +413,14 @@ export default function PatientDashboardHome() {
 
   const isGoldPlan = assessment?.membership_tier === 'Gold Plan'
 
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6 text-[#1A1F36]">
       {/* Meeting Reminder Alert */}
@@ -528,7 +527,6 @@ export default function PatientDashboardHome() {
         <div className="col-span-1">
           <MessagesPreview 
             notifications={notifications}
-            patientName={patientName}
             doctorName={physicianName}
           />
         </div>

@@ -3,7 +3,7 @@
 import React from 'react'
 import Image from 'next/image'
 import { motion } from 'framer-motion'
-import { ArrowRight, Star } from 'lucide-react'
+import { ArrowRight } from 'lucide-react'
 
 export default function Hero() {
   return (
@@ -62,14 +62,16 @@ export default function Hero() {
                 fill
                 className="object-cover transition-transform duration-[2s] group-hover:scale-105"
                 priority
+                sizes="(max-width: 640px) 88vw, (max-width: 1024px) 420px, 520px"
+                quality={78}
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A]/80 via-transparent to-transparent opacity-80 mix-blend-multiply" />
               
             </div>
 
             {/* Decorative element replacing the floating cards */}
-            <div className="absolute top-1/2 right-0 translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-gradient-to-tr from-[#D46E53]/10 to-[#A84A33]/5 rounded-full blur-[80px] -z-10" />
-            <div className="absolute bottom-0 left-0 -translate-x-1/2 translate-y-1/4 w-[400px] h-[400px] bg-gradient-to-bl from-[#D46E53]/5 to-[#A84A33]/10 rounded-full blur-[100px] -z-10" />
+            <div className="hidden md:block absolute top-1/2 right-0 translate-x-1/2 -translate-y-1/2 w-[300px] h-[300px] bg-gradient-to-tr from-[#D46E53]/10 to-[#A84A33]/5 rounded-full blur-[80px] -z-10" />
+            <div className="hidden md:block absolute bottom-0 left-0 -translate-x-1/2 translate-y-1/4 w-[400px] h-[400px] bg-gradient-to-bl from-[#D46E53]/5 to-[#A84A33]/10 rounded-full blur-[100px] -z-10" />
 
           </motion.div>
 

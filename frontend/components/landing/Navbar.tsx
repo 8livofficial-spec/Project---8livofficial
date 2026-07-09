@@ -4,11 +4,12 @@ import React, { useState, useEffect } from 'react'
 import { Menu, X, LogOut, User } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabaseClient'
+import type { User as SupabaseUser } from '@supabase/supabase-js'
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<SupabaseUser | null>(null)
   const [role, setRole] = useState<string>('patient')
 
   useEffect(() => {
@@ -56,8 +57,8 @@ export default function Navbar() {
         <div 
           className={`pointer-events-auto flex items-center justify-between w-full max-w-5xl rounded-full transition-all duration-500 border
             ${scrolled 
-              ? 'bg-[#F9F6F0]/80 backdrop-blur-2xl border-[#D46E53]/20 shadow-[0_8px_30px_rgb(0,0,0,0.08)] py-2.5 px-4 sm:py-3 sm:px-6' 
-              : 'bg-white/40 backdrop-blur-md border-white/50 shadow-sm py-3 px-4 sm:py-4 sm:px-8'
+              ? 'bg-[#F9F6F0]/95 md:bg-[#F9F6F0]/80 md:backdrop-blur-2xl border-[#D46E53]/20 shadow-[0_8px_30px_rgb(0,0,0,0.08)] py-2.5 px-4 sm:py-3 sm:px-6' 
+              : 'bg-white/90 md:bg-white/40 md:backdrop-blur-md border-white/50 shadow-sm py-3 px-4 sm:py-4 sm:px-8'
             }`}
         >
           {/* Logo */}
@@ -124,7 +125,7 @@ export default function Navbar() {
             exit={{ opacity: 0, y: -20 }}
             className="fixed inset-x-4 top-20 sm:top-24 z-40 md:hidden"
           >
-            <div className="bg-[#F9F6F0]/95 backdrop-blur-3xl border border-[#D46E53]/20 rounded-3xl p-6 shadow-2xl flex flex-col space-y-4">
+            <div className="bg-[#F9F6F0] md:bg-[#F9F6F0]/95 md:backdrop-blur-3xl border border-[#D46E53]/20 rounded-3xl p-6 shadow-2xl flex flex-col space-y-4">
               <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">How It Works</a>
               <a href="#program" onClick={() => setMobileMenuOpen(false)} className="text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">The Program</a>
               <a href="#outcomes" onClick={() => setMobileMenuOpen(false)} className="text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">Outcomes</a>

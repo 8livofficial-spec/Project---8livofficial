@@ -16,8 +16,8 @@ export default function CTABanner() {
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="glass-card p-6 sm:p-12 md:p-16 rounded-[3rem] border border-[#D46E53]/20 shadow-2xl relative overflow-hidden"
         >
-          <div className="absolute top-0 right-0 w-64 h-64 bg-[#D46E53]/10 rounded-full blur-[80px]" />
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#D46E53]/10 rounded-full blur-[80px]" />
+          <div className="hidden md:block absolute top-0 right-0 w-64 h-64 bg-[#D46E53]/10 rounded-full blur-[80px]" />
+          <div className="hidden md:block absolute bottom-0 left-0 w-64 h-64 bg-[#D46E53]/10 rounded-full blur-[80px]" />
           
           <motion.h2 
             initial={{ opacity: 0, y: 20 }}

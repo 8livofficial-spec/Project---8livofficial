@@ -36,7 +36,7 @@ export default function PortalTeaser() {
             <div className="bg-[#F9F6F0] rounded-[2rem] overflow-hidden ring-1 ring-[#D46E53]/20 flex flex-col md:flex-row h-[500px] sm:h-[550px] md:h-[600px] shadow-inner relative">
               
               {/* Background abstract blur */}
-              <div className="absolute top-0 right-0 w-96 h-96 bg-[#D46E53]/10 rounded-full blur-[100px] pointer-events-none" />
+              <div className="hidden md:block absolute top-0 right-0 w-96 h-96 bg-[#D46E53]/10 rounded-full blur-[100px] pointer-events-none" />
 
               {/* Sidebar Menu */}
               <div className="bg-white/60 backdrop-blur-md border-r border-[#D46E53]/10 p-4 sm:p-6 w-full md:w-64 flex-shrink-0 flex flex-row md:flex-col justify-between md:justify-start gap-4 md:gap-8 border-b md:border-b-0 z-10">
@@ -91,7 +91,7 @@ export default function PortalTeaser() {
                 >
                   <div>
                     <h3 className="text-2xl font-bold font-sora text-[#0F172A]">Good morning, Priya</h3>
-                    <p className="text-[#475569]">Here's your metabolic health summary.</p>
+                    <p className="text-[#475569]">Here&apos;s your metabolic health summary.</p>
                   </div>
                   <div className="relative p-2 rounded-full bg-white shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition-shadow">
                     <Bell className="text-[#475569] w-5 h-5" />
@@ -210,7 +210,7 @@ export default function PortalTeaser() {
                     viewport={{ once: true }}
                     className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm"
                   >
-                    <h4 className="font-bold text-[#0F172A] font-sora mb-6">Today's Tasks</h4>
+                    <h4 className="font-bold text-[#0F172A] font-sora mb-6">Today&apos;s Tasks</h4>
                     <div className="space-y-4">
                       <div className="flex gap-3">
                         <div className="w-8 h-8 rounded-full bg-[#D46E53]/10 flex items-center justify-center shrink-0 border border-[#D46E53]/20">
@@ -245,7 +245,7 @@ export default function PortalTeaser() {
   )
 }
 
-function CheckCircle(props: any) {
+function CheckCircle(props: React.SVGProps<SVGSVGElement>) {
   return (
     <svg
       {...props}

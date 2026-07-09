@@ -3,6 +3,7 @@
 import React from 'react'
 import { Pill, Activity, Smartphone, Apple } from 'lucide-react'
 import { motion } from 'framer-motion'
+import Image from 'next/image'
 
 export default function WhatIsIncluded() {
   const features = [
@@ -59,7 +60,7 @@ export default function WhatIsIncluded() {
               Everything You Need to <span className="teal-gradient-text">Succeed</span>
             </h2>
             <p className="text-[#475569] text-lg mb-10 leading-relaxed">
-              We don't just prescribe medication. We provide a complete metabolic reset with ongoing support, tracking, and personalized nutrition.
+              We don&apos;t just prescribe medication. We provide a complete metabolic reset with ongoing support, tracking, and personalized nutrition.
             </p>
 
             <motion.div 
@@ -94,7 +95,15 @@ export default function WhatIsIncluded() {
             <div className="absolute inset-0 bg-gradient-to-tr from-[#D46E53]/10 to-transparent rounded-3xl -rotate-6 scale-105"></div>
             <div className="bg-white p-4 sm:p-8 rounded-3xl relative z-10 shadow-2xl border border-gray-100">
               <div className="w-full rounded-2xl overflow-hidden shadow-sm bg-white flex items-center justify-center p-4">
-                <img src="/8liv_program_illustration.png" alt="8liv Program Elements - Medication, Coaching, Nutrition" className="w-full h-auto object-contain transform hover:scale-105 transition-transform duration-500 rounded-xl" />
+                <Image
+                  src="/8liv_program_illustration.png"
+                  alt="8liv Program Elements - Medication, Coaching, Nutrition"
+                  width={900}
+                  height={700}
+                  className="w-full h-auto object-contain transform hover:scale-105 transition-transform duration-500 rounded-xl"
+                  sizes="(max-width: 768px) 84vw, 520px"
+                  quality={72}
+                />
               </div>
             </div>
           </motion.div>
@@ -104,4 +113,3 @@ export default function WhatIsIncluded() {
     </section>
   )
 }
-

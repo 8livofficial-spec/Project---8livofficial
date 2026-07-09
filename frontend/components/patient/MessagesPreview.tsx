@@ -1,30 +1,27 @@
 'use client'
 
-import React from 'react'
 import Link from 'next/link'
 
-interface Message {
-  from: string
-  preview: string
-  time: string
-  unread: boolean
-  initials: string
+type MessageNotification = {
+  type?: string
+  message?: string
+  created_at: string
+  is_read?: boolean
 }
 
 interface MessagesPreviewProps {
-  notifications: any[]
-  patientName: string
+  notifications: MessageNotification[]
   doctorName: string
 }
 
-export default function MessagesPreview({ notifications, patientName, doctorName }: MessagesPreviewProps) {
+export default function MessagesPreview({ notifications, doctorName }: MessagesPreviewProps) {
   const messageNotifications = notifications.filter(n => n.type === 'message')
   const unreadCount = messageNotifications.filter(n => !n.is_read).length
   
   const doctorInitials = doctorName.split(' ').filter(Boolean).map(n => n[0]).join('').substring(0, 2).toUpperCase()
 
   const messages = messageNotifications.length > 0 
-    ? messageNotifications.map(n => ({
+    ? messageNotifications.slice(0, 5).map(n => ({
         from: doctorName,
         preview: n.message || '',
         time: new Date(n.created_at).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true }),
