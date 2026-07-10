@@ -55,6 +55,16 @@ export async function getAuthenticatedUser(request: Request) {
     return { user, role: profile.role }
   }
 
+  const { data: pharmacyUser } = await supabaseAdmin
+    .from('pharmacy_users')
+    .select('role, status')
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (pharmacyUser?.role && pharmacyUser.status === 'ACTIVE') {
+    return { user, role: pharmacyUser.role }
+  }
+
   // Fallback check to doctor_profiles or default role
   const { data: doctorProfile } = await supabaseAdmin
     .from('doctor_profiles')

@@ -4,7 +4,7 @@ import React from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { 
-  LayoutDashboard, Calendar, TrendingDown, MessageCircle, 
+  LayoutDashboard, Calendar, TrendingDown, MessageCircle, Package,
   Pill, Video, CreditCard, Settings, LogOut 
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
@@ -39,6 +39,7 @@ export default function Sidebar({
     { icon: TrendingDown, label: 'My Progress', href: '/patient/progress' },
     { icon: MessageCircle, label: 'Messages', href: '/patient/messages', badge: unreadMessagesCount },
     { icon: Pill, label: 'Prescriptions', href: '/patient/prescriptions' },
+    { icon: Package, label: 'Medicine Orders', href: '/patient/medicine-orders' },
     { icon: Video, label: 'Consultations', href: '/patient/consultation' },
     { icon: CreditCard, label: 'Billing', href: '/patient/billing' },
     { icon: Settings, label: 'Settings', href: '/patient/settings' },

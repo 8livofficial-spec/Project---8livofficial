@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Calendar, TrendingDown, MessageCircle, Video, X, PhoneCall } from 'lucide-react'
+import { LayoutDashboard, Calendar, TrendingDown, MessageCircle, Package, Video, X, PhoneCall } from 'lucide-react'
 import { usePatientData, PatientDataProvider } from '@/hooks/usePatientData'
 import { supabase } from '@/lib/supabaseClient'
 import Sidebar from '@/components/patient/Sidebar'
@@ -232,7 +232,7 @@ function DashboardLayoutContent({
     { icon: Calendar, label: 'Appointments', href: '/patient/appointments' },
     { icon: TrendingDown, label: 'Progress', href: '/patient/progress' },
     { icon: MessageCircle, label: 'Messages', href: '/patient/messages', badge: unreadMessages },
-    { icon: Video, label: 'Consultations', href: '/patient/consultation' }
+    { icon: Package, label: 'Orders', href: '/patient/medicine-orders' }
   ]
 
   if (loading) {

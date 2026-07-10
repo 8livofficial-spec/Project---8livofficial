@@ -1,13 +1,16 @@
 'use client'
 
 import React, { useState } from 'react'
-import { Pill, Package, ArrowRight, CheckCircle2 } from 'lucide-react'
+import { Pill, Package, Download, CheckCircle2 } from 'lucide-react'
 import { usePatientData } from '@/hooks/usePatientData'
+import { authedFetch } from '@/lib/apiClient'
 
 export default function PrescriptionsPage() {
-  const { consultation, assessment, loading } = usePatientData()
-  const [refillRequested, setRefillRequested] = useState(false)
-  const [refillLoading, setRefillLoading] = useState(false)
+  const { consultation, loading } = usePatientData()
+  const [orderCreated, setOrderCreated] = useState(false)
+  const [orderLoading, setOrderLoading] = useState(false)
+  const [orderError, setOrderError] = useState('')
+  const [deliveryAddress, setDeliveryAddress] = useState('')
 
   if (loading) {
     return (
@@ -17,11 +20,50 @@ export default function PrescriptionsPage() {
     )
   }
 
-  const handleRefillRequest = async () => {
-    setRefillLoading(true)
-    await new Promise(resolve => setTimeout(resolve, 1000))
-    setRefillRequested(true)
-    setRefillLoading(false)
+  const handleMedicineOrder = async () => {
+    if (!consultation?.id) return
+    if (!deliveryAddress.trim()) {
+      setOrderError('Delivery address is required.')
+      return
+    }
+    setOrderLoading(true)
+    setOrderError('')
+    try {
+      const res = await authedFetch('/api/patient/medicine-orders', {
+        method: 'POST',
+        body: JSON.stringify({
+          consultationId: consultation.id,
+          deliveryAddress: { address_line: deliveryAddress.trim() },
+        }),
+      })
+      const payload = await res.json()
+      if (!res.ok) throw new Error(payload.error || 'Unable to create medicine order.')
+      setOrderCreated(true)
+    } catch (err) {
+      setOrderError(err instanceof Error ? err.message : 'Unable to create medicine order.')
+    } finally {
+      setOrderLoading(false)
+    }
+  }
+
+  const handlePrescriptionDownload = () => {
+    const content = [
+      '8liv Prescription',
+      '',
+      `Medication: ${medicationName}`,
+      `Dosage: ${dosage}`,
+      `Prescribed By: ${physicianName}`,
+      `Date: ${consultation?.created_at ? new Date(consultation.created_at).toLocaleDateString() : new Date().toLocaleDateString()}`,
+      '',
+      prescriptionText || '',
+    ].join('\n')
+    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `8liv-prescription-${consultation?.id || 'download'}.txt`
+    anchor.click()
+    URL.revokeObjectURL(url)
   }
 
   const isApproved = consultation?.status === 'approved'
@@ -158,19 +200,32 @@ export default function PrescriptionsPage() {
               </div>
 
               <div className="pt-2">
-                {refillRequested ? (
+                <textarea
+                  value={deliveryAddress}
+                  onChange={(e) => setDeliveryAddress(e.target.value)}
+                  placeholder="Delivery address"
+                  className="input min-h-24 resize-none text-sm"
+                />
+                {orderError && <p className="text-xs font-bold text-red-600">{orderError}</p>}
+                {orderCreated ? (
                   <div className="w-full bg-[#5C7A6B]/10 text-[#5C7A6B] border border-[#5C7A6B]/20 rounded-xl py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" /> Refill Requested
+                    <CheckCircle2 className="w-4 h-4 shrink-0" /> Order Created
                   </div>
                 ) : (
                   <button
-                    onClick={handleRefillRequest}
-                    disabled={refillLoading}
+                    onClick={handleMedicineOrder}
+                    disabled={orderLoading}
                     className="w-full bg-[#1A1F36] hover:bg-[#C4622D] text-white font-bold uppercase tracking-wider text-xs rounded-xl py-3.5 transition-colors cursor-pointer disabled:opacity-50"
                   >
-                    {refillLoading ? "Processing Refill..." : "Request Refill Dispatch"}
+                    {orderLoading ? "Creating Order..." : "Order Medicines"}
                   </button>
                 )}
+                <button
+                  onClick={handlePrescriptionDownload}
+                  className="mt-3 w-full border border-[#1A1F36]/10 text-[#1A1F36] font-bold uppercase tracking-wider text-xs rounded-xl py-3.5 transition-colors cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <Download className="w-4 h-4" /> Download Prescription
+                </button>
               </div>
             </div>
           </div>
