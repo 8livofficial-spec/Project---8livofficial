@@ -12,7 +12,7 @@ import {
 
 export async function GET(request: Request) {
   try {
-    await assertPharmacyAccess(request)
+    await assertPharmacyAccess(request, ['PHARMACY_ADMIN', 'PHARMACY_STAFF', 'ADMIN'])
     const { params, from, to, page, limit } = parsePagination(request.url)
     const status = params.get('status')
     const search = params.get('search')?.trim()
@@ -41,7 +41,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const auth = await assertPharmacyAccess(request)
+    const auth = await assertPharmacyAccess(request, ['PHARMACY_ADMIN', 'PHARMACY_STAFF', 'ADMIN'])
     const body = await request.json().catch(() => ({}))
     const { orderId, status: nextStatus, notes, paymentId, refundId, invoiceId } = body
 

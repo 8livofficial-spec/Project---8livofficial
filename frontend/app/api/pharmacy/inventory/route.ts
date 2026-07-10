@@ -4,7 +4,7 @@ import { assertPharmacyAccess, logPharmacyAudit, parsePagination } from '@/lib/p
 
 export async function GET(request: Request) {
   try {
-    await assertPharmacyAccess(request)
+    await assertPharmacyAccess(request, ['PHARMACY_ADMIN', 'PHARMACY_STAFF', 'ADMIN'])
     const { params, from, to, page, limit } = parsePagination(request.url)
     const search = params.get('search')?.trim()
     const status = params.get('status')

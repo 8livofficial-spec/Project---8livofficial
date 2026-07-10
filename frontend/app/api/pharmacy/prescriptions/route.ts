@@ -4,7 +4,7 @@ import { assertPharmacyAccess, logPharmacyAudit, parsePagination } from '@/lib/p
 
 export async function GET(request: Request) {
   try {
-    await assertPharmacyAccess(request)
+    await assertPharmacyAccess(request, ['PHARMACY_ADMIN', 'PHARMACY_STAFF', 'ADMIN'])
     const { from, to, page, limit } = parsePagination(request.url)
 
     const { data, error, count } = await supabaseAdmin
@@ -48,7 +48,7 @@ export async function GET(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const auth = await assertPharmacyAccess(request)
+    const auth = await assertPharmacyAccess(request, ['PHARMACY_ADMIN', 'PHARMACY_STAFF', 'ADMIN'])
     const body = await request.json().catch(() => ({}))
     const { orderId, action, reason } = body
     if (!orderId || !['accept', 'reject'].includes(action)) {

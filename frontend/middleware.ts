@@ -41,6 +41,11 @@ export function middleware(request: NextRequest) {
         const unauthorizedUrl = new URL('/', request.url);
         return NextResponse.redirect(unauthorizedUrl);
       }
+      const deliveryPartnerAllowed = pathname.startsWith('/pharmacy/delivery') || pathname.startsWith('/pharmacy/profile');
+      if (normalizedRole === 'DELIVERY_PARTNER' && !deliveryPartnerAllowed) {
+        const unauthorizedUrl = new URL('/pharmacy/delivery', request.url);
+        return NextResponse.redirect(unauthorizedUrl);
+      }
     }
   }
 

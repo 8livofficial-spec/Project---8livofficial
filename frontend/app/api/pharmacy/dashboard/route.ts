@@ -4,7 +4,7 @@ import { assertPharmacyAccess } from '@/lib/pharmacy'
 
 export async function GET(request: Request) {
   try {
-    const auth = await assertPharmacyAccess(request)
+    const auth = await assertPharmacyAccess(request, ['PHARMACY_ADMIN', 'PHARMACY_STAFF', 'ADMIN'])
     const today = new Date()
     today.setHours(0, 0, 0, 0)
     const todayIso = today.toISOString()

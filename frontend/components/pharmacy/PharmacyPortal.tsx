@@ -62,7 +62,8 @@ export default function PharmacyPortal({ view }: { view: PortalView }) {
   const [statusFilter, setStatusFilter] = useState('')
 
   const endpoint = useMemo(() => {
-    if (view === 'dashboard' || view === 'profile' || view === 'reports') return '/api/pharmacy/dashboard'
+    if (view === 'dashboard' || view === 'reports') return '/api/pharmacy/dashboard'
+    if (view === 'profile') return '/api/pharmacy/profile'
     if (view === 'orders') return `/api/pharmacy/orders?search=${encodeURIComponent(search)}&status=${encodeURIComponent(statusFilter)}`
     if (view === 'inventory') return `/api/pharmacy/inventory?search=${encodeURIComponent(search)}`
     if (view === 'prescriptions') return '/api/pharmacy/prescriptions'
