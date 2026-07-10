@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useRef, useEffect } from 'react'
+import React, { useState, useRef, useEffect, useMemo } from 'react'
 import { MessageCircle, Send, Paperclip, Video, Phone, Search, Users } from 'lucide-react'
 import { usePatientData } from '@/hooks/usePatientData'
 import { supabase } from '@/lib/supabaseClient'
@@ -30,62 +30,54 @@ export default function MessagesPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  if (loading) {
-    return (
-      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
-        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
+  const contacts = useMemo<Contact[]>(() => {
+    const nextContacts: Contact[] = []
 
-  const patientName = (profile?.display_id || profile?.first_name || assessment?.first_name || 'Member')
+    if (careTeam?.doctor_name && careTeam.doctor_name !== 'Not Assigned') {
+      nextContacts.push({
+        id: careTeam.doctor_id || 'doctor',
+        name: careTeam.doctor_name,
+        role: 'Physician Specialist',
+        initials: careTeam.doctor_name.split(' ').filter(Boolean).map((n: string) => n[0]).join('').substring(0, 2).toUpperCase(),
+        active: false
+      })
+    }
+    if (careTeam?.dietitian_name && careTeam.dietitian_name !== 'Not Assigned') {
+      nextContacts.push({
+        id: careTeam.dietitian_id || 'dietitian',
+        name: careTeam.dietitian_name,
+        role: 'Dietitian Coach',
+        initials: careTeam.dietitian_name.split(' ').filter(Boolean).map((n: string) => n[0]).join('').substring(0, 2).toUpperCase(),
+        active: false
+      })
+    }
+    if (careTeam?.trainer_name && careTeam.trainer_name !== 'Not Assigned') {
+      nextContacts.push({
+        id: careTeam.trainer_id || 'trainer',
+        name: careTeam.trainer_name,
+        role: 'Fitness Trainer',
+        initials: careTeam.trainer_name.split(' ').filter(Boolean).map((n: string) => n[0]).join('').substring(0, 2).toUpperCase(),
+        active: false
+      })
+    }
 
-  // Build contacts from care team
-  const contacts: Contact[] = []
-  
-  if (careTeam?.doctor_name && careTeam.doctor_name !== 'Not Assigned') {
-    contacts.push({
-      id: careTeam.doctor_id || 'doctor',
-      name: careTeam.doctor_name,
-      role: 'Physician Specialist',
-      initials: careTeam.doctor_name.split(' ').filter(Boolean).map((n: string) => n[0]).join('').substring(0, 2).toUpperCase(),
+    nextContacts.push({
+      id: 'support',
+      name: '8Liv Care Support',
+      role: 'Customer Support',
+      initials: '8L',
       active: false
     })
-  }
-  if (careTeam?.dietitian_name && careTeam.dietitian_name !== 'Not Assigned') {
-    contacts.push({
-      id: careTeam.dietitian_id || 'dietitian',
-      name: careTeam.dietitian_name,
-      role: 'Dietitian Coach',
-      initials: careTeam.dietitian_name.split(' ').filter(Boolean).map((n: string) => n[0]).join('').substring(0, 2).toUpperCase(),
-      active: false
-    })
-  }
-  if (careTeam?.trainer_name && careTeam.trainer_name !== 'Not Assigned') {
-    contacts.push({
-      id: careTeam.trainer_id || 'trainer',
-      name: careTeam.trainer_name,
-      role: 'Fitness Trainer',
-      initials: careTeam.trainer_name.split(' ').filter(Boolean).map((n: string) => n[0]).join('').substring(0, 2).toUpperCase(),
-      active: false
-    })
-  }
 
-  // Add fallback support contact
-  contacts.push({
-    id: 'support',
-    name: '8Liv Care Support',
-    role: 'Customer Support',
-    initials: '8L',
-    active: false
-  })
+    return nextContacts
+  }, [careTeam])
 
   // Set first contact as active by default
   useEffect(() => {
     if (contacts.length > 0 && !activeContact) {
       setActiveContact({ ...contacts[0], active: true })
     }
-  }, [contacts.length])
+  }, [activeContact, contacts])
 
   // Fetch messages for the active contact
   useEffect(() => {
@@ -227,6 +219,14 @@ export default function MessagesPage() {
   const filteredContacts = contacts.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
+
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   return (
     <div className="bg-white rounded-2xl border border-[#1A1F36]/8 shadow-[0_4px_24px_rgba(26,31,54,0.08)] overflow-hidden h-[calc(100vh-8.5rem)] md:h-[calc(100vh-7rem)] flex">

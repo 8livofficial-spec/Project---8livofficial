@@ -24,14 +24,6 @@ export default function PatientProfilePage() {
   const [successMsg, setSuccessMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
 
-  if (loading) {
-    return (
-      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
-        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
   // Populate state when data loads
   useEffect(() => {
     if (profile) {
@@ -51,6 +43,14 @@ export default function PatientProfilePage() {
       setGoalWeight(assessment.goal_weight_kg?.toString() || '')
     }
   }, [profile, assessment])
+
+  if (loading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault()

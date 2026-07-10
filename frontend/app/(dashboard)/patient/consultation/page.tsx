@@ -179,14 +179,6 @@ export default function ConsultationSchedulingPage() {
   const [paymentStage, setPaymentStage] = useState<PaymentStage>('method')
   const [paymentError, setPaymentError] = useState('')
   const [assignment, setAssignment] = useState<AssignmentDetails | null>(null)
-
-  if (patientDataLoading) {
-    return (
-      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
-        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
   const [selectedSlot, setSelectedSlot] = useState<AvailableDoctorSlot | null>(null)
 
   // Real-time calling alert state
@@ -345,6 +337,14 @@ export default function ConsultationSchedulingPage() {
       if (channel) supabase.removeChannel(channel)
     }
   }, [])
+
+  if (patientDataLoading) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
 
   const handleConfirmBooking = async () => {
     if (!selectedSlot) {

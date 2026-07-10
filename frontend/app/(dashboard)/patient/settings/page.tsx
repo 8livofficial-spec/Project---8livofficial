@@ -20,6 +20,9 @@ export default function PatientSettingsPage() {
   const [savingPass, setSavingPass] = useState(false)
   const [passSuccess, setPassSuccess] = useState('')
   const [passError, setPassError] = useState('')
+  const [savingPrefs, setSavingPrefs] = useState(false)
+  const [successMsg, setSuccessMsg] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
 
   if (loading) {
     return (
@@ -28,9 +31,6 @@ export default function PatientSettingsPage() {
       </div>
     )
   }
-  const [savingPrefs, setSavingPrefs] = useState(false)
-  const [successMsg, setSuccessMsg] = useState('')
-  const [errorMsg, setErrorMsg] = useState('')
 
   const handleUpdatePreferences = async (e: React.FormEvent) => {
     e.preventDefault()

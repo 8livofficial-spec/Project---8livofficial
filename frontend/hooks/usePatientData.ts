@@ -231,6 +231,7 @@ export function PatientDataProvider({ children }: { children: React.ReactNode })
 export function usePatientData() {
   const context = useContext(PatientDataContext)
   if (!context) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
     return usePatientDataInternal()
   }
   return context
