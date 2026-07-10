@@ -9,6 +9,9 @@ dotenv.config({ path: path.resolve(process.cwd(), "frontend", ".env.local") });
 const nextConfig: NextConfig = {
   // other config options...
   allowedDevOrigins: ["little-emote-livestock.ngrok-free.dev", "172.21.100.123"],
+  turbopack: {
+    root: path.resolve(process.cwd()),
+  },
 };
 
 export default nextConfig;
