@@ -12,6 +12,11 @@ export default function Navbar() {
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [role, setRole] = useState<string>('patient')
 
+  const scrollToSection = (sectionId: string) => {
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    window.history.replaceState(null, '', window.location.pathname + window.location.search)
+  }
+
   useEffect(() => {
     const handleScroll = () => {
       if (window.scrollY > 40) {
@@ -72,10 +77,10 @@ export default function Navbar() {
 
           {/* Desktop Links */}
           <nav className="hidden md:flex items-center gap-1 bg-white/40 rounded-full p-1 border border-white/30 shadow-inner">
-            <a href="#how-it-works" className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all">How It Works</a>
-            <a href="#program" className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all">The Program</a>
-            <a href="#outcomes" className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all">Outcomes</a>
-            <a href="#portal" className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all">Dashboard</a>
+            <button type="button" onClick={() => scrollToSection('how-it-works')} className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all cursor-pointer">How It Works</button>
+            <button type="button" onClick={() => scrollToSection('program')} className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all cursor-pointer">The Program</button>
+            <button type="button" onClick={() => scrollToSection('outcomes')} className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all cursor-pointer">Outcomes</button>
+            <button type="button" onClick={() => scrollToSection('portal')} className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all cursor-pointer">Dashboard</button>
           </nav>
 
           {/* Right Action */}
@@ -126,10 +131,10 @@ export default function Navbar() {
             className="fixed inset-x-4 top-20 sm:top-24 z-40 md:hidden"
           >
             <div className="bg-[#F9F6F0] md:bg-[#F9F6F0]/95 md:backdrop-blur-3xl border border-[#D46E53]/20 rounded-3xl p-6 shadow-2xl flex flex-col space-y-4">
-              <a href="#how-it-works" onClick={() => setMobileMenuOpen(false)} className="text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">How It Works</a>
-              <a href="#program" onClick={() => setMobileMenuOpen(false)} className="text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">The Program</a>
-              <a href="#outcomes" onClick={() => setMobileMenuOpen(false)} className="text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">Outcomes</a>
-              <a href="#portal" onClick={() => setMobileMenuOpen(false)} className="text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">Dashboard</a>
+              <button type="button" onClick={() => { scrollToSection('how-it-works'); setMobileMenuOpen(false) }} className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">How It Works</button>
+              <button type="button" onClick={() => { scrollToSection('program'); setMobileMenuOpen(false) }} className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">The Program</button>
+              <button type="button" onClick={() => { scrollToSection('outcomes'); setMobileMenuOpen(false) }} className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">Outcomes</button>
+              <button type="button" onClick={() => { scrollToSection('portal'); setMobileMenuOpen(false) }} className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">Dashboard</button>
               {user ? (
                 <>
                   <a 

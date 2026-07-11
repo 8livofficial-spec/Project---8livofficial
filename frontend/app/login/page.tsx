@@ -57,7 +57,18 @@ export default function UnifiedLogin() {
                   .select('role')
                   .eq('id', session.user.id)
                   .maybeSingle()
-                role = profile?.role || session.user.user_metadata?.role || 'patient'
+                if (profile?.role) {
+                  role = profile.role
+                } else {
+                  const { data: pharmacyUser } = await supabase
+                    .from('pharmacy_users')
+                    .select('role, status')
+                    .eq('user_id', session.user.id)
+                    .maybeSingle()
+                  role = pharmacyUser?.status === 'ACTIVE'
+                    ? pharmacyUser.role
+                    : session.user.user_metadata?.role || 'patient'
+                }
               }
             }
             document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
@@ -69,6 +80,8 @@ export default function UnifiedLogin() {
             router.push('/doctor/dashboard')
           } else if (role === 'dietitian' || role === 'trainer' || role === 'fitness_coach' || role === 'nutritionist') {
             router.push('/provider/dashboard')
+          } else if (['PHARMACY_ADMIN', 'PHARMACY_STAFF', 'DELIVERY_PARTNER'].includes(String(role).toUpperCase())) {
+            router.push('/pharmacy')
           } else {
             const statusRes = await fetch(`/api/patient/status?patientId=${session.user.id}`, {
               headers: { Authorization: `Bearer ${session.access_token}` },
@@ -154,6 +167,8 @@ export default function UnifiedLogin() {
         window.location.href = '/doctor/dashboard'
       } else if (role === 'dietitian' || role === 'trainer' || role === 'fitness_coach' || role === 'nutritionist') {
         window.location.href = '/provider/dashboard'
+      } else if (['PHARMACY_ADMIN', 'PHARMACY_STAFF', 'DELIVERY_PARTNER'].includes(String(role).toUpperCase())) {
+        window.location.href = '/pharmacy'
       } else {
         const statusRes = await fetch(`/api/patient/status?patientId=${loginData.user.id}`, {
           headers: { Authorization: `Bearer ${loginData.session.access_token}` },
