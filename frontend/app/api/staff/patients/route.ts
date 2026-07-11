@@ -3,22 +3,6 @@ import { supabaseAdmin } from '@/lib/supabaseServer';
 import { normalizeProviderRole } from '@/lib/providerConsultations';
 import { getAuthenticatedUser } from '@/lib/apiSecurity';
 
-function displayValue(value: unknown): string | null {
-  if (value === null || value === undefined || value === '') return null;
-  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return String(value);
-  if (Array.isArray(value)) return value.map(displayValue).filter(Boolean).join(', ') || null;
-  if (typeof value === 'object') {
-    return Object.entries(value as Record<string, unknown>)
-      .map(([key, entry]) => {
-        const text = displayValue(entry);
-        return text ? `${key}: ${text}` : null;
-      })
-      .filter(Boolean)
-      .join(' | ') || null;
-  }
-  return null;
-}
-
 function getAssessmentField(assessment: any, key: string) {
   if (assessment?.[key] !== undefined && assessment?.[key] !== null) return assessment[key];
   if (assessment?.medical_history && typeof assessment.medical_history === 'object') {
@@ -27,16 +11,53 @@ function getAssessmentField(assessment: any, key: string) {
   return null;
 }
 
+const riskFieldLabels: Record<string, string> = {
+  has_mtc_men2: 'MTC or MEN 2 history',
+  has_pancreatitis: 'Pancreatitis history',
+  has_active_cancer: 'Active cancer treatment',
+  has_severe_gi_disease: 'Severe gastrointestinal disease',
+  is_pregnant_nursing: 'Pregnant, planning pregnancy, or breastfeeding',
+  recent_opiate_use: 'Recent opiate medication use',
+  has_severe_conditions: 'Severe condition flagged',
+  high_priority_candidate: 'High priority candidate',
+};
+
+function isNegativeRiskValue(value: unknown): boolean {
+  const normalized = String(value || '').trim().toLowerCase();
+  return !normalized || ['no', 'false', 'none', 'none of above', 'none of the above', 'n/a'].includes(normalized);
+}
+
+function riskItems(value: unknown): string[] {
+  if (value === null || value === undefined || value === '') return [];
+  if (typeof value === 'boolean') return value ? ['Flagged'] : [];
+  if (typeof value === 'number') return [String(value)];
+  if (typeof value === 'string') return isNegativeRiskValue(value) ? [] : [value];
+  if (Array.isArray(value)) return value.flatMap(riskItems);
+
+  if (typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>).flatMap(([key, entry]) => {
+      if (riskFieldLabels[key]) {
+        return isNegativeRiskValue(entry) ? [] : [riskFieldLabels[key]];
+      }
+      return riskItems(entry);
+    });
+  }
+
+  return [];
+}
+
 function getRiskFlags(assessment: any) {
   const flags = [
     getAssessmentField(assessment, 'hard_rejections'),
     getAssessmentField(assessment, 'contraindications'),
     getAssessmentField(assessment, 'review_conditions'),
     getAssessmentField(assessment, 'comorbidities'),
-    getAssessmentField(assessment, 'has_severe_conditions') ? 'Severe condition flagged' : null,
-    getAssessmentField(assessment, 'high_priority_candidate') ? 'High priority candidate' : null,
+    ...Object.keys(riskFieldLabels).map(key => {
+      const value = getAssessmentField(assessment, key);
+      return value === true || String(value).toLowerCase() === 'yes' ? riskFieldLabels[key] : null;
+    }),
   ]
-    .map(displayValue)
+    .flatMap(riskItems)
     .filter(Boolean);
 
   return Array.from(new Set(flags)).join(' | ') || null;

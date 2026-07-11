@@ -272,6 +272,63 @@ function safeDisplayValue(value: unknown): string {
   return 'N/A';
 }
 
+const riskFlagLabels: Record<string, string> = {
+  has_mtc_men2: 'MTC or MEN 2 history',
+  has_pancreatitis: 'Pancreatitis history',
+  has_active_cancer: 'Active cancer treatment',
+  has_severe_gi_disease: 'Severe gastrointestinal disease',
+  is_pregnant_nursing: 'Pregnant, planning pregnancy, or breastfeeding',
+  recent_opiate_use: 'Recent opiate medication use',
+  has_severe_conditions: 'Severe condition flagged',
+  high_priority_candidate: 'High priority candidate',
+};
+
+function isEmptyRiskFlagText(text: string): boolean {
+  const normalized = text.trim().toLowerCase();
+  return !normalized || ['no', 'false', 'none', 'none of above', 'none of the above', 'n/a'].includes(normalized);
+}
+
+function formatMedicalRiskFlags(value: unknown): string[] {
+  const raw = safeDisplayValue(value);
+  if (raw === 'N/A') return [];
+
+  return Array.from(new Set(
+    raw
+      .split('|')
+      .map(part => part.trim())
+      .map(part => {
+        const [rawKey, ...rawValueParts] = part.split(':');
+        if (rawValueParts.length === 0) return part;
+
+        const key = rawKey.trim();
+        const fieldValue = rawValueParts.join(':').trim();
+        if (isEmptyRiskFlagText(fieldValue)) return null;
+        return riskFlagLabels[key] || `${key.replace(/_/g, ' ')}: ${fieldValue}`;
+      })
+      .filter((part): part is string => Boolean(part && !isEmptyRiskFlagText(part)))
+  ));
+}
+
+function MedicalRiskFlagList({ value, empty = 'No high-risk flags recorded.' }: { value: unknown; empty?: string }) {
+  const flags = formatMedicalRiskFlags(value);
+
+  if (!flags.length) {
+    return <ClinicalText value={null} empty={empty} />;
+  }
+
+  return (
+    <div className="rounded-2xl border border-[#B94D4D]/18 bg-[#B94D4D]/8 p-4">
+      <div className="flex flex-wrap gap-2">
+        {flags.map(flag => (
+          <span key={flag} className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-[#B94D4D] shadow-sm">
+            {flag}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function patientName(patient: any): string {
   return `${patient?.first_name || ''} ${patient?.last_name || ''}`.trim() || patient?.email || 'Patient';
 }
@@ -1687,7 +1744,7 @@ export default function DoctorDashboard() {
       )}
 
       {/* ── SIDEBAR ── */}
-      <div className="flex h-screen overflow-hidden">
+      <div className="flex min-h-screen">
         {/* Mobile Sidebar Slide-out Drawer */}
         {mobileSidebarOpen && (
           <div className="fixed inset-0 z-50 flex lg:hidden">
@@ -1774,7 +1831,7 @@ export default function DoctorDashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
-          className="hidden lg:flex w-64 bg-[#1A1F36] text-white flex flex-col shadow-2xl shadow-[#1A1F36]/20 flex-shrink-0">
+          className="sticky top-0 hidden h-screen w-72 flex-shrink-0 flex-col bg-[#1A1F36] text-white shadow-2xl shadow-[#1A1F36]/20 lg:flex">
           {/* Doctor info */}
           <div className="p-6 border-b border-white/10">
             <div className="flex items-center gap-3 mb-4">
@@ -1810,7 +1867,7 @@ export default function DoctorDashboard() {
           </div>
 
           {/* Nav */}
-          <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+          <nav className="flex-1 space-y-1 overflow-y-auto p-4 pr-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {tabs.map(t => (
               <button key={t.key} onClick={() => setActiveTab(t.key)}
                 className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-r-2xl text-sm transition-all ${activeTab === t.key
@@ -1861,7 +1918,7 @@ export default function DoctorDashboard() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="flex-1 overflow-y-auto bg-[#F5F0EB] p-4 sm:p-8">
+          className="min-w-0 flex-1 bg-[#F5F0EB] p-4 sm:p-8">
 
           {/* Mobile Header Bar */}
           <div className="lg:hidden flex items-center justify-between bg-[#1A1F36] text-white px-5 py-4 border-b border-white/10 shadow-md mb-6 rounded-2xl">
@@ -1892,7 +1949,7 @@ export default function DoctorDashboard() {
 
               {/* FIX: Bug 3 — Doctor Overview stats dynamically computed from consultations array */}
               {/* Quick stats */}
-              <div className="grid grid-cols-2 xl:grid-cols-6 gap-4 sm:gap-6">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
                 {[
                   { label: 'Assigned Cases', value: consultations.length, icon: <Users className="w-6 h-6"/> },
                   { label: "Today's Consults", value: todayCases, icon: <Calendar className="w-6 h-6"/> },
@@ -1906,12 +1963,14 @@ export default function DoctorDashboard() {
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: idx * 0.1 }}
-                    className="bg-white p-4 sm:p-6 border border-[#1A1F36]/8 rounded-[20px] shadow-[0_12px_32px_rgba(26,31,54,0.08)] flex items-center gap-2 sm:gap-4 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(26,31,54,0.12)] transition-all duration-300"
+                    className="min-h-[132px] rounded-[20px] border border-[#1A1F36]/8 bg-white p-5 shadow-[0_12px_32px_rgba(26,31,54,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_18px_40px_rgba(26,31,54,0.12)]"
                   >
-                    <div className="bg-[#C4622D]/10 text-[#C4622D] p-4 rounded-2xl">{s.icon}</div>
-                    <div>
-                      <p className="text-xs font-medium text-[#8896A4] uppercase tracking-wider">{s.label}</p>
-                      <p className="text-3xl font-bold text-[#1A1F36] mt-1">{s.value}</p>
+                    <div className="flex h-full items-center gap-4">
+                      <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#C4622D]/10 text-[#C4622D]">{s.icon}</div>
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-black uppercase leading-snug text-[#8896A4]">{s.label}</p>
+                        <p className="mt-1 text-3xl font-black leading-none text-[#1A1F36]">{s.value}</p>
+                      </div>
                     </div>
                   </motion.div>
                 ))}
@@ -2232,7 +2291,11 @@ export default function DoctorDashboard() {
                                 <p className="text-[10px] font-black uppercase tracking-widest text-[#8896A4]">Patient Case Review</p>
                                 {c.patient_history && <p className="text-xs font-semibold text-[#40516A]"><span className="font-black text-[#1A1F36]">Assessment:</span> {safeDisplayValue(c.patient_history)}</p>}
                                 {c.patient_extra_info && <p className="text-xs font-semibold text-[#40516A]"><span className="font-black text-[#1A1F36]">Additional info:</span> {safeDisplayValue(c.patient_extra_info)}</p>}
-                                {c.patient_medical_risk_flags && <p className="text-xs font-semibold text-[#B7792F]"><span className="font-black">Risk flags:</span> {safeDisplayValue(c.patient_medical_risk_flags)}</p>}
+                                {formatMedicalRiskFlags(c.patient_medical_risk_flags).length > 0 && (
+                                  <p className="text-xs font-semibold text-[#B7792F]">
+                                    <span className="font-black">Risk flags:</span> {formatMedicalRiskFlags(c.patient_medical_risk_flags).join(', ')}
+                                  </p>
+                                )}
                                 {c.patient_medication_proof_url && (
                                   <a href={c.patient_medication_proof_url} target="_blank" rel="noreferrer" className="inline-flex text-xs font-black text-[#C4622D] hover:text-[#A8522A]">
                                     View uploaded medication proof
@@ -2728,13 +2791,7 @@ export default function DoctorDashboard() {
                       </ClinicalCard>
 
                       <ClinicalCard title="Medical Risk Flags" icon={<AlertCircle className="w-4 h-4 text-[#B94D4D]" />}>
-                        {selectedPatient.medical_risk_flags ? (
-                          <p className="rounded-2xl border border-[#B94D4D]/18 bg-[#B94D4D]/8 p-4 text-sm font-bold leading-relaxed text-[#B94D4D]">
-                            {safeDisplayValue(selectedPatient.medical_risk_flags)}
-                          </p>
-                        ) : (
-                          <ClinicalText value={null} empty="No high-risk flags recorded." />
-                        )}
+                        <MedicalRiskFlagList value={selectedPatient.medical_risk_flags} />
                         {selectedPatient.medication_proof_url && (
                           <a href={selectedPatient.medication_proof_url} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-full bg-[#FFF4EC] px-4 py-2 text-xs font-black text-[#C4622D]">
                             View uploaded medication proof
