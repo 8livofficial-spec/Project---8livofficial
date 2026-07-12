@@ -5,7 +5,7 @@ import { EmailService } from '@/lib/emailService'
 import { loadPatientJourneyState, updatePatientJourneyState } from '@/lib/patientJourneyServer'
 import { finalizeConsultationAssignment, reserveDoctorForInitialConsultation } from '@/lib/smartAssignmentEngine'
 import { getAuthenticatedPatient, getIndiaSlotTimestamp, isFutureIndiaSlot } from '@/lib/appointmentAvailability'
-import { FOLLOW_UP_CONSULTATION, INITIAL_CONSULTATION } from '@/lib/providerConsultations'
+import { FOLLOW_UP_CONSULTATION, INITIAL_CONSULTATION, getAssignedProviderForRole } from '@/lib/providerConsultations'
 import { getMembershipValidity } from '@/lib/membershipServer'
 import { createStreamMeeting } from '@/services/video/meeting.service'
 
@@ -289,11 +289,16 @@ export async function POST(request: Request) {
       }
     }
 
+    if (isInitialConsultation && paymentMethod && !reusedPayment && !APP_CONFIG.payment.allowMock) {
+      return NextResponse.json({ error: 'Verified consultation payment is required before booking.' }, { status: 402 })
+    }
+
     if (isInitialConsultation && !paymentMethod && !reusedPayment) {
       return NextResponse.json({ error: 'Consultation fee payment is required before booking.' }, { status: 402 })
     }
 
     let preferredDoctorId: string | null = null
+    let strictPreferredDoctor = false
     if (followUpOfBookingId || reusePaymentFromBookingId) {
       const { data: previousDoctor } = await supabaseAdmin
         .from('doctor_consultations')
@@ -304,6 +309,14 @@ export async function POST(request: Request) {
       preferredDoctorId = previousDoctor?.doctor_id || null
     }
 
+    if (!isInitialConsultation) {
+      preferredDoctorId = await getAssignedProviderForRole(patientId, 'doctor')
+      strictPreferredDoctor = true
+      if (!preferredDoctorId) {
+        return NextResponse.json({ error: 'No active primary doctor is assigned to this patient.' }, { status: 403 })
+      }
+    }
+
     let smartAssignment
     try {
       smartAssignment = await reserveDoctorForInitialConsultation({
@@ -312,6 +325,7 @@ export async function POST(request: Request) {
         selectedTime,
         requiredSpecialization: 'Endocrinologist',
         preferredDoctorId,
+        strictPreferredDoctor,
       })
     } catch (assignmentError) {
       const message = assignmentError instanceof Error ? assignmentError.message : 'Unable to assign a doctor for this slot.'

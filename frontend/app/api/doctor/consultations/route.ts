@@ -212,6 +212,60 @@ async function creditDoctorWalletOnce(doctorId: string, patientId: string, appoi
   return { credited: result.credited, reason: result.duplicate ? 'duplicate' : result.credited ? 'credited' : 'pending_review', amount: Number(result.amount || 0) };
 }
 
+async function ensurePrimaryDoctorAssignment(patientId: string, doctorId: string, consultationId: string) {
+  const now = new Date().toISOString();
+  try {
+    await supabaseAdmin
+      .from('care_team_assignments')
+      .update({
+        status: 'ENDED',
+        ended_at: now,
+        ended_reason: 'REPLACED_BY_COMPLETED_INITIAL_CONSULTATION',
+        updated_at: now,
+      })
+      .eq('patient_id', patientId)
+      .eq('relationship_type', 'PRIMARY_DOCTOR')
+      .eq('status', 'ACTIVE')
+      .is('ended_at', null)
+      .neq('provider_id', doctorId);
+
+    const { data: existing } = await supabaseAdmin
+      .from('care_team_assignments')
+      .select('id')
+      .eq('patient_id', patientId)
+      .eq('provider_id', doctorId)
+      .eq('relationship_type', 'PRIMARY_DOCTOR')
+      .eq('status', 'ACTIVE')
+      .is('ended_at', null)
+      .limit(1)
+      .maybeSingle();
+
+    if (existing?.id) return;
+
+    const { error } = await supabaseAdmin
+      .from('care_team_assignments')
+      .insert({
+        patient_id: patientId,
+        provider_id: doctorId,
+        doctor_id: doctorId,
+        provider_role: 'doctor',
+        relationship_type: 'PRIMARY_DOCTOR',
+        assigned_from_consultation_id: consultationId,
+        status: 'ACTIVE',
+        assigned_at: now,
+        assigned_by: doctorId,
+        created_at: now,
+        updated_at: now,
+      });
+
+    if (error && error.code !== '23505') {
+      console.error('Failed to create primary doctor assignment:', error);
+    }
+  } catch (error) {
+    console.error('Primary doctor assignment sync failed:', error);
+  }
+}
+
 export async function POST(req: Request) {
   try {
     const authUser = await getAuthenticatedUser(req);
@@ -542,11 +596,16 @@ export async function PATCH(req: Request) {
           is_completed: true,
           call_started_at: consultation.call_started_at || now,
           call_ended_at: consultation.call_ended_at || now,
+          completed_at: now,
           updated_at: now
         })
         .eq('id', consultationId);
 
       if (completeErr) throw completeErr;
+
+      if (isInitialConsultation) {
+        await ensurePrimaryDoctorAssignment(consultation.patient_id, consultation.doctor_id, consultation.id);
+      }
 
       if (consultation.patient_id) {
         const assessmentUpdate: Record<string, unknown> = {

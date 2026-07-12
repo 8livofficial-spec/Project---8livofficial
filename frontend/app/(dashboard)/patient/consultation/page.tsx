@@ -8,6 +8,8 @@ import { supabase } from '@/lib/supabaseClient'
 
 const CONSULTATION_FEE = 499
 const SESSION_EXPIRED = 'SESSION_EXPIRED'
+const INITIAL_DOCTOR_CONSULTATION = 'INITIAL_DOCTOR_CONSULTATION'
+const DOCTOR_FOLLOW_UP = 'DOCTOR_FOLLOW_UP'
 
 async function patientFetch(input: RequestInfo | URL, init: RequestInit = {}) {
   const { data: sessionData } = await supabase.auth.getSession()
@@ -167,6 +169,7 @@ export default function ConsultationSchedulingPage() {
   const reusePaymentFromBookingId = searchParams.get('rescheduleFrom') || ''
   const isActiveMemberFollowUp = onboardingState.membershipStatus === 'ACTIVE' && onboardingState.firstConsultationCompleted === true
   const isBookingPending = onboardingState.appointmentStatus === 'BOOKING_PENDING' || onboardingState.consultationPaymentStatus === 'PAID'
+  const appointmentType = isActiveMemberFollowUp ? DOCTOR_FOLLOW_UP : INITIAL_DOCTOR_CONSULTATION
 
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [selectedDateSlots, setSelectedDateSlots] = useState<AvailableDoctorSlot[]>([])
@@ -212,8 +215,8 @@ export default function ConsultationSchedulingPage() {
 
     setDateSlotsLoading(true)
     try {
-      const params = new URLSearchParams({ role: 'DOCTOR', date })
-      const res = await patientFetch(`/api/appointments/available-slots?${params.toString()}`)
+      const params = new URLSearchParams({ appointmentType, date })
+      const res = await patientFetch(`/api/patient/appointments/availability?${params.toString()}`)
       const data = await res.json()
       if (!res.ok || data.error) {
         throw new Error(data.error || 'Failed to load slots for selected date')
@@ -226,7 +229,8 @@ export default function ConsultationSchedulingPage() {
           available_date: slot.date,
           time_slot: slot.startTime,
         }
-        if (!uniqueTimes.has(mapped.time_slot)) uniqueTimes.set(mapped.time_slot, mapped)
+        const key = isActiveMemberFollowUp ? `${mapped.slotId || mapped.providerId}-${mapped.time_slot}` : mapped.time_slot
+        if (!uniqueTimes.has(key)) uniqueTimes.set(key, mapped)
       }
       setSelectedDateSlots(Array.from(uniqueTimes.values()))
     } catch (err) {
@@ -239,13 +243,13 @@ export default function ConsultationSchedulingPage() {
     } finally {
       setDateSlotsLoading(false)
     }
-  }, [router])
+  }, [appointmentType, isActiveMemberFollowUp, router])
 
   const loadAvailableSlots = useCallback(async () => {
     setSlotsLoading(true)
     try {
-      const params = new URLSearchParams({ role: 'DOCTOR' })
-      const res = await patientFetch(`/api/appointments/available-dates?${params.toString()}`)
+      const params = new URLSearchParams({ appointmentType })
+      const res = await patientFetch(`/api/patient/appointments/availability?${params.toString()}`)
       const data = await res.json()
       if (!res.ok || data.error) {
         throw new Error(data.error || 'Failed to load available slots')
@@ -275,7 +279,7 @@ export default function ConsultationSchedulingPage() {
     } finally {
       setSlotsLoading(false)
     }
-  }, [loadSlotsForDate, router])
+  }, [appointmentType, loadSlotsForDate, router])
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -373,20 +377,19 @@ export default function ConsultationSchedulingPage() {
     setPaymentError('')
     setPaymentStage('assigning')
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error(SESSION_EXPIRED)
+      const idempotencyKey = `patient-booking-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
-      const res = await patientFetch('/api/patient/consultations', {
+      const res = await patientFetch('/api/patient/appointments', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          patientId: session.user.id,
+          appointmentType,
+          slotId: selectedSlot.slotId,
+          idempotencyKey,
           paymentMethod: isActiveMemberFollowUp ? undefined : paymentMethod,
           reusePaymentFromBookingId: reusePaymentFromBookingId || (isBookingPending ? 'pending' : undefined),
-          selectedDate: selectedSlot.available_date,
-          selectedTime: selectedSlot.time_slot
         })
       })
 
@@ -686,7 +689,7 @@ export default function ConsultationSchedulingPage() {
                   ? 'Choose a new consultation slot. Your eligible consultation payment will be reused.'
                   : isActiveMemberFollowUp
                     ? 'Select a follow-up time that fits your schedule. Your active membership covers this consultation.'
-                  : 'Select a consultation time that fits your schedule. We&apos;ll automatically assign the best available specialist for your chosen time.'}
+                  : 'Select a consultation time that fits your schedule. We will reserve your chosen time with an eligible doctor.'}
               </p>
             </div>
           </div>
@@ -702,15 +705,17 @@ export default function ConsultationSchedulingPage() {
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: designTokens.colors.textTertiary }}>
-                    Automatic Specialist Assignment
+                    {isActiveMemberFollowUp ? 'Primary Doctor Follow-up' : 'Initial Doctor Assignment'}
                   </p>
                   <h3 className="text-lg font-bold" style={{ color: designTokens.colors.textPrimary }}>
-                    You choose the time
+                    {isActiveMemberFollowUp ? 'Your assigned doctor' : 'You choose the time'}
                   </h3>
                 </div>
               </div>
               <p className="text-sm" style={{ color: designTokens.colors.textSecondary }}>
-                Doctor names and photos are hidden during booking. Once you confirm a time, 8Liv reserves that slot and assigns the best available healthcare professional.
+                {isActiveMemberFollowUp
+                  ? 'Follow-up slots are limited to your active primary doctor. 8Liv will not switch you to another doctor automatically.'
+                  : 'Doctor names and photos are hidden during booking. Once you confirm a time, 8Liv reserves that slot with an eligible healthcare professional.'}
               </p>
             </div>
 
@@ -902,7 +907,7 @@ export default function ConsultationSchedulingPage() {
                     Healthcare Professional
                   </p>
                   <p className="font-semibold mt-2" style={{ color: designTokens.colors.textPrimary }}>
-                    Automatically Assigned
+                    {isActiveMemberFollowUp ? 'Primary Doctor' : 'Automatically Assigned'}
                   </p>
                 </div>
 

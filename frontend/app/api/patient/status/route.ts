@@ -5,6 +5,10 @@ import { getMembershipValidity } from '@/lib/membershipServer'
 import { assertPatientOrAssignedProvider } from '@/lib/apiSecurity'
 import { getPatientJourneyTarget } from '@/lib/patientJourney'
 
+function isDoctorFollowUpType(value?: string | null) {
+  return ['DOCTOR_FOLLOW_UP', 'FOLLOW_UP_CONSULTATION'].includes(String(value || '').toUpperCase())
+}
+
 type CareTeamStatus = {
   doctor_name: string
   dietitian_name: string
@@ -251,7 +255,7 @@ export async function GET(request: Request) {
     const firstConsultationCompleted = Boolean(
       persistedJourney?.first_consultation_completed === true
       || assessment?.first_consultation_completed === true
-      || (attendedConsult?.id && String(attendedConsult.appointment_type || '').toUpperCase() !== 'FOLLOW_UP_CONSULTATION')
+      || (attendedConsult?.id && !isDoctorFollowUpType(attendedConsult.appointment_type))
     )
     const onboardingCompleted = Boolean(
       persistedJourney?.onboarding_completed === true

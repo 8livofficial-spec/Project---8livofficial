@@ -253,6 +253,7 @@ export async function reserveDoctorForInitialConsultation(params: {
   selectedTime: string
   requiredSpecialization?: string | null
   preferredDoctorId?: string | null
+  strictPreferredDoctor?: boolean
 }) {
   const settings = await getSettings()
   if (settings.auto_assignment_enabled === false) {
@@ -284,7 +285,11 @@ export async function reserveDoctorForInitialConsultation(params: {
   const settingsDaily = settings.max_daily_consultations || 12
   const settingsHourly = settings.max_hourly_consultations || 3
 
-  const candidates = slots
+  const candidateSlots = params.strictPreferredDoctor && params.preferredDoctorId
+    ? slots.filter((slot) => slot.provider_id === params.preferredDoctorId)
+    : slots
+
+  const candidates = candidateSlots
     .filter((slot) => {
       if (!slot.provider_id) return false
       const provider = activeById.get(slot.provider_id)
@@ -322,7 +327,7 @@ export async function reserveDoctorForInitialConsultation(params: {
       strategy: settings.preferred_strategy,
       metadata: { selectedDate: params.selectedDate, selectedTime: params.selectedTime, requiredSpecialization: params.requiredSpecialization },
     })
-    throw new Error('No qualified doctors are available for this slot.')
+    throw new Error(params.strictPreferredDoctor ? 'Your assigned doctor is not available for this slot.' : 'No qualified doctors are available for this slot.')
   }
 
   const sameProviderFirst = params.preferredDoctorId

@@ -2,8 +2,10 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 
 export type VideoProviderRole = 'doctor' | 'dietitian' | 'nutritionist' | 'fitness_coach' | 'trainer'
 
-export const INITIAL_CONSULTATION = 'INITIAL_CONSULTATION'
-export const FOLLOW_UP_CONSULTATION = 'FOLLOW_UP_CONSULTATION'
+export const INITIAL_DOCTOR_CONSULTATION = 'INITIAL_DOCTOR_CONSULTATION'
+export const DOCTOR_FOLLOW_UP = 'DOCTOR_FOLLOW_UP'
+export const INITIAL_CONSULTATION = INITIAL_DOCTOR_CONSULTATION
+export const FOLLOW_UP_CONSULTATION = DOCTOR_FOLLOW_UP
 export const DIETITIAN_CONSULTATION = 'DIETITIAN_CONSULTATION'
 export const NUTRITIONIST_CONSULTATION = 'NUTRITIONIST_CONSULTATION'
 export const FITNESS_COACH_CONSULTATION = 'FITNESS_COACH_CONSULTATION'
@@ -22,7 +24,25 @@ export function appointmentTypeForRole(role: string) {
 }
 
 export function isInitialConsultationType(appointmentType?: string | null) {
-  return String(appointmentType || '').toUpperCase() === INITIAL_CONSULTATION
+  const normalized = String(appointmentType || '').toUpperCase()
+  return normalized === INITIAL_DOCTOR_CONSULTATION || normalized === 'INITIAL_CONSULTATION'
+}
+
+export function isDoctorFollowUpType(appointmentType?: string | null) {
+  const normalized = String(appointmentType || '').toUpperCase()
+  return normalized === DOCTOR_FOLLOW_UP || normalized === 'FOLLOW_UP_CONSULTATION'
+}
+
+export function normalizeAppointmentType(value?: string | null) {
+  const normalized = String(value || '').trim().toUpperCase()
+  if (normalized === 'INITIAL_CONSULTATION') return INITIAL_DOCTOR_CONSULTATION
+  if (normalized === 'FOLLOW_UP_CONSULTATION') return DOCTOR_FOLLOW_UP
+  if (normalized === INITIAL_DOCTOR_CONSULTATION) return INITIAL_DOCTOR_CONSULTATION
+  if (normalized === DOCTOR_FOLLOW_UP) return DOCTOR_FOLLOW_UP
+  if (normalized === DIETITIAN_CONSULTATION) return DIETITIAN_CONSULTATION
+  if (normalized === NUTRITIONIST_CONSULTATION) return NUTRITIONIST_CONSULTATION
+  if (normalized === FITNESS_COACH_CONSULTATION) return FITNESS_COACH_CONSULTATION
+  return ''
 }
 
 export function labelForRole(role: string) {
@@ -47,6 +67,28 @@ export function canJoinConsultation(bookingDate?: string | null, bookingTime?: s
 
 export async function getAssignedProviderForRole(patientId: string, role: string) {
   const normalized = normalizeProviderRole(role)
+  const relationshipType =
+    normalized === 'doctor' ? 'PRIMARY_DOCTOR'
+    : normalized === 'dietitian' ? 'ASSIGNED_DIETITIAN'
+    : normalized === 'nutritionist' ? 'ASSIGNED_NUTRITIONIST'
+    : normalized === 'fitness_coach' ? 'ASSIGNED_FITNESS_COACH'
+    : ''
+
+  if (relationshipType) {
+    const { data: relationshipAssignment } = await supabaseAdmin
+      .from('care_team_assignments')
+      .select('provider_id')
+      .eq('patient_id', patientId)
+      .eq('relationship_type', relationshipType)
+      .eq('status', 'ACTIVE')
+      .is('ended_at', null)
+      .order('assigned_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (relationshipAssignment?.provider_id) return relationshipAssignment.provider_id
+  }
+
   const { data: assignment } = await supabaseAdmin
     .from('care_team_assignments')
     .select('doctor_id, dietitian_id, nutritionist_id, fitness_coach_id, trainer_id')

@@ -173,7 +173,7 @@ export default function AppointmentDetailsPage() {
     : false
   const consultationCompleted = appointment?.consultationStatus === 'COMPLETED'
   const terminalStatus = ['cancelled_by_doctor', 'cancelled_by_patient', 'missed_by_patient', 'approved', 'rejected', 'completed'].includes(String(appointment?.rawStatus || '').toLowerCase())
-  const isInitialConsultation = appointment?.appointmentType === 'INITIAL_CONSULTATION'
+  const isInitialConsultation = ['INITIAL_DOCTOR_CONSULTATION', 'INITIAL_CONSULTATION'].includes(String(appointment?.appointmentType || '').toUpperCase())
   const needsMembership = isInitialConsultation && consultationCompleted && appointment?.membershipStatus === 'NOT_SELECTED'
   const needsMembershipPayment = isInitialConsultation && consultationCompleted && appointment?.membershipStatus === 'SELECTED'
   const canReschedule = Boolean(appointment?.freeRescheduleEligible)

@@ -79,8 +79,8 @@ function roleLabel(role?: string | null) {
 
 function appointmentTypeLabel(type?: string | null, fallbackRole?: string | null) {
   const normalized = String(type || '').toUpperCase()
-  if (normalized === 'INITIAL_CONSULTATION') return 'Initial Consultation'
-  if (normalized === 'FOLLOW_UP_CONSULTATION') return 'Follow-up Consultation'
+  if (normalized === 'INITIAL_DOCTOR_CONSULTATION' || normalized === 'INITIAL_CONSULTATION') return 'Initial Consultation'
+  if (normalized === 'DOCTOR_FOLLOW_UP' || normalized === 'FOLLOW_UP_CONSULTATION') return 'Follow-up Consultation'
   if (normalized === 'DIETITIAN_CONSULTATION') return 'Dietitian Consultation'
   if (normalized === 'NUTRITIONIST_CONSULTATION') return 'Nutritionist Consultation'
   if (normalized === 'FITNESS_COACH_CONSULTATION') return 'Fitness Coach Consultation'
