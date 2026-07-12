@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { 
-  AreaChart, Area, BarChart, Bar, LineChart, Line, 
+  AreaChart, Area, BarChart, Bar,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts'
 import { TrendingDown, Award, Flame, Zap } from 'lucide-react'
@@ -43,26 +43,6 @@ export default function ProgressPage() {
     { day: 'Fri', calories: 1910 },
     { day: 'Sat', calories: 1680 },
     { day: 'Sun', calories: 1750 }
-  ]
-
-  const waterData = [
-    { day: 'Mon', cups: 8 },
-    { day: 'Tue', cups: 9 },
-    { day: 'Wed', cups: 8 },
-    { day: 'Thu', cups: 10 },
-    { day: 'Fri', cups: 7 },
-    { day: 'Sat', cups: 8 },
-    { day: 'Sun', cups: 9 }
-  ]
-
-  const exerciseData = [
-    { day: 'Mon', mins: 30 },
-    { day: 'Tue', mins: 45 },
-    { day: 'Wed', mins: 0 },
-    { day: 'Thu', mins: 40 },
-    { day: 'Fri', mins: 35 },
-    { day: 'Sat', mins: 60 },
-    { day: 'Sun', mins: 20 }
   ]
 
   const getMilestones = () => {
@@ -244,7 +224,7 @@ export default function ProgressPage() {
       </div>
 
       {/* Auxiliary Charts Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-6">
         {/* Calories BarChart */}
         <div className="bg-white rounded-2xl p-5 border border-[#1A1F36]/6 shadow-sm">
           <div className="flex justify-between items-center mb-4">
@@ -264,49 +244,6 @@ export default function ProgressPage() {
           </div>
         </div>
 
-        {/* Water LineChart */}
-        <div className="bg-white rounded-2xl p-5 border border-[#1A1F36]/6 shadow-sm">
-          <div className="flex justify-between items-center mb-4">
-            <h4 className="font-bold text-sm font-sora">Water Intake</h4>
-            <span className="text-[9px] font-bold bg-[#5C7A6B]/10 text-[#5C7A6B] px-2 py-0.5 rounded-full select-none">Apple Health</span>
-          </div>
-          <div className="h-44 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={waterData} margin={{ left: -25 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,31,54,0.06)" vertical={false} />
-                <XAxis dataKey="day" tick={{ fill: '#8896A4', fontSize: 9 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#8896A4', fontSize: 9 }} axisLine={false} tickLine={false} />
-                <Tooltip />
-                <Line type="monotone" dataKey="cups" stroke="#5C7A6B" strokeWidth={3} dot={{ fill: '#5C7A6B', r: 3 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {/* Exercise AreaChart */}
-        <div className="bg-white rounded-2xl p-5 border border-[#1A1F36]/6 shadow-sm">
-          <div className="flex justify-between items-center mb-4">
-            <h4 className="font-bold text-sm font-sora">Active Exercise</h4>
-            <span className="text-[9px] font-bold bg-[#C4622D]/10 text-[#C4622D] px-2 py-0.5 rounded-full select-none">Smartwatch</span>
-          </div>
-          <div className="h-44 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={exerciseData} margin={{ left: -25 }}>
-                <defs>
-                  <linearGradient id="exerciseGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#C4622D" stopOpacity={0.15}/>
-                    <stop offset="95%" stopColor="#C4622D" stopOpacity={0.0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,31,54,0.06)" vertical={false} />
-                <XAxis dataKey="day" tick={{ fill: '#8896A4', fontSize: 9 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#8896A4', fontSize: 9 }} axisLine={false} tickLine={false} />
-                <Tooltip />
-                <Area type="monotone" dataKey="mins" stroke="#C4622D" strokeWidth={3} fill="url(#exerciseGrad)" dot={{ fill: '#C4622D', r: 3 }} />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
       </div>
 
       {/* Timeline milestones */}
