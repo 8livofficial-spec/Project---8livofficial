@@ -6,6 +6,7 @@ import { INITIAL_CONSULTATION, isInitialConsultationType } from '@/lib/providerC
 import { getMembershipValidity } from '@/lib/membershipServer';
 import { creditCompletedConsultation } from '@/lib/walletLedger';
 import { getAuthenticatedUser, assertDoctor } from '@/lib/apiSecurity';
+import { patientSearchOrFilter } from '@/lib/queryFilters';
 
 type ConsultationRow = {
   id: string;
@@ -231,8 +232,8 @@ export async function POST(req: Request) {
     let matchingPatientIds: string[] = [];
     if (search.trim()) {
       const [matchedProfiles, matchedAssess] = await Promise.all([
-        supabaseAdmin.from('profiles').select('id').or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%,phone_number.ilike.%${search}%`),
-        supabaseAdmin.from('health_assessments').select('patient_id').or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,phone_number.ilike.%${search}%`)
+        supabaseAdmin.from('profiles').select('id').or(patientSearchOrFilter(search)),
+        supabaseAdmin.from('health_assessments').select('patient_id').or(patientSearchOrFilter(search, false))
       ]);
       const ids = new Set([
         ...(matchedProfiles.data || []).map((p: any) => p.id),
@@ -285,11 +286,13 @@ export async function POST(req: Request) {
 
     const profiles = (profilesRes.data || []) as PatientProfileRow[];
     const assessments = (assessmentsRes.data || []) as HealthAssessmentRow[];
+    const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
+    const assessmentsByPatientId = new Map(assessments.map((assessment) => [assessment.patient_id, assessment]));
 
     // Helper function to enrich consultation
     const enrich = (c: ConsultationRow) => {
-      const prof: PatientProfileRow = profiles.find(p => p.id === c.patient_id) || { id: c.patient_id };
-      const assess: HealthAssessmentRow = assessments.find(a => a.patient_id === c.patient_id) || { patient_id: c.patient_id };
+      const prof: PatientProfileRow = profilesById.get(c.patient_id) || { id: c.patient_id };
+      const assess: HealthAssessmentRow = assessmentsByPatientId.get(c.patient_id) || { patient_id: c.patient_id };
       const firstName = assess.first_name || prof.first_name || prof.display_id || 'Patient';
       const lastName = assess.last_name || prof.last_name || '';
       const fullName = `${firstName} ${lastName}`.trim();

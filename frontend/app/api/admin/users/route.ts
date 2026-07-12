@@ -4,6 +4,23 @@ import { EmailService } from '@/lib/emailService'
 import { createToken, getOrigin } from '@/lib/authSecurity'
 import { assertAdmin } from '@/lib/apiSecurity'
 
+export async function GET(request: Request) {
+  try {
+    await assertAdmin(request)
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .select('id, first_name, last_name, role, phone_number, email')
+      .in('role', ['admin', 'doctor', 'dietitian', 'nutritionist', 'fitness_coach', 'trainer'])
+      .order('role', { ascending: true })
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ users: data || [] })
+  } catch (err: any) {
+    const status = err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status })
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const admin = await assertAdmin(request)

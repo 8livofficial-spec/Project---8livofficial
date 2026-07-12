@@ -8,9 +8,9 @@ export async function GET(request: Request) {
     await assertAdmin(request)
     const { from, to, page, limit } = parsePagination(request.url)
     const [{ data: pharmacies, error, count }, { data: users }, { data: partners }, { data: revenue }] = await Promise.all([
-      supabaseAdmin.from('pharmacies').select('*', { count: 'exact' }).order('created_at', { ascending: false }).range(from, to),
-      supabaseAdmin.from('pharmacy_users').select('*').order('created_at', { ascending: false }).limit(100),
-      supabaseAdmin.from('delivery_partners').select('*').order('created_at', { ascending: false }).limit(100),
+      supabaseAdmin.from('pharmacies').select('id, name, license_number, contact_email, contact_phone, address, status, approved_at, created_at, updated_at', { count: 'exact' }).order('created_at', { ascending: false }).range(from, to),
+      supabaseAdmin.from('pharmacy_users').select('id, user_id, pharmacy_id, role, status, created_at, updated_at').order('created_at', { ascending: false }).limit(100),
+      supabaseAdmin.from('delivery_partners').select('id, name, phone_number, vehicle_type, status, created_at, updated_at').order('created_at', { ascending: false }).limit(100),
       supabaseAdmin.from('prescription_orders').select('status,total_amount').limit(1000),
     ])
     if (error) throw error
@@ -50,7 +50,7 @@ export async function POST(request: Request) {
         address: address || {},
         status: 'PENDING_APPROVAL',
       })
-      .select('*')
+      .select('id, name, license_number, contact_email, contact_phone, address, status, approved_at, created_at, updated_at')
       .single()
     if (error) throw error
 
@@ -82,7 +82,7 @@ export async function PATCH(request: Request) {
         .from('prescription_orders')
         .update({ status: 'REFUNDED', refund_id: refundId || null, refunded_at: new Date().toISOString(), updated_at: new Date().toISOString() })
         .eq('id', refundOrderId)
-        .select('*')
+        .select('id, status, refund_id, refunded_at, updated_at')
         .single()
       if (error) throw error
       await logPharmacyAudit({ actorId: admin.id, actorRole: 'ADMIN', action: 'ORDER_REFUNDED', targetType: 'prescription_order', targetId: refundOrderId, request })
@@ -93,7 +93,7 @@ export async function PATCH(request: Request) {
       .from('pharmacies')
       .update({ status: pharmacyStatus, approved_at: pharmacyStatus === 'APPROVED' ? new Date().toISOString() : undefined, updated_at: new Date().toISOString() })
       .eq('id', pharmacyId)
-      .select('*')
+      .select('id, name, license_number, contact_email, contact_phone, address, status, approved_at, created_at, updated_at')
       .single()
     if (error) throw error
 

@@ -1,5 +1,5 @@
 import { supabaseAdmin } from './supabaseServer'
-import { normalizeEmail } from './authSecurity'
+import { checkRateLimit, getClientIp, normalizeEmail, rateLimitResponse } from './authSecurity'
 import { getAssignedProviderForRole } from './providerConsultations'
 
 export async function getAuthenticatedUser(request: Request) {
@@ -85,6 +85,19 @@ export async function assertAdmin(request: Request) {
     throw new Error('Forbidden')
   }
   return auth.user
+}
+
+export function enforceRateLimit(
+  request: Request,
+  key: string,
+  options: { limit: number; windowMs: number; lockMs?: number }
+) {
+  const ip = getClientIp(request)
+  const rate = checkRateLimit(`${key}:${ip}`, options)
+  if (!rate.allowed) {
+    return rateLimitResponse(rate.retryAfter || 60, rate.message)
+  }
+  return null
 }
 
 export async function assertProvider(request: Request) {

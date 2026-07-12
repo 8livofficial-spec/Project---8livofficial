@@ -2,7 +2,11 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { EmailService } from '@/lib/emailService'
 import { createToken, getOrigin } from '@/lib/authSecurity'
-import { getAuthenticatedUser } from '@/lib/apiSecurity'
+import { enforceRateLimit, getAuthenticatedUser } from '@/lib/apiSecurity'
+import { APP_CONFIG } from '@/lib/appConfig'
+import { ProviderInvitationService } from '@/lib/providerPlatform/services'
+import { toSafeError } from '@/lib/providerPlatform/errors'
+import { ilikePattern } from '@/lib/queryFilters'
 
 const providerRoles = ['doctor', 'dietitian', 'nutritionist', 'fitness_coach']
 const fallbackProviderRoles = ['doctor', 'dietitian', 'nutritionist', 'fitness_coach', 'trainer']
@@ -49,8 +53,9 @@ async function loadFallbackProviders(search = '', from = 0, to = 24) {
     .select('id, first_name, last_name, email, phone_number, role', { count: 'exact' })
     .in('role', fallbackProviderRoles);
 
-  if (search.trim()) {
-    query = query.or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%,phone_number.ilike.%${search}%`);
+  const searchPattern = ilikePattern(search)
+  if (searchPattern) {
+    query = query.or(`first_name.ilike.${searchPattern},last_name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`);
   }
 
   const { data, error, count } = await query
@@ -98,8 +103,9 @@ export async function GET(request: Request) {
       .from('provider_profiles')
       .select('*', { count: 'exact' });
 
-    if (search.trim()) {
-      query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%,phone_number.ilike.%${search}%`);
+    const searchPattern = ilikePattern(search)
+    if (searchPattern) {
+      query = query.or(`full_name.ilike.${searchPattern},email.ilike.${searchPattern},phone_number.ilike.${searchPattern}`);
     }
 
     const { data, error, count } = await query
@@ -133,7 +139,14 @@ export async function POST(request: Request) {
   try {
     const admin = await requireAdmin(request)
     if ('error' in admin) return admin.error
+    const limited = enforceRateLimit(request, `admin-provider-create:${admin.user.id}`, APP_CONFIG.rateLimits.adminSensitive)
+    if (limited) return limited
+
     const body = await request.json()
+    if (!body.password) {
+      const result = await ProviderInvitationService.createProvider(body, { request, adminId: admin.user.id })
+      return NextResponse.json({ success: true, ...result })
+    }
     const {
       fullName,
       email,

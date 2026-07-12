@@ -1,31 +1,22 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { assertAdmin, enforceRateLimit } from '@/lib/apiSecurity'
+import { APP_CONFIG } from '@/lib/appConfig'
 
 export async function GET(request: Request) {
   try {
+    const admin = await assertAdmin(request)
     const { searchParams } = new URL(request.url)
-    const adminId = searchParams.get('adminId')
     const format = searchParams.get('format') || 'json'
-
-    if (!adminId) {
-      return NextResponse.json({ error: 'Missing adminId' }, { status: 400 })
+    if (format === 'csv') {
+      const limited = enforceRateLimit(request, `admin-reports:${admin.id}`, APP_CONFIG.rateLimits.adminExports)
+      if (limited) return limited
     }
 
-    // 1. Verify admin role claim
-    const { data: adminProfile } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', adminId)
-      .maybeSingle()
-
-    if (!adminProfile || adminProfile.role !== 'admin') {
-      return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 })
-    }
-
-    // 2. Query patient assessments
+    // 1. Query patient assessments
     const { data: assessments, error: fetchErr } = await supabaseAdmin
       .from('health_assessments')
-      .select('*')
+      .select('patient_id, full_name, first_name, last_name, phone_number, weight_kg, goal_weight_kg, membership_tier, booking_date, booking_time, created_at')
       .order('created_at', { ascending: false })
 
     if (fetchErr) throw fetchErr
@@ -33,12 +24,12 @@ export async function GET(request: Request) {
     // 3. Query progress weight logs
     const { data: logs } = await supabaseAdmin
       .from('progress_logs')
-      .select('*')
+      .select('user_id, weight_kg, created_at')
 
     // 4. Query consultations for doctor mappings
     const { data: consultations } = await supabaseAdmin
       .from('doctor_consultations')
-      .select('*, doctor_profiles(full_name)')
+      .select('patient_id, status, doctor_profiles(full_name)')
 
     // 5. Query user profile names
     const { data: profiles } = await supabaseAdmin
@@ -70,7 +61,10 @@ export async function GET(request: Request) {
       // Find consultation status
       const patientConsult = (consultations || []).find(c => c.patient_id === patientId)
       const medicationStatus = patientConsult?.status || 'Pending Assessment'
-      const doctorName = patientConsult?.doctor_profiles?.full_name || 'Not Assigned'
+      const doctorProfile = Array.isArray(patientConsult?.doctor_profiles)
+        ? patientConsult?.doctor_profiles[0]
+        : patientConsult?.doctor_profiles
+      const doctorName = doctorProfile?.full_name || 'Not Assigned'
 
       const pProfile = profileMap[patientId] || {}
       const fullName = assess.full_name || `${assess.first_name || pProfile.first_name || ''} ${assess.last_name || pProfile.last_name || ''}`.trim() || 'Patient Member'

@@ -1,22 +1,10 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-
-async function getAuthenticatedAdmin(request: Request) {
-  const authorization = request.headers.get('authorization') || ''
-  const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
-  if (!token) return null
-
-  const { data: authData, error: authError } = await supabaseAdmin.auth.getUser(token)
-  if (authError || !authData.user) return null
-  const { data } = await supabaseAdmin.from('profiles').select('role').eq('id', authData.user.id).maybeSingle()
-  return data?.role === 'admin' ? authData.user : null
-}
+import { assertAdmin } from '@/lib/apiSecurity'
 
 export async function GET(request: Request) {
   try {
-    if (!(await getAuthenticatedAdmin(request))) {
-      return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 })
-    }
+    await assertAdmin(request)
 
     const { data: ratings, error } = await supabaseAdmin
       .from('doctor_consultation_ratings')
@@ -59,6 +47,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ ratings: enriched, summary: { total: enriched.length, average } })
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unable to load ratings.'
-    return NextResponse.json({ error: message }, { status: 500 })
+    const status = message === 'Forbidden' ? 403 : (message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: message }, { status })
   }
 }

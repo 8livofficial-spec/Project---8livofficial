@@ -25,20 +25,33 @@ async function verifyAssignment(patientId: string, providerId: string, role: str
 
   const { data } = await supabaseAdmin
     .from('care_team_assignments')
-    .select('*')
+    .select('doctor_id, dietitian_id, nutritionist_id, fitness_coach_id, trainer_id')
     .eq('patient_id', patientId)
     .maybeSingle()
 
-  if (!data) return false
-  if (data[assignmentColumn] === providerId) return true
-  if (fallbackColumn && data[fallbackColumn] === providerId) return true
+  const assignment = data as unknown as Record<string, string | null>
+  if (!assignment) return false
+  if (assignment[assignmentColumn] === providerId) return true
+  if (fallbackColumn && assignment[fallbackColumn] === providerId) return true
   return false
 }
 
 function planConfigForRole(role: string) {
-  if (role === 'dietitian') return { table: 'diet_plans', ownerColumn: 'dietitian_id' }
-  if (role === 'nutritionist') return { table: 'nutrition_guidance', ownerColumn: 'nutritionist_id' }
-  if (role === 'fitness_coach' || role === 'trainer') return { table: 'fitness_plans', ownerColumn: 'fitness_coach_id' }
+  if (role === 'dietitian') return {
+    table: 'diet_plans',
+    ownerColumn: 'dietitian_id',
+    select: 'id, patient_id, dietitian_id, calories_per_day, meal_schedule, food_restrictions, hydration_goal, notes, status, appointment_id, title, description, attachment_url, attachment_type, created_at, updated_at',
+  }
+  if (role === 'nutritionist') return {
+    table: 'nutrition_guidance',
+    ownerColumn: 'nutritionist_id',
+    select: 'id, patient_id, nutritionist_id, guidance_focus, calorie_strategy, meal_timing, supplement_notes, notes, status, created_at, updated_at',
+  }
+  if (role === 'fitness_coach' || role === 'trainer') return {
+    table: 'fitness_plans',
+    ownerColumn: 'fitness_coach_id',
+    select: 'id, patient_id, fitness_coach_id, workout_type, weekly_frequency, daily_step_goal, exercise_restrictions, notes, status, appointment_id, title, description, attachment_url, attachment_type, created_at, updated_at',
+  }
   return null
 }
 
@@ -56,9 +69,10 @@ export async function GET(request: Request) {
 
   let query = supabaseAdmin
     .from(config.table)
-    .select('*')
+    .select(config.select)
     .eq(config.ownerColumn, provider.user.id)
     .order('created_at', { ascending: false })
+    .limit(100)
 
   if (patientId) query = query.eq('patient_id', patientId)
 

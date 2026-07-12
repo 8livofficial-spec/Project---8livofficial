@@ -48,19 +48,28 @@ export async function GET(request: Request) {
   const from = searchParams.get('from')
   const to = searchParams.get('to')
   const today = new Date().toISOString().split('T')[0]
+  const defaultTo = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   let query = supabaseAdmin
     .from('provider_availability')
-    .select('*')
+    .select('id, provider_id, provider_role, available_date, start_time, end_time, is_available, source, status, created_at, updated_at')
     .eq('provider_id', provider.user.id)
     .eq('provider_role', provider.role)
     .order('available_date', { ascending: true })
     .order('start_time', { ascending: true })
   query = query.gte('available_date', from && isDate(from) ? from : today)
-  if (to && isDate(to)) query = query.lte('available_date', to)
+  query = query.lte('available_date', to && isDate(to) ? to : defaultTo)
 
   const [{ data, error }, consultationsResult] = await Promise.all([
     query,
-    supabaseAdmin.from('staff_consultations').select('*').eq('staff_id', provider.user.id).order('booking_date').order('booking_time'),
+    supabaseAdmin
+      .from('staff_consultations')
+      .select('id, patient_id, staff_role, booking_date, booking_time, status, meeting_url, meeting_provider, appointment_type')
+      .eq('staff_id', provider.user.id)
+      .gte('booking_date', from && isDate(from) ? from : today)
+      .lte('booking_date', to && isDate(to) ? to : defaultTo)
+      .order('booking_date')
+      .order('booking_time')
+      .limit(200),
   ])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (consultationsResult.error) return NextResponse.json({ error: consultationsResult.error.message }, { status: 500 })
@@ -72,8 +81,9 @@ export async function GET(request: Request) {
     : { data: [], error: null }
   if (profilesResult.error) return NextResponse.json({ error: profilesResult.error.message }, { status: 500 })
   const profiles = (profilesResult.data || []) as PatientProfile[]
+  const profilesById = new Map(profiles.map(profile => [profile.id, profile]))
   const consultations = consultationRows.map(consultation => {
-    const profile = profiles.find(row => row.id === consultation.patient_id)
+    const profile = profilesById.get(String(consultation.patient_id || ''))
     return { ...consultation, patientName: `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || profile?.email || 'Patient', meetingUrl: consultation.meeting_url }
   })
   return NextResponse.json({ availability: data || [], consultations })

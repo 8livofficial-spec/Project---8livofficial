@@ -132,10 +132,11 @@ export async function GET(request: Request) {
           .from('doctor_consultations')
           .select('id, doctor_id, patient_id, booking_date, booking_time, status, room_url, is_completed, consultation_notes, prescription_type, created_at, call_started_at, call_ended_at, prescription_text, prescription_notes, updated_at, appointment_type, meeting_provider, meeting_room, meeting_url, completed_at')
           .eq('doctor_id', userId)
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .limit(20),
         supabaseAdmin
           .from('doctor_wallet')
-          .select('*')
+          .select('doctor_id, balance, total_earned, total_withdrawn, updated_at')
           .eq('doctor_id', userId)
           .maybeSingle(),
         // Get unclaimed requests (where status is scheduled and no doctor is assigned yet)
@@ -145,6 +146,7 @@ export async function GET(request: Request) {
           .is('doctor_id', null)
           .in('status', ['scheduled', 'calling'])
           .order('created_at', { ascending: false })
+          .limit(20)
       ])
 
       if (consultationsRes.error) throw consultationsRes.error
@@ -165,10 +167,12 @@ export async function GET(request: Request) {
 
       const profiles = profilesRes.data || []
       const assessments = assessmentsRes.data || []
+      const profilesById = new Map(profiles.map((profile: any) => [profile.id, profile]))
+      const assessmentsByPatientId = new Map(assessments.map((assessment: any) => [assessment.patient_id, assessment]))
 
       const enrich = (c: any) => {
-        const prof = (profiles.find((p: any) => p.id === c.patient_id) || { id: c.patient_id }) as any;
-        const assess = (assessments.find((a: any) => a.patient_id === c.patient_id) || { patient_id: c.patient_id }) as any;
+        const prof = (profilesById.get(c.patient_id) || { id: c.patient_id }) as any;
+        const assess = (assessmentsByPatientId.get(c.patient_id) || { patient_id: c.patient_id }) as any;
         const firstName = assess.first_name || prof.first_name || prof.display_id || 'Patient';
         const lastName = assess.last_name || prof.last_name || '';
         const fullName = `${firstName} ${lastName}`.trim();
@@ -206,10 +210,10 @@ export async function GET(request: Request) {
 
     // Default provider logic (dietitians, nutritionists, fitness coaches)
     const [{ patients, summary }, consultationsRes, walletRes] = await Promise.all([
-      loadAssignedProviderPatients(userId, role),
+      loadAssignedProviderPatients(userId, role, { page: 1, limit: 4 }),
       supabaseAdmin
         .from('staff_consultations')
-        .select('*')
+        .select('id, staff_id, staff_role, patient_id, booking_date, booking_time, status, meeting_url, meeting_provider, appointment_type, created_at')
         .eq('staff_id', userId)
         .order('booking_date', { ascending: true })
         .order('booking_time', { ascending: true })
@@ -230,8 +234,9 @@ export async function GET(request: Request) {
 
     if (profilesRes.error) throw new Error(profilesRes.error.message)
 
+    const profilesById = new Map((profilesRes.data || []).map((profile: any) => [profile.id, profile]))
     const consultations = (consultationsRes.data || []).map((consultation: any) => {
-      const profile = profilesRes.data?.find((row: any) => row.id === consultation.patient_id)
+      const profile = profilesById.get(consultation.patient_id) as any
       const patientName = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || profile?.email || 'Patient'
       return {
         ...consultation,

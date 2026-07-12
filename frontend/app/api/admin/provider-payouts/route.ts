@@ -1,34 +1,26 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-
-async function verifyAdmin(adminId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', adminId)
-    .maybeSingle()
-
-  if (error) throw error
-  return data?.role === 'admin'
-}
+import { assertAdmin, enforceRateLimit } from '@/lib/apiSecurity'
+import { APP_CONFIG } from '@/lib/appConfig'
 
 export async function PATCH(request: Request) {
   try {
-    const { adminId, transactionId, payoutStatus } = await request.json()
-    if (!adminId || !transactionId || !payoutStatus) {
-      return NextResponse.json({ error: 'adminId, transactionId, and payoutStatus are required.' }, { status: 400 })
+    const admin = await assertAdmin(request)
+    const limited = enforceRateLimit(request, `admin-provider-payouts:${admin.id}`, APP_CONFIG.rateLimits.adminSensitive)
+    if (limited) return limited
+
+    const { transactionId, payoutStatus, transactionStatus } = await request.json()
+    if (!transactionId || (!payoutStatus && !transactionStatus)) {
+      return NextResponse.json({ error: 'transactionId and payoutStatus or transactionStatus are required.' }, { status: 400 })
     }
 
-    if (!(await verifyAdmin(adminId))) {
-      return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 })
-    }
+    const updates: Record<string, string> = { updated_at: new Date().toISOString() }
+    if (payoutStatus) updates.payout_status = payoutStatus
+    if (transactionStatus) updates.status = transactionStatus
 
     const { error } = await supabaseAdmin
       .from('doctor_wallet_transactions')
-      .update({
-        payout_status: payoutStatus,
-        updated_at: new Date().toISOString(),
-      })
+      .update(updates)
       .eq('id', transactionId)
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -1,26 +1,17 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-
-async function verifyAdmin(adminId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', adminId)
-    .maybeSingle()
-
-  if (error) throw error
-  return data?.role === 'admin'
-}
+import { assertAdmin, enforceRateLimit } from '@/lib/apiSecurity'
+import { APP_CONFIG } from '@/lib/appConfig'
 
 export async function POST(request: Request) {
   try {
-    const { adminId, paymentId, reason } = await request.json()
-    if (!adminId || !paymentId) {
-      return NextResponse.json({ error: 'adminId and paymentId are required.' }, { status: 400 })
-    }
+    const admin = await assertAdmin(request)
+    const limited = enforceRateLimit(request, `admin-refund:${admin.id}`, APP_CONFIG.rateLimits.adminSensitive)
+    if (limited) return limited
 
-    if (!(await verifyAdmin(adminId))) {
-      return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 })
+    const { paymentId, reason } = await request.json()
+    if (!paymentId) {
+      return NextResponse.json({ error: 'paymentId is required.' }, { status: 400 })
     }
 
     const { error } = await supabaseAdmin

@@ -45,6 +45,11 @@ export function ProviderDataProvider({ children }: { children: React.ReactNode }
     try {
       const me = await readCachedProviderJson('provider:me', () => authedFetch('/api/provider/me'))
 
+      if (me.redirectTo && me.redirectTo !== window.location.pathname) {
+        router.replace(me.redirectTo)
+        return
+      }
+
       if (me.provider.role === 'doctor') {
         router.replace('/doctor/dashboard')
         return
@@ -254,7 +259,7 @@ const providerApiRequests = new Map<string, Promise<any>>()
 
 async function readCachedProviderJson(key: string, fetcher: () => Promise<Response>, force = false) {
   const cached = providerApiCache.get(key)
-  const cacheIsFresh = key === 'provider:me' || (cached && Date.now() - cached.fetchedAt < PROVIDER_CACHE_TTL_MS)
+  const cacheIsFresh = key !== 'provider:me' && cached && Date.now() - cached.fetchedAt < PROVIDER_CACHE_TTL_MS
   if (!force && cached && cacheIsFresh) {
     return cached.data
   }

@@ -34,6 +34,15 @@ export const APP_CONFIG = {
     ratings: {
       limit: Number(process.env.RATE_LIMIT_RATING_LIMIT || 5),
       windowMs: Number(process.env.RATE_LIMIT_RATING_WINDOW_MS || 15 * 60 * 1000)
+    },
+    adminSensitive: {
+      limit: Number(process.env.RATE_LIMIT_ADMIN_SENSITIVE_LIMIT || 20),
+      windowMs: Number(process.env.RATE_LIMIT_ADMIN_SENSITIVE_WINDOW_MS || 15 * 60 * 1000),
+      lockMs: Number(process.env.RATE_LIMIT_ADMIN_SENSITIVE_LOCK_MS || 30 * 60 * 1000)
+    },
+    adminExports: {
+      limit: Number(process.env.RATE_LIMIT_ADMIN_EXPORT_LIMIT || 10),
+      windowMs: Number(process.env.RATE_LIMIT_ADMIN_EXPORT_WINDOW_MS || 15 * 60 * 1000)
     }
   },
   uploads: {

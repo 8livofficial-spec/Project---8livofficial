@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   try {
     const { data, error } = await supabaseAdmin
       .from('membership_plans')
-      .select('*')
+      .select('id, name, price_monthly, consultation_fee, features, is_active, discount_code, discount_percent, created_at, updated_at')
       .eq('is_active', true)
       .order('price_monthly', { ascending: true })
 

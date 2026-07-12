@@ -189,11 +189,11 @@ function AdminDashboardContent() {
   const [dashboardRecentActivities, setDashboardRecentActivities] = useState<any[]>([]);
   const [dashboardLoading, setDashboardLoading] = useState(false);
 
-  const fetchDashboardData = async (adminId = adminUser?.id) => {
-    if (!adminId) return;
+  const fetchDashboardData = async () => {
+    if (!adminUser?.id) return;
     setDashboardLoading(true);
     try {
-      const res = await adminFetch(`/api/admin/dashboard?adminId=${adminId}`);
+      const res = await adminFetch('/api/admin/dashboard');
       if (res.ok) {
         const data = await res.json();
         setDashboardSummary(data.summary || {});
@@ -299,7 +299,7 @@ function AdminDashboardContent() {
   const fetchProviders = async () => {
     if (!adminUser?.id) return;
     try {
-      const res = await adminFetch(`/api/admin/providers?adminId=${adminUser.id}`);
+      const res = await adminFetch('/api/admin/providers');
       if (res.status === 401) {
         setAuthError('Session expired. Please login again.');
         router.push('/login');
@@ -331,7 +331,6 @@ function AdminDashboardContent() {
     try {
       const payload = selectedProvider
         ? {
-          adminId: adminUser.id,
           providerId: selectedProvider.provider_id,
           updates: {
             full_name: providerFullName,
@@ -351,7 +350,6 @@ function AdminDashboardContent() {
           },
         }
         : {
-          adminId: adminUser.id,
           fullName: providerFullName,
           email: providerEmail,
           password: providerPassword,
@@ -394,7 +392,7 @@ function AdminDashboardContent() {
     try {
       const res = await adminFetch('/api/admin/providers', {
         method: 'PATCH',
-        body: JSON.stringify({ adminId: adminUser.id, providerId: provider.provider_id, updates: { status } }),
+        body: JSON.stringify({ providerId: provider.provider_id, updates: { status } }),
       });
       const data = await res.json();
       if (res.status === 401) {
@@ -473,7 +471,7 @@ function AdminDashboardContent() {
     try {
       const res = await adminFetch('/api/admin/payments/refund', {
         method: 'POST',
-        body: JSON.stringify({ adminId: adminUser.id, paymentId: payment.id, reason: 'Admin requested refund' }),
+        body: JSON.stringify({ paymentId: payment.id, reason: 'Admin requested refund' }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to request refund.');
@@ -499,7 +497,7 @@ function AdminDashboardContent() {
     try {
       const res = await adminFetch('/api/admin/provider-payouts', {
         method: 'PATCH',
-        body: JSON.stringify({ adminId: adminUser.id, transactionId, payoutStatus }),
+        body: JSON.stringify({ transactionId, payoutStatus }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update payout.');
@@ -517,7 +515,6 @@ function AdminDashboardContent() {
     const res = await adminFetch('/api/admin/plans', {
       method: 'POST',
       body: JSON.stringify({
-        adminId: adminUser.id,
         name,
         priceMonthly,
         consultationFee: updates.consultationFee ?? plan.consultation_fee ?? 499,
@@ -554,7 +551,7 @@ function AdminDashboardContent() {
 
     setStaffDeleting(true);
     try {
-      const res = await adminFetch(`/api/admin/users?adminId=${adminUser.id}&userId=${staffMember.id}`, {
+      const res = await adminFetch(`/api/admin/users?userId=${staffMember.id}`, {
         method: 'DELETE'
       });
       const data = await res.json();
@@ -602,7 +599,7 @@ function AdminDashboardContent() {
           return;
         }
 
-        const profileRes = await adminFetch(`/api/admin/profile?userId=${session.user.id}`);
+        const profileRes = await adminFetch('/api/admin/profile');
         if (!profileRes.ok) {
           setAuthError('Access Denied. You do not have permission to view the admin control center.');
           setAuthChecking(false);
@@ -634,7 +631,7 @@ function AdminDashboardContent() {
   // ── Tab specific effects with pagination dependencies ──────────────────
   useEffect(() => {
     if (!adminUser || adminTab !== 'dashboard') return;
-    fetchDashboardData(adminUser.id);
+    fetchDashboardData();
   }, [adminTab, adminUser]);
 
   useEffect(() => {
@@ -670,14 +667,10 @@ function AdminDashboardContent() {
   // ── Fetch staff profiles ───────────────────────────────────────────────
   const fetchStaffProfiles = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, first_name, last_name, role, phone_number, email')
-        .in('role', ['admin', 'doctor', 'dietitian', 'nutritionist', 'fitness_coach', 'trainer'])
-        .order('role', { ascending: true });
-      if (!error && data) {
-        setAllStaff(data);
-      }
+      const res = await adminFetch('/api/admin/users');
+      if (!res.ok) throw new Error('Failed to load staff profiles.');
+      const data = await res.json();
+      setAllStaff(data.users || []);
     } catch (err) {
       console.error('[Staff Fetch Error]', err);
     }
@@ -701,7 +694,7 @@ function AdminDashboardContent() {
     if (!adminUser) return;
     setAssignmentLoading(true);
     try {
-      const res = await adminFetch(`/api/admin/assignments?patientId=${patientId}&adminId=${adminUser.id}`);
+      const res = await adminFetch(`/api/admin/assignments?patientId=${patientId}`);
       if (res.ok) {
         const data = await res.json();
         if (data.assignment) {
@@ -727,7 +720,6 @@ function AdminDashboardContent() {
     setUpdatingAssignment(true);
     try {
       const payload = {
-        adminId: adminUser.id,
         patientId: selectedPatient.patient_id,
         doctorId: roleType === 'doctor' ? value : currentAssignment?.doctor_id,
         dietitianId: roleType === 'dietitian' ? value : currentAssignment?.dietitian_id,
@@ -760,82 +752,17 @@ function AdminDashboardContent() {
   // ── Fetch doctor-patient connections ───────────────────────────────────
   const fetchConnections = async () => {
     try {
-      let query = supabase
-        .from('doctor_consultations')
-        .select('id, patient_id, doctor_id, status, booking_date, booking_time, prescription_type, prescription_text, prescription_notes, call_started_at, call_ended_at, created_at', { count: 'exact' });
-
-      if (appointmentFilter !== 'all') {
-        query = query.eq('status', appointmentFilter);
-      } else {
-        query = query.in('status', ['scheduled', 'calling', 'attended', 'approved', 'rejected']);
-      }
-
-      const normalizedSearch = managementSearch.trim().toLowerCase();
-      if (normalizedSearch) {
-        const [matchedPatients, matchedDoctors] = await Promise.all([
-          supabase.from('health_assessments').select('patient_id').or(`full_name.ilike.%${normalizedSearch}%,first_name.ilike.%${normalizedSearch}%,last_name.ilike.%${normalizedSearch}%`),
-          supabase.from('doctor_profiles').select('id').ilike('full_name', `%${normalizedSearch}%`)
-        ]);
-        const matchingPatientIds = (matchedPatients.data || []).map((p: any) => p.patient_id);
-        const matchingDoctorIds = (matchedDoctors.data || []).map((d: any) => d.id);
-
-        const orConditions = [];
-        if (matchingPatientIds.length > 0) orConditions.push(`patient_id.in.(${matchingPatientIds.join(',')})`);
-        if (matchingDoctorIds.length > 0) orConditions.push(`doctor_id.in.(${matchingDoctorIds.join(',')})`);
-        
-        if (orConditions.length > 0) {
-          query = query.or(orConditions.join(','));
-        } else {
-          setConnections([]);
-          setConnectionsTotalPages(0);
-          return;
-        }
-      }
-
-      const from = (connectionsPage - 1) * connectionsLimit;
-      const to = connectionsPage * connectionsLimit - 1;
-
-      const { data: cons, count, error } = await query
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
-      if (error) throw error;
-
-      if (!cons || cons.length === 0) { 
-        setConnections([]); 
-        setConnectionsTotalPages(0);
-        return; 
-      }
-
-      setConnectionsTotalPages(Math.ceil((count || 0) / connectionsLimit));
-
-      // Fetch doctor profiles
-      const docIds = [...new Set(cons.map((c: any) => c.doctor_id).filter(Boolean))];
-      const { data: docProfiles } = docIds.length > 0 
-        ? await supabase.from('doctor_profiles').select('id, full_name').in('id', docIds)
-        : { data: [] };
-
-      // Fetch patient names from health_assessments
-      const patientIds = [...new Set(cons.map((c: any) => c.patient_id).filter(Boolean))];
-      const { data: patientData } = patientIds.length > 0
-        ? await supabase.from('health_assessments').select('patient_id, full_name, first_name, last_name, phone_number, age').in('patient_id', patientIds)
-        : { data: [] };
-
-      const docMap: Record<string, string> = {};
-      if (docProfiles) docProfiles.forEach((d: any) => { docMap[d.id] = d.full_name || 'Dr. Expert'; });
-
-      const patMap: Record<string, any> = {};
-      if (patientData) patientData.forEach((p: any) => { patMap[p.patient_id] = p; });
-
-      const enriched = cons.map((c: any) => ({
-        ...c,
-        doctor_name: docMap[c.doctor_id || ''] || 'Unknown Doctor',
-        patient_name: patMap[c.patient_id]?.full_name || `${patMap[c.patient_id]?.first_name || ''} ${patMap[c.patient_id]?.last_name || ''}`.trim() || 'Unknown Patient',
-        patient_phone: patMap[c.patient_id]?.phone_number || '',
-        patient_age: patMap[c.patient_id]?.age || '',
-      }));
-
-      setConnections(enriched);
+      const params = new URLSearchParams({
+        page: String(connectionsPage),
+        limit: String(connectionsLimit),
+        search: managementSearch,
+        appointment: appointmentFilter,
+      });
+      const res = await adminFetch(`/api/admin/connections?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to load connections.');
+      const data = await res.json();
+      setConnections(data.connections || []);
+      setConnectionsTotalPages(data.totalPages || 0);
     } catch (err) {
       console.error('[Connections Fetch Error]', err);
     }
@@ -844,65 +771,25 @@ function AdminDashboardContent() {
   const fetchPatients = async () => {
     setLoading(true);
     try {
-      let query = supabase
-        .from('health_assessments')
-        .select(`
-          id, patient_id, full_name, first_name, last_name, age, phone_number, address, dob_month, dob_day, dob_year, agree_terms,
-          height_cm, weight_kg, goal_weight_kg, tried_weight_program, extra_medical_info, prescription_type,
-          health_conditions_two, glp1_image_url,
-          is_eligible, medical_history, booking_date, booking_time, room_url, local_food, workout_preference, created_at, consultation_fee_paid
-        `, { count: 'exact' });
-
-      // Apply search on server
-      const normalizedSearch = managementSearch.trim().toLowerCase();
-      if (normalizedSearch) {
-        query = query.or(`full_name.ilike.%${normalizedSearch}%,first_name.ilike.%${normalizedSearch}%,last_name.ilike.%${normalizedSearch}%,phone_number.ilike.%${normalizedSearch}%`);
-      }
-
-      // Apply filters on server
-      if (eligibilityFilter !== 'all') {
-        query = query.eq('is_eligible', eligibilityFilter === 'true');
-      }
-      if (membershipFilter !== 'all') {
-        query = query.ilike('membership_tier', `%${membershipFilter}%`);
-      }
-      if (paymentFilter !== 'all') {
-        query = query.eq('consultation_fee_paid', paymentFilter === 'paid');
-      }
-      if (appointmentFilter !== 'all') {
-        if (appointmentFilter === 'scheduled') {
-          query = query.not('booking_date', 'is', null);
-        } else {
-          query = query.is('booking_date', null);
-        }
-      }
-
-      const from = (patientsPage - 1) * patientsLimit;
-      const to = patientsPage * patientsLimit - 1;
-
-      const { data, count, error } = await query
-        .order('created_at', { ascending: false })
-        .range(from, to);
-
-      if (!error && data) {
-        setAssessments(data);
-        setPatientsTotalPages(Math.ceil((count || 0) / patientsLimit));
-      }
-
-      // Fetch head-only counts for the cards (so they show system-wide stats, not page-wide stats)
-      const [totalRes, eligibleRes, paidRes, apptRes, progRes] = await Promise.all([
-        supabase.from('health_assessments').select('*', { head: true, count: 'exact' }),
-        supabase.from('health_assessments').select('*', { head: true, count: 'exact' }).eq('is_eligible', true),
-        supabase.from('health_assessments').select('*', { head: true, count: 'exact' }).eq('consultation_fee_paid', true),
-        supabase.from('health_assessments').select('*', { head: true, count: 'exact' }).not('booking_date', 'is', null),
-        supabase.from('health_assessments').select('*', { head: true, count: 'exact' }).not('weight_kg', 'is', null).not('goal_weight_kg', 'is', null),
-      ]);
-
-      setPatientsCount(totalRes.count || 0);
-      setEligibleCount(eligibleRes.count || 0);
-      setPaidCount(paidRes.count || 0);
-      setAppointmentCount(apptRes.count || 0);
-      setProgressCount(progRes.count || 0);
+      const params = new URLSearchParams({
+        page: String(patientsPage),
+        limit: String(patientsLimit),
+        search: managementSearch,
+        eligibility: eligibilityFilter,
+        membership: membershipFilter,
+        payment: paymentFilter,
+        appointment: appointmentFilter,
+      });
+      const res = await adminFetch(`/api/admin/patients?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to load patients.');
+      const data = await res.json();
+      setAssessments(data.patients || []);
+      setPatientsTotalPages(data.totalPages || 0);
+      setPatientsCount(data.summary?.total || 0);
+      setEligibleCount(data.summary?.eligible || 0);
+      setPaidCount(data.summary?.paid || 0);
+      setAppointmentCount(data.summary?.appointments || 0);
+      setProgressCount(data.summary?.progress || 0);
 
     } catch (err) {
       console.error('[Patients Fetch Error]', err);
@@ -913,162 +800,38 @@ function AdminDashboardContent() {
   const fetchPayoutsData = async () => {
     setPayoutLoading(true);
     try {
-      const { data: profiles } = await supabase.from('doctor_profiles').select('*');
-      const { data: wallets } = await supabase.from('wallet_accounts').select('*');
-
-      // Fetch total provider earnings sum (lightweight select)
-      const { data: sumData } = await supabase
-        .from('wallet_ledger_transactions')
-        .select('amount')
-        .eq('transaction_type', 'CONSULTATION_CREDIT')
-        .eq('status', 'SUCCESS');
-      const totalEarned = (sumData || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
-      setTotalProviderEarnings(totalEarned);
-
-      // Light payouts for KPIs and filters
-      const { data: lightPayoutsData } = await supabase.from('provider_payouts').select('provider_id, payout_status, payout_amount');
-      setProviderPayouts(lightPayoutsData || []);
-
-      // Paginated payouts for table view
-      const payoutsFrom = (payoutsPage - 1) * payoutsLimit;
-      const payoutsTo = payoutsPage * payoutsLimit - 1;
-      const { data: paginatedPayoutsData, count: payoutsCount } = await supabase
-        .from('provider_payouts')
-        .select('*', { count: 'exact' })
-        .order('initiated_at', { ascending: false })
-        .range(payoutsFrom, payoutsTo);
-      setPaginatedPayouts(paginatedPayoutsData || []);
-      setPayoutsTotalPages(Math.ceil((payoutsCount || 0) / payoutsLimit));
-
-      // Paginated audit logs
-      const auditFrom = (auditPage - 1) * auditLimit;
-      const auditTo = auditPage * auditLimit - 1;
-      const { data: logs, count: auditCount } = await supabase
-        .from('wallet_audit_log')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(auditFrom, auditTo);
-      setAuditLogs(logs || []);
-      setAuditTotalPages(Math.ceil((auditCount || 0) / auditLimit));
-
-      if (profiles && wallets) {
-        const doctorsWithWallets = profiles.map((doc: any) => {
-          const wallet = wallets.find((w: any) => w.provider_id === doc.id) || { current_balance: 0, total_earned: 0, total_paid: 0, pending_balance: 0 };
-          return {
-            ...doc,
-            doctor_id: doc.id,
-            balance: Number(wallet.current_balance || 0),
-            total_earned: Number(wallet.total_earned || 0),
-            total_paid: Number(wallet.total_paid || 0),
-            pending_balance: Number(wallet.pending_balance || 0),
-          };
-        });
-        setDoctors(doctorsWithWallets);
-      }
-
-      // Fetch wallet ledger transactions for approval modals
-      const { data: txs } = await supabase
-        .from('wallet_ledger_transactions')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(1000);
-      if (txs) {
-        setTransactions(txs);
-      }
-
-      // Fetch paginated payment transactions
-      let payQuery = supabase
-        .from('payment_transactions')
-        .select('id, patient_id, amount, status, payment_type, membership_tier, payment_method, transaction_id, created_at, metadata', { count: 'exact' });
-
-      // Apply paymentTab filter
-      if (paymentTab === 'consultation') {
-        payQuery = payQuery.eq('payment_type', 'consultation');
-      } else if (paymentTab === 'membership') {
-        payQuery = payQuery.in('payment_type', ['membership', 'combined']);
-      } else if (paymentTab === 'refunds') {
-        payQuery = payQuery.or('amount.lt.0,status.ilike.%refund%');
-      } else if (paymentTab === 'failed') {
-        payQuery = payQuery.in('status', ['failed', 'cancelled', 'declined']);
-      }
-
-      const normalizedSearch = managementSearch.trim().toLowerCase();
-      if (normalizedSearch) {
-        const { data: matchedPatients } = await supabase
-          .from('health_assessments')
-          .select('patient_id')
-          .or(`full_name.ilike.%${normalizedSearch}%,first_name.ilike.%${normalizedSearch}%,last_name.ilike.%${normalizedSearch}%`);
-        const patientIds = (matchedPatients || []).map((p: any) => p.patient_id);
-
-        const orConditions = [
-          `id.ilike.%${normalizedSearch}%`,
-          `transaction_id.ilike.%${normalizedSearch}%`,
-          `payment_type.ilike.%${normalizedSearch}%`,
-          `status.ilike.%${normalizedSearch}%`
-        ];
-        if (patientIds.length > 0) {
-          orConditions.push(`patient_id.in.(${patientIds.join(',')})`);
-        }
-        payQuery = payQuery.or(orConditions.join(','));
-      }
-
-      const payFrom = (paymentsPage - 1) * paymentsLimit;
-      const payTo = paymentsPage * paymentsLimit - 1;
-
-      const { data: payments, count: payCount } = await payQuery
-        .order('created_at', { ascending: false })
-        .range(payFrom, payTo);
-      setPaymentTransactions(payments || []);
-      setPaymentsTotalPages(Math.ceil((payCount || 0) / paymentsLimit));
-
-      // Fetch monthly revenue from patient payments (unpaginated month sum query)
-      const startOfMonth = new Date();
-      startOfMonth.setDate(1);
-      startOfMonth.setHours(0, 0, 0, 0);
-      const startOfMonthStr = startOfMonth.toISOString();
-
-      const { data: revData } = await supabase
-        .from('payment_transactions')
-        .select('amount')
-        .in('status', ['success', 'paid', 'captured'])
-        .gte('created_at', startOfMonthStr);
-
-      const total = (revData || []).reduce((sum: number, p: any) => sum + Number(p.amount), 0);
-      setMonthlyRevenue(total);
-
-      // Lightweight fetch of all payment transactions to compute card KPIs correctly
-      const { data: allPayData } = await supabase
-        .from('payment_transactions')
-        .select('status, amount, payment_type, created_at');
-
-      const succCount = (allPayData || []).filter(p => ['success', 'paid', 'captured'].includes(String(p.status || '').toLowerCase())).length;
-      const pendCount = (allPayData || []).filter(p => ['pending', 'created', 'authorized'].includes(String(p.status || '').toLowerCase())).length;
-      const failCount = (allPayData || []).filter(p => ['failed', 'cancelled', 'declined'].includes(String(p.status || '').toLowerCase())).length;
-      const refCount = (allPayData || []).filter(p => Number(p.amount || 0) < 0 || String(p.status || '').toLowerCase().includes('refund')).length;
-
-      setSuccessfulPaymentsCount(succCount);
-      setPendingPaymentsCount(pendCount);
-      setFailedPaymentsCount(failCount);
-      setRefundsCount(refCount);
-
-      const totalRev = (allPayData || []).filter(p => ['success', 'paid', 'captured'].includes(String(p.status || '').toLowerCase())).reduce((sum, p) => sum + Number(p.amount || 0), 0);
-      setTotalRevenue(totalRev);
-
-      const todayKey = new Date().toISOString().split('T')[0];
-      const todayRev = (allPayData || [])
-        .filter(p => ['success', 'paid', 'captured'].includes(String(p.status || '').toLowerCase()) && p.created_at && p.created_at.split('T')[0] === todayKey)
-        .reduce((sum, p) => sum + Number(p.amount || 0), 0);
-      setTodayRevenue(todayRev);
-
-      const consultRev = (allPayData || [])
-        .filter(p => ['success', 'paid', 'captured'].includes(String(p.status || '').toLowerCase()) && p.payment_type === 'consultation')
-        .reduce((sum, p) => sum + Number(p.amount || 0), 0);
-      setConsultationRevenue(consultRev);
-
-      const memberRev = (allPayData || [])
-        .filter(p => ['success', 'paid', 'captured'].includes(String(p.status || '').toLowerCase()) && ['membership', 'combined'].includes(p.payment_type))
-        .reduce((sum, p) => sum + Number(p.amount || 0), 0);
-      setMembershipRevenue(memberRev);
+      const params = new URLSearchParams({
+        paymentsPage: String(paymentsPage),
+        paymentsLimit: String(paymentsLimit),
+        payoutsPage: String(payoutsPage),
+        payoutsLimit: String(payoutsLimit),
+        auditPage: String(auditPage),
+        auditLimit: String(auditLimit),
+        paymentTab,
+        search: managementSearch,
+      });
+      const res = await adminFetch(`/api/admin/finance?${params.toString()}`);
+      if (!res.ok) throw new Error('Failed to load finance data.');
+      const data = await res.json();
+      setDoctors(data.doctors || []);
+      setProviderPayouts(data.providerPayouts || []);
+      setPaginatedPayouts(data.paginatedPayouts || []);
+      setPayoutsTotalPages(data.payoutsTotalPages || 0);
+      setAuditLogs(data.auditLogs || []);
+      setAuditTotalPages(data.auditTotalPages || 0);
+      setTransactions(data.transactions || []);
+      setPaymentTransactions(data.paymentTransactions || []);
+      setPaymentsTotalPages(data.paymentsTotalPages || 0);
+      setTotalProviderEarnings(data.summary?.totalProviderEarnings || 0);
+      setMonthlyRevenue(data.summary?.monthlyRevenue || 0);
+      setSuccessfulPaymentsCount(data.summary?.successfulPaymentsCount || 0);
+      setPendingPaymentsCount(data.summary?.pendingPaymentsCount || 0);
+      setFailedPaymentsCount(data.summary?.failedPaymentsCount || 0);
+      setRefundsCount(data.summary?.refundsCount || 0);
+      setTotalRevenue(data.summary?.totalRevenue || 0);
+      setTodayRevenue(data.summary?.todayRevenue || 0);
+      setConsultationRevenue(data.summary?.consultationRevenue || 0);
+      setMembershipRevenue(data.summary?.membershipRevenue || 0);
 
     } catch (err) {
       console.error('[Payouts Fetch Error]', err);
@@ -1093,17 +856,14 @@ function AdminDashboardContent() {
     if (!confirmed) return;
 
     try {
-      const { error } = await supabase
-        .from('doctor_wallet_transactions')
-        .update({ status: 'paid', updated_at: new Date().toISOString() })
-        .eq('id', txId);
-
-      if (error) {
-        alert('Error updating transaction status: ' + error.message);
-      } else {
-        alert('Withdrawal request successfully marked as paid! ✅');
-        fetchPayoutsData();
-      }
+      const res = await adminFetch('/api/admin/provider-payouts', {
+        method: 'PATCH',
+        body: JSON.stringify({ transactionId: txId, transactionStatus: 'paid' }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to update transaction status.');
+      alert('Withdrawal request successfully marked as paid!');
+      fetchPayoutsData();
     } catch (err: any) {
       alert('Error: ' + err.message);
     }
@@ -1179,15 +939,13 @@ function AdminDashboardContent() {
   }, [selectedPatient, adminUser]);
 
   const fetchPatientLogs = async (userId: string, startWeight: number) => {
-    const { data, error } = await supabase
-      .from('progress_logs')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: true });
+    const res = await adminFetch(`/api/admin/patient-logs?userId=${encodeURIComponent(userId)}`);
+    const payload = res.ok ? await res.json() : { logs: [] };
+    const data = payload.logs || [];
       
     const startData = { day: 'Start', weight: parseFloat(startWeight as any) || 0 };
     
-    if (!error && data && data.length > 0) {
+    if (data && data.length > 0) {
       const dbData = data.map((log: any) => {
         const dateObj = new Date(log.created_at);
         const formattedDate = `${dateObj.getDate()} ${dateObj.toLocaleString('default', { month: 'short' })}`;
@@ -1934,7 +1692,7 @@ function AdminDashboardContent() {
                 <p className="mt-1 text-sm font-semibold text-[#8896A4]">Export the filtered roster and review eligibility, payment, appointments, and progress inside this page.</p>
               </div>
               <a
-                href={`/api/admin/reports?adminId=${adminUser?.id}&format=csv`}
+                href="/api/admin/reports?format=csv"
                 download="8liv_patients_report.csv"
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1A1F36] px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#11162A]"
               >
@@ -2211,7 +1969,7 @@ function AdminDashboardContent() {
               </div>
               <div className="flex flex-wrap gap-2">
                 <input value={managementSearch} onChange={e => handleSearchChange(e.target.value)} placeholder="Search payment, patient, Razorpay ID..." className="min-w-[280px] rounded-xl border border-[#1A1F36]/10 bg-white px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#C4622D]/20" />
-                <a href={`/api/admin/reports?adminId=${adminUser?.id}&format=csv&type=payments`} className="inline-flex items-center gap-2 rounded-xl bg-[#1A1F36] px-5 py-3 text-xs font-black uppercase tracking-wider text-white transition-all hover:bg-[#11162A]">
+                <a href="/api/admin/reports?format=csv&type=payments" className="inline-flex items-center gap-2 rounded-xl bg-[#1A1F36] px-5 py-3 text-xs font-black uppercase tracking-wider text-white transition-all hover:bg-[#11162A]">
                   <ArrowDownToLine className="h-4 w-4" /> Export CSV
                 </a>
               </div>
@@ -2323,7 +2081,7 @@ function AdminDashboardContent() {
                 <select value={providerFilter} onChange={e => { setProviderFilter(e.target.value); setProvidersPage(1); setPayoutsPage(1); setAuditPage(1); }} className="rounded-xl border border-[#1A1F36]/10 bg-white px-4 py-3 text-sm font-bold">
                   <option value="all">All Providers</option><option value="doctor">Doctor</option><option value="dietitian">Dietitian</option><option value="nutritionist">Nutritionist</option><option value="fitness_coach">Fitness Coach</option><option value="pending">Pending</option><option value="paid">Paid</option><option value="failed">Failed</option>
                 </select>
-                <a href={`/api/admin/reports?adminId=${adminUser?.id}&format=csv&type=payouts`} className="inline-flex items-center gap-2 rounded-xl bg-[#1A1F36] px-5 py-3 text-xs font-black uppercase tracking-wider text-white"><ArrowDownToLine className="h-4 w-4" /> Export Payout Report</a>
+                <a href="/api/admin/reports?format=csv&type=payouts" className="inline-flex items-center gap-2 rounded-xl bg-[#1A1F36] px-5 py-3 text-xs font-black uppercase tracking-wider text-white"><ArrowDownToLine className="h-4 w-4" /> Export Payout Report</a>
               </div>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
@@ -2648,7 +2406,7 @@ function AdminDashboardContent() {
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-6 md:p-8 max-w-[1500px] mx-auto space-y-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
               <div><p className="text-xs font-black uppercase tracking-[0.18em] text-[#C4622D]">Membership Business</p><h2 className="text-3xl font-black text-[#1A1F36]">Membership Plans</h2><p className="mt-2 text-sm font-semibold text-[#8896A4]">Create, edit, activate, deactivate, and manage Gold and Silver plans.</p></div>
-              <div className="flex flex-wrap gap-2"><button onClick={async () => { const plan = plans[0]; if (!plan) return alert('No plan available.'); const code = window.prompt('Discount code'); if (!code) return; const percent = window.prompt('Discount percent', '10') || '0'; try { await savePlan(plan, { discountCode: code, discountPercent: percent }); alert('Discount added.'); } catch (err: any) { alert(err.message); } }} className="rounded-xl bg-[#1A1F36] px-5 py-3 text-xs font-black uppercase tracking-wider text-white">Add Discount</button><a href={`/api/admin/reports?adminId=${adminUser?.id}&format=csv&type=memberships`} className="inline-flex items-center gap-2 rounded-xl border border-[#1A1F36]/10 bg-white px-5 py-3 text-xs font-black uppercase tracking-wider text-[#1A1F36]"><ArrowDownToLine className="h-4 w-4" /> Export Members</a></div>
+              <div className="flex flex-wrap gap-2"><button onClick={async () => { const plan = plans[0]; if (!plan) return alert('No plan available.'); const code = window.prompt('Discount code'); if (!code) return; const percent = window.prompt('Discount percent', '10') || '0'; try { await savePlan(plan, { discountCode: code, discountPercent: percent }); alert('Discount added.'); } catch (err: any) { alert(err.message); } }} className="rounded-xl bg-[#1A1F36] px-5 py-3 text-xs font-black uppercase tracking-wider text-white">Add Discount</button><a href="/api/admin/reports?format=csv&type=memberships" className="inline-flex items-center gap-2 rounded-xl border border-[#1A1F36]/10 bg-white px-5 py-3 text-xs font-black uppercase tracking-wider text-[#1A1F36]"><ArrowDownToLine className="h-4 w-4" /> Export Members</a></div>
             </div>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
               {[
@@ -3089,7 +2847,6 @@ function AdminDashboardContent() {
                       const res = await adminFetch('/api/admin/users', {
                         method: 'POST',
                         body: JSON.stringify({
-                          adminId: adminUser.id,
                           email: staffEmail,
                           password: staffPassword,
                           role: staffRole,
@@ -3241,7 +2998,6 @@ function AdminDashboardContent() {
                     const res = await adminFetch('/api/admin/plans', {
                       method: 'POST',
                       body: JSON.stringify({
-                        adminId: adminUser.id,
                         name: planName,
                         priceMonthly: parseFloat(planPrice),
                         consultationFee: parseFloat(planConsultFee || '499'),
@@ -3384,7 +3140,7 @@ function AdminDashboardContent() {
               <button
                 onClick={() => {
                   if (adminTab === 'dashboard') {
-                    fetchDashboardData(adminUser?.id);
+                    fetchDashboardData();
                   } else if (adminTab === 'patients') {
                     fetchPatients();
                   } else if (adminTab === 'appointments' || adminTab === 'video-consultations') {
@@ -3632,7 +3388,7 @@ function AdminDashboardContent() {
                   {['csv', 'excel', 'pdf'].map(format => (
                     <a
                       key={format}
-                      href={`/api/admin/reports?adminId=${adminUser?.id}&format=${format}`}
+                      href={`/api/admin/reports?format=${format}`}
                       className="inline-flex items-center gap-2 rounded-xl border border-[#1A1F36]/10 bg-white px-4 py-3 text-xs font-black uppercase tracking-wider text-[#1A1F36] shadow-sm transition-all hover:-translate-y-0.5 hover:border-[#C4622D]/35 hover:text-[#C4622D]"
                     >
                       <ArrowDownToLine className="h-4 w-4" />

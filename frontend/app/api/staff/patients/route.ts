@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseServer';
 import { normalizeProviderRole } from '@/lib/providerConsultations';
 import { getAuthenticatedUser } from '@/lib/apiSecurity';
+import { patientSearchOrFilter } from '@/lib/queryFilters';
 
 function getAssessmentField(assessment: any, key: string) {
   if (assessment?.[key] !== undefined && assessment?.[key] !== null) return assessment[key];
@@ -106,8 +107,8 @@ export async function POST(req: Request) {
     let matchingPatientIds: string[] = [];
     if (search.trim()) {
       const [matchedProfiles, matchedAssess] = await Promise.all([
-        supabaseAdmin.from('profiles').select('id').or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%,phone_number.ilike.%${search}%`),
-        supabaseAdmin.from('health_assessments').select('patient_id').or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,phone_number.ilike.%${search}%`)
+        supabaseAdmin.from('profiles').select('id').or(patientSearchOrFilter(search)),
+        supabaseAdmin.from('health_assessments').select('patient_id').or(patientSearchOrFilter(search, false))
       ]);
       const ids = new Set([
         ...(matchedProfiles.data || []).map((p: any) => p.id),
@@ -153,39 +154,54 @@ export async function POST(req: Request) {
     // 2. Fetch profiles for these patients using admin client (bypassing RLS)
     const { data: profiles, error: profErr } = await supabaseAdmin
       .from('profiles')
-      .select('*')
+      .select('id, first_name, last_name, email, phone_number')
       .in('id', patientIds);
     if (profErr) throw profErr;
 
     // 3. Fetch health assessments using admin client
     const { data: assessments, error: assessErr } = await supabaseAdmin
       .from('health_assessments')
-      .select('*')
+      .select('patient_id, first_name, last_name, phone_number, membership_tier, membershipStatus, consultation_fee_paid, eligibility_status, eligibility_reason, is_eligible, medical_history, medication_proof_url, medication_proof, bmi, height_cm, weight_kg, diagnosis_summary, follow_up_instruction, follow_up_notes')
       .in('patient_id', patientIds);
     if (assessErr) throw assessErr;
 
     // 4. Fetch progress logs using admin client
     const { data: logs, error: logsErr } = await supabaseAdmin
       .from('progress_logs')
-      .select('*')
+      .select('user_id, weight_kg, created_at')
       .in('user_id', patientIds)
-      .order('created_at', { ascending: true });
+      .order('created_at', { ascending: false });
     if (logsErr) throw logsErr;
 
     // 5. Fetch consultations for these patients using admin client
     const { data: consults, error: consultsErr } = await supabaseAdmin
       .from('doctor_consultations')
-      .select('*')
+      .select('id, patient_id, doctor_id, booking_date, booking_time, status, prescription_text, prescription_type, prescription_notes, created_at, updated_at')
       .in('patient_id', patientIds)
       .order('created_at', { ascending: false });
     if (consultsErr) throw consultsErr;
 
+    const profilesById = new Map((profiles || []).map((profile: any) => [profile.id, profile]));
+    const assessmentsByPatientId = new Map((assessments || []).map((assessment: any) => [assessment.patient_id, assessment]));
+    const logsByPatientId = new Map<string, any[]>();
+    for (const log of logs || []) {
+      const existing = logsByPatientId.get(log.user_id) || [];
+      existing.push(log);
+      logsByPatientId.set(log.user_id, existing);
+    }
+    const consultationsByPatientId = new Map<string, any[]>();
+    for (const consultation of consults || []) {
+      const existing = consultationsByPatientId.get(consultation.patient_id) || [];
+      existing.push(consultation);
+      consultationsByPatientId.set(consultation.patient_id, existing);
+    }
+
     // Assemble the data
     const enrichedPatients = assignments.map(assign => {
-      const prof = profiles?.find(p => p.id === assign.patient_id) || {};
-      const assess = assessments?.find(a => a.patient_id === assign.patient_id) || {};
-      const pLogs = logs?.filter(l => l.user_id === assign.patient_id) || [];
-      const pConsults = consults?.filter(c => c.patient_id === assign.patient_id) || [];
+      const prof = profilesById.get(assign.patient_id) || {};
+      const assess = assessmentsByPatientId.get(assign.patient_id) || {};
+      const pLogs = logsByPatientId.get(assign.patient_id) || [];
+      const pConsults = consultationsByPatientId.get(assign.patient_id) || [];
 
       // Provider status calculation
       const isPaymentDue = !assess.consultation_fee_paid && !assess.membership_tier;

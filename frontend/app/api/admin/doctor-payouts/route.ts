@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { assertAdmin, enforceRateLimit } from '@/lib/apiSecurity'
+import { APP_CONFIG } from '@/lib/appConfig'
 import {
   createRazorpayXContact,
   createRazorpayXFundAccount,
@@ -44,21 +46,10 @@ type DoctorProfile = {
 
 const getErrorMessage = (err: unknown) => err instanceof Error ? err.message : 'Internal Server Error'
 
-async function verifyAdmin(adminId: string) {
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', adminId)
-    .maybeSingle()
-
-  if (error) throw error
-  return data?.role === 'admin'
-}
-
 async function loadPendingTransaction(transactionId: string): Promise<WalletTransaction> {
   const { data, error } = await supabaseAdmin
     .from('doctor_wallet_transactions')
-    .select('*')
+    .select('id, doctor_id, patient_id, appointment_id, type, amount, status, payout_status, razorpay_contact_id, razorpay_fund_account_id, razorpay_payout_id')
     .eq('id', transactionId)
     .maybeSingle()
 
@@ -93,7 +84,7 @@ async function processTransaction(transactionId: string) {
       .maybeSingle(),
     supabaseAdmin
       .from('doctor_payout_accounts')
-      .select('*')
+      .select('doctor_id, account_type, beneficiary_name, account_number, ifsc, vpa, razorpay_contact_id, razorpay_fund_account_id')
       .eq('doctor_id', tx.doctor_id)
       .maybeSingle(),
   ])
@@ -206,19 +197,18 @@ async function processTransaction(transactionId: string) {
 export async function POST(request: Request) {
   try {
     const body = await request.json()
-    const { adminId, transactionId, processPending, systemKey } = body
+    const { transactionId, processPending, systemKey } = body
 
     const cronSecret = process.env.PAYOUT_CRON_SECRET
     const isSystemRun = Boolean(processPending && cronSecret && systemKey === cronSecret)
 
     if (!isSystemRun) {
-      if (!adminId) {
-        return NextResponse.json({ error: 'adminId is required' }, { status: 400 })
-      }
-      const isAdmin = await verifyAdmin(adminId)
-      if (!isAdmin) {
-        return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 403 })
-      }
+      const admin = await assertAdmin(request)
+      const limited = enforceRateLimit(request, `admin-doctor-payouts:${admin.id}`, APP_CONFIG.rateLimits.adminSensitive)
+      if (limited) return limited
+    } else {
+      const limited = enforceRateLimit(request, 'system-doctor-payouts', APP_CONFIG.rateLimits.adminSensitive)
+      if (limited) return limited
     }
 
     if (processPending) {

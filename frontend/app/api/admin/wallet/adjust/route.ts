@@ -1,21 +1,15 @@
 import { randomUUID } from 'crypto'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-
-async function authenticatedAdmin(request: Request) {
-  const header = request.headers.get('authorization') || ''
-  const token = header.startsWith('Bearer ') ? header.slice(7).trim() : ''
-  if (!token) return null
-  const { data } = await supabaseAdmin.auth.getUser(token)
-  if (!data.user) return null
-  const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', data.user.id).maybeSingle()
-  return profile?.role === 'admin' ? data.user : null
-}
+import { assertAdmin, enforceRateLimit } from '@/lib/apiSecurity'
+import { APP_CONFIG } from '@/lib/appConfig'
 
 export async function POST(request: Request) {
   try {
-    const admin = await authenticatedAdmin(request)
-    if (!admin) return NextResponse.json({ error: 'Admin authorization required.' }, { status: 403 })
+    const admin = await assertAdmin(request)
+    const limited = enforceRateLimit(request, `admin-wallet-adjust:${admin.id}`, APP_CONFIG.rateLimits.adminSensitive)
+    if (limited) return limited
+
     const body = await request.json()
     const providerId = String(body.providerId || '')
     const amount = Number(body.amount)
@@ -31,6 +25,8 @@ export async function POST(request: Request) {
     if (error) return NextResponse.json({ error: error.message }, { status: 409 })
     return NextResponse.json({ adjustment: data })
   } catch (error: unknown) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to adjust wallet.' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'Unable to adjust wallet.'
+    const status = message === 'Forbidden' ? 403 : (message === 'Unauthorized' ? 401 : 500)
+    return NextResponse.json({ error: message }, { status })
   }
 }

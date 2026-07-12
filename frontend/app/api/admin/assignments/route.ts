@@ -17,7 +17,7 @@ export async function GET(request: Request) {
     // 2. Fetch assignments
     const { data, error } = await supabaseAdmin
       .from('care_team_assignments')
-      .select('*')
+      .select('patient_id, doctor_id, dietitian_id, nutritionist_id, fitness_coach_id, trainer_id, updated_at')
       .eq('patient_id', patientId)
       .maybeSingle()
 

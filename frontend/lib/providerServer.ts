@@ -20,11 +20,16 @@ export async function getCurrentProvider(request: Request) {
     throw err
   }
 
-  const [profileRes, providerRes] = await Promise.all([
+  const [profileRes, v2ProviderRes, providerRes] = await Promise.all([
     supabaseAdmin
       .from('profiles')
       .select('id, first_name, last_name, email, role')
       .eq('id', auth.user.id)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('provider_profiles_v2')
+      .select('id, user_id, full_name, email, role, specialization, account_status, onboarding_status, clinical_verification_status')
+      .eq('user_id', auth.user.id)
       .maybeSingle(),
     supabaseAdmin
       .from('provider_profiles')
@@ -40,8 +45,21 @@ export async function getCurrentProvider(request: Request) {
   }
 
   const profile = profileRes.data
-  const role = profile?.role || auth.role
-  const providerProfile = providerRes.data
+  const v2Provider = v2ProviderRes.data
+  const role = String(v2Provider?.role || profile?.role || auth.role).toLowerCase() === 'fitness_coach'
+    ? 'fitness_coach'
+    : String(v2Provider?.role || profile?.role || auth.role).toLowerCase()
+  const providerProfile = providerRes.data || (v2Provider ? {
+    provider_id: auth.user.id,
+    provider_profile_id: v2Provider.id,
+    full_name: v2Provider.full_name,
+    specialization: v2Provider.specialization,
+    qualification: null,
+    status: v2Provider.account_status === 'ACTIVE' ? 'active' : String(v2Provider.account_status || '').toLowerCase(),
+    profile_photo_url: null,
+    email: v2Provider.email,
+    payout_amount: null,
+  } : null)
 
   if (!providerProfile) {
     const err = new Error('Provider profile missing')

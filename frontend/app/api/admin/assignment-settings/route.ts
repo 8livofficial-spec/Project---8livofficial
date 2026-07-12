@@ -8,7 +8,7 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from('assignment_engine_settings')
-      .select('*')
+      .select('id, auto_assignment_enabled, preferred_strategy, fallback_manual_allowed, max_daily_consultations, max_hourly_consultations, updated_at')
       .eq('id', true)
       .maybeSingle()
 
@@ -38,7 +38,7 @@ export async function PATCH(request: Request) {
     const { data, error } = await supabaseAdmin
       .from('assignment_engine_settings')
       .upsert({ id: true, ...updates }, { onConflict: 'id' })
-      .select()
+      .select('id, auto_assignment_enabled, preferred_strategy, fallback_manual_allowed, max_daily_consultations, max_hourly_consultations, updated_at')
       .single()
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

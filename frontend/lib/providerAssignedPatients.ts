@@ -2,6 +2,11 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 import { assignmentColumnForRole, trainerFallbackColumnForRole, type ProviderRole } from '@/lib/providerServer'
 
 type PatientProfileRow = { id: string; first_name?: string | null; last_name?: string | null; email?: string | null; phone_number?: string | null }
+type LoadAssignedProviderPatientsOptions = {
+  patientIds?: string[]
+  page?: number
+  limit?: number
+}
 
 function numberOrNull(value: unknown) {
   const parsed = Number(value)
@@ -15,9 +20,7 @@ function avg(values: Array<number | null>) {
 }
 
 function latestByPatient(rows: any[] | null | undefined, patientId: string) {
-  return (rows || [])
-    .filter((row) => row.patient_id === patientId)
-    .sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime())[0] || null
+  return (rows || []).find((row) => row.patient_id === patientId) || null
 }
 
 export function providerPlanConfig(role: ProviderRole | string) {
@@ -27,75 +30,120 @@ export function providerPlanConfig(role: ProviderRole | string) {
   return null
 }
 
-export async function loadAssignedProviderPatients(providerId: string, role: ProviderRole) {
+export async function loadAssignedProviderPatients(providerId: string, role: ProviderRole, options: LoadAssignedProviderPatientsOptions = {}) {
   const assignmentColumn = assignmentColumnForRole(role)
   const fallbackColumn = trainerFallbackColumnForRole(role)
   if (!assignmentColumn) {
     return {
       patients: [],
       summary: { assignedPatients: 0, activePlans: 0, pendingFollowUps: 0, avgCurrentWeight: null, avgGoalWeight: null },
+      totalCount: 0,
+      totalPages: 0,
     }
   }
 
-  let assignments: any[] = []
-  const primary = await supabaseAdmin
-    .from('care_team_assignments')
-    .select('*')
-    .eq(assignmentColumn, providerId)
+  const page = Math.max(1, Number(options.page || 1))
+  const requestedLimit = options.limit ? Math.max(1, Number(options.limit)) : null
+  const canPageInDatabase = requestedLimit !== null && !fallbackColumn
 
-  if (!primary.error && primary.data) assignments = primary.data
+  let assignments: any[] = []
+  let totalAssigned = 0
+  let primaryQuery = supabaseAdmin
+    .from('care_team_assignments')
+    .select('patient_id', { count: canPageInDatabase ? 'exact' : undefined })
+    .eq(assignmentColumn, providerId)
+  if (options.patientIds?.length) primaryQuery = primaryQuery.in('patient_id', options.patientIds)
+  if (canPageInDatabase) {
+    primaryQuery = primaryQuery.range((page - 1) * requestedLimit, page * requestedLimit - 1)
+  }
+  const primary = await primaryQuery
+
+  if (!primary.error && primary.data) {
+    assignments = primary.data
+    totalAssigned = primary.count ?? primary.data.length
+  }
 
   if (fallbackColumn) {
-    const fallback = await supabaseAdmin
+    let fallbackQuery = supabaseAdmin
       .from('care_team_assignments')
-      .select('*')
+      .select('patient_id')
       .eq(fallbackColumn, providerId)
+    if (options.patientIds?.length) fallbackQuery = fallbackQuery.in('patient_id', options.patientIds)
+    const fallback = await fallbackQuery
     if (!fallback.error && fallback.data) {
       const seen = new Set(assignments.map((row) => row.patient_id))
       assignments = [...assignments, ...fallback.data.filter((row) => !seen.has(row.patient_id))]
     }
+    totalAssigned = assignments.length
   }
 
   if (!assignments.length) {
     return {
       patients: [],
-      summary: { assignedPatients: 0, activePlans: 0, pendingFollowUps: 0, avgCurrentWeight: null, avgGoalWeight: null },
+      summary: { assignedPatients: totalAssigned, activePlans: 0, pendingFollowUps: 0, avgCurrentWeight: null, avgGoalWeight: null },
+      totalCount: totalAssigned,
+      totalPages: requestedLimit ? Math.ceil(totalAssigned / requestedLimit) : 0,
     }
   }
 
-  const patientIds = assignments.map((assignment) => assignment.patient_id)
+  if (!totalAssigned) totalAssigned = assignments.length
+  const limit = Math.max(1, Number(options.limit || assignments.length))
+  const selectedAssignments = canPageInDatabase
+    ? assignments
+    : options.page || options.limit
+    ? assignments.slice((page - 1) * limit, page * limit)
+    : assignments
+  if (!selectedAssignments.length) {
+    return {
+      patients: [],
+      summary: { assignedPatients: totalAssigned, activePlans: 0, pendingFollowUps: 0, avgCurrentWeight: null, avgGoalWeight: null },
+      totalCount: totalAssigned,
+      totalPages: Math.ceil(totalAssigned / limit),
+    }
+  }
+  const patientIds = selectedAssignments.map((assignment) => assignment.patient_id)
   const [profilesRes, assessmentsRes, progressRes] = await Promise.all([
     supabaseAdmin.from('profiles').select('id, first_name, last_name, email, phone_number').in('id', patientIds),
-    supabaseAdmin.from('health_assessments').select('*').in('patient_id', patientIds),
-    supabaseAdmin.from('progress_logs').select('*').in('user_id', patientIds).order('created_at', { ascending: false }),
+    supabaseAdmin.from('health_assessments').select('patient_id, first_name, last_name, phone_number, weight_kg, goal_weight_kg, bmi, membership_tier, membershipStatus, local_food, food_preferences, medical_history, extra_medical_info, fitness_preference, exercise_limitations, doctor_notes, diagnosis_summary').in('patient_id', patientIds),
+    supabaseAdmin.from('progress_logs').select('user_id, weight_kg, created_at').in('user_id', patientIds).order('created_at', { ascending: false }),
   ])
 
   if (profilesRes.error) throw new Error(profilesRes.error.message)
   if (assessmentsRes.error) throw new Error(assessmentsRes.error.message)
   const profiles = (profilesRes.data || []) as PatientProfileRow[]
+  const profilesById = new Map(profiles.map((profile) => [profile.id, profile]))
+  const assessmentsByPatientId = new Map((assessmentsRes.data || []).map((assessment: any) => [assessment.patient_id, assessment]))
+  const progressByPatientId = new Map<string, any>()
+  for (const progress of progressRes.data || []) {
+    if (!progressByPatientId.has(progress.user_id)) progressByPatientId.set(progress.user_id, progress)
+  }
 
   const planConfig = providerPlanConfig(role)
   let plans: any[] = []
   if (planConfig) {
     const plansRes = await supabaseAdmin
       .from(planConfig.table)
-      .select('*')
+      .select('id, patient_id, status, created_at')
       .eq(planConfig.ownerColumn, providerId)
       .in('patient_id', patientIds)
       .order('created_at', { ascending: false })
     if (!plansRes.error && plansRes.data) plans = plansRes.data
   }
+  const plansByPatientId = new Map<string, any>()
+  for (const plan of plans) {
+    if (!plansByPatientId.has(plan.patient_id)) plansByPatientId.set(plan.patient_id, plan)
+  }
 
-  const patients = assignments
+  const patients = selectedAssignments
     .map((assignment) => {
-      const profile = profiles.find((row) => row.id === assignment.patient_id)
-      const assessment = assessmentsRes.data?.find((row) => row.patient_id === assignment.patient_id) || {}
+      const profile = profilesById.get(assignment.patient_id)
+      const assessment = assessmentsByPatientId.get(assignment.patient_id) || {}
       const membershipTier = assessment.membership_tier || assessment.membershipStatus || 'Not selected'
 
       if (!String(membershipTier).toLowerCase().includes('gold')) return null
 
-      const latestProgress = (progressRes.data || []).find((row) => row.user_id === assignment.patient_id)
-      const latestPlan = latestByPatient(plans, assignment.patient_id)
+      const latestProgress = progressByPatientId.get(assignment.patient_id)
+      const latestPlan = plansByPatientId.get(assignment.patient_id) || latestByPatient(plans, assignment.patient_id)
       const currentWeight = numberOrNull(latestProgress?.weight_kg) ?? numberOrNull(assessment.weight_kg)
       const goalWeight = numberOrNull(assessment.goal_weight_kg)
       const firstName = assessment.first_name || profile?.first_name || ''
@@ -128,11 +176,13 @@ export async function loadAssignedProviderPatients(providerId: string, role: Pro
   return {
     patients,
     summary: {
-      assignedPatients: patients.length,
+      assignedPatients: totalAssigned,
       activePlans,
       pendingFollowUps,
       avgCurrentWeight: avg(patients.map((patient: any) => patient.currentWeight)),
       avgGoalWeight: avg(patients.map((patient: any) => patient.goalWeight)),
     },
+    totalCount: totalAssigned,
+    totalPages: Math.ceil(totalAssigned / limit),
   }
 }

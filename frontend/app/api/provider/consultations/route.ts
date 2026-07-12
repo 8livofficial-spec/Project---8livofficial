@@ -3,8 +3,14 @@ import { getAuthenticatedProvider } from '@/lib/providerServer'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { canJoinConsultation, labelForRole } from '@/lib/providerConsultations'
 import { creditCompletedConsultation } from '@/lib/walletLedger'
+import { patientSearchOrFilter } from '@/lib/queryFilters'
 
 const terminalStatuses = ['completed', 'cancelled', 'cancelled_by_doctor', 'cancelled_by_patient', 'missed', 'missed_by_patient']
+const emptyStats = { total: 0, today: 0, upcoming: 0, completed: 0, missed: 0, cancelled: 0 }
+
+function countRows(table = 'staff_consultations') {
+  return supabaseAdmin.from(table).select('id', { count: 'exact', head: true })
+}
 
 async function creditProviderWallet(input: {
   providerId: string
@@ -39,7 +45,7 @@ export async function GET(request: Request) {
     const { data: matchedProfiles } = await supabaseAdmin
       .from('profiles')
       .select('id')
-      .or(`first_name.ilike.%${search}%,last_name.ilike.%${search}%,email.ilike.%${search}%,phone_number.ilike.%${search}%`);
+      .or(patientSearchOrFilter(search));
     matchingPatientIds = (matchedProfiles || []).map((p: any) => p.id)
   }
 
@@ -56,7 +62,7 @@ export async function GET(request: Request) {
     } else {
       return NextResponse.json({
         consultations: [],
-        stats: { total: 0, today: 0, upcoming: 0, completed: 0, missed: 0, cancelled: 0 },
+        stats: emptyStats,
         totalCount: 0,
         totalPages: 0
       })
@@ -77,9 +83,10 @@ export async function GET(request: Request) {
   const { data: profiles } = patientIds.length
     ? await supabaseAdmin.from('profiles').select('id, first_name, last_name, email').in('id', patientIds)
     : { data: [] as any[] }
+  const profilesById = new Map((profiles || []).map((profile) => [profile.id, profile]))
 
   const consultations = (data || []).map((session) => {
-    const profile = profiles?.find((item) => item.id === session.patient_id)
+    const profile = profilesById.get(session.patient_id)
     const patientName = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || profile?.email || 'Patient'
     return {
       ...session,
@@ -92,20 +99,35 @@ export async function GET(request: Request) {
     }
   })
 
-  // Load stats from lightweight select
-  const { data: allStatsData } = await supabaseAdmin
-    .from('staff_consultations')
-    .select('booking_date, status')
-    .eq('staff_id', provider.user.id)
-
   const today = new Date().toISOString().split('T')[0]
+  const [
+    totalStatsRes,
+    todayStatsRes,
+    upcomingStatsRes,
+    completedStatsRes,
+    missedStatsRes,
+    cancelledStatsRes,
+  ] = await Promise.all([
+    countRows().eq('staff_id', provider.user.id),
+    supabaseAdmin
+      .from('staff_consultations')
+      .select('status')
+      .eq('staff_id', provider.user.id)
+      .eq('booking_date', today),
+    countRows().eq('staff_id', provider.user.id).eq('status', 'scheduled'),
+    countRows().eq('staff_id', provider.user.id).eq('status', 'completed'),
+    countRows().eq('staff_id', provider.user.id).in('status', ['missed', 'missed_by_patient']),
+    countRows().eq('staff_id', provider.user.id).ilike('status', '%cancelled%'),
+  ])
+
+  const todayRows = todayStatsRes.data || []
   const stats = {
-    total: allStatsData?.length || 0,
-    today: (allStatsData || []).filter((session) => session.booking_date === today && !terminalStatuses.includes(String(session.status || '').toLowerCase())).length,
-    upcoming: (allStatsData || []).filter((session) => String(session.status || '').toLowerCase() === 'scheduled').length,
-    completed: (allStatsData || []).filter((session) => String(session.status || '').toLowerCase() === 'completed').length,
-    missed: (allStatsData || []).filter((session) => ['missed', 'missed_by_patient'].includes(String(session.status || '').toLowerCase())).length,
-    cancelled: (allStatsData || []).filter((session) => String(session.status || '').toLowerCase().includes('cancelled')).length,
+    total: totalStatsRes.count || 0,
+    today: todayRows.filter((session) => !terminalStatuses.includes(String(session.status || '').toLowerCase())).length,
+    upcoming: upcomingStatsRes.count || 0,
+    completed: completedStatsRes.count || 0,
+    missed: missedStatsRes.count || 0,
+    cancelled: cancelledStatsRes.count || 0,
   }
 
   return NextResponse.json({
