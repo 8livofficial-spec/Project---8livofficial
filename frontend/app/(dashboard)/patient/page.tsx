@@ -463,17 +463,6 @@ export default function PatientDashboardHome() {
           </p>
         </div>
 
-        {/* CTA button */}
-        <Link 
-          href="/patient/consultation/room"
-          className="flex-shrink-0 flex items-center gap-2 bg-[#1A1F36] text-white hover:bg-[#C4622D]
-                     rounded-full px-6 py-3 font-bold text-xs uppercase tracking-wider
-                     transition-all duration-300 self-start sm:self-center
-                     shadow-md shadow-[#1A1F36]/10 no-underline hover:shadow-lg"
-        >
-          <Video size={13} />
-          <span>Join Video Room</span>
-        </Link>
       </div>
 
       {/* 2. Quick Action shortcuts */}
