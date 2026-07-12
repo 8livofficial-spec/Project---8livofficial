@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useRef, useEffect, useMemo } from 'react'
-import { MessageCircle, Send, Paperclip, Video, Phone, Search, Users } from 'lucide-react'
+import { ArrowLeft, MessageCircle, Send, Paperclip, Video, Phone, Search, Users } from 'lucide-react'
 import { usePatientData } from '@/hooks/usePatientData'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -28,6 +28,7 @@ export default function MessagesPage() {
   const [inputText, setInputText] = useState('')
   const [activeContact, setActiveContact] = useState<Contact | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [mobileChatOpen, setMobileChatOpen] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const contacts = useMemo<Contact[]>(() => {
@@ -229,9 +230,9 @@ export default function MessagesPage() {
   }
 
   return (
-    <div className="bg-white rounded-2xl border border-[#1A1F36]/8 shadow-[0_4px_24px_rgba(26,31,54,0.08)] overflow-hidden h-[calc(100vh-8.5rem)] md:h-[calc(100vh-7rem)] flex">
+    <div className="bg-white rounded-2xl border border-[#1A1F36]/8 shadow-[0_4px_24px_rgba(26,31,54,0.08)] overflow-hidden h-[calc(100dvh-8.5rem)] min-h-[520px] md:h-[calc(100vh-7rem)] flex">
       {/* Left Contact List Panel */}
-      <div className="w-full md:w-80 border-r border-[#1A1F36]/8 flex flex-col bg-white shrink-0">
+      <div className={`${mobileChatOpen ? 'hidden md:flex' : 'flex'} w-full md:w-80 border-r border-[#1A1F36]/8 flex-col bg-white shrink-0`}>
         <div className="p-4 border-b border-[#1A1F36]/8 space-y-3">
           <h3 className="font-bold text-base font-sora">Conversations</h3>
           <div className="flex items-center gap-2 bg-[#F5F0EB] border border-[#1A1F36]/12 rounded-xl px-4 py-2">
@@ -250,7 +251,10 @@ export default function MessagesPage() {
           {filteredContacts.map((contact) => (
             <button
               key={contact.id}
-              onClick={() => setActiveContact({ ...contact, active: true })}
+              onClick={() => {
+                setActiveContact({ ...contact, active: true })
+                setMobileChatOpen(true)
+              }}
               className={`w-full text-left flex gap-3 px-4 py-4 transition-colors select-none cursor-pointer ${
                 activeContact?.id === contact.id
                   ? 'bg-[#F5F0EB]/60 border-r-4 border-r-[#C4622D]'
@@ -277,16 +281,24 @@ export default function MessagesPage() {
       </div>
 
       {/* Right Conversation Chat Area */}
-      <div className="hidden md:flex flex-col flex-1 bg-[#F5F0EB]/30">
+      <div className={`${mobileChatOpen ? 'flex' : 'hidden md:flex'} flex-col flex-1 min-w-0 bg-[#F5F0EB]/30`}>
         {activeContact ? (
           <>
             {/* Chat header */}
-            <div className="bg-white px-6 py-4 border-b border-[#1A1F36]/8 flex justify-between items-center shrink-0 shadow-sm">
+            <div className="bg-white px-4 sm:px-6 py-4 border-b border-[#1A1F36]/8 flex justify-between items-center shrink-0 shadow-sm">
               <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setMobileChatOpen(false)}
+                  className="md:hidden p-2 -ml-2 rounded-xl hover:bg-[#F5F0EB] text-[#1A1F36]"
+                  aria-label="Back to conversations"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </button>
                 <div className="w-10 h-10 rounded-full bg-[#F5F0EB] text-[#1A1F36] font-bold text-sm flex items-center justify-center select-none">
                   {activeContact.initials}
                 </div>
-                <div>
+                <div className="min-w-0">
                   <h3 className="text-sm font-bold leading-tight font-sora">{activeContact.name}</h3>
                   <div className="flex items-center gap-1.5 mt-0.5">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
@@ -294,14 +306,14 @@ export default function MessagesPage() {
                   </div>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-2">
                 <button className="p-2.5 bg-[#F5F0EB] hover:bg-[#EDE8E3] rounded-xl text-[#1A1F36] transition-all cursor-pointer"><Phone className="w-4 h-4" /></button>
                 <button className="p-2.5 bg-[#F5F0EB] hover:bg-[#EDE8E3] rounded-xl text-[#1A1F36] transition-all cursor-pointer"><Video className="w-4 h-4" /></button>
               </div>
             </div>
 
             {/* Message Log */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 custom-scrollbar">
               {activeContact.id === 'support' ? (
                 <div className="flex flex-col items-center justify-center h-full text-[#8896A4]">
                   <MessageCircle className="w-12 h-12 mb-4 opacity-50" />
@@ -327,7 +339,7 @@ export default function MessagesPage() {
                       return (
                         <div
                           key={msg.id}
-                          className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[75%] ${isMe ? 'ml-auto' : 'mr-auto'}`}
+                          className={`flex flex-col ${isMe ? 'items-end' : 'items-start'} max-w-[86%] sm:max-w-[75%] ${isMe ? 'ml-auto' : 'mr-auto'}`}
                         >
                           <div
                             className={`px-4.5 py-3 rounded-2xl text-sm leading-relaxed ${
@@ -354,11 +366,11 @@ export default function MessagesPage() {
             {/* Message Input Bar */}
             <form
               onSubmit={handleSendMessage}
-              className="bg-white border-t border-[#1A1F36]/8 px-6 py-4 flex items-center gap-3 shrink-0"
+              className="bg-white border-t border-[#1A1F36]/8 px-3 sm:px-6 py-3 sm:py-4 flex items-center gap-2 sm:gap-3 shrink-0"
             >
               <button
                 type="button"
-                className="p-3 hover:bg-[#F5F0EB] text-[#8896A4] hover:text-[#1A1F36] rounded-xl transition-all cursor-pointer border border-transparent hover:border-[#1A1F36]/8 shrink-0"
+                className="hidden sm:block p-3 hover:bg-[#F5F0EB] text-[#8896A4] hover:text-[#1A1F36] rounded-xl transition-all cursor-pointer border border-transparent hover:border-[#1A1F36]/8 shrink-0"
               >
                 <Paperclip className="w-5 h-5" />
               </button>
@@ -368,7 +380,7 @@ export default function MessagesPage() {
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 disabled={activeContact.id === 'support'}
-                className="flex-grow bg-[#F5F0EB] border border-[#1A1F36]/12 rounded-2xl px-4 py-3.5 text-sm text-[#1A1F36] placeholder-[#8896A4] focus:border-[#C4622D] outline-none disabled:opacity-50"
+                className="min-w-0 flex-grow bg-[#F5F0EB] border border-[#1A1F36]/12 rounded-2xl px-4 py-3 text-sm text-[#1A1F36] placeholder-[#8896A4] focus:border-[#C4622D] outline-none disabled:opacity-50"
               />
               <button
                 type="submit"

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { Send, MessageCircle, X, Search, Check, CheckCheck, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Send, MessageCircle, Search, Check, CheckCheck, RefreshCw } from 'lucide-react';
 import { supabase } from '@/lib/supabaseClient';
 
 type Message = {
@@ -35,6 +35,7 @@ export default function StaffChat({ staffId, staffName, patients, accentColor = 
   const [sending, setSending] = useState(false);
   const [search, setSearch] = useState('');
   const [unreadCounts, setUnreadCounts] = useState<Record<string, number>>({});
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<any>(null);
 
@@ -212,9 +213,9 @@ export default function StaffChat({ staffId, staffName, patients, accentColor = 
   const totalUnread = Object.values(unreadCounts).reduce((a, b) => a + b, 0);
 
   return (
-    <div className="flex h-full overflow-hidden bg-slate-50 rounded-2xl border border-slate-100 shadow-sm">
+    <div className="flex h-[calc(100dvh-8.5rem)] min-h-[520px] md:h-full overflow-hidden bg-slate-50 rounded-2xl border border-slate-100 shadow-sm">
       {/* Patient List */}
-      <div className="w-72 bg-white border-r border-slate-100 flex flex-col shrink-0">
+      <div className={`${selectedPatient && mobileChatOpen ? 'hidden md:flex' : 'flex'} w-full md:w-72 bg-white border-r border-slate-100 flex-col shrink-0`}>
         <div className="p-4 border-b border-slate-100">
           <div className="flex items-center gap-2 mb-3">
             <MessageCircle className="w-5 h-5" style={{ color: accentColor }} />
@@ -247,7 +248,10 @@ export default function StaffChat({ staffId, staffName, patients, accentColor = 
             return (
               <button
                 key={p.id}
-                onClick={() => setSelectedPatient(p)}
+                onClick={() => {
+                  setSelectedPatient(p);
+                  setMobileChatOpen(true);
+                }}
                 className={`w-full px-4 py-3.5 flex items-center gap-3 text-left transition-all border-l-4 ${
                   isActive
                     ? 'bg-orange-50 border-l-4'
@@ -277,18 +281,26 @@ export default function StaffChat({ staffId, staffName, patients, accentColor = 
       </div>
 
       {/* Chat Window */}
-      <div className="flex-1 flex flex-col overflow-hidden">
+      <div className={`${selectedPatient && mobileChatOpen ? 'flex' : 'hidden md:flex'} flex-1 min-w-0 flex-col overflow-hidden`}>
         {selectedPatient ? (
           <>
             {/* Chat Header */}
-            <div className="bg-white px-6 py-4 border-b border-slate-100 flex items-center gap-3 shrink-0">
+            <div className="bg-white px-4 md:px-6 py-4 border-b border-slate-100 flex items-center gap-3 shrink-0">
+              <button
+                type="button"
+                onClick={() => setMobileChatOpen(false)}
+                className="md:hidden p-2 -ml-2 rounded-xl hover:bg-slate-100 text-slate-700"
+                aria-label="Back to patient list"
+              >
+                <ArrowLeft className="w-5 h-5" />
+              </button>
               <div
                 className="w-9 h-9 rounded-full flex items-center justify-center text-white font-black text-xs"
                 style={{ backgroundColor: accentColor }}
               >
                 {`${selectedPatient.first_name?.[0] || ''}${selectedPatient.last_name?.[0] || ''}`.toUpperCase()}
               </div>
-              <div>
+              <div className="min-w-0">
                 <p className="font-black text-slate-900 text-sm">{selectedPatient.first_name} {selectedPatient.last_name}</p>
                 <p className="text-[10px] text-emerald-500 font-bold flex items-center gap-1">
                   <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full inline-block" /> Active Member
@@ -304,7 +316,7 @@ export default function StaffChat({ staffId, staffName, patients, accentColor = 
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-2 custom-scrollbar bg-slate-50/50">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2 custom-scrollbar bg-slate-50/50">
               {groupedMessages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center py-12">
                   <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center shadow-sm border border-slate-100 mb-4">
@@ -324,7 +336,7 @@ export default function StaffChat({ staffId, staffName, patients, accentColor = 
                     const isOwn = msg.sender_id === staffId;
                     return (
                       <div key={msg.id} className={`flex ${isOwn ? 'justify-end' : 'justify-start'} mb-1.5`}>
-                        <div className={`max-w-[75%] px-4 py-2.5 rounded-2xl text-sm font-semibold shadow-sm ${
+                        <div className={`max-w-[86%] sm:max-w-[75%] px-4 py-2.5 rounded-2xl text-sm font-semibold shadow-sm ${
                           isOwn
                             ? 'rounded-br-md text-white'
                             : 'bg-white rounded-bl-md text-slate-800 border border-slate-100'
@@ -352,15 +364,15 @@ export default function StaffChat({ staffId, staffName, patients, accentColor = 
             </div>
 
             {/* Input */}
-            <div className="bg-white px-4 py-4 border-t border-slate-100 shrink-0">
-              <div className="flex gap-3 items-end">
+            <div className="bg-white px-3 sm:px-4 py-3 sm:py-4 border-t border-slate-100 shrink-0">
+              <div className="flex gap-2 sm:gap-3 items-end">
                 <textarea
                   value={inputText}
                   onChange={e => setInputText(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder={`Message ${selectedPatient.first_name}...`}
                   rows={1}
-                  className="flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 placeholder-slate-400 outline-none focus:border-slate-400 resize-none transition-colors leading-relaxed"
+                  className="min-w-0 flex-1 bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-sm font-semibold text-slate-800 placeholder-slate-400 outline-none focus:border-slate-400 resize-none transition-colors leading-relaxed"
                   style={{ maxHeight: '120px' }}
                 />
                 <button
