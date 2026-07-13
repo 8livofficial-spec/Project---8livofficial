@@ -22,6 +22,16 @@ export default function Home() {
   const router = useRouter()
 
   useEffect(() => {
+    if (!window.location.hash) return
+
+    const sectionId = window.location.hash.slice(1)
+    window.setTimeout(() => {
+      document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    }, 0)
+  }, [])
+
+  useEffect(() => {
     const checkRedirect = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession()
