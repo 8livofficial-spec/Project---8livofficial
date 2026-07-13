@@ -77,7 +77,7 @@ export default function Hero() {
             {/* Main Image Container */}
             <div className="group relative mx-auto aspect-[16/10] w-full max-w-2xl overflow-hidden rounded-[2rem] border border-[#0F172A]/10 bg-white shadow-2xl sm:aspect-[16/9] lg:aspect-[16/10]">
               <Image 
-                src="/images/hero_consultation.png" 
+                src="/images/hero_telemedicine.png" 
                 alt="Doctor-Led Telemedicine Care" 
                 fill
                 className="object-cover object-center transition-transform duration-[2s] group-hover:scale-[1.03]"
