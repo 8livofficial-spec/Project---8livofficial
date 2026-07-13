@@ -52,7 +52,7 @@ export default function HowItWorks() {
             How it <span className="teal-gradient-text">Works</span>
           </h2>
           <p className="text-[#475569] text-lg max-w-2xl mx-auto">
-            Three simple steps to unlock your metabolic health.
+            Three simple steps to understand your options and begin guided care.
           </p>
         </motion.div>
 

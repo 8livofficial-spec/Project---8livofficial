@@ -14,8 +14,8 @@ export default function WhatIsIncluded() {
     },
     {
       icon: <Activity className="h-6 w-6 text-[#D46E53]" />,
-      title: 'Structured monthly care',
-      description: 'Your subscription unlocks one month of care access, follow-ups, progress tracking, and renewal reminders before expiry.',
+      title: 'Regular follow-up',
+      description: 'Your care team reviews your progress and adjusts the plan when your health data or goals change.',
     },
     {
       icon: <Smartphone className="h-6 w-6 text-[#D46E53]" />,
@@ -25,14 +25,14 @@ export default function WhatIsIncluded() {
     {
       icon: <Apple className="h-6 w-6 text-[#D46E53]" />,
       title: 'Nutrition and lifestyle support',
-      description: 'Gold members receive multidisciplinary support across diet, fitness, and sustainable habit formation.',
+      description: 'Diet and activity guidance is shaped around your food preferences, routine, and long-term safety.',
     },
   ]
 
   const phases = [
     { label: 'Clinical intake', value: 'Eligibility, risk flags, and goals reviewed' },
     { label: 'Doctor consult', value: 'Video visit with prescription decision if suitable' },
-    { label: 'Monthly care cycle', value: 'Plan updates, progress tracking, renewal reminders' },
+    { label: 'Follow-up care', value: 'Progress tracking, plan updates, and support when needed' },
   ]
 
   const listVariants = {
@@ -60,10 +60,10 @@ export default function WhatIsIncluded() {
               Clinically governed care
             </div>
             <h2 className="mb-6 font-sora text-3xl font-bold text-[#0F172A] sm:text-4xl md:text-5xl">
-              A medical weight-loss program built like a <span className="teal-gradient-text">care system</span>
+              Medical weight-loss care that is clear, safe, and <span className="teal-gradient-text">personal</span>
             </h2>
             <p className="mb-10 text-lg leading-relaxed text-[#475569]">
-              8Liv separates monthly subscription access from the longer clinical journey. Members renew monthly while their care plan adapts to age, BMI, medical history, progress, and provider review.
+              8Liv helps you understand whether treatment is right for you, speak with a clinician, and follow a plan that adapts to your age, BMI, medical history, and progress.
             </p>
 
             <motion.div
@@ -108,13 +108,13 @@ export default function WhatIsIncluded() {
               <div className="mb-5 grid grid-cols-2 gap-3">
                 <div className="rounded-2xl bg-[#F9F6F0] p-4">
                   <CalendarCheck className="mb-3 h-5 w-5 text-[#D46E53]" />
-                  <p className="text-[10px] font-black uppercase tracking-wider text-[#8896A4]">Access cycle</p>
-                  <p className="mt-1 text-lg font-black text-[#0F172A]">1 month</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-[#8896A4]">Care plan</p>
+                  <p className="mt-1 text-lg font-black text-[#0F172A]">Personal</p>
                 </div>
                 <div className="rounded-2xl bg-[#F9F6F0] p-4">
                   <ShieldCheck className="mb-3 h-5 w-5 text-[#D46E53]" />
-                  <p className="text-[10px] font-black uppercase tracking-wider text-[#8896A4]">Review cadence</p>
-                  <p className="mt-1 text-lg font-black text-[#0F172A]">Ongoing</p>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-[#8896A4]">Clinical review</p>
+                  <p className="mt-1 text-lg font-black text-[#0F172A]">Doctor-led</p>
                 </div>
               </div>
               <div className="flex w-full items-center justify-center overflow-hidden rounded-2xl bg-white p-4 shadow-sm">
@@ -135,4 +135,3 @@ export default function WhatIsIncluded() {
     </section>
   )
 }
-

@@ -13,20 +13,20 @@ export default function CompanySection() {
     },
     {
       icon: <LockKeyhole className="h-5 w-5" />,
-      title: 'Secure digital operations',
-      description: 'Patient records, prescriptions, notifications, and care-team access are organized in protected role-based portals.',
+      title: 'Private health records',
+      description: 'Your consultations, prescriptions, progress notes, and messages are handled through protected patient and provider portals.',
     },
     {
       icon: <Truck className="h-5 w-5" />,
-      title: 'End-to-end fulfillment',
-      description: 'Care decisions connect to pharmacy operations, prescription orders, delivery tracking, and patient follow-up.',
+      title: 'Coordinated care',
+      description: 'When treatment is prescribed, the next steps are clearly coordinated across clinical review, pharmacy support, and follow-up.',
     },
   ]
 
   const metrics = [
-    { value: '100%', label: 'online intake and care coordination' },
-    { value: '24/7', label: 'patient portal access' },
-    { value: '1 mo', label: 'clear subscription validity' },
+    { value: '100%', label: 'online intake and consultations' },
+    { value: 'Secure', label: 'patient and provider portals' },
+    { value: 'Clear', label: 'next steps after every review' },
   ]
 
   return (
@@ -44,10 +44,10 @@ export default function CompanySection() {
               Company
             </div>
             <h2 className="mb-6 font-sora text-3xl font-bold text-[#0F172A] sm:text-4xl md:text-5xl">
-              Built for modern metabolic care, not one-time transactions.
+              Care that feels simple, private, and medically guided.
             </h2>
             <p className="text-lg leading-relaxed text-[#475569]">
-              8Liv is designed as a care infrastructure company: clinical intake, provider decisioning, pharmacy workflows, subscription access, and patient engagement all work together in one operating model.
+              8Liv brings assessment, doctor consultation, prescription review, progress tracking, and care-team communication into one guided experience.
             </p>
 
             <div className="mt-8 grid gap-4 sm:grid-cols-3">
@@ -70,8 +70,8 @@ export default function CompanySection() {
             <div className="rounded-[1.5rem] bg-white p-5 shadow-sm sm:p-6">
               <div className="mb-6 flex items-start justify-between gap-4 border-b border-[#D46E53]/10 pb-5">
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-[#C4622D]">Care operating system</p>
-                  <h3 className="mt-2 font-sora text-2xl font-black text-[#0F172A]">Clinical, pharmacy, and patient teams in sync</h3>
+                  <p className="text-xs font-black uppercase tracking-[0.18em] text-[#C4622D]">Our approach</p>
+                  <h3 className="mt-2 font-sora text-2xl font-black text-[#0F172A]">The right care, clearly explained</h3>
                 </div>
                 <ClipboardCheck className="h-8 w-8 shrink-0 text-[#D46E53]" />
               </div>

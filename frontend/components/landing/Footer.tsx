@@ -11,7 +11,7 @@ export default function Footer() {
               style={{ height: 120, objectFit: 'contain' }}
             />
             <p className="mb-6 leading-relaxed text-[#475569]">
-              Secure online metabolic care built around doctors, care teams, pharmacy workflows, and monthly subscription access.
+              Secure online metabolic care with doctor consultations, treatment review, progress tracking, and follow-up support.
             </p>
           </div>
 
@@ -57,4 +57,3 @@ export default function Footer() {
     </footer>
   )
 }
-
