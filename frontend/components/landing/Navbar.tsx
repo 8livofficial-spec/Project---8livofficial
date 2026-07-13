@@ -80,7 +80,7 @@ export default function Navbar() {
             <button type="button" onClick={() => scrollToSection('how-it-works')} className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all cursor-pointer">How It Works</button>
             <button type="button" onClick={() => scrollToSection('program')} className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all cursor-pointer">The Program</button>
             <button type="button" onClick={() => scrollToSection('outcomes')} className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all cursor-pointer">Outcomes</button>
-            <button type="button" onClick={() => scrollToSection('portal')} className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all cursor-pointer">Dashboard</button>
+            <button type="button" onClick={() => scrollToSection('company')} className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all cursor-pointer">Company</button>
           </nav>
 
           {/* Right Action */}
@@ -134,7 +134,7 @@ export default function Navbar() {
               <button type="button" onClick={() => { scrollToSection('how-it-works'); setMobileMenuOpen(false) }} className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">How It Works</button>
               <button type="button" onClick={() => { scrollToSection('program'); setMobileMenuOpen(false) }} className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">The Program</button>
               <button type="button" onClick={() => { scrollToSection('outcomes'); setMobileMenuOpen(false) }} className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">Outcomes</button>
-              <button type="button" onClick={() => { scrollToSection('portal'); setMobileMenuOpen(false) }} className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">Dashboard</button>
+              <button type="button" onClick={() => { scrollToSection('company'); setMobileMenuOpen(false) }} className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">Company</button>
               {user ? (
                 <>
                   <a 

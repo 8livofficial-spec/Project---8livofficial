@@ -9,12 +9,12 @@ export default function RealResults() {
     {
       img: "/images/outcome_1.png",
       title: "Sustainable Fat Loss",
-      desc: "Our patients lose an average of 15-20% of their body weight in the first year."
+      desc: "Care plans are built around realistic clinical milestones, adherence, and steady progress over time."
     },
     {
       img: "/images/outcome_2.png",
       title: "Improved Metabolic Health",
-      desc: "Significant improvements in A1C, cholesterol, and overall energy levels."
+      desc: "Doctors track weight, risk factors, medication response, and lifestyle changes through ongoing review."
     }
   ]
 
@@ -47,7 +47,7 @@ export default function RealResults() {
             Expected <span className="teal-gradient-text">Outcomes</span>
           </h2>
           <p className="text-[#475569] text-lg max-w-2xl mx-auto">
-            Real, clinical results from our comprehensive metabolic programs.
+            Realistic goals, structured follow-up, and clinically reviewed progress.
           </p>
         </motion.div>
 

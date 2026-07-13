@@ -10,6 +10,7 @@ import WhatIsIncluded from '@/components/landing/WhatIsIncluded'
 import RealResults from '@/components/landing/RealResults'
 import MealNutrition from '@/components/landing/MealNutrition'
 import PortalTeaser from '@/components/landing/PortalTeaser'
+import CompanySection from '@/components/landing/CompanySection'
 import CTABanner from '@/components/landing/CTABanner'
 import Footer from '@/components/landing/Footer'
 
@@ -91,6 +92,8 @@ export default function Home() {
       <MealNutrition />
       <Divider />
       <PortalTeaser />
+      <Divider />
+      <CompanySection />
       <Divider />
       <CTABanner />
       <Footer />

@@ -41,9 +41,9 @@ export default function Hero() {
                 Start Assessment
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </a>
-              <button className="w-full sm:w-auto bg-white/50 text-[#0F172A] font-semibold rounded-full px-8 py-4 flex items-center justify-center hover:bg-white/80 transition-colors border border-[#D46E53]/10">
+              <a href="/assessment" className="w-full sm:w-auto bg-white/50 text-[#0F172A] font-semibold rounded-full px-8 py-4 flex items-center justify-center hover:bg-white/80 transition-colors border border-[#D46E53]/10">
                 See if you qualify
-              </button>
+              </a>
             </motion.div>
           </motion.div>
 
