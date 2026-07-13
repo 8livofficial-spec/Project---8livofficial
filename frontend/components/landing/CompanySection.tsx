@@ -93,7 +93,7 @@ export default function CompanySection() {
               <div className="mt-5 rounded-2xl bg-[#0F172A] p-5 text-white">
                 <div className="flex items-center gap-3">
                   <MessageSquareText className="h-5 w-5 text-[#F4B79D]" />
-                  <p className="text-sm font-bold">Designed for WhatsApp-ready follow-ups, prescription updates, and renewal communication.</p>
+                  <p className="text-sm font-bold">Every member journey is coordinated through documented clinical decisions, secure records, and accountable follow-up workflows.</p>
                 </div>
               </div>
             </div>
@@ -103,4 +103,3 @@ export default function CompanySection() {
     </section>
   )
 }
-
