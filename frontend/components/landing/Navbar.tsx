@@ -69,9 +69,9 @@ export default function Navbar() {
           {/* Logo */}
           <div className="flex items-center shrink-0">
             <img 
-              src="/images/logo loss.png" 
+              src="/brand-logo.svg" 
               alt="8Liv Logo" 
-              className="h-14 sm:h-16 md:h-24 object-contain cursor-pointer -my-2 md:-my-4"
+              className="h-10 sm:h-11 md:h-12 w-auto object-contain cursor-pointer"
             />
           </div>
 

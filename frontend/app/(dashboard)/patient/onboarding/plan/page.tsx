@@ -126,8 +126,8 @@ export default function PlanSelectionPage() {
 
         {/* Logo */}
         <div className="relative z-10">
-          <img src="/images/logo loss.png" alt="8Liv"
-            className="h-9 w-auto object-contain brightness-0 invert opacity-90" />
+          <img src="/brand-logo-light.svg" alt="8Liv"
+            className="h-9 w-auto object-contain opacity-95" />
         </div>
 
         {/* Hero text */}

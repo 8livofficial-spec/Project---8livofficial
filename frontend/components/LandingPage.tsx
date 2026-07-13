@@ -43,7 +43,7 @@ export default function LandingPage({ onStartAssessment, onLoginDoctor }: Landin
       <header className={`fixed top-0 w-full z-50 transition-all duration-300 border-b ${scrolled ? 'bg-[#0A0A0F]/80 backdrop-blur-xl border-[#2DD4BF]/10 py-4 shadow-lg shadow-black/50' : 'bg-transparent border-transparent py-6'}`}>
         <div className="max-w-[1400px] mx-auto px-6 lg:px-12 flex justify-between items-center">
           <div className="flex items-center space-x-2">
-            <img src="/images/logo%20loss.png" alt="8Liv Logo" className="h-10 md:h-12 object-contain" />
+            <img src="/brand-logo-light.svg" alt="8Liv Logo" className="h-10 md:h-12 w-auto object-contain" />
           </div>
           <nav className="hidden md:flex space-x-10">
             <a href="#how-it-works" className="text-sm font-medium text-[#CBD5E1] hover:text-[#2DD4BF] hover:drop-shadow-[0_0_8px_rgba(45,212,191,0.5)] transition-all">How It Works</a>
@@ -343,7 +343,7 @@ export default function LandingPage({ onStartAssessment, onLoginDoctor }: Landin
       <footer className="bg-[#050508] py-16 border-t border-white/5">
         <div className="max-w-[1400px] mx-auto px-6 lg:px-12 grid grid-cols-1 md:grid-cols-5 gap-12 mb-16">
           <div className="col-span-1 md:col-span-2 pr-8">
-            <img src="/images/logo%20loss.png" alt="8Liv Logo" className="h-10 mb-6 brightness-0 invert opacity-80" />
+            <img src="/brand-logo-light.svg" alt="8Liv Logo" className="h-10 w-auto mb-6 object-contain opacity-90" />
             <p className="text-[#94A3B8] font-light text-sm max-w-sm mb-6">
               Wellness Wherever You Are. The premium concierge telehealth platform connecting you with board-certified clinicians.
             </p>

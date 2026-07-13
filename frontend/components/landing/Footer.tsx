@@ -5,10 +5,9 @@ export default function Footer() {
         <div className="mb-16 grid grid-cols-1 gap-12 md:grid-cols-4">
           <div>
             <img
-              src="/images/logo%20loss.png"
+              src="/brand-logo.svg"
               alt="8Liv Logo"
-              className="mb-4 opacity-90"
-              style={{ height: 120, objectFit: 'contain' }}
+              className="mb-4 h-14 w-auto object-contain opacity-90"
             />
             <p className="mb-6 leading-relaxed text-[#475569]">
               Secure online metabolic care with doctor consultations, treatment review, progress tracking, and follow-up support.

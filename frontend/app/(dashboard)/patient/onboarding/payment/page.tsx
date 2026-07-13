@@ -210,7 +210,7 @@ export default function OnboardingPaymentPage() {
         <div className="absolute top-0 right-0 w-64 h-64 bg-[#C4622D]/10 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 space-y-8">
-          <img src="/images/logo loss.png" alt="8Liv" className="h-9 object-contain filter brightness-0 invert opacity-90" />
+          <img src="/brand-logo-light.svg" alt="8Liv" className="h-9 w-auto object-contain opacity-95" />
 
           <div>
             <span className="text-[#C4622D] text-xs font-black uppercase tracking-[0.2em]">

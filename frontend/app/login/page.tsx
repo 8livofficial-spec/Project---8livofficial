@@ -212,9 +212,9 @@ export default function UnifiedLogin() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8 }}
-              src="/images/logo loss.png" 
+              src="/brand-logo-light.svg" 
               alt="8Liv Logo" 
-              className="h-16 object-contain filter brightness-0 invert opacity-90"
+              className="h-12 w-auto object-contain opacity-95"
             />
           </div>
 
@@ -239,7 +239,7 @@ export default function UnifiedLogin() {
       {/* Right: Auth Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 md:p-24 relative overflow-y-auto">
         <div className="absolute top-8 left-8 lg:hidden">
-          <img src="/images/logo loss.png" alt="8Liv Logo" className="h-10 object-contain" />
+          <img src="/brand-logo.svg" alt="8Liv Logo" className="h-10 w-auto object-contain" />
         </div>
 
         <motion.div 
