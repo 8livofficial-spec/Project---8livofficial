@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { loadPatientJourneyState, updatePatientJourneyState } from '@/lib/patientJourneyServer'
 import { getAuthenticatedUser } from '@/lib/apiSecurity'
+import { normalizePhoneNumber } from '@/lib/phone'
 
 type AssessmentDraft = Record<string, unknown>
 
@@ -25,6 +26,7 @@ function validateStep(step: number, data: AssessmentDraft) {
     requireString(data.last_name, 'Last name')
     requireString(data.age, 'Age')
     requireString(data.phone_number, 'Phone number')
+    if (!normalizePhoneNumber(data.phone_number).isValid) throw new Error('Please enter a valid mobile number with country code.')
     if (data.agree_terms !== true) throw new Error('Terms and privacy consent is required.')
   }
 
@@ -47,6 +49,7 @@ function validateStep(step: number, data: AssessmentDraft) {
 
 async function saveAssessmentDraft(patientId: string, step: number, data: AssessmentDraft) {
   const now = new Date().toISOString()
+  const normalizedPhone = step >= 1 ? normalizePhoneNumber(data.phone_number) : null
 
   if (step === 1) {
     const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
@@ -55,7 +58,7 @@ async function saveAssessmentDraft(patientId: string, step: number, data: Assess
       display_id: `${data.first_name || ''} ${data.last_name || ''}`.trim(),
       first_name: String(data.first_name || ''),
       last_name: String(data.last_name || ''),
-      phone_number: String(data.phone_number || ''),
+      phone_number: normalizedPhone?.e164 || String(data.phone_number || ''),
     })
     if (profileError) throw profileError
   }
@@ -91,7 +94,7 @@ async function saveAssessmentDraft(patientId: string, step: number, data: Assess
       first_name: data.first_name || undefined,
       last_name: data.last_name || undefined,
       age: data.age ? Number(data.age) : undefined,
-      phone_number: data.phone_number || undefined,
+      phone_number: normalizedPhone?.e164 || data.phone_number || undefined,
       address: data.address || undefined,
       agree_terms: data.agree_terms,
     })

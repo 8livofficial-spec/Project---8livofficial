@@ -7,6 +7,7 @@ import { getMembershipValidity } from '@/lib/membershipServer';
 import { creditCompletedConsultation } from '@/lib/walletLedger';
 import { getAuthenticatedUser, assertDoctor } from '@/lib/apiSecurity';
 import { patientSearchOrFilter } from '@/lib/queryFilters';
+import { normalizePhoneNumber } from '@/lib/phone';
 
 type ConsultationRow = {
   id: string;
@@ -350,11 +351,15 @@ export async function POST(req: Request) {
       const firstName = assess.first_name || prof.first_name || prof.display_id || 'Patient';
       const lastName = assess.last_name || prof.last_name || '';
       const fullName = `${firstName} ${lastName}`.trim();
+      const normalizedPhone = normalizePhoneNumber(assess.phone_number || prof.phone_number || '');
 
       return {
         ...c,
         patient_name: fullName,
-        patient_phone: assess.phone_number || prof.phone_number || 'No Phone',
+        patient_phone: normalizedPhone.display || 'No Phone',
+        patient_phone_e164: normalizedPhone.e164,
+        patient_whatsapp_phone: normalizedPhone.whatsapp,
+        patient_phone_valid: normalizedPhone.isValid,
         patient_email: prof.email || '',
         patient_gender: 'Unknown',
         patient_dob: assess.dob_month && assess.dob_day && assess.dob_year ? `${assess.dob_month} ${assess.dob_day}, ${assess.dob_year}` : 'Not Stated',

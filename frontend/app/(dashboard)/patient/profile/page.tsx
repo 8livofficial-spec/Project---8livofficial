@@ -5,6 +5,7 @@ import { User, Mail, Phone, Calendar, Scale, Ruler, Lock, CheckCircle2 } from 'l
 import { supabase } from '@/lib/supabaseClient'
 import { usePatientData } from '@/hooks/usePatientData'
 import { motion } from 'framer-motion'
+import { normalizePhoneNumber } from '@/lib/phone'
 
 export default function PatientProfilePage() {
   const { user, profile, assessment, loading, reloadData } = usePatientData()
@@ -63,6 +64,10 @@ export default function PatientProfilePage() {
       if (!session) throw new Error('No active session.')
 
       const userId = session.user.id
+      const normalizedPhone = normalizePhoneNumber(phoneNumber)
+      if (!normalizedPhone.isValid) {
+        throw new Error('Please enter a valid mobile number with country code.')
+      }
 
       // ── 1. Update Profiles Table ──
       const { error: profileErr } = await supabase
@@ -71,7 +76,7 @@ export default function PatientProfilePage() {
           id: userId,
           first_name: firstName,
           last_name: lastName,
-          phone_number: phoneNumber,
+          phone_number: normalizedPhone.e164,
           role: 'patient',
           updated_at: new Date().toISOString()
         })
@@ -90,7 +95,7 @@ export default function PatientProfilePage() {
       const updateData = {
         first_name: firstName,
         last_name: lastName,
-        phone_number: phoneNumber,
+        phone_number: normalizedPhone.e164,
         age: age ? parseInt(age) : null,
         height_cm: height ? parseFloat(height) : null,
         weight_kg: weight ? parseFloat(weight) : null,

@@ -6,6 +6,8 @@ export type MembershipValidity = {
   expiresAt: string | null
 }
 
+const MEMBERSHIP_EXPIRY_WARNING_DAYS = 7
+
 function addOneCalendarMonth(value: string) {
   const start = new Date(value)
   if (Number.isNaN(start.getTime())) return null
@@ -41,4 +43,62 @@ export async function getMembershipValidity(patientId: string): Promise<Membersh
     startedAt: data.created_at,
     expiresAt: expiry.toISOString(),
   }
+}
+
+function formatExpiryDate(value: string) {
+  return new Date(value).toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+export async function ensureMembershipExpiryNotification(patientId: string, validity?: MembershipValidity) {
+  const membership = validity || await getMembershipValidity(patientId)
+  if (!membership.active || !membership.startedAt || !membership.expiresAt) return null
+
+  const expiresAt = new Date(membership.expiresAt)
+  if (Number.isNaN(expiresAt.getTime())) return null
+
+  const daysRemaining = Math.ceil((expiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+  if (daysRemaining < 0 || daysRemaining > MEMBERSHIP_EXPIRY_WARNING_DAYS) return null
+
+  const notificationTitle = 'Membership ending soon'
+  const notificationMessage = `Your current 8liv membership expires on ${formatExpiryDate(membership.expiresAt)}. Renew before this date to keep your care access active.`
+
+  const { data: existing, error: lookupError } = await supabaseAdmin
+    .from('patient_notifications')
+    .select('*')
+    .eq('patient_id', patientId)
+    .eq('type', 'billing')
+    .eq('title', notificationTitle)
+    .gte('created_at', membership.startedAt)
+    .limit(1)
+    .maybeSingle()
+
+  if (lookupError) {
+    console.error('Failed to check membership expiry notification:', lookupError.message)
+    return null
+  }
+
+  if (existing) return existing
+
+  const { data, error } = await supabaseAdmin
+    .from('patient_notifications')
+    .insert({
+      patient_id: patientId,
+      type: 'billing',
+      title: notificationTitle,
+      message: notificationMessage,
+      is_read: false,
+    })
+    .select('*')
+    .maybeSingle()
+
+  if (error) {
+    console.error('Failed to create membership expiry notification:', error.message)
+    return null
+  }
+
+  return data
 }

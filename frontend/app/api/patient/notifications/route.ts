@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { assertPatientOrAssignedProvider } from '@/lib/apiSecurity'
+import { ensureMembershipExpiryNotification } from '@/lib/membershipServer'
 
 export async function GET(request: Request) {
   try {
@@ -12,6 +13,7 @@ export async function GET(request: Request) {
     }
 
     await assertPatientOrAssignedProvider(request, patientId)
+    await ensureMembershipExpiryNotification(patientId)
 
     const { data, error } = await supabaseAdmin
       .from('patient_notifications')

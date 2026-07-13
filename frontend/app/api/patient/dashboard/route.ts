@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { loadPatientJourneyState, updatePatientJourneyState } from '@/lib/patientJourneyServer'
-import { getMembershipValidity } from '@/lib/membershipServer'
+import { ensureMembershipExpiryNotification, getMembershipValidity } from '@/lib/membershipServer'
 import { assertPatientOrAssignedProvider } from '@/lib/apiSecurity'
 import { getPatientJourneyTarget } from '@/lib/patientJourney'
 
@@ -163,7 +163,7 @@ export async function GET(request: Request) {
     const paymentsList = paymentsRes.data || []
     const weightLogs = [...(weightLogsRes.data || [])].reverse()
     const consultations = consultationsRes.data || []
-    const notifications = notificationsRes.data || []
+    let notifications = notificationsRes.data || []
     const dietPlan = dietPlanRes.data || null
     const fitnessPlan = fitnessPlanRes.data || null
 
@@ -235,6 +235,13 @@ export async function GET(request: Request) {
         : persistedJourney?.membership_status === 'SELECTED' || assessment?.membership_tier
           ? 'SELECTED'
           : 'NOT_SELECTED'
+    const membershipExpiryNotification = await ensureMembershipExpiryNotification(patientId, membershipValidity)
+    if (
+      membershipExpiryNotification
+      && !notifications.some((notification: any) => notification.id === membershipExpiryNotification.id)
+    ) {
+      notifications = [membershipExpiryNotification, ...notifications].slice(0, 50)
+    }
     const effectiveDashboardAccess = membershipActive && firstConsultationCompleted
     const currentJourneyStep = getCurrentJourneyStep({
       assessmentStatus,

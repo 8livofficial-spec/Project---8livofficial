@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight, ArrowLeft, User, Scale, Activity, ShieldCheck, Pill, CheckCircle2, AlertCircle } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { getPatientJourneyTarget } from '@/lib/patientJourney'
+import { normalizePhoneNumber } from '@/lib/phone'
 
 type EligibilityStatus = 'ELIGIBLE' | 'REVIEW_REQUIRED' | 'NOT_ELIGIBLE'
 type RadioField = 'has_mtc_men2' | 'is_pregnant_nursing' | 'has_pancreatitis' | 'has_active_cancer' | 'has_severe_gi_disease'
@@ -292,6 +293,10 @@ export default function AssessmentPage() {
   const validateStep1 = () => {
     if (!formData.first_name || !formData.last_name || !formData.age || !formData.phone_number) {
       setStepError('Please fill out all required contact fields.')
+      return false
+    }
+    if (!normalizePhoneNumber(formData.phone_number).isValid) {
+      setStepError('Please enter a valid mobile number with country code.')
       return false
     }
     if (!formData.agree_terms) {

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { updatePatientJourneyState } from '@/lib/patientJourneyServer'
 import { getAuthenticatedUser } from '@/lib/apiSecurity'
+import { normalizePhoneNumber } from '@/lib/phone'
 
 type EligibilityStatus = 'ELIGIBLE' | 'REVIEW_REQUIRED' | 'NOT_ELIGIBLE'
 
@@ -223,6 +224,10 @@ export async function POST(request: Request) {
 
     const patientId = await resolveAssessmentPatientId(request, userId)
     const eligibility = evaluateEligibility(formData)
+    const normalizedPhone = normalizePhoneNumber(formData.phone_number)
+    if (!normalizedPhone.isValid) {
+      return NextResponse.json({ error: 'Please enter a valid mobile number with country code.' }, { status: 400 })
+    }
     console.info('[assessment-submit]', {
       patientId,
       eligibilityStatus: eligibility.status,
@@ -237,7 +242,7 @@ export async function POST(request: Request) {
       display_id: `${formData.first_name} ${formData.last_name}`,
       first_name: formData.first_name,
       last_name: formData.last_name,
-      phone_number: formData.phone_number
+      phone_number: normalizedPhone.e164
     })
 
     if (profileError) {
@@ -251,7 +256,7 @@ export async function POST(request: Request) {
       first_name: formData.first_name,
       last_name: formData.last_name,
       age: parseInt(formData.age) || null,
-      phone_number: formData.phone_number,
+      phone_number: normalizedPhone.e164,
       address: formData.address,
       agree_terms: formData.agree_terms,
       height_cm: parseFloat(formData.height_cm) || null,

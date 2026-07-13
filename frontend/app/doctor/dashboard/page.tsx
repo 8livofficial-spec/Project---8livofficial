@@ -446,6 +446,10 @@ type Consultation = {
   patient_eligibility_status?: string | null;
   patient_medical_risk_flags?: string | null;
   patient_medication_proof_url?: string | null;
+  patient_phone?: string | null;
+  patient_phone_e164?: string | null;
+  patient_whatsapp_phone?: string | null;
+  patient_phone_valid?: boolean;
 };
 
 type WalletData = {
