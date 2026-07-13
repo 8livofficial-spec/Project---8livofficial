@@ -369,8 +369,8 @@ export default function AssessmentPage() {
   // Reusable Classes
   const inputCls = "w-full bg-[#F9F6F0] border-2 border-[#D46E53]/10 text-[#0F172A] rounded-2xl px-5 py-4 focus:outline-none focus:border-[#D46E53] focus:ring-4 focus:ring-[#D46E53]/20 transition-all font-medium placeholder:text-[#475569]/50"
   const labelCls = "block text-sm font-bold text-[#0F172A] mb-2 uppercase tracking-wide"
-  const btnPrimaryCls = "flex-1 bg-[#D46E53] text-white font-semibold rounded-full px-8 py-4 shadow-lg shadow-[#D46E53]/20 hover:bg-[#A84A33] transition-colors flex items-center justify-center gap-2 group"
-  const btnSecondaryCls = "px-8 py-4 rounded-full font-semibold text-[#475569] bg-white border-2 border-[#D46E53]/10 hover:bg-[#F9F6F0] hover:text-[#0F172A] transition-all flex items-center gap-2 group"
+  const btnPrimaryCls = "w-full sm:flex-1 bg-[#D46E53] text-white font-semibold rounded-full px-6 sm:px-8 py-4 shadow-lg shadow-[#D46E53]/20 hover:bg-[#A84A33] transition-colors flex items-center justify-center gap-2 group disabled:opacity-70"
+  const btnSecondaryCls = "w-full sm:w-auto px-6 sm:px-8 py-4 rounded-full font-semibold text-[#475569] bg-white border-2 border-[#D46E53]/10 hover:bg-[#F9F6F0] hover:text-[#0F172A] transition-all flex items-center justify-center gap-2 group"
 
   const renderRadioGroup = (field: RadioField, question: string) => (
     <div className="bg-[#F9F6F0]/50 p-5 rounded-2xl border border-[#D46E53]/10">
@@ -470,7 +470,7 @@ export default function AssessmentPage() {
           </div>
         )}
 
-        <div className="bg-white p-8 md:p-12 rounded-[2.5rem] shadow-xl border border-[#D46E53]/10 relative overflow-hidden">
+        <div className="bg-white p-6 sm:p-8 md:p-12 rounded-[2rem] sm:rounded-[2.5rem] shadow-xl border border-[#D46E53]/10 relative overflow-hidden">
           
           <AnimatePresence mode="wait">
             
@@ -505,7 +505,7 @@ export default function AssessmentPage() {
 
                   {stepError && <p className="text-rose-600 text-sm font-bold bg-rose-50 border border-rose-100 rounded-2xl px-5 py-4 flex items-center gap-2"><AlertCircle className="w-5 h-5"/> {stepError}</p>}
 
-                  <div className="flex gap-4 mt-10">
+                  <div className="flex flex-col sm:flex-row gap-4 mt-10">
                     <Link href="/" className={btnSecondaryCls}><ArrowLeft className="w-5 h-5"/> Cancel</Link>
                     <button onClick={nextStep} disabled={stepSaving} className={btnPrimaryCls}>{stepSaving ? 'Saving...' : 'Continue'} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform"/></button>
                   </div>
@@ -561,7 +561,7 @@ export default function AssessmentPage() {
 
                   {stepError && <p className="text-rose-600 text-sm font-bold bg-rose-50 border border-rose-100 rounded-2xl px-5 py-4 flex items-center gap-2"><AlertCircle className="w-5 h-5"/> {stepError}</p>}
 
-                  <div className="flex gap-4 mt-10">
+                  <div className="flex flex-col sm:flex-row gap-4 mt-10">
                     <button onClick={prevStep} className={btnSecondaryCls}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Back</button>
                     <button onClick={nextStep} disabled={stepSaving} className={btnPrimaryCls}>{stepSaving ? 'Saving...' : 'Continue'} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform"/></button>
                   </div>
@@ -601,7 +601,7 @@ export default function AssessmentPage() {
 
                 {stepError && <p className="text-rose-600 text-sm font-bold bg-rose-50 border border-rose-100 rounded-2xl px-5 py-4 mt-6 flex items-center gap-2"><AlertCircle className="w-5 h-5"/> {stepError}</p>}
 
-                <div className="flex gap-4 mt-10">
+                <div className="flex flex-col sm:flex-row gap-4 mt-10">
                   <button onClick={prevStep} className={btnSecondaryCls}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Back</button>
                   <button onClick={nextStep} disabled={stepSaving} className={btnPrimaryCls}>{stepSaving ? 'Saving...' : 'Continue'} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform"/></button>
                 </div>
@@ -630,7 +630,7 @@ export default function AssessmentPage() {
                     ))}
                   </div>
 
-                  <div className="flex gap-4 mt-10">
+                  <div className="flex flex-col sm:flex-row gap-4 mt-10">
                     <button onClick={prevStep} className={btnSecondaryCls}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Back</button>
                     <button onClick={nextStep} disabled={stepSaving} className={btnPrimaryCls}>{stepSaving ? 'Saving...' : 'Continue'} <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform"/></button>
                   </div>
@@ -660,7 +660,7 @@ export default function AssessmentPage() {
                     ))}
                   </div>
 
-                  <div className="flex gap-4 mt-10">
+                  <div className="flex flex-col sm:flex-row gap-4 mt-10">
                     <button onClick={prevStep} className={btnSecondaryCls}><ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform"/> Back</button>
                     <button onClick={nextStep} disabled={stepSaving} className={btnPrimaryCls}>{stepSaving ? 'Saving...' : 'Complete Assessment'} <CheckCircle2 className="w-5 h-5"/></button>
                   </div>

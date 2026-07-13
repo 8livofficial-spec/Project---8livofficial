@@ -388,7 +388,7 @@ function ClinicalMetric({ label, value, accent, success, compact }: { label: str
 
 function ClinicalCard({ title, icon, children }: { title: string; icon: ReactNode; children: ReactNode }) {
   return (
-    <div className="bg-white p-6 rounded-[20px] border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.08)]">
+    <div className="min-w-0 bg-white p-5 sm:p-6 rounded-[20px] border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.08)]">
       <h3 className="text-xs font-black text-[#8896A4] uppercase tracking-widest mb-4 flex items-center gap-1.5">
         {icon} {title}
       </h3>
@@ -400,7 +400,7 @@ function ClinicalCard({ title, icon, children }: { title: string; icon: ReactNod
 function ClinicalText({ value, empty }: { value: unknown; empty: string }) {
   const text = safeDisplayValue(value);
   return (
-    <p className="text-sm font-bold text-[#1A1F36] bg-[#F5F0EB]/50 p-4 rounded-2xl border border-[#1A1F36]/8 leading-relaxed">
+    <p className="break-words text-sm font-bold text-[#1A1F36] bg-[#F5F0EB]/50 p-4 rounded-2xl border border-[#1A1F36]/8 leading-relaxed">
       {text === 'N/A' ? empty : text}
     </p>
   );
@@ -2652,10 +2652,10 @@ export default function DoctorDashboard() {
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex-1 flex overflow-hidden h-full"
+              className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-[#1A1F36]/8 bg-white lg:h-[calc(100vh-64px)] lg:flex-row"
             >
               {/* Patient List Sidebar */}
-              <div className="w-80 bg-white border-r border-[#1A1F36]/8 overflow-y-auto p-6 space-y-4 custom-scrollbar shrink-0">
+              <div className="max-h-[42vh] w-full shrink-0 overflow-y-auto border-b border-[#1A1F36]/8 bg-white p-4 space-y-3 custom-scrollbar sm:p-5 lg:max-h-none lg:w-80 lg:border-b-0 lg:border-r lg:p-6 lg:space-y-4">
                 <div className="px-2 mb-4">
                   <h3 className="text-xs font-black text-[#8896A4] uppercase tracking-widest mb-3">Assigned Patients</h3>
                   <input
@@ -2680,7 +2680,7 @@ export default function DoctorDashboard() {
                     <div
                       key={p.id}
                       onClick={() => setSelectedPatient(p)}
-                      className={`p-4 rounded-2xl cursor-pointer border-2 transition-all duration-300 ${selectedPatient?.id === p.id ? 'border-[#C4622D] bg-[#F5F0EB]/70 shadow-sm scale-[1.01]' : 'border-transparent bg-[#F5F0EB]/35 hover:bg-[#F5F0EB]/65 hover:border-[#C4622D]/30'}`}
+                      className={`p-4 rounded-2xl cursor-pointer border-2 transition-all duration-300 ${selectedPatient?.id === p.id ? 'border-[#C4622D] bg-[#F5F0EB]/70 shadow-sm lg:scale-[1.01]' : 'border-transparent bg-[#F5F0EB]/35 hover:bg-[#F5F0EB]/65 hover:border-[#C4622D]/30'}`}
                     >
                       <h4 className="font-black text-[#1A1F36] text-sm leading-tight mb-1">{patientName(p)}</h4>
                       <div className="flex justify-between items-start gap-3 text-[10px] text-[#8896A4] font-bold">
@@ -2718,24 +2718,24 @@ export default function DoctorDashboard() {
               </div>
 
               {/* Patient Details Pane */}
-              <div className="flex-1 overflow-y-auto p-8 md:p-10 custom-scrollbar">
+              <div className="min-w-0 flex-1 overflow-y-auto bg-[#F5F0EB] p-4 custom-scrollbar sm:p-6 md:p-8 lg:p-10">
                 {selectedPatient ? (
-                  <div className="max-w-6xl space-y-8">
+                  <div className="max-w-6xl space-y-6 sm:space-y-8">
 
                     {/* Header info */}
-                    <div className="flex justify-between items-start">
-                      <div>
-                        <h2 className="text-3xl font-black text-[#1A1F36] tracking-tight">{patientName(selectedPatient)}</h2>
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <h2 className="break-words text-2xl font-black tracking-tight text-[#1A1F36] sm:text-3xl">{patientName(selectedPatient)}</h2>
                         <p className="text-xs font-bold text-[#8896A4] mt-1 uppercase tracking-wider flex items-center gap-1.5">
                           <Stethoscope className="w-3.5 h-3.5 text-[#C4622D]"/> Endocrinology case file
                         </p>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="flex w-full items-center gap-3 sm:w-auto">
                         <button
                           onClick={() => {
                             setActiveTab('messages');
                           }}
-                          className="bg-[#1A1F36] hover:bg-[#0D101C] text-white px-4 py-2 rounded-xl text-xs font-bold shadow-sm flex items-center gap-1.5 transition-all"
+                          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#1A1F36] px-4 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#0D101C] sm:w-auto"
                         >
                           <MessageCircle className="w-3.5 h-3.5" /> Message Patient
                         </button>
@@ -2755,7 +2755,7 @@ export default function DoctorDashboard() {
                     </div>
 
                     {/* Telemetry metrics */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
                       <div className="bg-white p-5 rounded-2xl border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.06)] hover:shadow-[0_18px_40px_rgba(26,31,54,0.10)] transition-shadow duration-300 text-center">
                         <p className="text-[10px] font-black text-[#8896A4] uppercase tracking-widest">Height</p>
                         <p className="text-xl font-black text-[#1A1F36] mt-1">{selectedPatient.height_cm ? `${selectedPatient.height_cm} cm` : '—'}</p>
@@ -2832,16 +2832,16 @@ export default function DoctorDashboard() {
                       {selectedPatient.previous_consultations?.length ? (
                         <div className="grid gap-3 md:grid-cols-2">
                           {selectedPatient.previous_consultations.slice(0, 6).map((consultation: Consultation) => (
-                            <div key={consultation.id} className="rounded-2xl border border-[#1A1F36]/8 bg-[#F5F0EB]/45 p-4">
-                              <div className="flex items-start justify-between gap-3">
-                                <div>
+                            <div key={consultation.id} className="min-w-0 rounded-2xl border border-[#1A1F36]/8 bg-[#F5F0EB]/45 p-4">
+                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div className="min-w-0">
                                   <p className="text-sm font-black text-[#1A1F36]">{formatClinicalDate(consultation.booking_date, consultation.booking_time)}</p>
                                   <p className="mt-1 text-xs font-bold text-[#8896A4]">{consultationLabel(consultation.status)}</p>
                                 </div>
-                                <span className={`rounded-full border px-3 py-1 text-[10px] font-black uppercase ${statusTone(consultation.status)}`}>{consultationLabel(consultation.status)}</span>
+                                <span className={`w-fit rounded-full border px-3 py-1 text-[10px] font-black uppercase ${statusTone(consultation.status)}`}>{consultationLabel(consultation.status)}</span>
                               </div>
                               {consultation.prescription_notes && (
-                                <p className="mt-3 text-xs font-semibold leading-relaxed text-[#40516A]">{safeDisplayValue(consultation.prescription_notes)}</p>
+                                <p className="mt-3 break-words text-xs font-semibold leading-relaxed text-[#40516A]">{safeDisplayValue(consultation.prescription_notes)}</p>
                               )}
                             </div>
                           ))}
