@@ -355,55 +355,8 @@ def verify_payment(data: PaymentVerifyRequest):
                 "updated_at": datetime.utcnow().isoformat()
             }).eq("patient_id", data.patient_id).execute()
             
-            # Fetch latest approved consultation for pharmacy dispatch
-            consultation_res = supabase.table("doctor_consultations") \
-                .select("id, prescription_type, status") \
-                .eq("patient_id", data.patient_id) \
-                .eq("status", "approved") \
-                .order("created_at", desc=True) \
-                .limit(1) \
-                .execute()
-                
-            if consultation_res.data and len(consultation_res.data) > 0:
-                consultation = consultation_res.data[0]
-                prescription_type = consultation.get("prescription_type")
-                
-                # Fetch patient details for dispatch
-                patient_res = supabase.table("health_assessments") \
-                    .select("first_name, last_name, full_name, address, phone_number") \
-                    .eq("patient_id", data.patient_id) \
-                    .limit(1) \
-                    .execute()
-                    
-                if patient_res.data and len(patient_res.data) > 0:
-                    patient = patient_res.data[0]
-                    first_name = patient.get("first_name") or ""
-                    last_name = patient.get("last_name") or ""
-                    full_name = patient.get("full_name") or f"{first_name} {last_name}".strip() or "Patient"
-                    address = patient.get("address") or "N/A"
-                    phone_number = patient.get("phone_number") or "N/A"
-                    
-                    # Call automated dispatch log simulation (as in dispatch_to_pharmacy)
-                    try:
-                        print("\n" + "="*50)
-                        print("[PHARMACY DEALER DISPATCH] AUTOMATED ORDER RECEIVED VIA BACKEND PAYMENT VERIFICATION")
-                        print(f"  Patient:  {full_name}")
-                        print(f"  Address:  {address}")
-                        print(f"  Phone:    {phone_number}")
-                        print(f"  Medication: {prescription_type}")
-                        print(f"  Doctor:   8liv Medical Team")
-                        print("="*50 + "\n")
-                    except Exception as ph_err:
-                        print(f"[PHARMACY DISPATCH ERROR] {ph_err}")
-                
-                # Mark prescription_ordered = True
-                supabase.table("doctor_consultations") \
-                    .update({
-                        "prescription_ordered": True,
-                        "updated_at": datetime.utcnow().isoformat()
-                    }) \
-                    .eq("id", consultation["id"]) \
-                    .execute()
+            # Medicine fulfilment is now created only when a doctor signs a
+            # structured e-prescription in the admin-managed Apollo workflow.
 
         return {"status": "success", "verified": True}
     except Exception as e:
@@ -422,15 +375,7 @@ class PharmacyDispatch(BaseModel):
 
 @app.post("/api/pharmacy/dispatch")
 def dispatch_to_pharmacy(data: PharmacyDispatch):
-    print("\n" + "="*50)
-    print("[PHARMACY DEALER DISPATCH] AUTOMATED ORDER RECEIVED")
-    print(f"  Patient:  {data.patient_name}")
-    print(f"  Address:  {data.patient_address}")
-    print(f"  Phone:    {data.patient_phone}")
-    print(f"  Medication: {data.medication_type}")
-    print(f"  Doctor:   {data.doctor_name}")
-    print("="*50 + "\n")
-    return {"status": "success", "message": "Order successfully dispatched to pharmacy dealer!"}
+    return {"status": "gone", "message": "Standalone pharmacy dispatch is retired. Use admin Apollo fulfilment."}
 
 
 

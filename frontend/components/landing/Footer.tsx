@@ -1,11 +1,6 @@
-'use client'
+import Link from 'next/link'
 
 export default function Footer() {
-  const scrollToSection = (sectionId: string) => {
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    window.history.replaceState(null, '', window.location.pathname + window.location.search)
-  }
-
   return (
     <footer className="relative z-10 border-t border-[#D46E53]/20 bg-transparent pb-10 pt-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -24,20 +19,21 @@ export default function Footer() {
           <div>
             <h4 className="mb-6 font-sora font-bold text-[#0F172A]">Program</h4>
             <ul className="space-y-4">
-              <li><button type="button" onClick={() => scrollToSection('how-it-works')} className="text-left text-[#475569] transition-colors hover:text-[#D46E53]">How it works</button></li>
-              <li><button type="button" onClick={() => scrollToSection('program')} className="text-left text-[#475569] transition-colors hover:text-[#D46E53]">Care model</button></li>
-              <li><button type="button" onClick={() => scrollToSection('outcomes')} className="text-left text-[#475569] transition-colors hover:text-[#D46E53]">Outcomes</button></li>
-              <li><button type="button" onClick={() => scrollToSection('portal')} className="text-left text-[#475569] transition-colors hover:text-[#D46E53]">Patient dashboard</button></li>
+              <li><Link href="/how-it-works" className="text-[#475569] transition-colors hover:text-[#D46E53]">How it works</Link></li>
+              <li><Link href="/medical-weight-management" className="text-[#475569] transition-colors hover:text-[#D46E53]">Medical weight management</Link></li>
+              <li><Link href="/online-doctor-consultation" className="text-[#475569] transition-colors hover:text-[#D46E53]">Online doctor consultation</Link></li>
+              <li><Link href="/membership" className="text-[#475569] transition-colors hover:text-[#D46E53]">Membership</Link></li>
+              <li><Link href="/learn" className="text-[#475569] transition-colors hover:text-[#D46E53]">Learning center</Link></li>
             </ul>
           </div>
 
           <div>
             <h4 className="mb-6 font-sora font-bold text-[#0F172A]">Company</h4>
             <ul className="space-y-4">
-              <li><button type="button" onClick={() => scrollToSection('company')} className="text-left text-[#475569] transition-colors hover:text-[#D46E53]">About 8Liv</button></li>
-              <li><button type="button" onClick={() => scrollToSection('company')} className="text-left text-[#475569] transition-colors hover:text-[#D46E53]">Clinical operations</button></li>
-              <li><button type="button" onClick={() => scrollToSection('company')} className="text-left text-[#475569] transition-colors hover:text-[#D46E53]">Care network</button></li>
-              <li><a href="mailto:8livofficial@gmail.com" className="text-[#475569] transition-colors hover:text-[#D46E53]">Contact</a></li>
+              <li><Link href="/about" className="text-[#475569] transition-colors hover:text-[#D46E53]">About 8Liv</Link></li>
+              <li><Link href="/nutrition-support" className="text-[#475569] transition-colors hover:text-[#D46E53]">Nutrition support</Link></li>
+              <li><Link href="/fitness-coaching" className="text-[#475569] transition-colors hover:text-[#D46E53]">Fitness coaching</Link></li>
+              <li><Link href="/contact" className="text-[#475569] transition-colors hover:text-[#D46E53]">Contact</Link></li>
             </ul>
           </div>
 
@@ -55,8 +51,9 @@ export default function Footer() {
             &copy; {new Date().getFullYear()} 8Liv. All rights reserved.
           </p>
           <div className="flex gap-6 text-sm">
-            <a href="/privacy-policy" className="text-[#475569] transition-colors hover:text-[#D46E53]">Privacy Policy</a>
-            <a href="/terms" className="text-[#475569] transition-colors hover:text-[#D46E53]">Terms of Service</a>
+            <Link href="/privacy" className="text-[#475569] transition-colors hover:text-[#D46E53]">Privacy Policy</Link>
+            <Link href="/terms" className="text-[#475569] transition-colors hover:text-[#D46E53]">Terms of Service</Link>
+            <Link href="/prescription-policy" className="text-[#475569] transition-colors hover:text-[#D46E53]">Prescription Policy</Link>
           </div>
         </div>
       </div>

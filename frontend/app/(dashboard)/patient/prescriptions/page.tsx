@@ -1,286 +1,53 @@
 'use client'
 
-import React, { useState } from 'react'
-import { Pill, Package, Download, CheckCircle2 } from 'lucide-react'
-import { usePatientData } from '@/hooks/usePatientData'
+import { useEffect, useState } from 'react'
+import Link from 'next/link'
+import { FileText, Pill } from 'lucide-react'
 import { authedFetch } from '@/lib/apiClient'
 
-export default function PrescriptionsPage() {
-  const { consultation, loading } = usePatientData()
-  const [orderCreated, setOrderCreated] = useState(false)
-  const [orderLoading, setOrderLoading] = useState(false)
-  const [orderError, setOrderError] = useState('')
-  const [deliveryAddress, setDeliveryAddress] = useState('')
+export default function PatientPrescriptionsPage() {
+  const [prescriptions, setPrescriptions] = useState<any[]>([])
+  const [error, setError] = useState('')
 
-  if (loading) {
-    return (
-      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
-        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
-  const handleMedicineOrder = async () => {
-    if (!consultation?.id) return
-    if (!deliveryAddress.trim()) {
-      setOrderError('Delivery address is required.')
-      return
-    }
-    setOrderLoading(true)
-    setOrderError('')
-    try {
-      const res = await authedFetch('/api/patient/medicine-orders', {
-        method: 'POST',
-        body: JSON.stringify({
-          consultationId: consultation.id,
-          deliveryAddress: { address_line: deliveryAddress.trim() },
-        }),
+  useEffect(() => {
+    authedFetch('/api/patient/prescriptions')
+      .then(async (res) => {
+        const payload = await res.json()
+        if (!res.ok) throw new Error(payload.error || 'Unable to load prescriptions.')
+        setPrescriptions(payload.prescriptions || [])
       })
-      const payload = await res.json()
-      if (!res.ok) throw new Error(payload.error || 'Unable to create medicine order.')
-      setOrderCreated(true)
-    } catch (err) {
-      setOrderError(err instanceof Error ? err.message : 'Unable to create medicine order.')
-    } finally {
-      setOrderLoading(false)
-    }
-  }
-
-  const handlePrescriptionDownload = () => {
-    const content = [
-      '8liv Prescription',
-      '',
-      `Medication: ${medicationName}`,
-      `Dosage: ${dosage}`,
-      `Prescribed By: ${physicianName}`,
-      `Date: ${consultation?.created_at ? new Date(consultation.created_at).toLocaleDateString() : new Date().toLocaleDateString()}`,
-      '',
-      prescriptionText || '',
-    ].join('\n')
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' })
-    const url = URL.createObjectURL(blob)
-    const anchor = document.createElement('a')
-    anchor.href = url
-    anchor.download = `8liv-prescription-${consultation?.id || 'download'}.txt`
-    anchor.click()
-    URL.revokeObjectURL(url)
-  }
-
-  const isApproved = consultation?.status === 'approved'
-
-  // Dynamic calculations
-  const prescriptionText = consultation?.prescription_text || ''
-  
-  let medicationName = "Semaglutide (GLP-1)"
-  let dosage = "1.5 mg"
-  
-  if (prescriptionText) {
-    const match = prescriptionText.match(/^([a-zA-Z\s\(\)-]+)\s+([0-9\.]+\s*m?g)/i)
-    if (match) {
-      medicationName = match[1].trim()
-      dosage = match[2].trim()
-    } else {
-      medicationName = prescriptionText
-      dosage = "Standard Dosage"
-    }
-  }
-
-  const getDosesTaken = (approvedAtString?: string) => {
-    if (!approvedAtString) return 6
-    const start = new Date(approvedAtString)
-    const now = new Date()
-    const diffTime = Math.abs(now.getTime() - start.getTime())
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    const weeks = Math.ceil(diffDays / 7)
-    return Math.min(12, Math.max(1, weeks))
-  }
-
-  const dosesTaken = consultation?.created_at ? getDosesTaken(consultation.created_at) : 6
-  const totalDoses = 12
-  const compliancePercent = Math.round((dosesTaken / totalDoses) * 100)
-
-  const getNextRefillDetails = (approvedAtString?: string) => {
-    if (!approvedAtString) return { date: 'Apr 18', days: 12 }
-    const start = new Date(approvedAtString)
-    const now = new Date()
-    
-    const nextRefill = new Date(start.getTime() + 28 * 24 * 60 * 60 * 1000)
-    while (nextRefill.getTime() < now.getTime()) {
-      nextRefill.setTime(nextRefill.getTime() + 28 * 24 * 60 * 60 * 1000)
-    }
-    
-    const diffTime = nextRefill.getTime() - now.getTime()
-    const days = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
-    
-    const options: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric' }
-    return { date: nextRefill.toLocaleDateString('en-US', options), days: Math.max(0, days) }
-  }
-
-  const refillDetails = consultation?.created_at 
-    ? getNextRefillDetails(consultation.created_at) 
-    : { date: 'Apr 18', days: 12 }
-
-  const physicianName = 'Assigned Doctor'
-
-  const history = isApproved ? [
-    { medication: medicationName, dose: dosage, date: consultation?.created_at ? new Date(consultation.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : 'June 01, 2026', duration: '12 Weeks', status: 'Active' }
-  ] : []
+      .catch((err) => setError(err instanceof Error ? err.message : 'Unable to load prescriptions.'))
+  }, [])
 
   return (
     <div className="space-y-6 text-[#1A1F36]">
-      {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold font-sora">My Protocols & Prescriptions</h2>
-        <p className="text-xs text-[#8896A4] font-medium">Track your active dosages, refills, and shipping statuses.</p>
-      </div>
-
-      {/* Active Prescription Card */}
-      <div className="bg-white rounded-2xl p-6 shadow-[0_2px_12px_rgba(26,31,54,0.08)] border border-[#1A1F36]/6">
-        {isApproved ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Left: Drug Metadata */}
-            <div className="lg:col-span-1 space-y-4">
-              <div className="flex items-center gap-2 text-[#C4622D]">
-                <Pill className="w-5 h-5 shrink-0" />
-                <span className="font-bold text-sm uppercase tracking-wider font-sora">Active Protocol</span>
+      <div><h2 className="text-xl font-bold">My Prescriptions</h2><p className="text-xs font-medium text-[#8896A4]">Signed prescriptions issued by your doctor.</p></div>
+      {error && <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">{error}</p>}
+      <div className="grid gap-4">
+        {prescriptions.length === 0 ? <Empty /> : prescriptions.map((rx) => {
+          const order = rx.pharmacy_orders?.[0]
+          return (
+            <Link key={rx.id} href={`/patient/prescriptions/${rx.id}`} className="dash-card block p-5">
+              <p className="text-xs font-black uppercase tracking-wider text-[#C4622D]">{rx.prescription_number}</p>
+              <h3 className="mt-1 text-lg font-black">{rx.status}</h3>
+              <p className="mt-2 text-sm font-semibold text-[#40516A]">{(rx.prescription_items || []).map((item: any) => item.medicine_name).join(', ') || 'Prescription medicines'}</p>
+              <div className="mt-4 grid gap-3 border-t border-[#1A1F36]/6 pt-4 text-sm sm:grid-cols-3">
+                <Meta label="Issued" value={rx.issued_at ? new Date(rx.issued_at).toLocaleDateString() : '-'} />
+                <Meta label="Valid until" value={rx.valid_until || '-'} />
+                <Meta label="Apollo order" value={order?.status || 'Pending fulfilment'} />
               </div>
-              <div className="space-y-1">
-                <h3 className="text-2xl font-bold font-sora">{medicationName}</h3>
-                <span className="inline-block bg-[#5C7A6B]/10 text-[#5C7A6B] text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-full mt-1">
-                  Physician Approved
-                </span>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-4 pt-3 border-t border-[#1A1F36]/6">
-                <div>
-                  <span className="text-[10px] font-bold text-[#8896A4] uppercase tracking-wider">Dosage</span>
-                  <p className="text-sm font-semibold mt-0.5">{dosage}</p>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-[#8896A4] uppercase tracking-wider">Frequency</span>
-                  <p className="text-sm font-semibold mt-0.5">Weekly</p>
-                </div>
-                <div className="col-span-2">
-                  <span className="text-[10px] font-bold text-[#8896A4] uppercase tracking-wider">Prescribed By</span>
-                  <p className="text-sm font-semibold mt-0.5">{physicianName}</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Middle: Progress compliance */}
-            <div className="lg:col-span-1 border-y lg:border-y-0 lg:border-x border-[#1A1F36]/8 py-6 lg:py-0 lg:px-6 space-y-4">
-              <div>
-                <span className="text-[10px] font-bold text-[#8896A4] uppercase tracking-wider">Treatment Compliance</span>
-                <div className="flex justify-between items-center text-xs mt-2 font-bold">
-                  <span>Doses Administered</span>
-                  <span>{dosesTaken} of {totalDoses} ({compliancePercent}%)</span>
-                </div>
-                <div className="bg-[#F5F0EB] h-2.5 rounded-full overflow-hidden mt-2 border border-[#1A1F36]/6">
-                  <div className="bg-[#C4622D] h-full rounded-full transition-all" style={{ width: `${compliancePercent}%` }} />
-                </div>
-              </div>
-
-              <div className="p-4 bg-[#F5F0EB] rounded-2xl border border-[#1A1F36]/6 flex items-start gap-3">
-                <Package className="w-5 h-5 text-[#8896A4] shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-xs font-bold">Next Refill Dispatch: {refillDetails.date}</p>
-                  <p className="text-[10px] text-[#C4622D] font-bold uppercase mt-0.5">{refillDetails.days} days remaining</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Right: Actions & Refill Request */}
-            <div className="lg:col-span-1 flex flex-col justify-center space-y-4">
-              <div className="space-y-1.5">
-                <span className="text-[10px] font-bold text-[#8896A4] uppercase tracking-wider">Dispatch Status</span>
-                <p className="text-sm font-bold text-[#5C7A6B] flex items-center gap-1.5 mt-1">
-                  <span className="w-2 h-2 rounded-full bg-[#5C7A6B] animate-pulse" /> 
-                  Shipped • Arrives in {refillDetails.days > 2 ? 2 : refillDetails.days} days
-                </p>
-              </div>
-
-              <div className="pt-2">
-                <textarea
-                  value={deliveryAddress}
-                  onChange={(e) => setDeliveryAddress(e.target.value)}
-                  placeholder="Delivery address"
-                  className="input min-h-24 resize-none text-sm"
-                />
-                {orderError && <p className="text-xs font-bold text-red-600">{orderError}</p>}
-                {orderCreated ? (
-                  <div className="w-full bg-[#5C7A6B]/10 text-[#5C7A6B] border border-[#5C7A6B]/20 rounded-xl py-3 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 shrink-0" /> Order Created
-                  </div>
-                ) : (
-                  <button
-                    onClick={handleMedicineOrder}
-                    disabled={orderLoading}
-                    className="w-full bg-[#1A1F36] hover:bg-[#C4622D] text-white font-bold uppercase tracking-wider text-xs rounded-xl py-3.5 transition-colors cursor-pointer disabled:opacity-50"
-                  >
-                    {orderLoading ? "Creating Order..." : "Order Medicines"}
-                  </button>
-                )}
-                <button
-                  onClick={handlePrescriptionDownload}
-                  className="mt-3 w-full border border-[#1A1F36]/10 text-[#1A1F36] font-bold uppercase tracking-wider text-xs rounded-xl py-3.5 transition-colors cursor-pointer flex items-center justify-center gap-2"
-                >
-                  <Download className="w-4 h-4" /> Download Prescription
-                </button>
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div className="py-8 text-center space-y-3">
-            <Pill className="w-12 h-12 text-[#8896A4] mx-auto opacity-40" />
-            <h3 className="font-bold text-base font-sora">Awaiting Clinical Decision</h3>
-            <p className="text-xs text-[#8896A4] max-w-sm mx-auto leading-relaxed">
-              Your metabolic evaluation files are pending clinician authorization. Once approved, your custom prescription details will appear here.
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* History table */}
-      <div className="space-y-4">
-        <h3 className="font-bold text-base font-sora">Prescription History</h3>
-        
-        <div className="bg-white rounded-2xl border border-[#1A1F36]/6 overflow-hidden shadow-[0_2px_12px_rgba(26,31,54,0.04)]">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-[#F5F0EB] text-[#8896A4] text-[10px] font-black uppercase tracking-wider border-b border-[#1A1F36]/8">
-                  <th className="px-6 py-4">Medication</th>
-                  <th className="px-6 py-4">Dose</th>
-                  <th className="px-6 py-4">Prescribed Date</th>
-                  <th className="px-6 py-4">Duration</th>
-                  <th className="px-6 py-4">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#1A1F36]/6 text-xs font-semibold">
-                {history.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-[#F5F0EB]/30 transition-colors">
-                    <td className="px-6 py-4 text-[#1A1F36]">{row.medication}</td>
-                    <td className="px-6 py-4 text-[#C4622D]">{row.dose}</td>
-                    <td className="px-6 py-4 text-[#8896A4]">{row.date}</td>
-                    <td className="px-6 py-4 text-[#1A1F36]">{row.duration}</td>
-                    <td className="px-6 py-4">
-                      <span className={`inline-block px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider ${
-                        row.status === 'Active' 
-                          ? 'bg-[#C4622D]/10 text-[#C4622D]' 
-                          : row.status === 'Completed'
-                            ? 'bg-[#5C7A6B]/10 text-[#5C7A6B]'
-                            : 'bg-slate-100 text-slate-400'
-                      }`}>
-                        {row.status}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+            </Link>
+          )
+        })}
       </div>
     </div>
   )
+}
+
+function Empty() {
+  return <div className="dash-card p-8 text-center"><FileText className="mx-auto mb-3 h-10 w-10 text-[#8896A4]" /><h3 className="font-black">No signed prescriptions yet</h3><p className="mt-2 text-sm font-semibold text-[#8896A4]">Your doctor-issued prescriptions will appear here.</p></div>
+}
+
+function Meta({ label, value }: { label: string; value: string }) {
+  return <div><p className="text-[10px] font-black uppercase tracking-wider text-[#8896A4]">{label}</p><p className="mt-1 font-bold">{value}</p></div>
 }

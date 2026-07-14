@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Sora } from "next/font/google";
+import { absoluteUrl, shouldNoIndexEnvironment, siteConfig } from "@/lib/seo/site";
 import "./globals.css";
 
 const inter = Inter({
@@ -13,12 +14,71 @@ const sora = Sora({
 });
 
 export const metadata: Metadata = {
-  title: "8Liv - Wellness Wherever You Are",
-  description: "Premium concierge telehealth platform connecting patients with board-certified clinicians.",
+  metadataBase: new URL(siteConfig.url),
+  title: {
+    default: siteConfig.defaultTitle,
+    template: siteConfig.titleTemplate,
+  },
+  description: siteConfig.description,
+  applicationName: siteConfig.applicationName,
+  authors: [{ name: siteConfig.name, url: siteConfig.url }],
+  creator: siteConfig.creator,
+  publisher: siteConfig.publisher,
+  category: siteConfig.category,
+  keywords: siteConfig.keywords,
+  alternates: {
+    canonical: "/",
+  },
+  robots: shouldNoIndexEnvironment()
+    ? {
+        index: false,
+        follow: false,
+        noarchive: true,
+        nosnippet: true,
+      }
+    : {
+        index: true,
+        follow: true,
+      },
   icons: {
     icon: "/brand-mark.svg",
     shortcut: "/brand-mark.svg",
     apple: "/brand-mark.svg",
+  },
+  openGraph: {
+    type: "website",
+    locale: siteConfig.locale,
+    siteName: siteConfig.name,
+    url: siteConfig.url,
+    title: siteConfig.defaultTitle,
+    description: siteConfig.description,
+    images: [
+      {
+        url: absoluteUrl(siteConfig.ogImage),
+        width: 1200,
+        height: 630,
+        alt: "8liv online doctor-led weight management and wellness care",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: siteConfig.socialHandle,
+    creator: siteConfig.socialHandle,
+    title: siteConfig.defaultTitle,
+    description: siteConfig.description,
+    images: [absoluteUrl(siteConfig.ogImage)],
+  },
+  formatDetection: {
+    telephone: false,
+    address: false,
+    email: false,
+  },
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || undefined,
+    other: {
+      "msvalidate.01": process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION || "",
+    },
   },
 };
 

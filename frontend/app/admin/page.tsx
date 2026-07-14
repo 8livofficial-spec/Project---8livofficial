@@ -1,10 +1,11 @@
 'use client';
+/* eslint-disable @next/next/no-html-link-for-pages */
 
 import { Suspense, useState, useEffect, useRef, type FormEvent } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
-import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer, Trash2, GitMerge, ClipboardList, DollarSign, Calendar, UserCheck, XCircle, TrendingUp, BadgeCheck, Menu, X } from 'lucide-react';
+import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Package, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer, Trash2, GitMerge, ClipboardList, DollarSign, Calendar, UserCheck, XCircle, TrendingUp, BadgeCheck, Menu, X } from 'lucide-react';
 import { motion } from 'framer-motion';
 import SessionMonitor from '@/components/admin/SessionMonitor';
 import { authedFetch } from '@/lib/apiClient';
@@ -22,6 +23,8 @@ type AdminTab =
   | 'analytics'
   | 'payments'
   | 'provider-wallets'
+  | 'prescription-fulfilment'
+  | 'pharmacy-orders'
   | 'reports'
   | 'notifications'
   | 'audit-logs'
@@ -408,6 +411,14 @@ function AdminDashboardContent() {
   };
 
   const openAdminTab = (tab: AdminTab) => {
+    if (tab === 'prescription-fulfilment') {
+      router.push('/admin/prescriptions');
+      return;
+    }
+    if (tab === 'pharmacy-orders') {
+      router.push('/admin/pharmacy-orders');
+      return;
+    }
     setAdminTab(tab);
     router.push(`/admin?tab=${tab}`);
   };
@@ -1254,6 +1265,17 @@ function AdminDashboardContent() {
         { id: 'video-consultations', label: 'Video Consultations', icon: Video },
         { id: 'payments', label: 'Payments', icon: DollarSign },
         { id: 'provider-wallets', label: 'Provider Wallets', icon: Wallet },
+      ],
+    },
+    {
+      title: 'Prescription Fulfilment',
+      items: [
+        { id: 'prescription-fulfilment', label: 'New Prescriptions', icon: FileText },
+        { id: 'pharmacy-orders', label: 'Pending Apollo Orders', icon: Pill },
+        { id: 'pharmacy-orders', label: 'Active Medicine Orders', icon: Package },
+        { id: 'pharmacy-orders', label: 'Delivered Orders', icon: CheckCircle2 },
+        { id: 'pharmacy-orders', label: 'Cancelled Orders', icon: XCircle },
+        { id: 'pharmacy-orders', label: 'Fulfilment Exceptions', icon: AlertCircle },
       ],
     },
     {

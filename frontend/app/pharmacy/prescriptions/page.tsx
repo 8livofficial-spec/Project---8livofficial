@@ -1,5 +1,5 @@
-import PharmacyPortal from '@/components/pharmacy/PharmacyPortal'
+import PharmacyRetired from '../retired'
 
 export default function PharmacyPrescriptionsPage() {
-  return <PharmacyPortal view="prescriptions" />
+  return <PharmacyRetired />
 }

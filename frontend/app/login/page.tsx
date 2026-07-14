@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { ArrowRight, Lock, Mail, AlertCircle, CheckCircle2 } from 'lucide-react'
@@ -60,14 +61,7 @@ export default function UnifiedLogin() {
                 if (profile?.role) {
                   role = profile.role
                 } else {
-                  const { data: pharmacyUser } = await supabase
-                    .from('pharmacy_users')
-                    .select('role, status')
-                    .eq('user_id', session.user.id)
-                    .maybeSingle()
-                  role = pharmacyUser?.status === 'ACTIVE'
-                    ? pharmacyUser.role
-                    : session.user.user_metadata?.role || 'patient'
+                  role = session.user.user_metadata?.role || 'patient'
                 }
               }
             }
@@ -80,8 +74,9 @@ export default function UnifiedLogin() {
             router.push('/doctor/dashboard')
           } else if (role === 'dietitian' || role === 'trainer' || role === 'fitness_coach' || role === 'nutritionist') {
             router.push('/provider/dashboard')
-          } else if (['PHARMACY_ADMIN', 'PHARMACY_STAFF', 'DELIVERY_PARTNER'].includes(String(role).toUpperCase())) {
-            router.push('/pharmacy')
+          } else if (['PHARMACY_ADMIN', 'PHARMACY_STAFF', 'DELIVERY_PARTNER', 'PHARMACIST'].includes(String(role).toUpperCase())) {
+            setAuthError('Pharmacy portal access has been retired. Contact 8liv admin support if this account needs a new role.')
+            setCheckingAuth(false)
           } else {
             const statusRes = await fetch(`/api/patient/status?patientId=${session.user.id}`, {
               headers: { Authorization: `Bearer ${session.access_token}` },
@@ -167,8 +162,9 @@ export default function UnifiedLogin() {
         window.location.href = '/doctor/dashboard'
       } else if (role === 'dietitian' || role === 'trainer' || role === 'fitness_coach' || role === 'nutritionist') {
         window.location.href = '/provider/dashboard'
-      } else if (['PHARMACY_ADMIN', 'PHARMACY_STAFF', 'DELIVERY_PARTNER'].includes(String(role).toUpperCase())) {
-        window.location.href = '/pharmacy'
+      } else if (['PHARMACY_ADMIN', 'PHARMACY_STAFF', 'DELIVERY_PARTNER', 'PHARMACIST'].includes(String(role).toUpperCase())) {
+        document.cookie = 'user_role=; path=/; max-age=0; SameSite=Lax'
+        setAuthError('Pharmacy portal access has been retired. Contact 8liv admin support if this account needs a new role.')
       } else {
         const statusRes = await fetch(`/api/patient/status?patientId=${loginData.user.id}`, {
           headers: { Authorization: `Bearer ${loginData.session.access_token}` },
@@ -278,7 +274,7 @@ export default function UnifiedLogin() {
             <div className="space-y-2">
               <div className="flex justify-between items-center ml-1">
                 <label className="text-sm font-semibold text-[#0F172A]">Password</label>
-                <a href="/forgot-password" className="text-sm font-medium text-[#D46E53] hover:text-[#A84A33] transition-colors">Forgot password?</a>
+                <Link href="/forgot-password" className="text-sm font-medium text-[#D46E53] hover:text-[#A84A33] transition-colors">Forgot password?</Link>
               </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -290,7 +286,7 @@ export default function UnifiedLogin() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   className="w-full bg-white border border-gray-200 text-[#0F172A] rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-[#D46E53]/50 focus:border-[#D46E53] transition-all shadow-sm"
-                  placeholder="••••••••"
+                  placeholder="Password"
                 />
               </div>
             </div>
@@ -317,9 +313,9 @@ export default function UnifiedLogin() {
           <div className="mt-10 text-center">
             <p className="text-[#475569] text-sm mb-4">
               Don&apos;t have an account? {' '}
-              <a href="/assessment" className="font-semibold text-[#D46E53] hover:text-[#A84A33] transition-colors">
+              <Link href="/assessment" className="font-semibold text-[#D46E53] hover:text-[#A84A33] transition-colors">
                 Take the Assessment
-              </a>
+              </Link>
             </p>
           </div>
         </motion.div>

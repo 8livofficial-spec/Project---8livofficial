@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
+import Link from 'next/link'
 import { Menu, X, LogOut, User } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabaseClient'
@@ -11,11 +12,6 @@ export default function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [role, setRole] = useState<string>('patient')
-
-  const scrollToSection = (sectionId: string) => {
-    document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    window.history.replaceState(null, '', window.location.pathname + window.location.search)
-  }
 
   useEffect(() => {
     const handleScroll = () => {
@@ -77,10 +73,10 @@ export default function Navbar() {
 
           {/* Desktop Links */}
           <nav className="hidden md:flex items-center gap-1 bg-white/40 rounded-full p-1 border border-white/30 shadow-inner">
-            <button type="button" onClick={() => scrollToSection('how-it-works')} className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all cursor-pointer">How It Works</button>
-            <button type="button" onClick={() => scrollToSection('program')} className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all cursor-pointer">The Program</button>
-            <button type="button" onClick={() => scrollToSection('outcomes')} className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all cursor-pointer">Outcomes</button>
-            <button type="button" onClick={() => scrollToSection('company')} className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all cursor-pointer">Company</button>
+            <Link href="/how-it-works" className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all">How It Works</Link>
+            <Link href="/medical-weight-management" className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all">The Program</Link>
+            <Link href="/membership" className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all">Membership</Link>
+            <Link href="/about" className="px-5 py-2 rounded-full text-sm font-medium text-[#475569] hover:text-[#0F172A] hover:bg-white/60 transition-all">Company</Link>
           </nav>
 
           {/* Right Action */}
@@ -105,9 +101,9 @@ export default function Navbar() {
                 </button>
               </>
             ) : (
-              <a href="/login" className="bg-[#0F172A] text-white font-medium rounded-full px-6 py-2.5 text-sm hover:bg-[#1E293B] hover:shadow-lg transition-all border border-transparent hover:border-white/20">
+              <Link href="/login" className="bg-[#0F172A] text-white font-medium rounded-full px-6 py-2.5 text-sm hover:bg-[#1E293B] hover:shadow-lg transition-all border border-transparent hover:border-white/20">
                 Log In
-              </a>
+              </Link>
             )}
           </div>
 
@@ -131,10 +127,10 @@ export default function Navbar() {
             className="fixed inset-x-4 top-20 sm:top-24 z-40 md:hidden"
           >
             <div className="bg-[#F9F6F0] md:bg-[#F9F6F0]/95 md:backdrop-blur-3xl border border-[#D46E53]/20 rounded-3xl p-6 shadow-2xl flex flex-col space-y-4">
-              <button type="button" onClick={() => { scrollToSection('how-it-works'); setMobileMenuOpen(false) }} className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">How It Works</button>
-              <button type="button" onClick={() => { scrollToSection('program'); setMobileMenuOpen(false) }} className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">The Program</button>
-              <button type="button" onClick={() => { scrollToSection('outcomes'); setMobileMenuOpen(false) }} className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">Outcomes</button>
-              <button type="button" onClick={() => { scrollToSection('company'); setMobileMenuOpen(false) }} className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">Company</button>
+              <Link href="/how-it-works" className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">How It Works</Link>
+              <Link href="/medical-weight-management" className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">The Program</Link>
+              <Link href="/membership" className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">Membership</Link>
+              <Link href="/about" className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">Company</Link>
               {user ? (
                 <>
                   <a 
@@ -157,9 +153,9 @@ export default function Navbar() {
                   </button>
                 </>
               ) : (
-                <a href="/login" className="w-full text-center bg-[#0F172A] text-white font-semibold rounded-full px-6 py-4 mt-4 shadow-lg block">
+                <Link href="/login" className="w-full text-center bg-[#0F172A] text-white font-semibold rounded-full px-6 py-4 mt-4 shadow-lg block">
                   Log In
-                </a>
+                </Link>
               )}
             </div>
           </motion.div>

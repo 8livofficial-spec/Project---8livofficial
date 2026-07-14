@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "seo:audit": "node scripts/seo-audit.mjs"
   },
   "dependencies": {
     "@stream-io/video-react-sdk": "^1.38.0",

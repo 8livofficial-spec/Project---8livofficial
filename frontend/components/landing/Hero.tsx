@@ -2,6 +2,7 @@
 
 import React from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 
@@ -34,16 +35,16 @@ export default function Hero() {
               transition={{ delay: 0.4, duration: 0.6 }}
               className="flex flex-col sm:flex-row gap-4 items-center mb-12"
             >
-              <a 
+              <Link 
                 href="/assessment"
                 className="w-full sm:w-auto bg-[#0F172A] text-white font-semibold rounded-full px-8 py-4 flex items-center justify-center gap-2 hover:bg-[#1E293B] hover:shadow-lg transition-all group"
               >
                 Start Assessment
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-              </a>
-              <a href="/assessment" className="w-full sm:w-auto bg-white/50 text-[#0F172A] font-semibold rounded-full px-8 py-4 flex items-center justify-center hover:bg-white/80 transition-colors border border-[#D46E53]/10">
+              </Link>
+              <Link href="/assessment" className="w-full sm:w-auto bg-white/50 text-[#0F172A] font-semibold rounded-full px-8 py-4 flex items-center justify-center hover:bg-white/80 transition-colors border border-[#D46E53]/10">
                 See if you qualify
-              </a>
+              </Link>
             </motion.div>
           </motion.div>
 
@@ -58,7 +59,7 @@ export default function Hero() {
             <div className="relative w-full max-w-md mx-auto aspect-[3/4] rounded-[2.5rem] overflow-hidden shadow-2xl ring-1 ring-[#D46E53]/20 group">
               <Image 
                 src="/images/hero_indian.png" 
-                alt="Premium Wellness Care" 
+                alt="Patient using 8liv for online doctor-led weight management care" 
                 fill
                 className="object-cover transition-transform duration-[2s] group-hover:scale-105"
                 priority

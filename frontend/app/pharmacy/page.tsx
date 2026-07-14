@@ -1,5 +1,5 @@
-import PharmacyPortal from '@/components/pharmacy/PharmacyPortal'
+import PharmacyRetired from './retired'
 
 export default function PharmacyIndexPage() {
-  return <PharmacyPortal view="dashboard" />
+  return <PharmacyRetired />
 }

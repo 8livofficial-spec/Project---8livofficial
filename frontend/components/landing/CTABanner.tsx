@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import Link from 'next/link'
 import { motion } from 'framer-motion'
 
 export default function CTABanner() {
@@ -47,7 +48,7 @@ export default function CTABanner() {
             transition={{ delay: 0.6, duration: 0.6 }}
             className="flex flex-col sm:flex-row gap-4 justify-center relative z-10"
           >
-            <a href="/assessment">
+            <Link href="/assessment">
               <motion.div 
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -55,7 +56,7 @@ export default function CTABanner() {
               >
                 Start Your Assessment
               </motion.div>
-            </a>
+            </Link>
           </motion.div>
         </motion.div>
 

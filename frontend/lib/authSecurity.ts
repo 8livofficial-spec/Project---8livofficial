@@ -111,16 +111,6 @@ export async function getUserRole(userId: string, email?: string | null) {
 
   if (profile?.role) return profile.role
 
-  const { data: pharmacyUser } = await supabaseAdmin
-    .from('pharmacy_users')
-    .select('role, status')
-    .eq('user_id', userId)
-    .maybeSingle()
-
-  if (pharmacyUser?.role && pharmacyUser.status === 'ACTIVE') {
-    return pharmacyUser.role
-  }
-
   const { data: doctorProfile } = await supabaseAdmin
     .from('doctor_profiles')
     .select('id')
