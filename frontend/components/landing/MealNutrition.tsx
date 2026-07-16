@@ -2,6 +2,7 @@
 
 import React from 'react'
 import Image from 'next/image'
+import Link from 'next/link'
 import { CheckCircle2 } from 'lucide-react'
 import { motion } from 'framer-motion'
 
@@ -109,13 +110,18 @@ export default function MealNutrition() {
               ))}
             </motion.ul>
 
-            <motion.button 
+            <motion.div
               whileHover={{ scale: 1.05 }}
               whileTap={{ scale: 0.95 }}
-              className="bg-gradient-to-r from-[#A84A33] to-[#D46E53] text-white font-semibold rounded-full px-8 py-4 shadow-lg flex items-center gap-2"
             >
-              Explore Nutrition Plans
-            </motion.button>
+              <Link
+                href="/plans#compare"
+                aria-label="Explore 8liv nutrition and membership plans"
+                className="flex w-full items-center justify-center rounded-full bg-gradient-to-r from-[#A84A33] to-[#D46E53] px-6 py-4 text-center font-semibold text-white shadow-lg transition-shadow hover:shadow-xl sm:w-fit sm:px-8"
+              >
+                Explore Nutrition Plans
+              </Link>
+            </motion.div>
           </motion.div>
 
         </div>
