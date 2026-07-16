@@ -6,8 +6,10 @@ export function organizationSchema() {
     '@type': 'MedicalOrganization',
     '@id': `${siteConfig.url}/#organization`,
     name: siteConfig.name,
+    legalName: siteConfig.legalName,
+    alternateName: siteConfig.alternateNames,
     url: siteConfig.url,
-    logo: absoluteUrl('/brand-logo.png'),
+    logo: absoluteUrl('/brand-logo.svg'),
     description: siteConfig.description,
     medicalSpecialty: ['Weight management', 'Telemedicine'],
   }
@@ -19,6 +21,7 @@ export function websiteSchema() {
     '@type': 'WebSite',
     '@id': `${siteConfig.url}/#website`,
     name: siteConfig.name,
+    alternateName: siteConfig.alternateNames,
     url: siteConfig.url,
     publisher: {
       '@id': `${siteConfig.url}/#organization`,

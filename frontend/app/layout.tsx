@@ -26,8 +26,18 @@ export const metadata: Metadata = {
   publisher: siteConfig.publisher,
   category: siteConfig.category,
   keywords: siteConfig.keywords,
+  manifest: "/manifest.webmanifest",
   alternates: {
     canonical: "/",
+  },
+  appleWebApp: {
+    capable: true,
+    title: siteConfig.applicationName,
+    statusBarStyle: "default",
+  },
+  other: {
+    "application-name": siteConfig.applicationName,
+    "msapplication-TileColor": "#0A0A0F",
   },
   robots: shouldNoIndexEnvironment()
     ? {

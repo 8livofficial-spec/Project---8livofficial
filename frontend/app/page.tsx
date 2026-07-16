@@ -5,13 +5,13 @@ import { absoluteUrl, siteConfig } from '@/lib/seo/site'
 import { organizationSchema, webPageSchema, websiteSchema } from '@/lib/seo/schema'
 
 export const metadata: Metadata = {
-  title: '8liv | Online Doctor-Led Weight Management and Wellness Care',
+  title: siteConfig.defaultTitle,
   description: siteConfig.description,
   alternates: {
     canonical: '/',
   },
   openGraph: {
-    title: '8liv | Online Doctor-Led Weight Management and Wellness Care',
+    title: siteConfig.defaultTitle,
     description: siteConfig.description,
     url: absoluteUrl('/'),
     type: 'website',
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: '8liv | Online Doctor-Led Weight Management and Wellness Care',
+    title: siteConfig.defaultTitle,
     description: siteConfig.description,
     images: [absoluteUrl(siteConfig.ogImage)],
   },
@@ -40,7 +40,7 @@ export default function Home() {
       <JsonLd
         data={webPageSchema(
           '/',
-          '8liv Online Doctor-Led Weight Management and Wellness Care',
+          '8liv.in Online Doctor-Led Weight Management and Wellness Care',
           siteConfig.description,
         )}
       />

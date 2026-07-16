@@ -1,6 +1,6 @@
 import type { MetadataRoute } from 'next'
 
-const fallbackSiteUrl = 'https://www.8liv.com'
+const fallbackSiteUrl = 'https://8liv.in'
 
 function normalizeSiteUrl(value?: string | null) {
   const raw = (value || fallbackSiteUrl).trim().replace(/\/+$/, '')
@@ -18,16 +18,23 @@ function normalizeSiteUrl(value?: string | null) {
 
 export const siteConfig = {
   name: '8liv',
+  legalName: '8liv',
+  alternateNames: ['8liv.in', '8liv India', '8liv health', '8 live'],
   applicationName: '8liv',
   url: normalizeSiteUrl(process.env.NEXT_PUBLIC_SITE_URL),
-  defaultTitle: '8liv | Online Doctor-Led Weight Management and Wellness Care',
+  defaultTitle: '8liv.in | Online Doctor-Led Weight Management and Wellness Care',
   titleTemplate: '%s | 8liv',
   description:
-    'Access doctor-led weight-management consultations, personalized nutrition support, fitness guidance and ongoing care through the secure 8liv platform.',
+    '8liv.in is a secure online healthcare platform for doctor-led weight-management consultations, personalized nutrition support, fitness guidance and ongoing care.',
   publisher: '8liv',
   creator: '8liv',
   category: 'Healthcare',
   keywords: [
+    '8liv',
+    '8liv.in',
+    '8 liv',
+    '8live',
+    '8liv health',
     'online weight management consultation',
     'doctor-supervised weight management',
     'online doctor consultation',

@@ -9,6 +9,7 @@ const requiredFiles = [
   'app/sitemap.ts',
   'app/page.tsx',
   'app/layout.tsx',
+  'app/manifest.ts',
   'lib/seo/site.ts',
 ]
 
@@ -47,6 +48,7 @@ const sitemap = fs.readFileSync(sitemapPath, 'utf8')
 const layout = fs.readFileSync(layoutPath, 'utf8')
 const proxy = fs.readFileSync(proxyPath, 'utf8')
 const siteConfig = fs.readFileSync(path.join(root, 'lib/seo/site.ts'), 'utf8')
+const manifest = fs.readFileSync(path.join(appDir, 'manifest.ts'), 'utf8')
 
 for (const prefix of privatePrefixes) {
   if (!siteConfig.includes(`'${prefix}'`)) {
@@ -67,6 +69,22 @@ for (const forbidden of ['/admin', '/api', '/patient', '/provider', '/doctor', '
 for (const required of ['metadataBase', 'openGraph', 'twitter', 'verification']) {
   if (!layout.includes(required)) {
     fail(`root metadata missing ${required}`)
+  }
+}
+
+for (const required of ['https://8liv.in', "'8liv.in'", 'alternateNames']) {
+  if (!siteConfig.includes(required)) {
+    fail(`site config missing brand/canonical signal ${required}`)
+  }
+}
+
+if (siteConfig.includes('www.8liv.com')) {
+  fail('site config still references the old 8liv.com canonical fallback')
+}
+
+for (const required of ['name', 'short_name', 'description', 'start_url', 'theme_color']) {
+  if (!manifest.includes(required)) {
+    fail(`manifest missing ${required}`)
   }
 }
 
