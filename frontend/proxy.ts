@@ -12,6 +12,10 @@ function withSeoPrivacyHeaders(response: NextResponse, pathname: string) {
   return response
 }
 
+function normalizeWwwAlias(host: string) {
+  return host.toLowerCase().replace(/^www\./, '')
+}
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const canonical = canonicalPath(pathname)
@@ -26,7 +30,9 @@ export function proxy(request: NextRequest) {
 
   if (process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_SITE_URL) {
     const canonicalHost = new URL(siteConfig.url).host
-    if (request.nextUrl.host !== canonicalHost && !request.nextUrl.host.includes('localhost')) {
+    const requestHost = request.nextUrl.host
+    const isWwwAlias = normalizeWwwAlias(requestHost) === normalizeWwwAlias(canonicalHost)
+    if (requestHost !== canonicalHost && !isWwwAlias && !requestHost.includes('localhost')) {
       const url = new URL(request.url)
       url.protocol = 'https:'
       url.host = canonicalHost
