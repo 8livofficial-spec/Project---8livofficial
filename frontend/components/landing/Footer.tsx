@@ -4,7 +4,7 @@ export default function Footer() {
   return (
     <footer className="relative z-10 border-t border-[#D46E53]/20 bg-transparent pb-10 pt-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="mb-16 grid grid-cols-1 gap-12 md:grid-cols-4">
+        <div className="mb-12 grid grid-cols-1 gap-10 sm:grid-cols-2 md:mb-16 md:grid-cols-4 md:gap-12">
           <div>
             <img
               src="/brand-logo.svg"
@@ -46,11 +46,11 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-between gap-4 border-t border-[#D46E53]/10 pt-8 md:flex-row">
+        <div className="flex flex-col items-center justify-between gap-5 border-t border-[#D46E53]/10 pt-8 text-center md:flex-row md:text-left">
           <p className="text-sm text-[#475569]">
             &copy; {new Date().getFullYear()} 8Liv. All rights reserved.
           </p>
-          <div className="flex gap-6 text-sm">
+          <div className="flex flex-wrap justify-center gap-x-5 gap-y-3 text-sm md:justify-end">
             <Link href="/privacy" className="text-[#475569] transition-colors hover:text-[#D46E53]">Privacy Policy</Link>
             <Link href="/terms" className="text-[#475569] transition-colors hover:text-[#D46E53]">Terms of Service</Link>
             <Link href="/prescription-policy" className="text-[#475569] transition-colors hover:text-[#D46E53]">Prescription Policy</Link>

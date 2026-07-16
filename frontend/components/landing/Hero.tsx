@@ -8,24 +8,24 @@ import { ArrowRight } from 'lucide-react'
 
 export default function Hero() {
   return (
-    <section className="relative min-h-[90vh] flex items-center overflow-hidden bg-transparent pt-28 pb-12 sm:pt-32 md:pt-20 md:pb-0">
+    <section className="relative flex min-h-[90vh] items-center overflow-hidden bg-transparent px-0 pb-12 pt-28 sm:pt-32 md:pb-0 md:pt-20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
+        <div className="grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
           
           {/* Left Column: Copy */}
           <motion.div 
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "easeOut" }}
-            className="max-w-2xl"
+            className="mx-auto max-w-2xl text-center lg:mx-0 lg:text-left"
           >
-            <h1 className="text-3.5xl sm:text-5xl md:text-6xl lg:text-7xl font-bold font-sora leading-[1.1] text-[#0F172A] mb-6">
+            <h1 className="mb-5 font-sora text-4xl font-bold leading-[1.08] text-[#0F172A] sm:text-5xl md:text-6xl lg:mb-6 lg:text-7xl">
               Transform your <br/>
               <span className="teal-gradient-text">health</span> <br/>
               from home.
             </h1>
             
-            <p className="text-xl text-[#475569] mb-10 leading-relaxed max-w-lg">
+            <p className="mx-auto mb-8 max-w-lg text-base leading-7 text-[#475569] sm:text-lg md:text-xl lg:mx-0 lg:mb-10">
               Connect with board-certified doctors for 100% online metabolic consultations and personalized weight loss protocols.
             </p>
             
@@ -33,16 +33,16 @@ export default function Hero() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4, duration: 0.6 }}
-              className="flex flex-col sm:flex-row gap-4 items-center mb-12"
+              className="mb-10 flex flex-col items-stretch gap-3 sm:flex-row sm:items-center sm:justify-center sm:gap-4 lg:mb-12 lg:justify-start"
             >
               <Link 
                 href="/assessment"
-                className="w-full sm:w-auto bg-[#0F172A] text-white font-semibold rounded-full px-8 py-4 flex items-center justify-center gap-2 hover:bg-[#1E293B] hover:shadow-lg transition-all group"
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-[#0F172A] px-6 py-4 text-center font-semibold text-white transition-all hover:bg-[#1E293B] hover:shadow-lg sm:w-auto sm:px-8"
               >
                 Start Assessment
                 <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
               </Link>
-              <Link href="/assessment" className="w-full sm:w-auto bg-white/50 text-[#0F172A] font-semibold rounded-full px-8 py-4 flex items-center justify-center hover:bg-white/80 transition-colors border border-[#D46E53]/10">
+              <Link href="/assessment" className="flex w-full items-center justify-center rounded-full border border-[#D46E53]/10 bg-white/50 px-6 py-4 text-center font-semibold text-[#0F172A] transition-colors hover:bg-white/80 sm:w-auto sm:px-8">
                 See if you qualify
               </Link>
             </motion.div>
@@ -53,10 +53,10 @@ export default function Hero() {
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 1, ease: "easeOut" }}
-            className="relative h-[350px] sm:h-[450px] lg:h-[700px] flex items-center justify-center"
+            className="relative flex h-[330px] items-center justify-center sm:h-[450px] lg:h-[700px]"
           >
             {/* Main Image Container */}
-            <div className="relative w-full max-w-md mx-auto aspect-[3/4] rounded-[2.5rem] overflow-hidden shadow-2xl ring-1 ring-[#D46E53]/20 group">
+            <div className="group relative mx-auto aspect-[3/4] w-full max-w-[min(82vw,24rem)] overflow-hidden rounded-[1.75rem] shadow-2xl ring-1 ring-[#D46E53]/20 sm:rounded-[2.5rem] lg:max-w-md">
               <Image 
                 src="/images/hero_indian.png" 
                 alt="Patient using 8liv for online doctor-led weight management care" 

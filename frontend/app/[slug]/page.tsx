@@ -78,25 +78,25 @@ export default async function PublicSeoPage({ params }: PageProps) {
         />
       ) : null}
 
-      <section className="border-b border-[#D46E53]/10 bg-white/70 px-4 py-16 sm:px-6 lg:px-8">
+      <section className="border-b border-[#D46E53]/10 bg-white/70 px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
         <div className="mx-auto max-w-4xl">
           <Link href="/" className="text-sm font-black text-[#C4622D]">8liv</Link>
-          <p className="mt-10 text-xs font-black uppercase tracking-[0.22em] text-[#C4622D]">{page.eyebrow}</p>
-          <h1 className="mt-4 font-sora text-4xl font-black tracking-tight text-[#0F172A] sm:text-5xl">{page.h1}</h1>
-          <p className="mt-6 max-w-3xl text-lg font-semibold leading-8 text-[#475569]">{page.intro}</p>
+          <p className="mt-8 text-xs font-black uppercase tracking-[0.18em] text-[#C4622D] sm:mt-10 sm:tracking-[0.22em]">{page.eyebrow}</p>
+          <h1 className="mt-4 break-words font-sora text-3xl font-black leading-tight tracking-tight text-[#0F172A] sm:text-5xl">{page.h1}</h1>
+          <p className="mt-5 max-w-3xl text-base font-semibold leading-7 text-[#475569] sm:mt-6 sm:text-lg sm:leading-8">{page.intro}</p>
           {page.cta ? (
-            <Link href={page.cta.href} className="mt-8 inline-flex rounded-full bg-[#0F172A] px-6 py-3 text-sm font-black text-white">
+            <Link href={page.cta.href} className="mt-8 inline-flex w-full justify-center rounded-full bg-[#0F172A] px-6 py-3 text-center text-sm font-black text-white sm:w-auto">
               {page.cta.label}
             </Link>
           ) : null}
         </div>
       </section>
 
-      <section className="px-4 py-14 sm:px-6 lg:px-8">
+      <section className="px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
         <div className="mx-auto grid max-w-4xl gap-6">
           {page.sections.map((section) => (
-            <article key={section.heading} className="rounded-lg border border-[#D46E53]/10 bg-white p-6 shadow-sm">
-              <h2 className="font-sora text-2xl font-black text-[#0F172A]">{section.heading}</h2>
+            <article key={section.heading} className="rounded-lg border border-[#D46E53]/10 bg-white p-5 shadow-sm sm:p-6">
+              <h2 className="break-words font-sora text-xl font-black text-[#0F172A] sm:text-2xl">{section.heading}</h2>
               <p className="mt-4 text-base font-semibold leading-7 text-[#475569]">{section.body}</p>
               {section.bullets?.length ? (
                 <ul className="mt-5 grid gap-3">
@@ -109,8 +109,8 @@ export default async function PublicSeoPage({ params }: PageProps) {
           ))}
 
           {page.faq ? (
-            <section className="rounded-lg border border-[#D46E53]/10 bg-white p-6 shadow-sm">
-              <h2 className="font-sora text-2xl font-black text-[#0F172A]">Questions and answers</h2>
+            <section className="rounded-lg border border-[#D46E53]/10 bg-white p-5 shadow-sm sm:p-6">
+              <h2 className="font-sora text-xl font-black text-[#0F172A] sm:text-2xl">Questions and answers</h2>
               <div className="mt-5 grid gap-4">
                 {page.faq.map((item) => (
                   <div key={item.question} className="rounded-lg bg-[#F5F0EB] p-4">
@@ -122,7 +122,7 @@ export default async function PublicSeoPage({ params }: PageProps) {
             </section>
           ) : null}
 
-          <nav className="rounded-lg border border-[#D46E53]/10 bg-white p-6 shadow-sm" aria-label="Related public pages">
+          <nav className="rounded-lg border border-[#D46E53]/10 bg-white p-5 shadow-sm sm:p-6" aria-label="Related public pages">
             <h2 className="text-sm font-black uppercase tracking-[0.18em] text-[#8896A4]">Continue exploring</h2>
             <div className="mt-4 flex flex-wrap gap-3">
               <Link href="/medical-weight-management" className="rounded-full bg-[#F5F0EB] px-4 py-2 text-sm font-bold text-[#40516A]">Medical weight management</Link>

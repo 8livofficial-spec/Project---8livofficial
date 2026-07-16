@@ -52,11 +52,11 @@ export default function Navbar() {
         initial={{ y: -100, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.8, ease: "easeOut" }}
-        className="fixed top-0 left-0 right-0 z-50 flex justify-center px-4 pt-4 sm:pt-6 pointer-events-none"
+        className="pointer-events-none fixed left-0 right-0 top-0 z-50 flex justify-center px-3 pt-3 sm:px-4 sm:pt-6"
       >
         {/* Floating Capsule */}
         <div 
-          className={`pointer-events-auto flex items-center justify-between w-full max-w-5xl rounded-full transition-all duration-500 border
+          className={`pointer-events-auto flex w-full max-w-5xl items-center justify-between rounded-full border transition-all duration-500
             ${scrolled 
               ? 'bg-[#F9F6F0]/95 md:bg-[#F9F6F0]/80 md:backdrop-blur-2xl border-[#D46E53]/20 shadow-[0_8px_30px_rgb(0,0,0,0.08)] py-2.5 px-4 sm:py-3 sm:px-6' 
               : 'bg-white/90 md:bg-white/40 md:backdrop-blur-md border-white/50 shadow-sm py-3 px-4 sm:py-4 sm:px-8'
@@ -109,7 +109,8 @@ export default function Navbar() {
 
           {/* Mobile Menu Toggle */}
           <button 
-            className="md:hidden text-[#0F172A] p-2 bg-white/50 rounded-full border border-white/50"
+            className="rounded-full border border-white/50 bg-white/50 p-2 text-[#0F172A] md:hidden"
+            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
           >
             {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
@@ -124,13 +125,13 @@ export default function Navbar() {
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
-            className="fixed inset-x-4 top-20 sm:top-24 z-40 md:hidden"
+            className="fixed inset-x-3 top-20 z-40 md:hidden sm:inset-x-4 sm:top-24"
           >
-            <div className="bg-[#F9F6F0] md:bg-[#F9F6F0]/95 md:backdrop-blur-3xl border border-[#D46E53]/20 rounded-3xl p-6 shadow-2xl flex flex-col space-y-4">
-              <Link href="/how-it-works" className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">How It Works</Link>
-              <Link href="/medical-weight-management" className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">The Program</Link>
-              <Link href="/membership" className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">Membership</Link>
-              <Link href="/about" className="text-left text-[#0F172A] text-lg font-medium p-2 border-b border-[#D46E53]/10">Company</Link>
+            <div className="flex max-h-[calc(100vh-6rem)] flex-col space-y-3 overflow-y-auto rounded-3xl border border-[#D46E53]/20 bg-[#F9F6F0] p-5 shadow-2xl md:bg-[#F9F6F0]/95 md:backdrop-blur-3xl sm:p-6">
+              <Link href="/how-it-works" onClick={() => setMobileMenuOpen(false)} className="border-b border-[#D46E53]/10 p-2 text-left text-base font-medium text-[#0F172A] sm:text-lg">How It Works</Link>
+              <Link href="/medical-weight-management" onClick={() => setMobileMenuOpen(false)} className="border-b border-[#D46E53]/10 p-2 text-left text-base font-medium text-[#0F172A] sm:text-lg">The Program</Link>
+              <Link href="/membership" onClick={() => setMobileMenuOpen(false)} className="border-b border-[#D46E53]/10 p-2 text-left text-base font-medium text-[#0F172A] sm:text-lg">Membership</Link>
+              <Link href="/about" onClick={() => setMobileMenuOpen(false)} className="border-b border-[#D46E53]/10 p-2 text-left text-base font-medium text-[#0F172A] sm:text-lg">Company</Link>
               {user ? (
                 <>
                   <a 
@@ -153,7 +154,7 @@ export default function Navbar() {
                   </button>
                 </>
               ) : (
-                <Link href="/login" className="w-full text-center bg-[#0F172A] text-white font-semibold rounded-full px-6 py-4 mt-4 shadow-lg block">
+                <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="mt-4 block w-full rounded-full bg-[#0F172A] px-6 py-4 text-center font-semibold text-white shadow-lg">
                   Log In
                 </Link>
               )}

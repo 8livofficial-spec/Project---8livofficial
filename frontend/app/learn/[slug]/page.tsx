@@ -96,13 +96,13 @@ export default async function ArticlePage({ params }: PageProps) {
       />
 
       <article>
-        <header className="border-b border-[#D46E53]/10 bg-white/70 px-4 py-16 sm:px-6 lg:px-8">
+        <header className="border-b border-[#D46E53]/10 bg-white/70 px-4 py-12 sm:px-6 sm:py-16 lg:px-8">
           <div className="mx-auto max-w-4xl">
             <Link href="/learn" className="text-sm font-black text-[#C4622D]">Learning center</Link>
-            <p className="mt-10 text-xs font-black uppercase tracking-[0.22em] text-[#C4622D]">{article.category}</p>
-            <h1 className="mt-4 font-sora text-4xl font-black tracking-tight text-[#0F172A] sm:text-5xl">{article.title}</h1>
-            <p className="mt-6 max-w-3xl text-lg font-semibold leading-8 text-[#475569]">{article.summary}</p>
-            <dl className="mt-8 grid gap-3 rounded-lg border border-[#D46E53]/10 bg-[#F5F0EB] p-5 text-sm font-bold text-[#40516A] sm:grid-cols-2">
+            <p className="mt-8 text-xs font-black uppercase tracking-[0.18em] text-[#C4622D] sm:mt-10 sm:tracking-[0.22em]">{article.category}</p>
+            <h1 className="mt-4 break-words font-sora text-3xl font-black leading-tight tracking-tight text-[#0F172A] sm:text-5xl">{article.title}</h1>
+            <p className="mt-5 max-w-3xl text-base font-semibold leading-7 text-[#475569] sm:mt-6 sm:text-lg sm:leading-8">{article.summary}</p>
+            <dl className="mt-8 grid gap-3 rounded-lg border border-[#D46E53]/10 bg-[#F5F0EB] p-4 text-sm font-bold text-[#40516A] sm:grid-cols-2 sm:p-5">
               <div>
                 <dt className="text-xs uppercase tracking-[0.16em] text-[#8896A4]">Reviewed by</dt>
                 <dd className="mt-1">{article.reviewer}</dd>
@@ -123,15 +123,15 @@ export default async function ArticlePage({ params }: PageProps) {
           </div>
         </header>
 
-        <section className="px-4 py-14 sm:px-6 lg:px-8">
+        <section className="px-4 py-10 sm:px-6 sm:py-14 lg:px-8">
           <div className="mx-auto grid max-w-4xl gap-6">
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm font-semibold leading-6 text-amber-950">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-950 sm:p-5">
               This article is for general education only and does not replace consultation with a qualified medical professional.
             </div>
 
             {article.sections.map((section) => (
-              <section key={section.heading} className="rounded-lg border border-[#D46E53]/10 bg-white p-6 shadow-sm">
-                <h2 className="font-sora text-2xl font-black text-[#0F172A]">{section.heading}</h2>
+              <section key={section.heading} className="rounded-lg border border-[#D46E53]/10 bg-white p-5 shadow-sm sm:p-6">
+                <h2 className="break-words font-sora text-xl font-black text-[#0F172A] sm:text-2xl">{section.heading}</h2>
                 <div className="mt-4 grid gap-4 text-base font-semibold leading-7 text-[#475569]">
                   {section.body.map((paragraph) => (
                     <p key={paragraph}>{paragraph}</p>
@@ -140,8 +140,8 @@ export default async function ArticlePage({ params }: PageProps) {
               </section>
             ))}
 
-            <section className="rounded-lg border border-[#D46E53]/10 bg-white p-6 shadow-sm">
-              <h2 className="font-sora text-2xl font-black text-[#0F172A]">Questions patients often ask</h2>
+            <section className="rounded-lg border border-[#D46E53]/10 bg-white p-5 shadow-sm sm:p-6">
+              <h2 className="font-sora text-xl font-black text-[#0F172A] sm:text-2xl">Questions patients often ask</h2>
               <div className="mt-5 grid gap-4">
                 {article.faqs.map((item) => (
                   <div key={item.question} className="rounded-lg bg-[#F5F0EB] p-4">
@@ -152,12 +152,12 @@ export default async function ArticlePage({ params }: PageProps) {
               </div>
             </section>
 
-            <section className="rounded-lg border border-[#D46E53]/10 bg-white p-6 shadow-sm">
-              <h2 className="font-sora text-2xl font-black text-[#0F172A]">Sources</h2>
+            <section className="rounded-lg border border-[#D46E53]/10 bg-white p-5 shadow-sm sm:p-6">
+              <h2 className="font-sora text-xl font-black text-[#0F172A] sm:text-2xl">Sources</h2>
               <ul className="mt-4 grid gap-3">
                 {article.sources.map((source) => (
                   <li key={source.url}>
-                    <a href={source.url} rel="noreferrer" target="_blank" className="font-bold text-[#C4622D] underline-offset-4 hover:underline">
+                    <a href={source.url} rel="noreferrer" target="_blank" className="break-words font-bold text-[#C4622D] underline-offset-4 hover:underline">
                       {source.name}
                     </a>
                   </li>
@@ -165,7 +165,7 @@ export default async function ArticlePage({ params }: PageProps) {
               </ul>
             </section>
 
-            <nav className="rounded-lg border border-[#D46E53]/10 bg-white p-6 shadow-sm" aria-label="Related guides">
+            <nav className="rounded-lg border border-[#D46E53]/10 bg-white p-5 shadow-sm sm:p-6" aria-label="Related guides">
               <h2 className="text-sm font-black uppercase tracking-[0.18em] text-[#8896A4]">Related guides</h2>
               <div className="mt-4 flex flex-wrap gap-3">
                 {relatedArticles.map((related) => (
@@ -176,12 +176,12 @@ export default async function ArticlePage({ params }: PageProps) {
               </div>
             </nav>
 
-            <section className="rounded-lg bg-[#0F172A] p-6 text-white">
-              <h2 className="font-sora text-2xl font-black">Considering doctor-led weight-management care?</h2>
+            <section className="rounded-lg bg-[#0F172A] p-5 text-white sm:p-6">
+              <h2 className="font-sora text-xl font-black sm:text-2xl">Considering doctor-led weight-management care?</h2>
               <p className="mt-3 text-sm font-semibold leading-6 text-white/75">
                 Start with a secure assessment so a clinician can review whether online consultation is appropriate.
               </p>
-              <Link href="/assessment" className="mt-5 inline-flex rounded-full bg-white px-5 py-3 text-sm font-black text-[#0F172A]">
+              <Link href="/assessment" className="mt-5 inline-flex w-full justify-center rounded-full bg-white px-5 py-3 text-center text-sm font-black text-[#0F172A] sm:w-auto">
                 Start assessment
               </Link>
             </section>
