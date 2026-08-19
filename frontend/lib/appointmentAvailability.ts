@@ -178,6 +178,14 @@ export async function loadAvailableDates(params: { patientId: string; role: Book
       
       if (activeProvider) {
         activeDoctorIds = [providerId]
+      } else {
+        const { data: legacyProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .eq('id', providerId)
+          .eq('role', params.role)
+          .maybeSingle()
+        if (legacyProfile) activeDoctorIds = [providerId]
       }
     } else {
       const { data: activeProviders } = await supabaseAdmin
@@ -186,6 +194,14 @@ export async function loadAvailableDates(params: { patientId: string; role: Book
         .eq('role', params.role)
         .eq('status', 'active')
       activeDoctorIds = (activeProviders || []).map((p) => p.provider_id)
+
+      if (activeDoctorIds.length === 0) {
+        const { data: legacyProfiles } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .eq('role', params.role)
+        activeDoctorIds = (legacyProfiles || []).map((p) => p.id)
+      }
     }
 
     if (activeDoctorIds.length === 0) {
@@ -266,6 +282,14 @@ export async function loadAvailableSlots(params: {
       
       if (activeProvider) {
         activeDoctorIds = [providerId]
+      } else {
+        const { data: legacyProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .eq('id', providerId)
+          .eq('role', params.role)
+          .maybeSingle()
+        if (legacyProfile) activeDoctorIds = [providerId]
       }
     } else {
       const { data: activeProviders } = await supabaseAdmin
@@ -274,6 +298,14 @@ export async function loadAvailableSlots(params: {
         .eq('role', params.role)
         .eq('status', 'active')
       activeDoctorIds = (activeProviders || []).map((p) => p.provider_id)
+
+      if (activeDoctorIds.length === 0) {
+        const { data: legacyProfiles } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .eq('role', params.role)
+        activeDoctorIds = (legacyProfiles || []).map((p) => p.id)
+      }
     }
 
     if (activeDoctorIds.length === 0) {
