@@ -165,7 +165,7 @@ const periodMeta = {
 export default function ConsultationSchedulingPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { reloadData, profile, assessment, onboardingState, loading: patientDataLoading } = usePatientData()
+  const { reloadData, user, profile, assessment, onboardingState, loading: patientDataLoading } = usePatientData()
   const reusePaymentFromBookingId = searchParams.get('rescheduleFrom') || ''
   const isActiveMemberFollowUp = onboardingState.membershipStatus === 'ACTIVE' && onboardingState.firstConsultationCompleted === true
   const isBookingPending = onboardingState.appointmentStatus === 'BOOKING_PENDING' || onboardingState.consultationPaymentStatus === 'PAID'
@@ -421,8 +421,9 @@ export default function ConsultationSchedulingPage() {
           throw new Error(orderData.error || 'Failed to initialize payment gateway')
         }
 
+        const patientId = user?.id || profile?.id || assessment?.patient_id
         const patientName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || assessment?.first_name || 'Patient'
-        const patientEmail = (profile as any)?.email || 'care@8liv.in'
+        const patientEmail = user?.email || (profile as any)?.email || 'care@8liv.in'
         const patientContact = profile?.phone_number || assessment?.phone_number || ''
 
         // 2. Open Razorpay Checkout
@@ -454,7 +455,7 @@ export default function ConsultationSchedulingPage() {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    patientId: profile?.id,
+                    patientId,
                     paymentType: 'consultation',
                     amount: CONSULTATION_FEE,
                     paymentMethod,
