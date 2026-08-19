@@ -360,18 +360,34 @@ export default function ConsultationSchedulingPage() {
     )
   }
 
+  // Strict Onboarding Guard: Patient must have completed the assessment before choosing slots
+  const assessmentCompleted = Boolean(assessment) && ((assessment as any)?.status === 'COMPLETED' || onboardingState.assessmentStatus === 'COMPLETED')
+  const isEligible = onboardingState.eligibilityStatus === 'ELIGIBLE' || onboardingState.eligibilityStatus === 'REVIEW_REQUIRED' || (assessment as any)?.eligibility_status === 'ELIGIBLE' || (assessment as any)?.eligibility_status === 'REVIEW_REQUIRED'
+
+  if (!assessmentCompleted || !isEligible) {
+    if (typeof window !== 'undefined') {
+      router.replace(onboardingState.eligibilityStatus === 'NOT_ELIGIBLE' ? '/not-eligible' : '/assessment')
+    }
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
+        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   const handleConfirmBooking = async () => {
     if (!selectedSlot) {
       alert("Please select a consultation time first.")
       return
     }
     setPaymentError('')
-    if (reusePaymentFromBookingId || isActiveMemberFollowUp || isBookingPending) {
+    // If already paid or active member follow up, book directly
+    if (reusePaymentFromBookingId || isActiveMemberFollowUp || isBookingPending || assessment?.consultation_fee_paid) {
       void handlePaidBooking()
       return
     }
-    setPaymentStage('method')
-    setPaymentOpen(true)
+    // Launch Razorpay directly without intermediate fake/extra modal steps
+    void handlePaidBooking()
   }
 
   const loadRazorpayScript = () => {
@@ -633,8 +649,8 @@ export default function ConsultationSchedulingPage() {
                     <p className="text-2xl font-bold" style={{ color: designTokens.colors.primary }}>
                       INR {CONSULTATION_FEE}
                     </p>
-                    <p className="text-xs" style={{ color: designTokens.colors.textTertiary }}>
-                      Razorpay simulated
+                    <p className="text-xs font-semibold text-[#5C7A6B]">
+                      Official Razorpay Gateway
                     </p>
                   </div>
                 </div>
@@ -644,39 +660,8 @@ export default function ConsultationSchedulingPage() {
                     After payment, we will reserve your selected time and assign the best available specialist.
                   </p>
                   <p className="text-xs mt-1" style={{ color: designTokens.colors.textSecondary }}>
-                    You choose the time. 8Liv handles specialist matching and workload balancing behind the scenes.
+                    Pay securely via UPI (GPay, PhonePe, Paytm), Cards, or NetBanking.
                   </p>
-                </div>
-
-                <div className="mb-5">
-                  <p className="text-xs font-bold uppercase tracking-wider mb-2" style={{ color: designTokens.colors.textTertiary }}>
-                    Payment Method
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { key: 'upi' as PaymentMethod, label: 'UPI', icon: Smartphone },
-                      { key: 'card' as PaymentMethod, label: 'Card', icon: CreditCard },
-                      { key: 'netbanking' as PaymentMethod, label: 'NetBanking', icon: Building2 },
-                    ].map(({ key, label, icon: Icon }) => {
-                      const selected = paymentMethod === key
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setPaymentMethod(key)}
-                          className="h-20 rounded-xl border-2 text-xs font-bold flex flex-col items-center justify-center gap-2 transition-all"
-                          style={{
-                            borderColor: selected ? designTokens.colors.primary : designTokens.colors.border,
-                            color: selected ? designTokens.colors.primary : designTokens.colors.textSecondary,
-                            backgroundColor: selected ? `${designTokens.colors.primary}10` : designTokens.colors.surface
-                          }}
-                        >
-                          <Icon className="w-5 h-5" />
-                          {label}
-                        </button>
-                      )
-                    })}
-                  </div>
                 </div>
 
                 {paymentError && (
@@ -694,17 +679,17 @@ export default function ConsultationSchedulingPage() {
                     className="flex-1 py-3 rounded-xl font-bold border disabled:opacity-50"
                     style={{ borderColor: designTokens.colors.border, color: designTokens.colors.textSecondary }}
                   >
-                    Back
+                    Cancel
                   </button>
                   <button
                     type="button"
                     onClick={handlePaidBooking}
                     disabled={loading}
-                    className="flex-[1.4] py-3 rounded-xl font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2"
+                    className="flex-[1.4] py-3 rounded-xl font-bold text-white disabled:opacity-50 flex items-center justify-center gap-2 shadow-md hover:shadow-lg transition-all"
                     style={{ backgroundColor: designTokens.colors.primary }}
                   >
                     <Lock className="w-4 h-4" />
-                    Pay INR {CONSULTATION_FEE}
+                    {loading ? 'Opening Razorpay...' : `Pay INR ${CONSULTATION_FEE}`}
                   </button>
                 </div>
               </>
