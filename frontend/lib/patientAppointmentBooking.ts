@@ -164,7 +164,6 @@ export async function loadPatientDoctorAvailability(params: {
     .eq('provider_role', 'doctor')
     .eq('status', 'AVAILABLE')
     .eq('is_available', true)
-    .contains('allowed_appointment_types', [params.appointmentType])
     .in('provider_id', providerIds)
     .order('available_date', { ascending: true })
     .order('start_time', { ascending: true })
@@ -243,7 +242,6 @@ export async function bookPatientDoctorAppointment(params: {
     .eq('provider_role', 'doctor')
     .eq('status', 'AVAILABLE')
     .eq('is_available', true)
-    .contains('allowed_appointment_types', [params.appointmentType])
     .maybeSingle()
   if (slotError) throw slotError
   if (!slot || !isFutureIndiaSlot(slot.available_date, slot.start_time)) {
