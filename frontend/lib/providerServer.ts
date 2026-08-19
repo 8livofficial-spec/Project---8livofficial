@@ -49,7 +49,7 @@ export async function getCurrentProvider(request: Request) {
   const role = String(v2Provider?.role || profile?.role || auth.role).toLowerCase() === 'fitness_coach'
     ? 'fitness_coach'
     : String(v2Provider?.role || profile?.role || auth.role).toLowerCase()
-  const providerProfile = providerRes.data || (v2Provider ? {
+  let providerProfile = providerRes.data || (v2Provider ? {
     provider_id: auth.user.id,
     provider_profile_id: v2Provider.id,
     full_name: v2Provider.full_name,
@@ -62,10 +62,35 @@ export async function getCurrentProvider(request: Request) {
   } : null)
 
   if (!providerProfile) {
-    const err = new Error('Provider profile missing')
-    ;(err as any).status = 404
-    ;(err as any).reason = 'provider profile missing'
-    throw err
+    const fullName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ')
+      || auth.user.user_metadata?.full_name
+      || auth.user.email?.split('@')[0]
+      || 'Provider'
+    
+    // Auto-create in provider_profiles
+    const { data: createdProfile } = await supabaseAdmin
+      .from('provider_profiles')
+      .upsert({
+        provider_id: auth.user.id,
+        role: role === 'trainer' ? 'fitness_coach' : role,
+        full_name: role === 'doctor' ? `Dr. ${fullName}` : fullName,
+        email: auth.user.email || profile?.email || null,
+        status: 'active',
+      })
+      .select()
+      .maybeSingle()
+
+    providerProfile = createdProfile || {
+      provider_id: auth.user.id,
+      provider_profile_id: auth.user.id,
+      full_name: fullName,
+      specialization: null,
+      qualification: null,
+      status: 'active',
+      profile_photo_url: null,
+      email: auth.user.email || null,
+      payout_amount: null,
+    }
   }
 
   return {
