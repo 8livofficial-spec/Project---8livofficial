@@ -418,6 +418,8 @@ export default function ConsultationSchedulingPage() {
         }
 
         const patientName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || assessment?.first_name || 'Patient'
+        const patientEmail = (profile as any)?.email || 'care@8liv.in'
+        const patientContact = profile?.phone_number || assessment?.phone_number || ''
 
         // 2. Open Razorpay Checkout if not mock
         const isScriptLoaded = await loadRazorpayScript()
@@ -432,8 +434,8 @@ export default function ConsultationSchedulingPage() {
               order_id: orderData.id,
               prefill: {
                 name: patientName,
-                email: assessment?.phone_number || profile?.phone_number || '',
-                contact: profile?.phone_number || assessment?.phone_number || '',
+                email: patientEmail,
+                contact: patientContact,
               },
               theme: {
                 color: '#C4622D',
@@ -465,22 +467,22 @@ export default function ConsultationSchedulingPage() {
               },
               modal: {
                 ondismiss: function () {
-                  reject(new Error('Payment cancelled by user.'))
+                  reject(new Error('Payment cancelled.'))
                 },
               },
             }
             try {
               const rzp = new (window as any).Razorpay(options)
               rzp.on('payment.failed', function (resp: any) {
-                reject(new Error(resp?.error?.description || 'Payment failed. Please try another method.'))
+                reject(new Error(resp?.error?.description || 'Payment failed. Please try again.'))
               })
               rzp.open()
             } catch (openErr: any) {
-              reject(new Error(openErr.message || 'Unable to open payment interface.'))
+              reject(new Error(openErr?.message || 'Unable to open Razorpay payment gateway.'))
             }
           })
-        } else {
-          // Verify with mock signature if development or mock mode
+        } else if (orderData.isMock && process.env.NODE_ENV === 'development') {
+          // Verify with mock signature only in local development
           const verifyRes = await patientFetch('/api/payment/verify', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -498,6 +500,8 @@ export default function ConsultationSchedulingPage() {
           if (!verifyRes.ok || verifyData.error) {
             throw new Error(verifyData.error || 'Payment verification failed.')
           }
+        } else {
+          throw new Error('Payment gateway could not be loaded. Please ensure Razorpay keys are configured.')
         }
       }
 
