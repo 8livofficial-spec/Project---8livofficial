@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
 import { authedFetch } from '@/lib/apiClient';
@@ -16,14 +16,9 @@ import ProviderAvailabilityScheduler, { GeneratedSlot, AvailabilitySubmission } 
 import StreamConsultationCall from '@/components/video/StreamConsultationCall';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder';
-const supabase = createClient(supabaseUrl, supabaseKey);
-
 const inputCls = 'w-full border border-[#1A1F36]/10 rounded-2xl p-3 bg-[#F5F0EB]/60 outline-none transition-all text-[#1A1F36] placeholder-[#8896A4] font-medium focus:bg-white focus:border-[#C4622D] focus:ring-4 focus:ring-[#C4622D]/10 [color-scheme:light]';
 const labelCls = 'block text-xs font-bold text-[#40516A] mb-1 uppercase tracking-wider';
 
-// ── Helper: format call duration ──────────────────────────────────────────────
 function formatDuration(startedAt: string | null, endedAt: string | null): string {
   if (!startedAt) return '—';
   const start = new Date(startedAt).getTime();
@@ -591,25 +586,20 @@ export default function DoctorDashboard() {
           return;
         }
 
-        // Ensure doctor profile exists in profiles table (required for doctor_availability FK constraint)
-        // This calls the backend which has service-role permissions to bypass RLS
+        // Ensure doctor profile exists via backend service-role
         try {
-          const profileInitRes = await authedFetch('/api/provider/ensure-profile', {
+          await authedFetch('/api/provider/ensure-profile', {
             method: 'POST',
             body: JSON.stringify({
               first_name: userProfile?.first_name || 'Dr',
               last_name: userProfile?.last_name || 'Unknown'
             })
           });
-
-          if (!profileInitRes.ok) {
-            console.warn('Failed to initialize doctor profile, continuing anyway...');
-          }
         } catch (err) {
           console.warn('Profile initialization error (non-critical):', err);
         }
 
-        // Load or auto-create doctor profile
+        // Load doctor profile
         const { data: profile } = await supabase
           .from('doctor_profiles')
           .select('*')
@@ -619,20 +609,11 @@ export default function DoctorDashboard() {
         if (profile) {
           setDoctorProfile(profile);
         } else {
-          // Auto-create to satisfy foreign key constraints
-          const { data: newProfile, error: insertErr } = await supabase
-            .from('doctor_profiles')
-            .upsert({
-              id: session.user.id,
-              full_name: `Dr. ${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || 'Dr. Unknown',
-              specialty: 'Physician'
-            })
-            .select()
-            .single();
-
-          if (!insertErr && newProfile) {
-            setDoctorProfile(newProfile);
-          }
+          setDoctorProfile({
+            id: session.user.id,
+            full_name: `Dr. ${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || 'Dr. Unknown',
+            specialty: 'Physician'
+          });
         }
 
         const loadDashboardAggregated = async () => {
@@ -751,7 +732,7 @@ export default function DoctorDashboard() {
       }
     };
     updatePresence();
-    const presenceInterval = setInterval(updatePresence, 10000); // Heartbeat every 10 seconds
+    const presenceInterval = setInterval(updatePresence, 10000);
     return () => clearInterval(presenceInterval);
   }, [doctor]);
 
@@ -809,7 +790,6 @@ export default function DoctorDashboard() {
     }, 1000);
     return () => { if (callTimerRef.current) clearInterval(callTimerRef.current); };
   }, [activeCallId]);
-
 
   const loadConsultations = async (
     doctorId: string,
