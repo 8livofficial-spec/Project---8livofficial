@@ -165,7 +165,7 @@ const periodMeta = {
 export default function ConsultationSchedulingPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { reloadData, onboardingState, loading: patientDataLoading } = usePatientData()
+  const { reloadData, profile, assessment, onboardingState, loading: patientDataLoading } = usePatientData()
   const reusePaymentFromBookingId = searchParams.get('rescheduleFrom') || ''
   const isActiveMemberFollowUp = onboardingState.membershipStatus === 'ACTIVE' && onboardingState.firstConsultationCompleted === true
   const isBookingPending = onboardingState.appointmentStatus === 'BOOKING_PENDING' || onboardingState.consultationPaymentStatus === 'PAID'
@@ -366,6 +366,19 @@ export default function ConsultationSchedulingPage() {
     setPaymentOpen(true)
   }
 
+  const loadRazorpayScript = () => {
+    return new Promise((resolve) => {
+      if (typeof window !== 'undefined' && (window as any).Razorpay) {
+        return resolve(true)
+      }
+      const script = document.createElement('script')
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+      script.onload = () => resolve(true)
+      script.onerror = () => resolve(false)
+      document.body.appendChild(script)
+    })
+  }
+
   const handlePaidBooking = async () => {
     if (!selectedSlot) {
       setPaymentError('Please select a consultation time before payment.')
@@ -375,8 +388,105 @@ export default function ConsultationSchedulingPage() {
 
     setLoading(true)
     setPaymentError('')
-    setPaymentStage('assigning')
+
     try {
+      const needsPayment = !isActiveMemberFollowUp && !reusePaymentFromBookingId && !isBookingPending && !assessment?.consultation_fee_paid
+
+      if (needsPayment) {
+        // 1. Create order on backend
+        const orderRes = await patientFetch('/api/razorpay/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            amount: CONSULTATION_FEE,
+            currency: 'INR',
+            paymentType: 'consultation',
+          }),
+        })
+        const orderData = await orderRes.json()
+        if (!orderRes.ok || orderData.error) {
+          throw new Error(orderData.error || 'Failed to initialize payment gateway')
+        }
+
+        const patientName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || assessment?.first_name || 'Patient'
+
+        // 2. Open Razorpay Checkout if not mock
+        const isScriptLoaded = await loadRazorpayScript()
+        if (isScriptLoaded && typeof window !== 'undefined' && (window as any).Razorpay && !orderData.isMock) {
+          await new Promise<void>((resolve, reject) => {
+            const options = {
+              key: orderData.key,
+              amount: orderData.amount,
+              currency: orderData.currency,
+              name: '8Liv',
+              description: 'Initial Doctor Consultation Fee',
+              order_id: orderData.id,
+              prefill: {
+                name: patientName,
+                email: assessment?.phone_number || profile?.phone_number || '',
+                contact: profile?.phone_number || assessment?.phone_number || '',
+              },
+              theme: {
+                color: '#C4622D',
+              },
+              handler: async function (response: any) {
+                try {
+                  // Verify payment on backend
+                  const verifyRes = await patientFetch('/api/payment/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      patientId: profile?.id,
+                      paymentType: 'consultation',
+                      amount: CONSULTATION_FEE,
+                      paymentMethod,
+                      razorpay_order_id: response.razorpay_order_id,
+                      razorpay_payment_id: response.razorpay_payment_id,
+                      razorpay_signature: response.razorpay_signature,
+                    }),
+                  })
+                  const verifyData = await verifyRes.json()
+                  if (!verifyRes.ok || verifyData.error) {
+                    throw new Error(verifyData.error || 'Payment verification failed.')
+                  }
+                  resolve()
+                } catch (verifyErr) {
+                  reject(verifyErr)
+                }
+              },
+              modal: {
+                ondismiss: function () {
+                  reject(new Error('Payment cancelled by user.'))
+                },
+              },
+            }
+            const rzp = new (window as any).Razorpay(options)
+            rzp.open()
+          })
+        } else {
+          // Verify with mock signature if development or mock mode
+          const verifyRes = await patientFetch('/api/payment/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              patientId: profile?.id,
+              paymentType: 'consultation',
+              amount: CONSULTATION_FEE,
+              paymentMethod,
+              razorpay_order_id: orderData.id,
+              razorpay_payment_id: `pay_mock_${Date.now()}`,
+              razorpay_signature: 'mock_signature',
+            }),
+          })
+          const verifyData = await verifyRes.json()
+          if (!verifyRes.ok || verifyData.error) {
+            throw new Error(verifyData.error || 'Payment verification failed.')
+          }
+        }
+      }
+
+      setPaymentStage('assigning')
+
       const idempotencyKey = `patient-booking-${Date.now()}-${Math.random().toString(36).slice(2)}`
 
       const res = await patientFetch('/api/patient/appointments', {

@@ -250,7 +250,8 @@ export async function bookPatientDoctorAppointment(params: {
 
   const start = `${reservedSlot.available_date}T${String(reservedSlot.start_time).slice(0, 8)}+05:30`
   const end = reservedSlot.end_time ? `${reservedSlot.available_date}T${String(reservedSlot.end_time).slice(0, 8)}+05:30` : null
-  const paymentRequired = params.appointmentType === INITIAL_DOCTOR_CONSULTATION
+  const feeAlreadyPaid = Boolean(context.assessment?.consultation_fee_paid)
+  const paymentRequired = params.appointmentType === INITIAL_DOCTOR_CONSULTATION && !feeAlreadyPaid
   if (paymentRequired && !APP_CONFIG.payment.allowMock) {
     await supabaseAdmin
       .from('provider_availability')
@@ -258,7 +259,7 @@ export async function bookPatientDoctorAppointment(params: {
       .eq('id', reservedSlot.id)
     return { error: 'Verified consultation payment is required before booking.', status: 402 as const }
   }
-  const txnId = paymentRequired ? generateTxnId() : ''
+  const txnId = (paymentRequired || feeAlreadyPaid) ? generateTxnId() : ''
 
   const payload = {
     id: appointmentId,
