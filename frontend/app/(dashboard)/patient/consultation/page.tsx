@@ -207,9 +207,16 @@ export default function ConsultationSchedulingPage() {
     }, { morning: [], afternoon: [], evening: [] })
   }, [selectedDateSlots])
 
+  const slotCacheRef = React.useRef<Map<string, AvailableDoctorSlot[]>>(new Map())
+
   const loadSlotsForDate = useCallback(async (date: string) => {
     if (!date) {
       setSelectedDateSlots([])
+      return
+    }
+
+    if (slotCacheRef.current.has(date)) {
+      setSelectedDateSlots(slotCacheRef.current.get(date) || [])
       return
     }
 
@@ -232,7 +239,9 @@ export default function ConsultationSchedulingPage() {
         const key = isActiveMemberFollowUp ? `${mapped.slotId || mapped.providerId}-${mapped.time_slot}` : mapped.time_slot
         if (!uniqueTimes.has(key)) uniqueTimes.set(key, mapped)
       }
-      setSelectedDateSlots(Array.from(uniqueTimes.values()))
+      const slotsList = Array.from(uniqueTimes.values())
+      slotCacheRef.current.set(date, slotsList)
+      setSelectedDateSlots(slotsList)
     } catch (err) {
       if (err instanceof Error && err.message === SESSION_EXPIRED) {
         router.replace('/login')
@@ -247,6 +256,7 @@ export default function ConsultationSchedulingPage() {
 
   const loadAvailableSlots = useCallback(async () => {
     setSlotsLoading(true)
+    slotCacheRef.current.clear()
     try {
       const params = new URLSearchParams({ appointmentType })
       const res = await patientFetch(`/api/patient/appointments/availability?${params.toString()}`)

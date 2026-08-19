@@ -111,9 +111,20 @@ async function loadActiveDoctors(providerIds?: string[]) {
 
   if (providerIds?.length) query = query.in('provider_id', providerIds)
 
-  const { data, error } = await query
-  if (error) throw error
-  return new Set((data || []).map(row => row.provider_id).filter(Boolean))
+  const { data } = await query
+  const ids = new Set((data || []).map(row => row.provider_id).filter(Boolean))
+
+  if (ids.size === 0) {
+    let legacyQuery = supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('role', 'doctor')
+    if (providerIds?.length) legacyQuery = legacyQuery.in('id', providerIds)
+    const { data: legacyData } = await legacyQuery
+    for (const row of legacyData || []) ids.add(row.id)
+  }
+
+  return ids
 }
 
 function validateBookingEligibility(context: PatientBookingContext, appointmentType: AppointmentType) {
