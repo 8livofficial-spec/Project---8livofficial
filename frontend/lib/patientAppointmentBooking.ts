@@ -206,35 +206,6 @@ export async function bookPatientDoctorAppointment(params: {
   const eligibilityError = validateBookingEligibility(context, params.appointmentType)
   if (eligibilityError) return { error: eligibilityError, status: 403 as const }
 
-  const { data: existingByKey, error: idempotencyError } = await supabaseAdmin
-    .from('doctor_consultations')
-    .select('*')
-    .eq('patient_id', params.patientId)
-    .eq('idempotency_key', params.idempotencyKey)
-    .maybeSingle()
-  if (idempotencyError) throw idempotencyError
-  if (existingByKey?.id) {
-    return {
-      success: true,
-      bookingId: existingByKey.id,
-      consultation: existingByKey,
-      appointmentType: params.appointmentType,
-      idempotent: true,
-    }
-  }
-
-  const { data: existingActive, error: activeError } = await supabaseAdmin
-    .from('doctor_consultations')
-    .select('id, appointment_type, status')
-    .eq('patient_id', params.patientId)
-    .in('status', ['scheduled', 'calling', 'attended'])
-    .limit(1)
-    .maybeSingle()
-  if (activeError) throw activeError
-  if (existingActive?.id && isActiveAppointment(existingActive.status)) {
-    return { error: 'You already have an active scheduled consultation.', status: 409 as const }
-  }
-
   const { data: slot, error: slotError } = await supabaseAdmin
     .from('provider_availability')
     .select('id, provider_id, provider_role, available_date, start_time, end_time, slot_duration, source')
@@ -307,7 +278,6 @@ export async function bookPatientDoctorAppointment(params: {
     payment_requirement: paymentRequired ? 'PAID_INITIAL_FEE' : 'MEMBERSHIP_INCLUDED',
     scheduled_start: start,
     scheduled_end: end,
-    idempotency_key: params.idempotencyKey,
     is_completed: false,
   }
 
