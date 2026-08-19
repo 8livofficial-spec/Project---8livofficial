@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Inter, Sora } from "next/font/google";
+import Script from "next/script";
 import { absoluteUrl, shouldNoIndexEnvironment, siteConfig } from "@/lib/seo/site";
 import "./globals.css";
 
@@ -102,7 +103,13 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${sora.variable} h-full antialiased`}
     >
-      <body className={`min-h-full flex flex-col font-sans bg-[#0A0A0F] text-[#F8FAFC]`}>{children}</body>
+      <body className={`min-h-full flex flex-col font-sans bg-[#0A0A0F] text-[#F8FAFC]`}>
+        {children}
+        <Script
+          src="https://checkout.razorpay.com/v1/checkout.js"
+          strategy="lazyOnload"
+        />
+      </body>
     </html>
   );
 }
