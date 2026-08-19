@@ -31,6 +31,7 @@ export type AvailabilitySubmission =
       slotDuration: number
       breakStart: string | null
       breakEnd: string | null
+      daySchedules?: Record<DayKey, DaySchedule>
     }
 
 type Props = {
@@ -124,13 +125,24 @@ export default function ProviderAvailabilityScheduler({ providerLabel = 'provide
         return
       }
 
-      const workingDays = days.filter(day => schedules[day.key].enabled).map(day => day.jsDay)
-      const firstEnabledDay = days.find(day => schedules[day.key].enabled)
-      const sched = firstEnabledDay ? schedules[firstEnabledDay.key] : null
-
-      if (!workingDays.length || !sched) {
+      const enabledDays = days.filter(day => schedules[day.key].enabled)
+      if (!enabledDays.length) {
         return setMessage('Enable at least one working day.')
       }
+
+      // Check if any enabled day has invalid hours
+      for (const day of enabledDays) {
+        const sched = schedules[day.key]
+        const s = minutesFromTime(sched.startTime)
+        const e = minutesFromTime(sched.endTime)
+        if (e <= s) {
+          return setMessage(`${day.label}: end time must be after start time.`)
+        }
+      }
+
+      const workingDays = enabledDays.map(day => day.jsDay)
+      const firstEnabledDay = enabledDays[0]
+      const sched = schedules[firstEnabledDay.key]
 
       await onGenerate({
         scheduleMode: 'RECURRING',
@@ -141,7 +153,8 @@ export default function ProviderAvailabilityScheduler({ providerLabel = 'provide
         endTime: sched.endTime,
         slotDuration,
         breakStart: sched.breakStart || null,
-        breakEnd: sched.breakEnd || null
+        breakEnd: sched.breakEnd || null,
+        daySchedules: schedules
       })
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to save availability.')

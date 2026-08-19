@@ -282,34 +282,37 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'slotDuration must be between 5 and 240 minutes.' }, { status: 400 })
     }
 
+    const { daySchedules } = body
+    const dayKeyByJsDay: Record<number, string> = {
+      0: 'sunday',
+      1: 'monday',
+      2: 'tuesday',
+      3: 'wednesday',
+      4: 'thursday',
+      5: 'friday',
+      6: 'saturday'
+    }
+
     const startNorm = normalizeTime(startTime)
     const endNorm = normalizeTime(endTime)
     if (!startNorm || !endNorm) {
       return NextResponse.json({ error: 'Invalid startTime or endTime.' }, { status: 400 })
     }
 
-    const workStart = minutesFromTime(startNorm)!
-    const workEnd = minutesFromTime(endNorm)!
-    if (workEnd <= workStart) {
+    const defaultWorkStart = minutesFromTime(startNorm)!
+    const defaultWorkEnd = minutesFromTime(endNorm)!
+    if (defaultWorkEnd <= defaultWorkStart) {
       return NextResponse.json({ error: 'End time must be after start time.' }, { status: 400 })
     }
 
-    if (workEnd - workStart < durationNum) {
-      return NextResponse.json({ error: 'slotDuration is too large for the working hours.' }, { status: 400 })
-    }
-
-    let bStartMin: number | null = null
-    let bEndMin: number | null = null
+    let defaultBStartMin: number | null = null
+    let defaultBEndMin: number | null = null
     if (breakStart && breakEnd) {
       const bStartNorm = normalizeTime(breakStart)
       const bEndNorm = normalizeTime(breakEnd)
-      if (!bStartNorm || !bEndNorm) {
-        return NextResponse.json({ error: 'Invalid breakStart or breakEnd.' }, { status: 400 })
-      }
-      bStartMin = minutesFromTime(bStartNorm)
-      bEndMin = minutesFromTime(bEndNorm)
-      if (bStartMin === null || bEndMin === null || bEndMin <= bStartMin || bStartMin < workStart || bEndMin > workEnd) {
-        return NextResponse.json({ error: 'Break time must be inside working hours.' }, { status: 400 })
+      if (bStartNorm && bEndNorm) {
+        defaultBStartMin = minutesFromTime(bStartNorm)
+        defaultBEndMin = minutesFromTime(bEndNorm)
       }
     }
 
@@ -324,6 +327,45 @@ export async function POST(request: Request) {
       const jsDay = cursor.getDay()
       if (workingDaysSet.has(jsDay)) {
         const dateStr = cursor.toISOString().split('T')[0]
+        const dayKey = dayKeyByJsDay[jsDay]
+        const customDay = daySchedules && daySchedules[dayKey] ? daySchedules[dayKey] : null
+
+        let workStart = defaultWorkStart
+        let workEnd = defaultWorkEnd
+        let bStartMin = defaultBStartMin
+        let bEndMin = defaultBEndMin
+
+        if (customDay && customDay.enabled) {
+          const cStartNorm = normalizeTime(customDay.startTime)
+          const cEndNorm = normalizeTime(customDay.endTime)
+          if (cStartNorm && cEndNorm) {
+            const cStartMin = minutesFromTime(cStartNorm)
+            const cEndMin = minutesFromTime(cEndNorm)
+            if (cStartMin !== null && cEndMin !== null && cEndMin > cStartMin) {
+              workStart = cStartMin
+              workEnd = cEndMin
+            }
+          }
+          if (customDay.breakStart && customDay.breakEnd) {
+            const cbStartNorm = normalizeTime(customDay.breakStart)
+            const cbEndNorm = normalizeTime(customDay.breakEnd)
+            if (cbStartNorm && cbEndNorm) {
+              const cbStartMin = minutesFromTime(cbStartNorm)
+              const cbEndMin = minutesFromTime(cbEndNorm)
+              if (cbStartMin !== null && cbEndMin !== null && cbEndMin > cbStartMin) {
+                bStartMin = cbStartMin
+                bEndMin = cbEndMin
+              } else {
+                bStartMin = null
+                bEndMin = null
+              }
+            }
+          } else {
+            bStartMin = null
+            bEndMin = null
+          }
+        }
+
         for (let minute = workStart; minute + durationNum <= workEnd; minute += durationNum) {
           const overlapsBreak = bStartMin !== null && bEndMin !== null && minute < bEndMin && minute + durationNum > bStartMin
           const startSlotNorm = normalizeTime(timeFromMinutes(minute))
