@@ -87,6 +87,8 @@ export default function OnboardingPaymentPage() {
       if (statusData.dashboardAccess) { router.replace('/patient'); return }
 
       setAssessment(data)
+
+      setAssessment(data)
       setProfile(statusData.profile)
       setLoading(false)
     }
@@ -100,100 +102,143 @@ export default function OnboardingPaymentPage() {
   const gst = Math.round(subtotal * 0.18)
   const total = subtotal + gst
 
-  // ── Payment process simulation ─────────────────────────────────────────────
-  const simulatePayment = async () => {
-    setStep('processing')
-    setProgress(0)
-    setProcessingMsg('Initiating payment...')
-
-    const newTxn = generateTxnId()
-    setTxnId(newTxn)
-
-    const phases = [
-      { pct: 30, msg: 'Connecting to payment gateway...' },
-      { pct: 55, msg: 'Contacting your bank...' },
-      { pct: 75, msg: 'Awaiting authorisation...' },
-      { pct: 90, msg: 'Verifying transaction...' },
-      { pct: 100, msg: 'Confirming payment...' },
-    ]
-
-    let idx = 0
-    progressRef.current = setInterval(() => {
-      if (idx < phases.length) {
-        setProgress(phases[idx].pct)
-        setProcessingMsg(phases[idx].msg)
-        idx++
-      } else {
-        clearInterval(progressRef.current)
-        finalisePayment(newTxn)
+  // ── Real Razorpay Checkout ────────────────────────────────────────────────
+  const loadRazorpayScript = () => {
+    return new Promise<boolean>((resolve) => {
+      if (typeof window !== 'undefined' && (window as any).Razorpay) {
+        return resolve(true)
       }
-    }, 700)
+      const existingScript = document.querySelector('script[src="https://checkout.razorpay.com/v1/checkout.js"]') as HTMLScriptElement | null
+      if (existingScript) {
+        if ((window as any).Razorpay) return resolve(true)
+        existingScript.addEventListener('load', () => resolve(true), { once: true })
+        existingScript.addEventListener('error', () => resolve(false), { once: true })
+      } else {
+        const script = document.createElement('script')
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js'
+        script.async = true
+        script.onload = () => resolve(true)
+        script.onerror = () => resolve(false)
+        document.body.appendChild(script)
+      }
+      setTimeout(() => {
+        resolve(typeof window !== 'undefined' && Boolean((window as any).Razorpay))
+      }, 3000)
+    })
   }
 
-  const finalisePayment = async (txn: string) => {
+  const validateAndPay = async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession()
-      if (!session) throw new Error('No session')
-
-      const metadata: Record<string, string> = {}
-      if (method === 'upi') {
-        metadata.upi_sub_method = upiSubMethod
-        if (upiSubMethod === 'qr') {
-          metadata.upi_app = 'QR Scanner'
-          metadata.upi_id = 'scanned_qr_code'
-        } else {
-          metadata.upi_app = selectedUpiApp
-          metadata.upi_id = upiId
-        }
-      } else if (method === 'card') {
-        metadata.card_last4 = cardNumber.replace(/\s/g, '').slice(-4)
-        metadata.card_name = cardName
-      } else {
-        metadata.bank = selectedBank
+      if (!session) {
+        router.push('/login')
+        return
       }
 
-      const res = await authedFetch('/api/payment', {
+      setStep('processing')
+      setProgress(25)
+      setProcessingMsg('Initializing Razorpay gateway...')
+
+      const amountInRupees = total
+      const orderRes = await authedFetch('/api/razorpay/create-order', {
         method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          patientId: session.user.id,
+          amount: amountInRupees,
+          currency: 'INR',
           paymentType: 'combined',
-          membershipTier: assessment.membership_tier,
-          amount: total,
-          paymentMethod: method,
-          metadata,
-        })
+        }),
       })
 
-      const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Payment failed')
-
-      setStep('success')
-    } catch (err: any) {
-      setStep('failed')
-      console.error('Payment error:', err)
-    }
-  }
-
-  const validateAndPay = () => {
-    if (method === 'upi') {
-      if (upiSubMethod === 'id') {
-        if (!upiId || !upiId.includes('@')) {
-          setUpiError('Please enter a valid UPI ID (e.g. name@upi)')
-          return
-        }
-        setUpiError('')
+      const orderData = await orderRes.json()
+      if (!orderRes.ok || orderData.error) {
+        throw new Error(orderData.error || 'Failed to create payment order')
       }
-    } else if (method === 'card') {
-      if (cardNumber.replace(/\s/g, '').length < 16) { setCardError('Enter a valid 16-digit card number'); return }
-      if (!cardName.trim()) { setCardError('Enter the name on card'); return }
-      if (cardExpiry.length < 5) { setCardError('Enter a valid expiry (MM/YY)'); return }
-      if (cardCvv.length < 3) { setCardError('Enter a valid CVV'); return }
-      setCardError('')
-    } else {
-      if (!selectedBank) { setBankError('Please select your bank'); return }
-      setBankError('')
+
+      setProgress(50)
+      setProcessingMsg('Opening Razorpay checkout...')
+
+      // 2. Open Razorpay Modal
+      await loadRazorpayScript()
+      if (typeof window === 'undefined' || !(window as any).Razorpay) {
+        throw new Error('Razorpay checkout could not be loaded. Please disable ad-blockers.')
+      }
+
+      const patientName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || assessment?.first_name || 'Member'
+      const patientEmail = session.user.email || profile?.email || 'care@8liv.in'
+      const patientContact = profile?.phone_number || assessment?.phone_number || ''
+
+      await new Promise<void>((resolve, reject) => {
+        const options = {
+          key: orderData.key,
+          amount: orderData.amount,
+          currency: orderData.currency,
+          name: '8Liv',
+          description: `${assessment?.membership_tier || 'Membership'} Plan Activation`,
+          order_id: orderData.id,
+          prefill: {
+            name: patientName,
+            email: patientEmail,
+            contact: patientContact,
+          },
+          theme: {
+            color: '#C4622D',
+          },
+          handler: async function (response: any) {
+            try {
+              setProgress(80)
+              setProcessingMsg('Verifying payment signature...')
+
+              const verifyRes = await authedFetch('/api/payment/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  patientId: session.user.id,
+                  paymentType: 'combined',
+                  membershipTier: assessment?.membership_tier,
+                  amount: total,
+                  paymentMethod: method,
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                }),
+              })
+
+              const verifyData = await verifyRes.json()
+              if (!verifyRes.ok || verifyData.error) {
+                throw new Error(verifyData.error || 'Payment verification failed.')
+              }
+
+              setTxnId(response.razorpay_payment_id)
+              setProgress(100)
+              setStep('success')
+              resolve()
+            } catch (vErr) {
+              reject(vErr)
+            }
+          },
+          modal: {
+            ondismiss: function () {
+              setStep('method')
+              reject(new Error('Payment cancelled by user.'))
+            },
+          },
+        }
+
+        try {
+          const rzp = new (window as any).Razorpay(options)
+          rzp.on('payment.failed', function (resp: any) {
+            reject(new Error(resp?.error?.description || 'Payment failed.'))
+          })
+          rzp.open()
+        } catch (openErr: any) {
+          reject(new Error(openErr?.message || 'Could not open payment interface.'))
+        }
+      })
+    } catch (err: any) {
+      console.error('Onboarding payment error:', err)
+      setStep('failed')
     }
-    simulatePayment()
   }
 
   if (loading) return (
@@ -204,7 +249,6 @@ export default function OnboardingPaymentPage() {
 
   return (
     <div className="min-h-screen bg-[#F5F0EB] flex flex-col lg:flex-row font-sans">
-
       {/* ── LEFT: Order summary sidebar ───────────────────────────────────── */}
       <div className="lg:w-[38%] bg-[#1A1F36] p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-[#C4622D]/10 rounded-full blur-3xl pointer-events-none" />
