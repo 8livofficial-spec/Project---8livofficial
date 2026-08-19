@@ -296,6 +296,31 @@ export default function OnboardingPaymentPage() {
               assessment?.membership_tier === 'Gold Plan' ? 'Dietitian + fitness coaching' : null,
               'GLP-1 prescription pathway',
               'Encrypted health records',
+            {[
+              { label: `${assessment?.membership_tier} — Month 1`, amount: planPrice },
+              { label: 'Initial Consultation Fee', amount: consultFee },
+              { label: 'GST (18%)', amount: gst },
+            ].map(line => (
+              <div key={line.label} className="flex justify-between items-center">
+                <span className="text-white/60 text-xs font-medium">{line.label}</span>
+                <span className="text-white text-xs font-bold">₹{line.amount.toLocaleString('en-IN')}</span>
+              </div>
+            ))}
+            <div className="flex justify-between items-center border-t border-white/10 pt-3">
+              <span className="text-white font-bold text-sm">Total</span>
+              <span className="text-[#C4622D] font-extrabold text-xl font-sora">₹{total.toLocaleString('en-IN')}</span>
+            </div>
+          </div>
+
+          {/* Inclusions */}
+          <div className="space-y-2">
+            <p className="text-white/40 text-[10px] font-black uppercase tracking-wider">Included Today</p>
+            {[
+              'Doctor consultation booking access',
+              'Personalised health dashboard',
+              assessment?.membership_tier === 'Gold Plan' ? 'Dietitian + fitness coaching' : null,
+              'GLP-1 prescription pathway',
+              'Encrypted health records',
             ].filter(Boolean).map((item: any) => (
               <div key={item} className="flex items-start gap-2.5">
                 <CheckCircle2 size={13} className="text-[#5C7A6B] shrink-0 mt-0.5" />
@@ -325,11 +350,11 @@ export default function OnboardingPaymentPage() {
 
           <AnimatePresence mode="wait">
 
-            {/* ── STEP: Review → pick method ─────────────────────────────── */}
+            {/* ── STEP: Review → Proceed to Razorpay ─────────────────────── */}
             {step === 'review' && (
               <motion.div key="review" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}>
-                <h3 className="text-xl font-bold font-sora text-[#1A1F36] mb-2">Ready to pay?</h3>
-                <p className="text-sm text-[#8896A4] mb-6">Review your order, then select a payment method.</p>
+                <h3 className="text-xl font-bold font-sora text-[#1A1F36] mb-2">Ready to complete enrollment?</h3>
+                <p className="text-sm text-[#8896A4] mb-6">Review your order details and activate your care plan via Razorpay.</p>
 
                 <div className="bg-white rounded-2xl p-5 border border-[#1A1F36]/8 shadow-sm mb-6 space-y-3">
                   <div className="flex justify-between text-sm">
@@ -337,244 +362,38 @@ export default function OnboardingPaymentPage() {
                     <span className="font-bold text-[#1A1F36]">{assessment?.membership_tier}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-[#8896A4]">Total (incl. GST)</span>
-                    <span className="font-extrabold text-[#C4622D]">₹{total.toLocaleString('en-IN')}</span>
+                    <span className="text-[#8896A4]">Doctor Consultation</span>
+                    <span className="font-bold text-[#1A1F36]">₹{consultFee.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#8896A4]">GST (18%)</span>
+                    <span className="font-bold text-[#1A1F36]">₹{gst.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between text-sm border-t border-[#1A1F36]/8 pt-2">
+                    <span className="text-[#8896A4] font-bold">Total (incl. GST)</span>
+                    <span className="font-extrabold text-lg text-[#C4622D]">₹{total.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
 
-                <button
-                  onClick={() => setStep('method')}
-                  className="w-full bg-[#1A1F36] hover:bg-[#C4622D] text-white font-bold rounded-full py-4 text-sm flex items-center justify-center gap-2 transition-all"
-                >
-                  Proceed to Payment <ChevronRight size={16} />
-                </button>
-                <button
-                  onClick={() => router.replace('/plans')}
-                  className="w-full mt-3 text-xs text-[#8896A4] hover:text-[#1A1F36] flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <ArrowLeft size={12} /> Change plan
-                </button>
-              </motion.div>
-            )}
-
-            {/* ── STEP: Method selection + form ───────────────────────────── */}
-            {step === 'method' && (
-              <motion.div key="method" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }} className="space-y-5">
-                <div>
-                  <h3 className="text-xl font-bold font-sora text-[#1A1F36]">Payment Method</h3>
-                  <p className="text-xs text-[#8896A4] mt-1">Choose how you'd like to pay</p>
+                <div className="rounded-xl bg-[#5C7A6B]/8 p-4 border border-[#5C7A6B]/20 flex items-start gap-3 mb-6">
+                  <ShieldCheck className="w-5 h-5 text-[#5C7A6B] shrink-0 mt-0.5" />
+                  <div className="text-xs text-[#5C7A6B]">
+                    <p className="font-bold">Official Razorpay Gateway</p>
+                    <p className="mt-0.5 text-[#5C7A6B]/90">UPI (Google Pay, PhonePe, Paytm, BHIM), NetBanking, and all major Credit/Debit Cards supported.</p>
+                  </div>
                 </div>
-
-                {/* Method tabs */}
-                <div className="flex gap-2 bg-[#1A1F36]/5 p-1 rounded-xl">
-                  {[
-                    { key: 'upi' as PaymentMethod, icon: Smartphone, label: 'UPI' },
-                    { key: 'card' as PaymentMethod, icon: CreditCard, label: 'Card' },
-                    { key: 'netbanking' as PaymentMethod, icon: Building2, label: 'Net Banking' },
-                  ].map(tab => {
-                    const Icon = tab.icon
-                    return (
-                      <button
-                        key={tab.key}
-                        onClick={() => setMethod(tab.key)}
-                        className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-bold transition-all ${
-                          method === tab.key
-                            ? 'bg-white text-[#1A1F36] shadow-sm'
-                            : 'text-[#8896A4] hover:text-[#1A1F36]'
-                        }`}
-                      >
-                        <Icon size={13} /> {tab.label}
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {/* ── UPI form ── */}
-                {method === 'upi' && (
-                  <div className="space-y-4">
-                    {/* Sub-method toggle */}
-                    <div className="flex gap-1 bg-[#1A1F36]/5 p-1 rounded-xl max-w-[280px] mx-auto">
-                      <button
-                        type="button"
-                        onClick={() => setUpiSubMethod('qr')}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          upiSubMethod === 'qr'
-                            ? 'bg-white text-[#1A1F36] shadow-sm'
-                            : 'text-[#8896A4] hover:text-[#1A1F36]'
-                        }`}
-                      >
-                        Scan QR Code
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setUpiSubMethod('id')}
-                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                          upiSubMethod === 'id'
-                            ? 'bg-white text-[#1A1F36] shadow-sm'
-                            : 'text-[#8896A4] hover:text-[#1A1F36]'
-                        }`}
-                      >
-                        Enter UPI ID
-                      </button>
-                    </div>
-
-                    {upiSubMethod === 'qr' ? (
-                      <div className="flex flex-col items-center justify-center p-4 bg-white rounded-2xl border border-[#1A1F36]/8 shadow-sm space-y-4">
-                        <div className="text-center">
-                          <p className="text-[11px] font-bold text-[#5C7A6B] bg-[#5C7A6B]/8 px-3 py-1 rounded-full inline-block uppercase tracking-wider">
-                            Instant Activation
-                          </p>
-                          <p className="text-[11px] text-[#8896A4] mt-1.5 max-w-[280px]">
-                            Scan using Google Pay, PhonePe, Paytm, BHIM, or any banking app
-                          </p>
-                        </div>
-
-                        {/* Interactive QR Card Wrapper */}
-                        <div className="relative p-3 bg-[#1A1F36]/2 rounded-2xl border border-[#1A1F36]/5 flex items-center justify-center overflow-hidden w-[200px] h-[200px] group">
-                          {/* Animated scanline */}
-                          <motion.div
-                            className="absolute left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-[#C4622D] to-transparent shadow-[0_0_10px_#C4622D] z-10 pointer-events-none"
-                            animate={{ top: ['0%', '100%', '0%'] }}
-                            transition={{ repeat: Infinity, duration: 3, ease: 'easeInOut' }}
-                          />
-                          {/* QR Image */}
-                          <img
-                            src="/images/upi_qr_mock.png"
-                            alt="UPI QR Code"
-                            className="w-[180px] h-[180px] object-contain rounded-lg transition-transform group-hover:scale-[1.02]"
-                          />
-                        </div>
-
-                        <div className="text-center space-y-1">
-                          <p className="text-xs text-[#8896A4]">Amount to Pay</p>
-                          <p className="text-lg font-black font-sora text-[#1A1F36]">₹{total.toLocaleString('en-IN')}</p>
-                          <div className="flex items-center justify-center gap-1.5 text-[10px] font-bold text-[#8896A4] bg-[#1A1F36]/4 px-3 py-1 rounded-full mt-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping" />
-                            Awaiting scanner confirmation...
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-4 gap-2">
-                          {UPI_APPS.map(app => (
-                            <button
-                              key={app.name}
-                              onClick={() => {
-                                setSelectedUpiApp(app.name)
-                                setUpiError('')
-                              }}
-                              className={`py-3 rounded-xl border-2 text-[10px] font-black transition-all ${
-                                selectedUpiApp === app.name
-                                  ? 'border-[#C4622D] text-[#C4622D] bg-[#C4622D]/5'
-                                  : 'border-[#1A1F36]/10 text-[#8896A4] hover:border-[#1A1F36]/25'
-                              }`}
-                            >
-                              {app.abbr}
-                            </button>
-                          ))}
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-[#8896A4] mb-1.5 uppercase tracking-wider">UPI ID</label>
-                          <input
-                            type="text"
-                            placeholder="yourname@upi"
-                            value={upiId}
-                            onChange={e => setUpiId(e.target.value)}
-                            className="w-full bg-white border border-[#1A1F36]/12 rounded-xl px-4 py-3.5 text-sm text-[#1A1F36] focus:outline-none focus:border-[#C4622D] focus:ring-2 focus:ring-[#C4622D]/15 font-medium"
-                          />
-                          {upiError && <p className="text-red-500 text-xs mt-1.5 flex items-center gap-1"><AlertCircle size={11}/> {upiError}</p>}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* ── Card form ── */}
-                {method === 'card' && (
-                  <div className="space-y-3">
-                    <div>
-                      <label className="block text-xs font-bold text-[#8896A4] mb-1.5 uppercase tracking-wider">Card Number</label>
-                      <input
-                        type="text"
-                        placeholder="0000 0000 0000 0000"
-                        value={cardNumber}
-                        onChange={e => setCardNumber(formatCard(e.target.value))}
-                        className="w-full bg-white border border-[#1A1F36]/12 rounded-xl px-4 py-3.5 text-sm font-mono text-[#1A1F36] focus:outline-none focus:border-[#C4622D] focus:ring-2 focus:ring-[#C4622D]/15 tracking-widest"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-[#8896A4] mb-1.5 uppercase tracking-wider">Name on Card</label>
-                      <input
-                        type="text"
-                        placeholder="RAHUL SHARMA"
-                        value={cardName}
-                        onChange={e => setCardName(e.target.value.toUpperCase())}
-                        className="w-full bg-white border border-[#1A1F36]/12 rounded-xl px-4 py-3.5 text-sm font-medium text-[#1A1F36] focus:outline-none focus:border-[#C4622D] focus:ring-2 focus:ring-[#C4622D]/15"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-bold text-[#8896A4] mb-1.5 uppercase tracking-wider">Expiry</label>
-                        <input
-                          type="text"
-                          placeholder="MM/YY"
-                          maxLength={5}
-                          value={cardExpiry}
-                          onChange={e => {
-                            let v = e.target.value.replace(/\D/g, '')
-                            if (v.length >= 3) v = v.slice(0,2) + '/' + v.slice(2,4)
-                            setCardExpiry(v)
-                          }}
-                          className="w-full bg-white border border-[#1A1F36]/12 rounded-xl px-4 py-3.5 text-sm font-mono text-[#1A1F36] focus:outline-none focus:border-[#C4622D] focus:ring-2 focus:ring-[#C4622D]/15"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-[#8896A4] mb-1.5 uppercase tracking-wider">CVV</label>
-                        <input
-                          type="password"
-                          placeholder="•••"
-                          maxLength={4}
-                          value={cardCvv}
-                          onChange={e => setCardCvv(e.target.value.replace(/\D/g, '').slice(0,4))}
-                          className="w-full bg-white border border-[#1A1F36]/12 rounded-xl px-4 py-3.5 text-sm font-mono text-[#1A1F36] focus:outline-none focus:border-[#C4622D] focus:ring-2 focus:ring-[#C4622D]/15"
-                        />
-                      </div>
-                    </div>
-                    {cardError && <p className="text-red-500 text-xs flex items-center gap-1"><AlertCircle size={11}/> {cardError}</p>}
-                  </div>
-                )}
-
-                {/* ── Net banking ── */}
-                {method === 'netbanking' && (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-2">
-                      {BANKS.map(bank => (
-                        <button
-                          key={bank}
-                          onClick={() => setSelectedBank(bank)}
-                          className={`text-left px-4 py-3 rounded-xl border-2 text-xs font-semibold transition-all ${
-                            selectedBank === bank
-                              ? 'border-[#C4622D] text-[#C4622D] bg-[#C4622D]/5'
-                              : 'border-[#1A1F36]/10 text-[#1A1F36] hover:border-[#1A1F36]/25'
-                          }`}
-                        >
-                          {bank}
-                        </button>
-                      ))}
-                    </div>
-                    {bankError && <p className="text-red-500 text-xs flex items-center gap-1"><AlertCircle size={11}/> {bankError}</p>}
-                  </div>
-                )}
 
                 <button
                   onClick={validateAndPay}
-                  className="w-full bg-[#C4622D] hover:bg-[#A8522A] text-white font-bold rounded-full py-4 text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-[#C4622D]/20 animate-pulse-glow"
+                  className="w-full bg-[#C4622D] hover:bg-[#A8522A] text-white font-bold rounded-full py-4 text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-[#C4622D]/20 hover:shadow-lg"
                 >
-                  <Lock size={14} />{' '}
-                  {method === 'upi' && upiSubMethod === 'qr'
-                    ? `I have Paid ₹${total.toLocaleString('en-IN')}`
-                    : `Pay ₹${total.toLocaleString('en-IN')} Securely`}
+                  <Lock size={15} /> Pay ₹{total.toLocaleString('en-IN')} with Razorpay
+                </button>
+                <button
+                  onClick={() => router.replace('/plans')}
+                  className="w-full mt-3 text-xs text-[#8896A4] hover:text-[#1A1F36] flex items-center justify-center gap-1.5 py-2 transition-colors font-medium"
+                >
+                  <ArrowLeft size={13} /> Change plan
                 </button>
               </motion.div>
             )}
