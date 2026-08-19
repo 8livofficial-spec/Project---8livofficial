@@ -296,31 +296,6 @@ export default function OnboardingPaymentPage() {
               assessment?.membership_tier === 'Gold Plan' ? 'Dietitian + fitness coaching' : null,
               'GLP-1 prescription pathway',
               'Encrypted health records',
-            {[
-              { label: `${assessment?.membership_tier} — Month 1`, amount: planPrice },
-              { label: 'Initial Consultation Fee', amount: consultFee },
-              { label: 'GST (18%)', amount: gst },
-            ].map(line => (
-              <div key={line.label} className="flex justify-between items-center">
-                <span className="text-white/60 text-xs font-medium">{line.label}</span>
-                <span className="text-white text-xs font-bold">₹{line.amount.toLocaleString('en-IN')}</span>
-              </div>
-            ))}
-            <div className="flex justify-between items-center border-t border-white/10 pt-3">
-              <span className="text-white font-bold text-sm">Total</span>
-              <span className="text-[#C4622D] font-extrabold text-xl font-sora">₹{total.toLocaleString('en-IN')}</span>
-            </div>
-          </div>
-
-          {/* Inclusions */}
-          <div className="space-y-2">
-            <p className="text-white/40 text-[10px] font-black uppercase tracking-wider">Included Today</p>
-            {[
-              'Doctor consultation booking access',
-              'Personalised health dashboard',
-              assessment?.membership_tier === 'Gold Plan' ? 'Dietitian + fitness coaching' : null,
-              'GLP-1 prescription pathway',
-              'Encrypted health records',
             ].filter(Boolean).map((item: any) => (
               <div key={item} className="flex items-start gap-2.5">
                 <CheckCircle2 size={13} className="text-[#5C7A6B] shrink-0 mt-0.5" />
