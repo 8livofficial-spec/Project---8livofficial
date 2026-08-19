@@ -187,6 +187,7 @@ export default function OnboardingPaymentPage() {
         }
         if (orderData.id && String(orderData.id).startsWith('order_') && !orderData.isMock) {
           options.order_id = orderData.id
+        }
         options.handler = async function (response: any) {
           try {
             setProgress(80)
