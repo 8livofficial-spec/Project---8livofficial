@@ -273,7 +273,7 @@ export async function bookPatientDoctorAppointment(params: {
     call_type: meeting.callType,
     created_by: meeting.createdBy,
     meeting_status: meeting.meetingStatus,
-    appointment_type: params.appointmentType,
+    appointment_type: params.appointmentType === INITIAL_DOCTOR_CONSULTATION ? 'INITIAL_CONSULTATION' : 'FOLLOW_UP_CONSULTATION',
     slot_id: reservedSlot.id,
     is_completed: false,
   }
@@ -301,6 +301,23 @@ export async function bookPatientDoctorAppointment(params: {
       console.warn(`doctor_consultations.${missingColumn} not in schema; retrying insert without it.`)
       delete payload[missingColumn]
       continue
+    }
+
+    // If check constraint fails on appointment_type, try alternative enum string or null
+    if (result.error.code === '23514' && String(result.error.message).includes('appointment_type_check')) {
+      if (payload.appointment_type === 'INITIAL_CONSULTATION') {
+        console.warn('Retrying with INITIAL_DOCTOR_CONSULTATION constraint variant')
+        payload.appointment_type = 'INITIAL_DOCTOR_CONSULTATION'
+        continue
+      } else if (payload.appointment_type === 'FOLLOW_UP_CONSULTATION') {
+        console.warn('Retrying with DOCTOR_FOLLOW_UP constraint variant')
+        payload.appointment_type = 'DOCTOR_FOLLOW_UP'
+        continue
+      } else if (payload.appointment_type) {
+        console.warn('Retrying without appointment_type check constraint failure')
+        delete payload.appointment_type
+        continue
+      }
     }
 
     insertError = result.error
