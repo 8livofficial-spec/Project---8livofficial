@@ -41,56 +41,75 @@ function isPastSlot(date: string, time: string) {
 }
 
 export async function GET(request: Request) {
-  const provider = await getAuthenticatedProvider(request)
-  if ('error' in provider) return NextResponse.json({ error: provider.error }, { status: provider.status })
+  try {
+    const provider = await getAuthenticatedProvider(request)
+    if ('error' in provider) return NextResponse.json({ error: provider.error }, { status: provider.status })
 
-  const { searchParams } = new URL(request.url)
-  const from = searchParams.get('from')
-  const to = searchParams.get('to')
-  const today = new Date().toISOString().split('T')[0]
-  const defaultTo = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-  let query = supabaseAdmin
-    .from('provider_availability')
-    .select('id, provider_id, provider_role, available_date, start_time, end_time, is_available, source, status, created_at, updated_at')
-    .eq('provider_id', provider.user.id)
-    .eq('provider_role', provider.role)
-    .order('available_date', { ascending: true })
-    .order('start_time', { ascending: true })
-  if (from && isDate(from)) {
-    query = query.gte('available_date', from)
+    const { searchParams } = new URL(request.url)
+    const from = searchParams.get('from')
+    const to = searchParams.get('to')
+    const today = new Date().toISOString().split('T')[0]
+    const defaultTo = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
+    let query = supabaseAdmin
+      .from('provider_availability')
+      .select('id, provider_id, provider_role, available_date, start_time, end_time, is_available, source, status, created_at, updated_at')
+      .eq('provider_id', provider.user.id)
+      .eq('provider_role', provider.role)
+      .order('available_date', { ascending: true })
+      .order('start_time', { ascending: true })
+
+    if (from && isDate(from)) {
+      query = query.gte('available_date', from)
+    }
+    if (to && isDate(to)) {
+      query = query.lte('available_date', to)
+    }
+
+    const { data: availabilityData, error: availErr } = await query
+
+    if (availErr) {
+      console.warn('Availability fetch warning:', availErr.message)
+      return NextResponse.json({ availability: [], consultations: [] })
+    }
+
+    let consultations: any[] = []
+    try {
+      const { data: consultData } = await supabaseAdmin
+        .from('staff_consultations')
+        .select('id, patient_id, staff_role, booking_date, booking_time, status, meeting_url, meeting_provider, appointment_type')
+        .eq('staff_id', provider.user.id)
+        .gte('booking_date', from && isDate(from) ? from : today)
+        .lte('booking_date', to && isDate(to) ? to : defaultTo)
+        .order('booking_date')
+        .order('booking_time')
+        .limit(200)
+
+      if (consultData && consultData.length > 0) {
+        const patientIds = Array.from(new Set(consultData.map((row: any) => row.patient_id).filter(Boolean))) as string[]
+        const { data: profiles } = patientIds.length
+          ? await supabaseAdmin.from('profiles').select('id, first_name, last_name, email').in('id', patientIds)
+          : { data: [] }
+        const profilesById = new Map((profiles || []).map((p: any) => [p.id, p]))
+
+        consultations = consultData.map((consultation: any) => {
+          const profile = profilesById.get(String(consultation.patient_id || ''))
+          return {
+            ...consultation,
+            patientName: `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || profile?.email || 'Patient',
+            meetingUrl: consultation.meeting_url
+          }
+        })
+      }
+    } catch (consultErr) {
+      console.warn('Consultations enrichment error (non-fatal):', consultErr)
+    }
+
+    return NextResponse.json({ availability: availabilityData || [], consultations })
+  } catch (err: any) {
+    console.error('Provider availability GET fatal error:', err)
+    return NextResponse.json({ availability: [], consultations: [], error: err.message }, { status: 200 })
   }
-  if (to && isDate(to)) {
-    query = query.lte('available_date', to)
-  }
-
-  const [{ data, error }, consultationsResult] = await Promise.all([
-    query,
-    supabaseAdmin
-      .from('staff_consultations')
-      .select('id, patient_id, staff_role, booking_date, booking_time, status, meeting_url, meeting_provider, appointment_type')
-      .eq('staff_id', provider.user.id)
-      .gte('booking_date', from && isDate(from) ? from : today)
-      .lte('booking_date', to && isDate(to) ? to : defaultTo)
-      .order('booking_date')
-      .order('booking_time')
-      .limit(200),
-  ])
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (consultationsResult.error) return NextResponse.json({ error: consultationsResult.error.message }, { status: 500 })
-
-  const consultationRows = (consultationsResult.data || []) as StaffConsultation[]
-  const patientIds = Array.from(new Set(consultationRows.map(row => row.patient_id).filter(Boolean))) as string[]
-  const profilesResult = patientIds.length
-    ? await supabaseAdmin.from('profiles').select('id, first_name, last_name, email').in('id', patientIds)
-    : { data: [], error: null }
-  if (profilesResult.error) return NextResponse.json({ error: profilesResult.error.message }, { status: 500 })
-  const profiles = (profilesResult.data || []) as PatientProfile[]
-  const profilesById = new Map(profiles.map(profile => [profile.id, profile]))
-  const consultations = consultationRows.map(consultation => {
-    const profile = profilesById.get(String(consultation.patient_id || ''))
-    return { ...consultation, patientName: `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || profile?.email || 'Patient', meetingUrl: consultation.meeting_url }
-  })
-  return NextResponse.json({ availability: data || [], consultations })
 }
 
 export async function POST(request: Request) {
