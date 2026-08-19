@@ -261,7 +261,7 @@ export async function bookPatientDoctorAppointment(params: {
   }
   const txnId = (paymentRequired || feeAlreadyPaid) ? generateTxnId() : ''
 
-  const payload = {
+  const payload: Record<string, unknown> = {
     id: appointmentId,
     patient_id: params.patientId,
     doctor_id: reservedSlot.provider_id,
@@ -275,25 +275,44 @@ export async function bookPatientDoctorAppointment(params: {
     meeting_status: meeting.meetingStatus,
     appointment_type: params.appointmentType,
     slot_id: reservedSlot.id,
-    booking_source: 'PATIENT_PORTAL',
-    payment_requirement: paymentRequired ? 'PAID_INITIAL_FEE' : 'MEMBERSHIP_INCLUDED',
-    scheduled_start: start,
-    scheduled_end: end,
     is_completed: false,
   }
 
-  const { data: consultation, error: insertError } = await supabaseAdmin
-    .from('doctor_consultations')
-    .insert(payload)
-    .select()
-    .single()
+  let consultation: any = null
+  let insertError: any = null
 
-  if (insertError) {
+  while (!consultation) {
+    const result = await supabaseAdmin
+      .from('doctor_consultations')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (!result.error) {
+      consultation = result.data
+      break
+    }
+
+    const missingColumn = result.error.code === 'PGRST204'
+      ? result.error.message.match(/Could not find the '([^']+)' column/)?.[1]
+      : null
+
+    if (missingColumn && missingColumn in payload) {
+      console.warn(`doctor_consultations.${missingColumn} not in schema; retrying insert without it.`)
+      delete payload[missingColumn]
+      continue
+    }
+
+    insertError = result.error
+    break
+  }
+
+  if (insertError || !consultation) {
     await supabaseAdmin
       .from('provider_availability')
       .update({ status: 'AVAILABLE', is_available: true, updated_at: new Date().toISOString() })
       .eq('id', reservedSlot.id)
-    throw insertError
+    throw insertError || new Error('Failed to insert consultation record.')
   }
 
   if (paymentRequired) {
