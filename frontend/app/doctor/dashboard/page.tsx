@@ -207,7 +207,18 @@ function getParsedTime(bookingDate: string, bookingTime: string): number | null 
 function getSlotTimestamp(slotDate: string, slotTime: string): number | null {
   if (!slotDate || !slotTime) return null;
   try {
-    const target = new Date(`${slotDate} ${slotTime}`);
+    const rawDate = slotDate.trim();
+    let isoDate = rawDate;
+    if (rawDate.includes('/')) {
+      const [d, m, y] = rawDate.split('/');
+      isoDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+    }
+    const rawTime = slotTime.trim();
+    const timeParts = rawTime.split(':');
+    const h = String(timeParts[0] || '00').padStart(2, '0');
+    const min = String(timeParts[1] || '00').padStart(2, '0');
+    const s = String(timeParts[2] || '00').padStart(2, '0');
+    const target = new Date(`${isoDate}T${h}:${min}:${s}`);
     const parsed = target.getTime();
     return Number.isNaN(parsed) ? null : parsed;
   } catch {

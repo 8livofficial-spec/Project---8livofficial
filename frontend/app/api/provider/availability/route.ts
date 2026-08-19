@@ -56,8 +56,12 @@ export async function GET(request: Request) {
     .eq('provider_role', provider.role)
     .order('available_date', { ascending: true })
     .order('start_time', { ascending: true })
-  query = query.gte('available_date', from && isDate(from) ? from : today)
-  query = query.lte('available_date', to && isDate(to) ? to : defaultTo)
+  if (from && isDate(from)) {
+    query = query.gte('available_date', from)
+  }
+  if (to && isDate(to)) {
+    query = query.lte('available_date', to)
+  }
 
   const [{ data, error }, consultationsResult] = await Promise.all([
     query,
