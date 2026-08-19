@@ -458,34 +458,33 @@ export default function ConsultationSchedulingPage() {
             options.order_id = orderData.id
           }
           options.handler = async function (response: any) {
-              try {
-                // Verify payment on backend
-                const verifyRes = await patientFetch('/api/payment/verify', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    patientId,
-                    paymentType: 'consultation',
-                    amount: CONSULTATION_FEE,
-                    paymentMethod,
-                    razorpay_order_id: response.razorpay_order_id,
-                    razorpay_payment_id: response.razorpay_payment_id,
-                    razorpay_signature: response.razorpay_signature,
-                  }),
-                })
-                const verifyData = await verifyRes.json()
-                if (!verifyRes.ok || verifyData.error) {
-                  throw new Error(verifyData.error || 'Payment verification failed.')
-                }
-                resolve()
-              } catch (verifyErr) {
-                reject(verifyErr)
+            try {
+              // Verify payment on backend
+              const verifyRes = await patientFetch('/api/payment/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  patientId,
+                  paymentType: 'consultation',
+                  amount: CONSULTATION_FEE,
+                  paymentMethod,
+                  razorpay_order_id: response.razorpay_order_id,
+                  razorpay_payment_id: response.razorpay_payment_id,
+                  razorpay_signature: response.razorpay_signature,
+                }),
+              })
+              const verifyData = await verifyRes.json()
+              if (!verifyRes.ok || verifyData.error) {
+                throw new Error(verifyData.error || 'Payment verification failed.')
               }
-            },
-            modal: {
-              ondismiss: function () {
-                reject(new Error('Payment cancelled.'))
-              },
+              resolve()
+            } catch (verifyErr) {
+              reject(verifyErr)
+            }
+          }
+          options.modal = {
+            ondismiss: function () {
+              reject(new Error('Payment cancelled.'))
             },
           }
           try {

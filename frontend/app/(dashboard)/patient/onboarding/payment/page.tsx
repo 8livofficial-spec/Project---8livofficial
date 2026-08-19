@@ -187,45 +187,43 @@ export default function OnboardingPaymentPage() {
         }
         if (orderData.id && String(orderData.id).startsWith('order_') && !orderData.isMock) {
           options.order_id = orderData.id
-        }
         options.handler = async function (response: any) {
-            try {
-              setProgress(80)
-              setProcessingMsg('Verifying payment signature...')
+          try {
+            setProgress(80)
+            setProcessingMsg('Verifying payment signature...')
 
-              const verifyRes = await authedFetch('/api/payment/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  patientId: session.user.id,
-                  paymentType: 'combined',
-                  membershipTier: assessment?.membership_tier,
-                  amount: total,
-                  paymentMethod: method,
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                }),
-              })
+            const verifyRes = await authedFetch('/api/payment/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                patientId: session.user.id,
+                paymentType: 'combined',
+                membershipTier: assessment?.membership_tier,
+                amount: total,
+                paymentMethod: method,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+              }),
+            })
 
-              const verifyData = await verifyRes.json()
-              if (!verifyRes.ok || verifyData.error) {
-                throw new Error(verifyData.error || 'Payment verification failed.')
-              }
-
-              setTxnId(response.razorpay_payment_id)
-              setProgress(100)
-              setStep('success')
-              resolve()
-            } catch (vErr) {
-              reject(vErr)
+            const verifyData = await verifyRes.json()
+            if (!verifyRes.ok || verifyData.error) {
+              throw new Error(verifyData.error || 'Payment verification failed.')
             }
-          },
-          modal: {
-            ondismiss: function () {
-              setStep('method')
-              reject(new Error('Payment cancelled by user.'))
-            },
+
+            setTxnId(response.razorpay_payment_id)
+            setProgress(100)
+            setStep('success')
+            resolve()
+          } catch (vErr) {
+            reject(vErr)
+          }
+        }
+        options.modal = {
+          ondismiss: function () {
+            setStep('method')
+            reject(new Error('Payment cancelled by user.'))
           },
         }
 
