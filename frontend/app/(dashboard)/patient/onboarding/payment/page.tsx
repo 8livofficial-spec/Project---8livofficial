@@ -166,25 +166,29 @@ export default function OnboardingPaymentPage() {
 
       const patientName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || assessment?.first_name || 'Member'
       const patientEmail = session.user.email || profile?.email || 'care@8liv.in'
-      const patientContact = profile?.phone_number || assessment?.phone_number || ''
+      const rawContact = profile?.phone_number || assessment?.phone_number || ''
+      const patientContact = rawContact.replace(/\D/g, '').slice(-10)
 
       await new Promise<void>((resolve, reject) => {
-        const options = {
+        const options: any = {
           key: orderData.key,
           amount: orderData.amount,
-          currency: orderData.currency,
+          currency: orderData.currency || 'INR',
           name: '8Liv',
           description: `${assessment?.membership_tier || 'Membership'} Plan Activation`,
-          order_id: orderData.id,
           prefill: {
             name: patientName,
             email: patientEmail,
-            contact: patientContact,
+            ...(patientContact.length === 10 ? { contact: patientContact } : {}),
           },
           theme: {
             color: '#C4622D',
           },
-          handler: async function (response: any) {
+        }
+        if (orderData.id && String(orderData.id).startsWith('order_') && !orderData.isMock) {
+          options.order_id = orderData.id
+        }
+        options.handler = async function (response: any) {
             try {
               setProgress(80)
               setProcessingMsg('Verifying payment signature...')

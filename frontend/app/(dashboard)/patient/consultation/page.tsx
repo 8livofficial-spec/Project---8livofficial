@@ -429,7 +429,8 @@ export default function ConsultationSchedulingPage() {
         const patientId = user?.id || profile?.id || assessment?.patient_id
         const patientName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || assessment?.first_name || 'Patient'
         const patientEmail = user?.email || (profile as any)?.email || 'care@8liv.in'
-        const patientContact = profile?.phone_number || assessment?.phone_number || ''
+        const rawContact = profile?.phone_number || assessment?.phone_number || ''
+        const patientContact = rawContact.replace(/\D/g, '').slice(-10)
 
         // 2. Open Razorpay Checkout
         await loadRazorpayScript()
@@ -438,22 +439,25 @@ export default function ConsultationSchedulingPage() {
         }
 
         await new Promise<void>((resolve, reject) => {
-          const options = {
+          const options: any = {
             key: orderData.key,
             amount: orderData.amount,
-            currency: orderData.currency,
+            currency: orderData.currency || 'INR',
             name: '8Liv',
             description: 'Initial Doctor Consultation Fee',
-            order_id: orderData.id,
             prefill: {
               name: patientName,
               email: patientEmail,
-              contact: patientContact,
+              ...(patientContact.length === 10 ? { contact: patientContact } : {}),
             },
             theme: {
               color: '#C4622D',
             },
-            handler: async function (response: any) {
+          }
+          if (orderData.id && String(orderData.id).startsWith('order_') && !orderData.isMock) {
+            options.order_id = orderData.id
+          }
+          options.handler = async function (response: any) {
               try {
                 // Verify payment on backend
                 const verifyRes = await patientFetch('/api/payment/verify', {
