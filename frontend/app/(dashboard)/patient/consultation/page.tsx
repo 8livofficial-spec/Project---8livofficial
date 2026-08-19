@@ -365,15 +365,8 @@ export default function ConsultationSchedulingPage() {
       alert("Please select a consultation time first.")
       return
     }
-
-    if (reusePaymentFromBookingId || isActiveMemberFollowUp || isBookingPending) {
-      void handlePaidBooking()
-      return
-    }
-
-    setPaymentError('')
-    setPaymentStage('method')
-    setPaymentOpen(true)
+    // Go directly to Razorpay — no intermediate modal
+    void handlePaidBooking()
   }
 
   const loadRazorpayScript = () => {
@@ -399,7 +392,6 @@ export default function ConsultationSchedulingPage() {
   const handlePaidBooking = async () => {
     if (!selectedSlot) {
       setPaymentError('Please select a consultation time before payment.')
-      setPaymentStage('method')
       return
     }
 
