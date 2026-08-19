@@ -365,8 +365,13 @@ export default function ConsultationSchedulingPage() {
       alert("Please select a consultation time first.")
       return
     }
-    // Go directly to Razorpay — no intermediate modal
-    void handlePaidBooking()
+    setPaymentError('')
+    if (reusePaymentFromBookingId || isActiveMemberFollowUp || isBookingPending) {
+      void handlePaidBooking()
+      return
+    }
+    setPaymentStage('method')
+    setPaymentOpen(true)
   }
 
   const loadRazorpayScript = () => {
