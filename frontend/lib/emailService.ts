@@ -103,7 +103,7 @@ async function logEmail(params: {
   providerMessageId?: string | null
 }) {
   try {
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('email_logs')
       .insert({
         patient_id: params.patientId || null,
@@ -115,8 +115,11 @@ async function logEmail(params: {
         provider_message_id: params.providerMessageId || null,
         error_message: params.errorMessage || null,
       })
+    if (error) {
+      console.warn('Could not write email log (table may not exist):', error.message)
+    }
   } catch (error) {
-    console.error('Failed to write email log:', error)
+    console.warn('Failed to write email log:', error)
   }
 }
 
@@ -134,7 +137,8 @@ async function sendEmail(params: {
   }
 
   try {
-    const info = await getTransporter().sendMail({
+    const transporter = getTransporter()
+    const info = await transporter.sendMail({
       from: EMAIL_FROM,
       to: params.to,
       subject: params.subject,
