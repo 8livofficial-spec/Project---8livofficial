@@ -1,27 +1,35 @@
-import { useEffect, useRef } from 'react'
+'use client'
 
-export function useScrollAnimation() {
-  const ref = useRef<HTMLDivElement>(null)
-  
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add('animate-fade-in-up')
-          entry.target.classList.remove('opacity-0')
-          // Optional: stop observing once animated to keep it visible
-          observer.unobserve(entry.target)
-        }
-      },
-      { threshold: 0.1 }
-    )
-    
-    if (ref.current) {
-      observer.observe(ref.current)
+import { useLayoutEffect, useEffect, useRef } from 'react'
+import gsap from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+gsap.registerPlugin(ScrollTrigger)
+
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect
+
+export function useScrollAnimation<T extends HTMLElement = HTMLDivElement>(
+  animationCallback: (element: T) => void,
+  deps: React.DependencyList = []
+) {
+  const containerRef = useRef<T>(null)
+
+  useIsomorphicLayoutEffect(() => {
+    if (!containerRef.current) return
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (prefersReducedMotion) return
+
+    const element = containerRef.current
+    const ctx = gsap.context(() => {
+      animationCallback(element)
+    }, containerRef)
+
+    return () => {
+      ctx.revert()
     }
-    
-    return () => observer.disconnect()
-  }, [])
-  
-  return ref
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps)
+
+  return containerRef
 }

@@ -52,10 +52,14 @@ export const metadata: Metadata = {
         follow: true,
       },
   icons: {
-    icon: "/brand-mark.svg",
-    shortcut: "/brand-mark.svg",
-    apple: "/brand-mark.svg",
+    icon: [
+      { url: "/favicon.ico" },
+      { url: "/icon.png", type: "image/png" }
+    ],
+    shortcut: "/favicon.ico",
+    apple: "/apple-touch-icon.png",
   },
+
   openGraph: {
     type: "website",
     locale: siteConfig.locale,
@@ -103,7 +107,8 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${sora.variable} h-full antialiased`}
     >
-      <body className={`min-h-full flex flex-col font-sans bg-[#0A0A0F] text-[#F8FAFC]`}>
+      <body className={`min-h-full flex flex-col font-sans bg-white text-[#0F172A]`}>
+
         {children}
         <Script
           src="https://checkout.razorpay.com/v1/checkout.js"

@@ -8,6 +8,12 @@ import { ArrowRight, ArrowLeft, User, Scale, Activity, ShieldCheck, Pill, CheckC
 import { supabase } from '@/lib/supabaseClient'
 import { getPatientJourneyTarget } from '@/lib/patientJourney'
 import { normalizePhoneNumber } from '@/lib/phone'
+import Features2 from '@/components/ui/features-2'
+import AddressAutocompleteInput from '@/components/ui/address-autocomplete-input'
+import LiveAssessmentHub from '@/components/ui/live-assessment-hub'
+
+
+
 
 type EligibilityStatus = 'ELIGIBLE' | 'REVIEW_REQUIRED' | 'NOT_ELIGIBLE'
 type RadioField = 'has_mtc_men2' | 'is_pregnant_nursing' | 'has_pancreatitis' | 'has_active_cancer' | 'has_severe_gi_disease'
@@ -450,24 +456,53 @@ export default function AssessmentPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F9F6F0] flex flex-col pt-24 pb-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl w-full mx-auto relative z-10">
-        
-        {/* Progress Bar */}
-        <div className="mb-8">
-          <div className="flex justify-between text-sm font-bold text-[#475569] mb-2 uppercase tracking-widest">
-            <span>Step {step} of 6</span>
-            <span className="text-[#D46E53]">{Math.round((step / 6) * 100)}%</span>
-          </div>
-          <div className="h-2 w-full bg-black/5 rounded-full overflow-hidden">
-            <motion.div 
-              className="h-full bg-gradient-to-r from-[#A84A33] to-[#D46E53]"
-              initial={{ width: 0 }}
-              animate={{ width: `${(step / 6) * 100}%` }}
-              transition={{ duration: 0.5, ease: "easeOut" }}
-            />
-          </div>
+    <div className="min-h-screen bg-slate-50/50 pt-20 pb-16 px-4 sm:px-6 lg:px-8">
+      {/* Top Navigation & Section Header */}
+      <div className="max-w-7xl mx-auto mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <Link
+            href="/"
+            className="inline-flex items-center gap-2 text-xs font-bold text-[#0D9488] hover:text-[#0F766E] transition-colors mb-2 font-sora cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>Back to Home</span>
+          </Link>
+          <h1 className="text-2xl sm:text-3xl font-bold font-sora text-[#0F172A] tracking-tight">
+            Confidential Clinical Assessment
+          </h1>
+          <p className="text-xs sm:text-sm text-[#475569] font-light mt-0.5">
+            3-minute evaluation to review eligibility for doctor-led GLP-1 protocols.
+          </p>
         </div>
+
+        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-slate-200 text-[#0F766E] text-xs font-bold font-sora shadow-xs self-start sm:self-auto">
+          <ShieldCheck className="w-4 h-4 text-[#0D9488]" />
+          <span>100% Confidential & Medical Standard</span>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-14 items-start relative z-10">
+        
+        {/* Left Column: Interactive Assessment Questionnaire */}
+        <div className="lg:col-span-6 w-full">
+
+
+          {/* Progress Bar */}
+          <div className="mb-8">
+            <div className="flex justify-between text-xs font-bold text-[#475569] mb-2 uppercase tracking-widest font-sora">
+              <span>Step {step} of 6</span>
+              <span className="text-[#0D9488]">{Math.round((step / 6) * 100)}%</span>
+            </div>
+            <div className="h-2 w-full bg-slate-200/80 rounded-full overflow-hidden">
+              <motion.div 
+                className="h-full bg-[#0D9488]"
+                initial={{ width: 0 }}
+                animate={{ width: `${(step / 6) * 100}%` }}
+                transition={{ duration: 0.5, ease: "easeOut" }}
+              />
+            </div>
+          </div>
+
 
         {resumeNotice && (
           <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm font-semibold text-emerald-700">
@@ -499,7 +534,15 @@ export default function AssessmentPage() {
                     <div><label className={labelCls}>Age</label><input type="number" name="age" value={formData.age} onChange={handleInputChange} className={inputCls} placeholder="35"/></div>
                     <div><label className={labelCls}>Phone Number</label><input type="tel" name="phone_number" value={formData.phone_number} onChange={handleInputChange} className={inputCls} placeholder="+91 9090909090"/></div>
                   </div>
-                  <div><label className={labelCls}>Address</label><textarea name="address" value={formData.address} onChange={handleInputChange} rows={3} className={inputCls} placeholder="Address 10/7 Avenue Street..."></textarea></div>
+                  <div>
+                    <label className={labelCls}>Address</label>
+                    <AddressAutocompleteInput
+                      value={formData.address}
+                      onChange={(val) => setFormData(prev => ({ ...prev, address: val }))}
+                      placeholder="Start typing your street address..."
+                    />
+                  </div>
+
 
                   <div className="bg-[#D46E53]/5 p-6 rounded-3xl border border-[#D46E53]/10">
                     <label className="flex items-start space-x-4 cursor-pointer group">
@@ -759,6 +802,15 @@ export default function AssessmentPage() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* Right Column: Interactive Claude-Style Visual Feature Card */}
+      <div className="lg:col-span-6 w-full sticky top-28 hidden lg:block">
+        <Features2 className="p-0 shadow-none border-none" />
+      </div>
+
+
     </div>
-  )
+  </div>
+)
 }
+

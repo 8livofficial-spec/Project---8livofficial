@@ -235,7 +235,10 @@ export default function UnifiedLogin() {
       {/* Right: Auth Form */}
       <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 md:p-24 relative overflow-y-auto">
         <div className="absolute top-8 left-8 lg:hidden">
-          <img src="/brand-logo.svg" alt="8Liv Logo" className="h-10 w-auto object-contain" />
+          <img src="/brand-logo-official.png" alt="8LIV Official Logo" className="h-10 w-auto object-contain" />
+
+
+
         </div>
 
         <motion.div 
