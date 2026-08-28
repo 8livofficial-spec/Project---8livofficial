@@ -64,7 +64,22 @@ export async function assertPatientPrescriptionOwnership(prescriptionId: string,
     .eq('patient_id', patientId)
     .maybeSingle()
 
-  if (error) throw error
+  if (!error && data) return data
+
+  if (error) {
+    // Fallback if pharmacy_orders join fails
+    const { data: fallback, error: fallbackError } = await supabaseAdmin
+      .from('prescriptions')
+      .select('*, prescription_items(*)')
+      .eq('id', prescriptionId)
+      .eq('patient_id', patientId)
+      .maybeSingle()
+
+    if (fallbackError) throw fallbackError
+    if (!fallback) throw new Error('Prescription not found.')
+    return fallback
+  }
+
   if (!data) throw new Error('Prescription not found.')
   return data
 }
