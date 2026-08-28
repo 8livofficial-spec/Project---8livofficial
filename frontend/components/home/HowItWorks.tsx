@@ -15,7 +15,7 @@ const stages: DissolveStageItem[] = [
       'Initial metabolic biology check',
       'Clinical safety verification',
     ],
-    image: '/images/medical_supervision_slide1.png',
+    image: '/images/hero_indian.png',
     cardTag: 'Intake Completed',
   },
   {

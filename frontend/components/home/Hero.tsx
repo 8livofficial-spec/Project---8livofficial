@@ -96,43 +96,64 @@ export default function Hero() {
         )
       }
 
-      // STICKY SCROLL PINNING: Fades out text & overlays to reveal 100% bright video on scroll
-      const pinTrigger = ScrollTrigger.create({
-        trigger: section,
-        pin: true,
-        start: 'top top',
-        end: '+=700',
-        scrub: 0.6,
+      // Mobile responsive GSAP animations
+      const mm = gsap.matchMedia()
+
+      mm.add('(min-width: 768px)', () => {
+        // Sticky pinning only on tablet & desktop for buttery-smooth mobile scrolling
+        ScrollTrigger.create({
+          trigger: section,
+          pin: true,
+          start: 'top top',
+          end: '+=650',
+          scrub: 0.6,
+        })
+
+        if (contentRef.current) {
+          gsap.to(contentRef.current, {
+            opacity: 0,
+            y: -45,
+            scale: 0.96,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: section,
+              start: 'top top',
+              end: '+=450',
+              scrub: 0.5,
+            }
+          })
+        }
+
+        if (overlayRef.current) {
+          gsap.to(overlayRef.current, {
+            opacity: 0.15,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: section,
+              start: 'top top',
+              end: '+=500',
+              scrub: 0.5,
+            }
+          })
+        }
       })
 
-      if (contentRef.current) {
-        gsap.to(contentRef.current, {
-          opacity: 0,
-          y: -45,
-          scale: 0.96,
-          ease: 'none',
-          scrollTrigger: {
-            trigger: section,
-            start: 'top top',
-            end: '+=450',
-            scrub: 0.5,
-          }
-        })
-      }
-
-      if (overlayRef.current) {
-        gsap.to(overlayRef.current, {
-          opacity: 0.15,
-          ease: 'none',
-          scrollTrigger: {
-            trigger: section,
-            start: 'top top',
-            end: '+=500',
-            scrub: 0.5,
-          }
-        })
-      }
-
+      mm.add('(max-width: 767px)', () => {
+        // Lightweight non-blocking scroll fade for mobile screens
+        if (contentRef.current) {
+          gsap.to(contentRef.current, {
+            opacity: 0.2,
+            y: -20,
+            ease: 'power1.out',
+            scrollTrigger: {
+              trigger: section,
+              start: 'center top',
+              end: 'bottom top',
+              scrub: true,
+            }
+          })
+        }
+      })
     })
 
     // Programmatic play fallback to ensure video starts smoothly on mobile/Safari
@@ -161,7 +182,7 @@ export default function Hero() {
   return (
     <section
       ref={sectionRef}
-      className="relative w-full min-h-[100svh] h-[100svh] flex flex-col justify-between overflow-hidden bg-[#0B1120]"
+      className="relative w-full min-h-[100svh] flex flex-col justify-between overflow-hidden bg-[#0B1120]"
     >
       {/* FULL-SCREEN BRIGHT HERO BACKGROUND VIDEO */}
       <div
@@ -171,20 +192,20 @@ export default function Hero() {
       >
         <video
           ref={videoRef}
-          src="https://res.cloudinary.com/junufjm3/video/upload/v1787941971/Hero.mp4"
+          src="https://res.cloudinary.com/junufjm3/video/upload/q_auto,f_auto,vc_auto,w_1280/v1787941971/Hero.mp4"
           autoPlay
           muted
           loop
           playsInline
-          preload="auto"
+          preload="metadata"
           poster="/images/hero_indian.png"
-          className="w-full h-full object-cover object-[80%_center] md:object-[75%_center] scale-105 brightness-125 contrast-[1.04] saturate-[1.05]"
+          className="w-full h-full object-cover object-[62%_center] sm:object-[70%_center] md:object-[75%_center] scale-100 md:scale-105 brightness-110 md:brightness-125 contrast-[1.04] saturate-[1.05]"
         />
         
-        {/* Soft gradient overlay that fades out on scroll to reveal video */}
-        <div ref={overlayRef} className="absolute inset-0 bg-gradient-to-r from-[#0F172A]/85 via-[#0F172A]/40 to-transparent pointer-events-none z-10 transition-opacity" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#0B1120]/70 via-transparent to-transparent pointer-events-none z-10" />
-        <div className="absolute top-0 left-0 w-[450px] sm:w-[600px] h-[450px] sm:h-[600px] bg-[#0D9488]/10 rounded-full blur-[140px] pointer-events-none" />
+        {/* Soft responsive gradient overlay */}
+        <div ref={overlayRef} className="absolute inset-0 bg-gradient-to-t from-[#0B1120]/95 via-[#0B1120]/60 to-[#0B1120]/30 md:bg-gradient-to-r md:from-[#0F172A]/85 md:via-[#0F172A]/40 md:to-transparent pointer-events-none z-10 transition-opacity" />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0B1120]/80 via-transparent to-transparent pointer-events-none z-10" />
+        <div className="absolute top-0 left-0 w-[320px] sm:w-[500px] md:w-[600px] h-[320px] sm:h-[500px] md:h-[600px] bg-[#0D9488]/10 rounded-full blur-[100px] sm:blur-[140px] pointer-events-none" />
       </div>
 
       {/* TOP HEADER SPACER */}

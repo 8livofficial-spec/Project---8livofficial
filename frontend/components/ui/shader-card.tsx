@@ -20,11 +20,13 @@ export function ShaderCard({
 }: ShaderCardProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
-  const [mousePos, setMousePos] = useState({ x: 0.5, y: 0.5 })
+  const mousePosRef = useRef({ x: 0.5, y: 0.5 })
+  const isVisibleRef = useRef(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    const container = containerRef.current
+    if (!canvas || !container) return
     const ctx = canvas.getContext('2d')
     if (!ctx) return
 
@@ -41,56 +43,74 @@ export function ShaderCard({
     if (customColors) colors = customColors
 
     const resizeCanvas = () => {
-      if (!canvas || !containerRef.current) return
-      const rect = containerRef.current.getBoundingClientRect()
-      canvas.width = rect.width
-      canvas.height = rect.height
+      if (!canvas || !container) return
+      const rect = container.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0) {
+        canvas.width = Math.min(rect.width, 800)
+        canvas.height = Math.min(rect.height, 800)
+      }
     }
 
     resizeCanvas()
     window.addEventListener('resize', resizeCanvas)
 
+    // IntersectionObserver to pause loop when offscreen
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        isVisibleRef.current = entry.isIntersecting
+        if (entry.isIntersecting && !animationFrameId) {
+          render()
+        }
+      },
+      { threshold: 0.05 }
+    )
+    observer.observe(container)
+
     const render = () => {
+      if (!isVisibleRef.current) {
+        animationFrameId = 0
+        return
+      }
+
       time += speed
       const w = canvas.width
       const h = canvas.height
 
-      if (w === 0 || h === 0) return
+      if (w > 0 && h > 0) {
+        const mouse = mousePosRef.current
+        const centerX = w * (0.3 + 0.4 * mouse.x + 0.1 * Math.sin(time * 1.5))
+        const centerY = h * (0.3 + 0.4 * mouse.y + 0.1 * Math.cos(time * 1.2))
 
-      // Create radial gradient wave mesh
-      const centerX = w * (0.3 + 0.4 * mousePos.x + 0.1 * Math.sin(time * 1.5))
-      const centerY = h * (0.3 + 0.4 * mousePos.y + 0.1 * Math.cos(time * 1.2))
+        const grad = ctx.createRadialGradient(
+          centerX,
+          centerY,
+          10,
+          centerX,
+          centerY,
+          Math.max(w, h) * 0.95
+        )
 
-      const grad = ctx.createRadialGradient(
-        centerX,
-        centerY,
-        10,
-        centerX,
-        centerY,
-        Math.max(w, h) * 0.95
-      )
+        grad.addColorStop(0, colors[2])
+        grad.addColorStop(0.5, colors[1])
+        grad.addColorStop(1, colors[0])
 
-      grad.addColorStop(0, colors[2])
-      grad.addColorStop(0.5, colors[1])
-      grad.addColorStop(1, colors[0])
+        ctx.fillStyle = grad
+        ctx.fillRect(0, 0, w, h)
 
-      ctx.fillStyle = grad
-      ctx.fillRect(0, 0, w, h)
+        ctx.save()
+        ctx.globalCompositeOperation = 'screen'
+        ctx.strokeStyle = colorTheme === 'gold' ? 'rgba(245, 158, 11, 0.18)' : 'rgba(148, 163, 184, 0.15)'
+        ctx.lineWidth = 2.5
 
-      // Add dynamic glowing wave lines
-      ctx.save()
-      ctx.globalCompositeOperation = 'screen'
-      ctx.strokeStyle = colorTheme === 'gold' ? 'rgba(245, 158, 11, 0.18)' : 'rgba(148, 163, 184, 0.15)'
-      ctx.lineWidth = 3
-
-      ctx.beginPath()
-      for (let x = 0; x <= w; x += 20) {
-        const y = h / 2 + Math.sin(x * 0.01 + time * 3) * 35 + Math.cos(x * 0.02 + time * 2) * 20
-        if (x === 0) ctx.moveTo(x, y)
-        else ctx.lineTo(x, y)
+        ctx.beginPath()
+        for (let x = 0; x <= w; x += 24) {
+          const y = h / 2 + Math.sin(x * 0.01 + time * 3) * 35 + Math.cos(x * 0.02 + time * 2) * 20
+          if (x === 0) ctx.moveTo(x, y)
+          else ctx.lineTo(x, y)
+        }
+        ctx.stroke()
+        ctx.restore()
       }
-      ctx.stroke()
-      ctx.restore()
 
       animationFrameId = requestAnimationFrame(render)
     }
@@ -99,17 +119,18 @@ export function ShaderCard({
 
     return () => {
       window.removeEventListener('resize', resizeCanvas)
-      cancelAnimationFrame(animationFrameId)
+      observer.disconnect()
+      if (animationFrameId) cancelAnimationFrame(animationFrameId)
     }
-  }, [colorTheme, customColors, mousePos, speed])
+  }, [colorTheme, customColors, speed])
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current) return
     const rect = containerRef.current.getBoundingClientRect()
-    setMousePos({
+    mousePosRef.current = {
       x: (e.clientX - rect.left) / rect.width,
       y: (e.clientY - rect.top) / rect.height
-    })
+    }
   }
 
   return (
