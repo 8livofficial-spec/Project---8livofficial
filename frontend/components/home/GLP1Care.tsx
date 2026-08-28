@@ -55,9 +55,9 @@ const clinicalRevealItems: ImageRevealListItem[] = [
     id: 'step-05',
     number: '05',
     phase: 'SUPPORT',
-    title: 'Daily Nutrition & Behavioral Coaching',
-    description: 'Partner with a clinical dietitian to establish high-protein Indian meal pacing and strength training guidelines for long-term health.',
-    subtitle: 'Dietitian Coaching',
+    title: 'Dietitian & Fitness Coach Guidance',
+    description: 'Partner with a clinical dietitian and certified trainer to establish high-protein Indian meal pacing and custom strength routines for permanent metabolic health.',
+    subtitle: 'Dietitian & Trainer',
     image: '/images/nutrition_lifestyle.png',
   },
 ]

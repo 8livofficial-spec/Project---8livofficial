@@ -225,7 +225,7 @@ export default function Hero() {
           >
             <span className="flex h-1.5 w-1.5 rounded-full bg-[#0D9488] animate-pulse" />
             <span className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.16em] text-[#5EEAD4] font-sora">
-              Doctor-Led Metabolic Care
+              Doctor-Led &amp; Trainer-Coached Metabolic Care
             </span>
           </div>
 
@@ -250,7 +250,7 @@ export default function Hero() {
             ref={subtextRef}
             className="text-[11px] sm:text-xs md:text-sm text-white/90 leading-relaxed mb-5 sm:mb-6 max-w-lg font-normal opacity-0 will-change-transform drop-shadow-[0_1px_6px_rgba(15,23,42,0.4)]"
           >
-            Personalized metabolic healthcare — online physician consultations, clinical nutrition mapping, and continuous lifestyle support. Built for real lives.
+            Personalized metabolic healthcare — online physician consultations, clinical nutrition mapping, and 1-on-1 certified fitness coaching. Built for real lives.
           </p>
 
           {/* ACTION BUTTONS */}

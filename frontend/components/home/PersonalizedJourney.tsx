@@ -21,7 +21,7 @@ const deckSteps = [
   {
     step: '01',
     action: 'FOOD',
-    tag: 'Metabolic Fueling',
+    tag: 'Clinical Dietitian',
     title: 'Adaptive Indian Meals',
     desc: 'No restrictive plans. Your clinical dietitian adapts your meal blueprint around paneer, dal, household spices, and home-cooked family favorites.',
     image: '/images/meal_indian.png',
@@ -29,15 +29,15 @@ const deckSteps = [
   {
     step: '02',
     action: 'MOVEMENT',
-    tag: 'Lean Muscle Protection',
-    title: 'Visceral Fat Control',
-    desc: 'Simple physical activity and strength guidelines designed to reduce visceral fat indicators while fully protecting your active muscle mass.',
+    tag: '1-on-1 Fitness Trainer',
+    title: 'Trainer-Led Muscle Protection',
+    desc: 'Customized resistance exercises and movement guidelines from certified fitness coaches designed to burn visceral fat and protect active muscle.',
     image: '/images/meal_prep.png',
   },
   {
     step: '03',
     action: 'HABITS',
-    tag: 'Daily Biomarker Tracking',
+    tag: 'Metabolic Coaching',
     title: 'Stress, Sleep & Hydration',
     desc: 'Targeted lifestyle check-ins that track hydration level, deep sleep cycles, and cortisol response to optimize daily insulin sensitivity.',
     image: '/images/hero_wellness.png',
@@ -45,9 +45,9 @@ const deckSteps = [
   {
     step: '04',
     action: 'CONSISTENCY',
-    tag: 'Sustained Maintenance',
+    tag: 'Care Team Synergy',
     title: 'Metabolic Set-Point Calibration',
-    desc: 'Gradual adjustments to ensure your weight loss is held permanent as your hormones settle into a healthy new regulation state.',
+    desc: 'Gradual adjustments by your doctor, dietitian, and coach to ensure your weight loss is held permanent as your hormones settle into a healthy set-point.',
     image: '/images/nutrition_indian.png',
   },
 ]

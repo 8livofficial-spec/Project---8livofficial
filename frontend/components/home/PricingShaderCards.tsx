@@ -72,6 +72,10 @@ export default function PricingShaderCards() {
                 </div>
                 <div className="flex items-start gap-3 text-xs sm:text-sm text-[#0F172A]">
                   <CheckCircle2 className="w-4 h-4 text-[#0D9488] shrink-0 mt-0.5" />
+                  <span>Personalized Movement & Strength Roadmap</span>
+                </div>
+                <div className="flex items-start gap-3 text-xs sm:text-sm text-[#0F172A]">
+                  <CheckCircle2 className="w-4 h-4 text-[#0D9488] shrink-0 mt-0.5" />
                   <span>Unified Patient Portal & Biomarker Tracker</span>
                 </div>
               </div>
@@ -107,7 +111,7 @@ export default function PricingShaderCards() {
                 VIP Concierge Care
               </h3>
               <p className="text-xs sm:text-sm text-[#475569] font-light mb-6">
-                Continuous priority doctor messaging, dedicated 1-on-1 dietitian coaching, and custom meal planning.
+                Continuous priority doctor messaging, dedicated 1-on-1 dietitian coaching, and personal fitness trainer supervision.
               </p>
 
               <div className="flex items-baseline gap-1.5 mb-8 pb-6 border-b border-slate-200">
@@ -123,11 +127,15 @@ export default function PricingShaderCards() {
                 </div>
                 <div className="flex items-start gap-3 text-xs sm:text-sm text-[#0F172A]">
                   <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <span>Unlimited 24/7 Priority Doctor Chat</span>
+                  <span>Dedicated 1-on-1 Certified Fitness Trainer</span>
                 </div>
                 <div className="flex items-start gap-3 text-xs sm:text-sm text-[#0F172A]">
                   <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                  <span>Weekly Dedicated Dietitian Coaching</span>
+                  <span>Unlimited 24/7 Priority Doctor & Coach Chat</span>
+                </div>
+                <div className="flex items-start gap-3 text-xs sm:text-sm text-[#0F172A]">
+                  <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                  <span>Weekly Dietitian & Trainer Progress Reviews</span>
                 </div>
                 <div className="flex items-start gap-3 text-xs sm:text-sm text-[#0F172A]">
                   <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />

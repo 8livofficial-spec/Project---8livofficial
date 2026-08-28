@@ -199,10 +199,10 @@ export default function Trust() {
               </div>
               <div>
                 <h4 className="font-sora text-sm sm:text-base font-bold text-[#0F172A] mb-1">
-                  Support Beyond first Consultation
+                  Multidisciplinary Care Support
                 </h4>
                 <p className="text-xs sm:text-sm text-[#5D7068] leading-relaxed font-light">
-                  Weekly coach accountability check-ins and direct portal messaging ensure safety adjustments at every phase.
+                  Direct collaboration between your physician, clinical dietitian, and dedicated fitness trainer ensures synchronized medical, nutritional, and movement care.
                 </p>
               </div>
             </div>

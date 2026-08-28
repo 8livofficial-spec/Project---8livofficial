@@ -19,34 +19,34 @@ const GUIDANCE_CAROUSEL_ITEMS: CarouselItem[] = [
     title: 'Personalized Indian Meals',
     subtitle: 'Preserving Traditional Regional Flavors',
     description: 'No generic Western templates. Your dietitian tailors high-protein meals around regional spices, home-cooked family favorites, and Indian ingredients.',
-    tag: 'Nutrition',
+    tag: 'Dietitian',
     image: '/images/meal_indian.png'
   },
   {
     id: 'step-02',
     badge: 'Step 02 / Movement',
-    title: 'Movement & Muscle Protection',
-    subtitle: 'Protecting Lean Muscle Mass & Metabolism',
-    description: 'Simple, habit-forming strength guidelines to protect lean muscle mass and optimize glycemic control — with zero extreme exercise strain.',
-    tag: 'Exercise',
+    title: 'Trainer-Guided Strength & Muscle Protection',
+    subtitle: 'Preserving Lean Muscle Mass with Certified Trainers',
+    description: 'Work with certified fitness coaches on customized, low-impact resistance routines that burn visceral fat while protecting your active muscle mass.',
+    tag: 'Trainer Coach',
     image: '/images/meal_prep.png'
   },
   {
     id: 'step-03',
     badge: 'Step 03 / Habits',
     title: 'Daily Metabolic Habits',
-    subtitle: 'Metabolic Stability & Routines',
-    description: 'Clinical strategies for hydration, sleep, stress response, and consistent daily routines that stabilize your metabolic markers.',
-    tag: 'Behavior',
+    subtitle: 'Metabolic Stability & Sleep Routines',
+    description: 'Clinical strategies for hydration, restorative sleep, cortisol control, and consistent daily routines that stabilize your insulin sensitivity.',
+    tag: 'Lifestyle',
     image: '/images/nutrition_indian.png'
   },
   {
     id: 'step-04',
-    badge: 'Step 04 / Support',
-    title: 'Dedicated Dietitian & Care Support',
-    subtitle: 'Continuous Guidance That Adapts To You',
-    description: 'Direct 1-on-1 guidance with certified clinical dietitians to adjust your personalized blueprint whenever your schedule changes.',
-    tag: 'Coaching',
+    badge: 'Step 04 / Care Team',
+    title: 'Dietitian & Fitness Coach Synergy',
+    subtitle: 'Continuous 1-on-1 Multidisciplinary Coaching',
+    description: 'Direct 1-on-1 messaging with clinical dietitians and personal fitness trainers to adjust your nutrition and workout plans as your metabolism evolves.',
+    tag: '1-on-1 Coaching',
     image: '/images/nutrition_lifestyle.png'
   }
 ]

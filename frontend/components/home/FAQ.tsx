@@ -40,6 +40,11 @@ const faqs = [
       'Our clinical dietitians design personalised nutrition guidance adapted to your food culture, household routine, and health targets. Plans incorporate Indian dietary preferences and do not rely on punitive calorie restriction or generic templates. Your dietitian is accessible for regular check-ins and adjustments.',
   },
   {
+    question: 'How do fitness coaches and personal trainers support my care?',
+    answer:
+      'In addition to your doctor and dietitian, 8Liv pairs you with a certified fitness trainer and movement coach. Your trainer designs low-impact, muscle-preserving resistance routines tailored to your current fitness level and schedule. This protects lean muscle mass while accelerating visceral fat reduction, ensuring your metabolic rate remains high.',
+  },
+  {
     question: 'Is my health information kept private?',
     answer:
       'Yes. Your consultation notes, health history, and personal data are protected with strict medical-grade data practices. We do not share your information with third parties outside your care team without your explicit consent.',

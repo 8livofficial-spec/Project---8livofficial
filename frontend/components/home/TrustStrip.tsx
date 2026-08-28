@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useRef, useEffect } from 'react'
-import { Stethoscope, ShieldAlert, Award, CalendarClock } from 'lucide-react'
+import { Stethoscope, Utensils, Dumbbell, ShieldCheck } from 'lucide-react'
 import gsap from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import { prefersReducedMotion } from '@/lib/scrollMotion'
@@ -10,24 +10,24 @@ gsap.registerPlugin(ScrollTrigger)
 
 const trustPillars = [
   {
-    icon: <Stethoscope className="w-4 h-4 text-[#D46E53]" />,
+    icon: <Stethoscope className="w-4 h-4 text-[#0D9488]" />,
     label: 'Doctor-Led Care',
     detail: 'Board-Certified Physicians',
   },
   {
-    icon: <Award className="w-4 h-4 text-[#D46E53]" />,
-    label: 'Clinically Governed',
-    detail: 'Evidence-Informed Protocols',
+    icon: <Utensils className="w-4 h-4 text-[#0D9488]" />,
+    label: 'Clinical Nutrition',
+    detail: 'Registered Dietitians',
   },
   {
-    icon: <ShieldAlert className="w-4 h-4 text-[#D46E53]" />,
-    label: 'HIPAA Compliant',
+    icon: <Dumbbell className="w-4 h-4 text-[#0D9488]" />,
+    label: 'Fitness Coaching',
+    detail: '1-on-1 Certified Trainers',
+  },
+  {
+    icon: <ShieldCheck className="w-4 h-4 text-[#0D9488]" />,
+    label: 'Clinical Security',
     detail: 'Protected Health Records',
-  },
-  {
-    icon: <CalendarClock className="w-4 h-4 text-[#D46E53]" />,
-    label: 'Ongoing Supervision',
-    detail: 'Routine Progress Audits',
   },
 ]
 
