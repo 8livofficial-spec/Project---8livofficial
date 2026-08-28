@@ -18,7 +18,7 @@ gsap.registerPlugin(ScrollTrigger)
 const outcomeStories = [
   {
     type: 'video' as const,
-    videoSrc: '/videos/Hero.mp4',
+    videoSrc: 'https://res.cloudinary.com/junufjm3/video/upload/v1787941971/Hero.mp4',
     imageFallback: '/images/outcome_1.png',
     tag: 'Outcome Journey 01',
     patient: 'Rahul M. — Bangalore',
@@ -36,7 +36,7 @@ const outcomeStories = [
   },
   {
     type: 'image' as const,
-    videoSrc: '/videos/Hero.mp4',
+    videoSrc: 'https://res.cloudinary.com/junufjm3/video/upload/v1787941971/Hero.mp4',
     imageFallback: '/images/outcome_2.png',
     tag: 'Outcome Journey 02',
     patient: 'Ananya S. — Mumbai',

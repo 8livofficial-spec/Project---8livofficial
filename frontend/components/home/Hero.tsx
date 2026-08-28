@@ -171,7 +171,7 @@ export default function Hero() {
       >
         <video
           ref={videoRef}
-          src="/videos/Hero.mp4"
+          src="https://res.cloudinary.com/junufjm3/video/upload/v1787941971/Hero.mp4"
           autoPlay
           muted
           defaultMuted
