@@ -135,6 +135,13 @@ export default function Hero() {
 
     })
 
+    // Programmatic play fallback to ensure video starts smoothly on mobile/Safari
+    if (videoRef.current) {
+      videoRef.current.play().catch(() => {
+        // Autoplay may require muted or user interaction on some mobile devices
+      })
+    }
+
     return () => ctx.current?.revert()
   }, [])
 
