@@ -137,9 +137,22 @@ export default function Hero() {
 
     // Programmatic play fallback to ensure video starts smoothly on mobile/Safari
     if (videoRef.current) {
-      videoRef.current.play().catch(() => {
-        // Autoplay may require muted or user interaction on some mobile devices
-      })
+      videoRef.current.muted = true
+      const playPromise = videoRef.current.play()
+      if (playPromise !== undefined) {
+        playPromise.catch(() => {
+          // If browser blocks autoplay, play on first user interaction
+          const handleFirstTouch = () => {
+            if (videoRef.current) {
+              videoRef.current.play().catch(() => {})
+            }
+            window.removeEventListener('touchstart', handleFirstTouch)
+            window.removeEventListener('click', handleFirstTouch)
+          }
+          window.addEventListener('touchstart', handleFirstTouch, { once: true })
+          window.addEventListener('click', handleFirstTouch, { once: true })
+        })
+      }
     }
 
     return () => ctx.current?.revert()
@@ -161,6 +174,7 @@ export default function Hero() {
           src="/videos/Hero.mp4"
           autoPlay
           muted
+          defaultMuted
           loop
           playsInline
           preload="auto"
