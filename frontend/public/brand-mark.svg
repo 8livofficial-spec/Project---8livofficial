@@ -1,4 +1,10 @@
-<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="tealMarkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00A884"/>
+      <stop offset="50%" stop-color="#0D9488"/>
+      <stop offset="100%" stop-color="#5EEAD4"/>
+    </linearGradient>
+  </defs>
   <rect width="512" height="512" rx="112" fill="#0F172A"/>
-  <path d="M96 256C96 182 190 164 256 256C322 348 416 330 416 256C416 182 322 164 256 256C190 348 96 330 96 256Z" stroke="#D95A2B" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M96 256C96 182 190 164 256 256C322 348 416 330 416 256C416 182 322 164 256 256C190 348 96 330 96 256Z" stroke="url(#tealMarkGrad)" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -194,13 +194,15 @@ export default function UnifiedLogin() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F9F6F0] flex">
+    <div className="min-h-screen bg-white flex">
       {/* Left: Branding & Visual */}
       <div 
-        className="hidden lg:flex lg:w-1/2 relative overflow-hidden items-center justify-center p-12 bg-cover bg-center"
-        style={{ backgroundImage: 'url("/images/hero_wellness.png")' }}
+        className="hidden lg:flex lg:w-1/2 relative overflow-hidden items-center justify-center p-12 bg-cover bg-center bg-[#0B1120]"
+        style={{ backgroundImage: 'url("/images/hero_indian.png")' }}
       >
-        <div className="absolute inset-0 bg-gradient-to-t from-[#A84A33]/90 via-[#D46E53]/60 to-black/20"></div>
+        <div className="absolute inset-0 bg-gradient-to-t from-[#0B1120]/95 via-[#0F172A]/75 to-[#0D9488]/20"></div>
+        <div className="absolute top-0 left-0 w-96 h-96 bg-[#0D9488]/15 rounded-full blur-[140px] pointer-events-none" />
+        <div className="absolute bottom-0 right-0 w-96 h-96 bg-[#00A884]/15 rounded-full blur-[140px] pointer-events-none" />
         
         <div className="relative z-10 w-full max-w-lg text-white flex flex-col h-full justify-between">
           <div>
@@ -209,8 +211,8 @@ export default function UnifiedLogin() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.8 }}
               src="/brand-logo-light.svg" 
-              alt="8Liv Logo" 
-              className="h-12 w-auto object-contain opacity-95"
+              alt="8liv Logo" 
+              className="h-12 w-auto object-contain"
             />
           </div>
 
@@ -220,12 +222,18 @@ export default function UnifiedLogin() {
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.8, delay: 0.2 }}
             >
-              <h1 className="text-4xl lg:text-5xl font-bold font-sora leading-tight mb-6">
-                &ldquo;Real transformation begins when expert care meets daily consistency.&rdquo;
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#0D9488]/20 border border-[#0D9488]/40 mb-6 backdrop-blur-md">
+                <span className="w-2 h-2 rounded-full bg-[#5EEAD4] animate-pulse" />
+                <span className="text-[10px] font-bold uppercase tracking-widest text-[#5EEAD4] font-sora">
+                  Doctor-Led &amp; Coach-Supervised
+                </span>
+              </div>
+              <h1 className="text-3xl lg:text-4xl xl:text-5xl font-bold font-sora leading-tight mb-6">
+                &ldquo;Real transformation begins when <span className="bg-gradient-to-r from-[#00A884] via-[#0D9488] to-[#5EEAD4] bg-clip-text text-transparent">clinical care</span> meets daily consistency.&rdquo;
               </h1>
               <div className="flex items-center gap-4">
-                <div className="w-12 h-1 bg-[#F9F6F0] rounded-full opacity-80"></div>
-                <p className="text-lg font-medium tracking-wide opacity-90 uppercase">The 8Liv Medical Team</p>
+                <div className="w-12 h-1 bg-[#0D9488] rounded-full"></div>
+                <p className="text-xs font-bold tracking-widest text-[#5EEAD4] uppercase font-sora">The 8liv Care Team</p>
               </div>
             </motion.div>
           </div>
@@ -233,12 +241,9 @@ export default function UnifiedLogin() {
       </div>
 
       {/* Right: Auth Form */}
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 md:p-24 relative overflow-y-auto">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 sm:p-12 md:p-24 relative overflow-y-auto bg-white">
         <div className="absolute top-8 left-8 lg:hidden">
           <img src="/brand-logo-official.png" alt="8LIV Official Logo" className="h-10 w-auto object-contain" />
-
-
-
         </div>
 
         <motion.div 
@@ -248,27 +253,27 @@ export default function UnifiedLogin() {
           className="w-full max-w-md py-12"
         >
           <div className="mb-10 text-center lg:text-left">
-            <h2 className="text-3xl font-bold font-sora text-[#0F172A] mb-3">
+            <h2 className="text-3xl sm:text-4xl font-extrabold font-sora text-[#0F172A] mb-3 tracking-tight">
               Sign In
             </h2>
-            <p className="text-[#475569]">
-              Enter your credentials to access your account.
+            <p className="text-[#475569] text-sm sm:text-base">
+              Enter your credentials to access your 8liv account.
             </p>
           </div>
 
           <form onSubmit={handleAuth} className="space-y-6">
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-[#0F172A] ml-1">Email Address</label>
+              <label className="text-sm font-bold text-[#0F172A] font-sora ml-1">Email Address</label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Mail className="h-5 w-5 text-[#475569]" />
+                  <Mail className="h-5 w-5 text-[#94A3B8]" />
                 </div>
                 <input 
                   type="email" 
                   required
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full bg-white border border-gray-200 text-[#0F172A] rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-[#D46E53]/50 focus:border-[#D46E53] transition-all shadow-sm"
+                  className="w-full bg-[#F8FAFC] border border-slate-200 text-[#0F172A] rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-[#0D9488]/30 focus:border-[#0D9488] focus:bg-white transition-all shadow-xs"
                   placeholder="name@example.com"
                 />
               </div>
@@ -276,19 +281,19 @@ export default function UnifiedLogin() {
 
             <div className="space-y-2">
               <div className="flex justify-between items-center ml-1">
-                <label className="text-sm font-semibold text-[#0F172A]">Password</label>
-                <Link href="/forgot-password" className="text-sm font-medium text-[#D46E53] hover:text-[#A84A33] transition-colors">Forgot password?</Link>
+                <label className="text-sm font-bold text-[#0F172A] font-sora">Password</label>
+                <Link href="/forgot-password" className="text-xs sm:text-sm font-semibold text-[#0D9488] hover:text-[#0F766E] transition-colors font-sora">Forgot password?</Link>
               </div>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                  <Lock className="h-5 w-5 text-[#475569]" />
+                  <Lock className="h-5 w-5 text-[#94A3B8]" />
                 </div>
                 <input 
                   type="password" 
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-white border border-gray-200 text-[#0F172A] rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-[#D46E53]/50 focus:border-[#D46E53] transition-all shadow-sm"
+                  className="w-full bg-[#F8FAFC] border border-slate-200 text-[#0F172A] rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-[#0D9488]/30 focus:border-[#0D9488] focus:bg-white transition-all shadow-xs"
                   placeholder="Password"
                 />
               </div>
@@ -300,13 +305,13 @@ export default function UnifiedLogin() {
             <button 
               type="submit" 
               disabled={isLoading}
-              className="w-full bg-[#0F172A] text-white font-semibold rounded-2xl py-4 flex items-center justify-center gap-2 hover:bg-[#1E293B] hover:shadow-lg transition-all disabled:opacity-70 group mt-4"
+              className="w-full bg-[#0D9488] hover:bg-[#097A70] text-white font-sora font-bold text-sm sm:text-base rounded-2xl py-4 flex items-center justify-center gap-2 shadow-lg shadow-[#0D9488]/20 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-70 cursor-pointer mt-4"
             >
               {isLoading ? (
                 <div className="w-6 h-6 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
-                  Sign In
+                  <span>Sign In</span>
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 </>
               )}
@@ -314,9 +319,9 @@ export default function UnifiedLogin() {
           </form>
 
           <div className="mt-10 text-center">
-            <p className="text-[#475569] text-sm mb-4">
+            <p className="text-[#475569] text-sm">
               Don&apos;t have an account? {' '}
-              <Link href="/assessment" className="font-semibold text-[#D46E53] hover:text-[#A84A33] transition-colors">
+              <Link href="/assessment" className="font-bold text-[#0D9488] hover:text-[#0F766E] transition-colors font-sora">
                 Take the Assessment
               </Link>
             </p>

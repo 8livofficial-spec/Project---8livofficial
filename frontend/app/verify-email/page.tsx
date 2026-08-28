@@ -46,15 +46,16 @@ function VerifyEmailContent() {
   }, [token])
 
   return (
-    <main className="min-h-screen bg-[#F9F6F0] flex items-center justify-center p-6">
-      <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-xl border border-[#E8DED4] text-center">
-        <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl ${status === 'error' ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
+    <main className="min-h-screen bg-slate-50 relative overflow-hidden flex items-center justify-center p-6">
+      <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-[#0D9488]/10 rounded-full blur-[140px] pointer-events-none" />
+      <section className="w-full max-w-md rounded-3xl bg-white p-8 sm:p-10 shadow-2xl border border-[#0D9488]/20 text-center relative z-10">
+        <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl ${status === 'error' ? 'bg-rose-50 text-rose-600' : 'bg-[#0D9488]/10 text-[#0D9488]'}`}>
           {status === 'error' ? <AlertCircle className="h-7 w-7" /> : <CheckCircle2 className="h-7 w-7" />}
         </div>
-        <h1 className="mt-6 text-2xl font-bold text-[#1A1F36]">Email verification</h1>
+        <h1 className="mt-6 text-2xl font-extrabold font-sora text-[#0F172A]">Email Verification</h1>
         <p className="mt-3 text-sm leading-6 text-[#475569]">{message}</p>
         {status !== 'loading' && (
-          <Link href={nextPath} className="mt-6 inline-flex w-full justify-center rounded-2xl bg-[#1A1F36] px-4 py-4 text-sm font-bold text-white">
+          <Link href={nextPath} className="mt-6 inline-flex w-full justify-center rounded-2xl bg-[#0D9488] hover:bg-[#097A70] px-4 py-4 text-sm font-bold font-sora text-white shadow-lg shadow-[#0D9488]/20 transition-all hover:scale-[1.01] active:scale-[0.99]">
             {nextPath.startsWith('/reset-password') ? 'Set password' : 'Go to login'}
           </Link>
         )}
@@ -65,7 +66,7 @@ function VerifyEmailContent() {
 
 export default function VerifyEmailPage() {
   return (
-    <Suspense fallback={<main className="min-h-screen bg-[#F9F6F0]" />}>
+    <Suspense fallback={<main className="min-h-screen bg-slate-50" />}>
       <VerifyEmailContent />
     </Suspense>
   )

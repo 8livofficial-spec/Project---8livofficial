@@ -245,22 +245,23 @@ export default function OnboardingPaymentPage() {
   }
 
   if (loading) return (
-    <div className="min-h-screen bg-[#F5F0EB] flex items-center justify-center">
-      <div className="w-10 h-10 border-4 border-[#C4622D] border-t-transparent rounded-full animate-spin" />
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+      <div className="w-10 h-10 border-4 border-[#0D9488] border-t-transparent rounded-full animate-spin" />
     </div>
   )
 
   return (
-    <div className="min-h-screen bg-[#F5F0EB] flex flex-col lg:flex-row font-sans">
+    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans">
       {/* ── LEFT: Order summary sidebar ───────────────────────────────────── */}
-      <div className="lg:w-[38%] bg-[#1A1F36] p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-[#C4622D]/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="lg:w-[38%] bg-[#0B1120] p-8 lg:p-12 flex flex-col justify-between relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-[#0D9488]/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#00A884]/15 rounded-full blur-3xl pointer-events-none" />
 
         <div className="relative z-10 space-y-8">
-          <img src="/brand-logo-light.svg" alt="8Liv" className="h-9 w-auto object-contain opacity-95" />
+          <img src="/brand-logo-light.svg" alt="8liv" className="h-9 w-auto object-contain" />
 
           <div>
-            <span className="text-[#C4622D] text-xs font-black uppercase tracking-[0.2em]">
+            <span className="text-[#5EEAD4] text-xs font-extrabold uppercase tracking-[0.2em] font-sora">
               Step 2 of 2 — Payment
             </span>
             <h2 className="text-2xl font-bold font-sora text-white mt-2 leading-snug">
@@ -270,36 +271,36 @@ export default function OnboardingPaymentPage() {
 
           {/* Order lines */}
           <div className="space-y-3">
-            <p className="text-white/40 text-[10px] font-black uppercase tracking-wider border-b border-white/10 pb-2">Order Summary</p>
+            <p className="text-white/40 text-[10px] font-black uppercase tracking-wider border-b border-white/10 pb-2 font-sora">Order Summary</p>
             {[
               { label: `${assessment?.membership_tier} — Month 1`, amount: planPrice },
               { label: 'Initial Consultation Fee', amount: consultFee },
               { label: 'GST (18%)', amount: gst },
             ].map(line => (
               <div key={line.label} className="flex justify-between items-center">
-                <span className="text-white/60 text-xs font-medium">{line.label}</span>
-                <span className="text-white text-xs font-bold">₹{line.amount.toLocaleString('en-IN')}</span>
+                <span className="text-white/70 text-xs font-medium">{line.label}</span>
+                <span className="text-white text-xs font-bold font-sora">₹{line.amount.toLocaleString('en-IN')}</span>
               </div>
             ))}
             <div className="flex justify-between items-center border-t border-white/10 pt-3">
-              <span className="text-white font-bold text-sm">Total</span>
-              <span className="text-[#C4622D] font-extrabold text-xl font-sora">₹{total.toLocaleString('en-IN')}</span>
+              <span className="text-white font-bold text-sm font-sora">Total</span>
+              <span className="text-[#5EEAD4] font-extrabold text-xl font-sora">₹{total.toLocaleString('en-IN')}</span>
             </div>
           </div>
 
           {/* Inclusions */}
           <div className="space-y-2">
-            <p className="text-white/40 text-[10px] font-black uppercase tracking-wider">Included Today</p>
+            <p className="text-white/40 text-[10px] font-black uppercase tracking-wider font-sora">Included Today</p>
             {[
               'Doctor consultation booking access',
-              'Personalised health dashboard',
+              'Personalised metabolic dashboard',
               assessment?.membership_tier === 'Gold Plan' ? 'Dietitian + fitness coaching' : null,
               'GLP-1 prescription pathway',
               'Encrypted health records',
             ].filter(Boolean).map((item: any) => (
               <div key={item} className="flex items-start gap-2.5">
-                <CheckCircle2 size={13} className="text-[#5C7A6B] shrink-0 mt-0.5" />
-                <span className="text-white/65 text-xs font-medium">{item}</span>
+                <CheckCircle2 size={14} className="text-[#5EEAD4] shrink-0 mt-0.5" />
+                <span className="text-white/75 text-xs font-medium">{item}</span>
               </div>
             ))}
           </div>
@@ -312,15 +313,15 @@ export default function OnboardingPaymentPage() {
             { icon: ShieldCheck, label: 'HIPAA' },
             { icon: CreditCard, label: 'Razorpay' },
           ].map(({ icon: Icon, label }) => (
-            <div key={label} className="flex items-center gap-1.5 text-[10px] font-semibold text-white/40">
-              <Icon size={11} /> {label}
+            <div key={label} className="flex items-center gap-1.5 text-[10px] font-semibold text-white/50 font-sora">
+              <Icon size={11} className="text-[#5EEAD4]" /> {label}
             </div>
           ))}
         </div>
       </div>
 
       {/* ── RIGHT: Payment form / steps ───────────────────────────────────── */}
-      <div className="flex-1 flex items-center justify-center p-6 lg:p-12">
+      <div className="flex-1 flex items-center justify-center p-6 lg:p-12 bg-slate-50">
         <div className="w-full max-w-md">
 
           <AnimatePresence mode="wait">
@@ -328,45 +329,45 @@ export default function OnboardingPaymentPage() {
             {/* ── STEP: Review → Proceed to Razorpay ─────────────────────── */}
             {step === 'review' && (
               <motion.div key="review" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}>
-                <h3 className="text-xl font-bold font-sora text-[#1A1F36] mb-2">Ready to complete enrollment?</h3>
-                <p className="text-sm text-[#8896A4] mb-6">Review your order details and activate your care plan via Razorpay.</p>
+                <h3 className="text-xl sm:text-2xl font-extrabold font-sora text-[#0F172A] mb-2">Ready to complete enrollment?</h3>
+                <p className="text-sm text-[#475569] mb-6">Review your order details and activate your care plan via Razorpay.</p>
 
-                <div className="bg-white rounded-2xl p-5 border border-[#1A1F36]/8 shadow-sm mb-6 space-y-3">
+                <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xl mb-6 space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-[#8896A4]">Plan</span>
-                    <span className="font-bold text-[#1A1F36]">{assessment?.membership_tier}</span>
+                    <span className="text-[#475569]">Plan</span>
+                    <span className="font-bold text-[#0F172A] font-sora">{assessment?.membership_tier}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-[#8896A4]">Doctor Consultation</span>
-                    <span className="font-bold text-[#1A1F36]">₹{consultFee.toLocaleString('en-IN')}</span>
+                    <span className="text-[#475569]">Doctor Consultation</span>
+                    <span className="font-bold text-[#0F172A] font-sora">₹{consultFee.toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-[#8896A4]">GST (18%)</span>
-                    <span className="font-bold text-[#1A1F36]">₹{gst.toLocaleString('en-IN')}</span>
+                    <span className="text-[#475569]">GST (18%)</span>
+                    <span className="font-bold text-[#0F172A] font-sora">₹{gst.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="flex justify-between text-sm border-t border-[#1A1F36]/8 pt-2">
-                    <span className="text-[#8896A4] font-bold">Total (incl. GST)</span>
-                    <span className="font-extrabold text-lg text-[#C4622D]">₹{total.toLocaleString('en-IN')}</span>
+                  <div className="flex justify-between text-sm border-t border-slate-200 pt-3">
+                    <span className="text-[#0F172A] font-bold font-sora">Total (incl. GST)</span>
+                    <span className="font-extrabold text-xl text-[#0D9488] font-sora">₹{total.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
 
-                <div className="rounded-xl bg-[#5C7A6B]/8 p-4 border border-[#5C7A6B]/20 flex items-start gap-3 mb-6">
-                  <ShieldCheck className="w-5 h-5 text-[#5C7A6B] shrink-0 mt-0.5" />
-                  <div className="text-xs text-[#5C7A6B]">
-                    <p className="font-bold">Official Razorpay Gateway</p>
-                    <p className="mt-0.5 text-[#5C7A6B]/90">UPI (Google Pay, PhonePe, Paytm, BHIM), NetBanking, and all major Credit/Debit Cards supported.</p>
+                <div className="rounded-2xl bg-[#0D9488]/10 p-4 border border-[#0D9488]/20 flex items-start gap-3 mb-6">
+                  <ShieldCheck className="w-5 h-5 text-[#0D9488] shrink-0 mt-0.5" />
+                  <div className="text-xs text-[#0F766E]">
+                    <p className="font-bold font-sora">Official Razorpay Gateway</p>
+                    <p className="mt-0.5 text-[#475569]">UPI (Google Pay, PhonePe, Paytm, BHIM), NetBanking, and all major Credit/Debit Cards supported.</p>
                   </div>
                 </div>
 
                 <button
                   onClick={validateAndPay}
-                  className="w-full bg-[#C4622D] hover:bg-[#A8522A] text-white font-bold rounded-full py-4 text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-[#C4622D]/20 hover:shadow-lg"
+                  className="w-full bg-[#0D9488] hover:bg-[#097A70] text-white font-sora font-bold rounded-2xl py-4 text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#0D9488]/20 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
                 >
                   <Lock size={15} /> Pay ₹{total.toLocaleString('en-IN')} with Razorpay
                 </button>
                 <button
                   onClick={() => router.replace('/plans')}
-                  className="w-full mt-3 text-xs text-[#8896A4] hover:text-[#1A1F36] flex items-center justify-center gap-1.5 py-2 transition-colors font-medium"
+                  className="w-full mt-3 text-xs text-[#475569] hover:text-[#0F172A] flex items-center justify-center gap-1.5 py-2 transition-colors font-semibold font-sora cursor-pointer"
                 >
                   <ArrowLeft size={13} /> Change plan
                 </button>

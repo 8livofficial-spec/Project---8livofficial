@@ -51,24 +51,24 @@ const PLANS = [
     id: 'Silver Plan',
     name: 'Silver',
     icon: Zap,
-    price: '₹999',
+    price: '₹2,999',
     period: '/mo',
     tagline: 'Essential medical care',
-    color: '#5C7A6B',
-    accentBg: 'rgba(92,122,107,0.08)',
-    description: 'Doctor-supervised GLP-1 therapy with pharmacy delivery. Everything you need to get started.',
+    color: '#0D9488',
+    accentBg: 'rgba(13,148,136,0.08)',
+    description: 'Doctor-supervised GLP-1 therapy with pharmacy delivery and personalized dietitian roadmap.',
   },
   {
     id: 'Gold Plan',
     name: 'Gold',
     icon: Star,
-    price: '₹1,999',
+    price: '₹4,999',
     period: '/mo',
-    tagline: 'All-inclusive wellness',
-    color: '#C4622D',
-    accentBg: 'rgba(196,98,45,0.08)',
+    tagline: 'All-inclusive VIP concierge',
+    color: '#D97706',
+    accentBg: 'rgba(217,119,6,0.08)',
     recommended: true,
-    description: 'Full medical program plus dedicated dietitian, fitness trainer, and priority support.',
+    description: 'Full medical program plus dedicated 1-on-1 dietitian, personal fitness trainer, and 24/7 priority chat.',
   },
 ]
 
@@ -111,37 +111,37 @@ export default function PlanSelectionPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F0EB] flex flex-col lg:flex-row font-sans">
+    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans">
 
       {/* ═══ LEFT — Dark hero panel ═══════════════════════════════════════════ */}
       <motion.aside
         initial={{ opacity: 0, x: -24 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ duration: 0.55 }}
-        className="lg:w-[40%] xl:w-[36%] bg-[#1A1F36] relative overflow-hidden flex flex-col justify-between p-8 lg:p-12"
+        className="lg:w-[40%] xl:w-[36%] bg-[#0B1120] relative overflow-hidden flex flex-col justify-between p-8 lg:p-12"
       >
         {/* Glow blobs */}
-        <div className="absolute -top-20 -right-20 w-72 h-72 bg-[#C4622D]/12 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-[#5C7A6B]/12 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-20 -right-20 w-72 h-72 bg-[#0D9488]/15 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-[#00A884]/15 rounded-full blur-3xl pointer-events-none" />
 
         {/* Logo */}
         <div className="relative z-10">
-          <img src="/brand-logo-light.svg" alt="8Liv"
-            className="h-9 w-auto object-contain opacity-95" />
+          <img src="/brand-logo-light.svg" alt="8liv"
+            className="h-9 w-auto object-contain" />
         </div>
 
         {/* Hero text */}
         <div className="relative z-10 space-y-6 mt-10 lg:mt-0">
           <div>
-            <span className="text-[#C4622D] text-[10px] font-black uppercase tracking-[0.25em]">
-              Step 1 of 2 — Choose your plan
+            <span className="text-[#5EEAD4] text-[10px] font-extrabold uppercase tracking-[0.25em] font-sora">
+              Step 1 of 2 — Choose your protocol
             </span>
             <h1 className="mt-4 text-4xl xl:text-5xl font-bold font-sora text-white leading-[1.15]">
-              Your weight loss<br />
-              <span className="text-[#C4622D]">starts today.</span>
+              Your metabolic care<br />
+              <span className="bg-gradient-to-r from-[#00A884] via-[#0D9488] to-[#5EEAD4] bg-clip-text text-transparent">starts today.</span>
             </h1>
-            <p className="mt-4 text-white/55 text-sm leading-relaxed max-w-xs">
-              Join 10,000+ members on India's first doctor-supervised GLP-1 weight loss program — 100% from home.
+            <p className="mt-4 text-white/70 text-sm leading-relaxed max-w-xs font-light">
+              Doctor-supervised GLP-1 weight management with dedicated dietitian &amp; trainer support — 100% online.
             </p>
           </div>
 
@@ -152,9 +152,9 @@ export default function PlanSelectionPage() {
               { val: '15–20%', label: 'Avg weight loss' },
               { val: '98%',    label: 'Satisfaction' },
             ].map(s => (
-              <div key={s.val} className="bg-white/5 rounded-2xl p-3.5 text-center">
+              <div key={s.val} className="bg-white/5 border border-white/10 rounded-2xl p-3.5 text-center">
                 <p className="text-white font-extrabold text-base font-sora">{s.val}</p>
-                <p className="text-white/40 text-[10px] font-medium mt-0.5 leading-snug">{s.label}</p>
+                <p className="text-white/50 text-[10px] font-medium mt-0.5 leading-snug">{s.label}</p>
               </div>
             ))}
           </div>
@@ -162,17 +162,17 @@ export default function PlanSelectionPage() {
           {/* Trust signals */}
           <div className="space-y-3">
             {[
-              { icon: ShieldCheck, title: 'HIPAA Compliant',    sub: 'Encrypted & secure data' },
+              { icon: ShieldCheck, title: 'HIPAA Compliant',    sub: 'Encrypted & secure records' },
               { icon: Stethoscope, title: 'Licensed Doctors',   sub: 'Board-certified physicians' },
-              { icon: HeartPulse,  title: 'Clinically Proven',  sub: 'GLP-1 protocols with results' },
+              { icon: HeartPulse,  title: 'Clinically Proven',  sub: 'GLP-1 metabolic protocol' },
             ].map(({ icon: Icon, title, sub }) => (
               <div key={title} className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-white/8 flex items-center justify-center shrink-0">
-                  <Icon size={16} className="text-[#C4622D]" />
+                <div className="w-9 h-9 rounded-xl bg-white/8 border border-white/10 flex items-center justify-center shrink-0">
+                  <Icon size={16} className="text-[#5EEAD4]" />
                 </div>
                 <div>
-                  <p className="text-white text-xs font-bold">{title}</p>
-                  <p className="text-white/45 text-[10px] font-medium">{sub}</p>
+                  <p className="text-white text-xs font-bold font-sora">{title}</p>
+                  <p className="text-white/50 text-[10px] font-medium">{sub}</p>
                 </div>
               </div>
             ))}
@@ -180,20 +180,20 @@ export default function PlanSelectionPage() {
 
           {/* Testimonial */}
           <div className="bg-white/6 border border-white/10 rounded-2xl p-4">
-            <p className="text-white/75 text-xs italic leading-relaxed">
-              "Lost 18 kg in 5 months. My doctor adjusted my medication every step — I never felt alone."
+            <p className="text-white/80 text-xs italic leading-relaxed">
+              "Lost 18 kg in 5 months. My doctor and dietitian adjusted my protocol every step — I never felt alone."
             </p>
             <div className="flex items-center gap-2.5 mt-3">
-              <div className="w-7 h-7 rounded-full bg-[#C4622D]/30 flex items-center justify-center text-[10px] font-bold text-[#C4622D]">P</div>
+              <div className="w-7 h-7 rounded-full bg-[#0D9488]/30 flex items-center justify-center text-[10px] font-bold text-[#5EEAD4]">P</div>
               <div>
-                <p className="text-white text-[11px] font-bold">Priya M. · Gold member</p>
-                <p className="text-white/35 text-[9px]">Mumbai · GLP-1 program</p>
+                <p className="text-white text-[11px] font-bold font-sora">Priya M. · Gold Member</p>
+                <p className="text-white/40 text-[9px]">Mumbai · GLP-1 Care</p>
               </div>
             </div>
           </div>
         </div>
 
-        <p className="text-white/20 text-[10px] relative z-10 mt-6">© 2026 8Liv Health Technologies Pvt. Ltd.</p>
+        <p className="text-white/30 text-[10px] relative z-10 mt-6 font-sora">© 2026 8liv Health Technologies Pvt. Ltd.</p>
       </motion.aside>
 
       {/* ═══ RIGHT — Plan chooser ══════════════════════════════════════════════ */}
@@ -201,13 +201,13 @@ export default function PlanSelectionPage() {
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45, delay: 0.12 }}
-        className="flex-1 overflow-y-auto p-6 sm:p-8 lg:p-10 xl:p-14"
+        className="flex-1 overflow-y-auto p-6 sm:p-8 lg:p-10 xl:p-14 bg-slate-50"
       >
         <div className="max-w-2xl mx-auto">
 
           <div className="mb-7">
-            <h2 className="text-2xl font-bold font-sora text-[#1A1F36]">Choose your membership</h2>
-            <p className="text-[#8896A4] text-sm mt-1">Select the plan that matches your health goals.</p>
+            <h2 className="text-2xl sm:text-3xl font-extrabold font-sora text-[#0F172A]">Choose your membership</h2>
+            <p className="text-[#475569] text-sm mt-1">Select the care protocol that matches your metabolic targets.</p>
           </div>
 
           {/* ── Plan toggle cards ── */}
@@ -220,15 +220,15 @@ export default function PlanSelectionPage() {
                   key={plan.id}
                   onClick={() => setSelected(plan.id)}
                   whileTap={{ scale: 0.98 }}
-                  className="relative text-left w-full rounded-2xl p-5 border-2 transition-all focus:outline-none"
+                  className="relative text-left w-full rounded-2xl p-5 border-2 transition-all focus:outline-none cursor-pointer"
                   style={{
-                    borderColor: isSelected ? plan.color : 'rgba(26,31,54,0.1)',
+                    borderColor: isSelected ? plan.color : 'rgba(15,23,42,0.1)',
                     background: isSelected ? plan.accentBg : 'white',
-                    boxShadow: isSelected ? `0 8px 30px ${plan.color}20` : '0 2px 12px rgba(26,31,54,0.05)',
+                    boxShadow: isSelected ? `0 8px 30px ${plan.color}20` : '0 2px 12px rgba(15,23,42,0.04)',
                   }}
                 >
                   {plan.recommended && (
-                    <span className="absolute -top-3 left-4 bg-[#C4622D] text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full">
+                    <span className="absolute -top-3 left-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-sm font-sora">
                       Most Popular
                     </span>
                   )}

@@ -33,16 +33,17 @@ function VerificationPendingContent() {
   }
 
   return (
-    <main className="min-h-screen bg-[#F9F6F0] flex items-center justify-center p-6">
-      <section className="w-full max-w-md rounded-3xl bg-white p-8 shadow-xl border border-[#E8DED4] text-center">
-        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#C4622D]/10 text-[#C4622D]">
+    <main className="min-h-screen bg-slate-50 relative overflow-hidden flex items-center justify-center p-6">
+      <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-[#0D9488]/10 rounded-full blur-[140px] pointer-events-none" />
+      <section className="w-full max-w-md rounded-3xl bg-white p-8 sm:p-10 shadow-2xl border border-[#0D9488]/20 text-center relative z-10">
+        <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#0D9488]/10 text-[#0D9488]">
           <Mail className="h-7 w-7" />
         </div>
-        <h1 className="mt-6 text-2xl font-bold text-[#1A1F36]">Verify your email</h1>
+        <h1 className="mt-6 text-2xl font-extrabold font-sora text-[#0F172A]">Verify Your Email</h1>
         <p className="mt-3 text-sm leading-6 text-[#475569]">
-          We sent a verification link to {email ? <strong>{email}</strong> : 'your email address'}. Verify your email before signing in.
+          We sent a verification link to {email ? <strong className="text-[#0F172A]">{email}</strong> : 'your email address'}. Verify your email before signing in.
         </p>
-        <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm font-semibold leading-6 text-amber-800">
+        <p className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs sm:text-sm font-semibold leading-relaxed text-amber-900">
           If you do not see the confirmation email, please check your Spam, Junk, or Promotions folder.
         </p>
         {message && <p className="mt-5 rounded-xl bg-emerald-50 p-3 text-sm font-semibold text-emerald-700"><CheckCircle2 className="mr-2 inline h-4 w-4" />{message}</p>}
@@ -51,12 +52,12 @@ function VerificationPendingContent() {
           type="button"
           onClick={resend}
           disabled={loading || !email}
-          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#1A1F36] px-4 py-4 text-sm font-bold text-white disabled:opacity-60"
+          className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#0D9488] hover:bg-[#097A70] px-4 py-4 text-sm font-bold font-sora text-white shadow-lg shadow-[#0D9488]/20 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-60 cursor-pointer"
         >
           {loading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           Resend verification email
         </button>
-        <Link href="/login" className="mt-5 inline-block text-sm font-bold text-[#C4622D]">Back to login</Link>
+        <Link href="/login" className="mt-5 inline-block text-sm font-bold text-[#0D9488] hover:text-[#0F766E] font-sora transition-colors">Back to login</Link>
       </section>
     </main>
   )
@@ -64,7 +65,7 @@ function VerificationPendingContent() {
 
 export default function VerificationPendingPage() {
   return (
-    <Suspense fallback={<main className="min-h-screen bg-[#F9F6F0]" />}>
+    <Suspense fallback={<main className="min-h-screen bg-slate-50" />}>
       <VerificationPendingContent />
     </Suspense>
   )

@@ -66,16 +66,14 @@ body {
   color: #0F172A;
 }
 
-/* Pure White Background Utility Overrides */
+/* Warm Neutral & Terracotta Legacy Overrides to Modern White & Teal */
 .bg-\[\#FDFBF7\] { background-color: #FFFFFF !important; }
 .bg-\[\#F9F6F0\] { background-color: #FFFFFF !important; }
 .bg-\[\#F9F6F0\]\/60 { background-color: #FFFFFF !important; }
 .bg-\[\#F9F6F0\]\/80 { background-color: #FFFFFF !important; }
 .bg-\[\#F9F6F0\]\/90 { background-color: #FFFFFF !important; }
 .bg-\[\#F9F6F0\]\/95 { background-color: #FFFFFF !important; }
-.bg-\[\#F8FAFC\] { background-color: #FFFFFF !important; }
-.bg-\[\#0F172A\] { background-color: #FFFFFF !important; color: #0F172A !important; }
-.bg-\[\#0B1120\] { background-color: #FFFFFF !important; }
+.bg-\[\#F8FAFC\] { background-color: #F8FAFC !important; }
 
 .bg-\[\#D46E53\] { background-color: #0D9488 !important; }
 .bg-\[\#D46E53\]\/10 { background-color: rgba(13, 148, 136, 0.08) !important; }
