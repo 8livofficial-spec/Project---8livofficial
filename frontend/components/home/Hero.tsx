@@ -174,7 +174,6 @@ export default function Hero() {
           src="https://res.cloudinary.com/junufjm3/video/upload/v1787941971/Hero.mp4"
           autoPlay
           muted
-          defaultMuted
           loop
           playsInline
           preload="auto"
