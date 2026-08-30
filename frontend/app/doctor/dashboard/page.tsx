@@ -880,20 +880,29 @@ export default function DoctorDashboard() {
   };
 
   const loadWallet = async (doctorId: string) => {
-    const { data } = await supabase
-      .from('doctor_wallet')
-      .select('*')
-      .eq('doctor_id', doctorId)
-      .single();
-    if (data) setWallet(data);
+    try {
+      const { data, error } = await supabase
+        .from('doctor_wallet')
+        .select('*')
+        .eq('doctor_id', doctorId)
+        .maybeSingle();
+      if (!error && data) {
+        setWallet(data);
+      } else {
+        setWallet({ balance: 0, total_earned: 0, total_withdrawn: 0 });
+      }
 
-    const { data: txns } = await supabase
-      .from('doctor_wallet_transactions')
-      .select('*')
-      .eq('doctor_id', doctorId)
-      .order('created_at', { ascending: false })
-      .limit(20);
-    if (txns) setTransactions(txns);
+      const { data: txns } = await supabase
+        .from('doctor_wallet_transactions')
+        .select('*')
+        .eq('doctor_id', doctorId)
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (txns) setTransactions(txns);
+    } catch (err) {
+      console.warn('Doctor wallet query exception:', err);
+      setWallet({ balance: 0, total_earned: 0, total_withdrawn: 0 });
+    }
   };
 
   const handleLogout = async () => {
