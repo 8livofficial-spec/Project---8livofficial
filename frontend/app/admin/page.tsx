@@ -2034,7 +2034,7 @@ function AdminDashboardContent() {
               </div>
               <div className="overflow-x-auto">
                 <div className="min-w-[1180px]">
-                  <div className="grid grid-cols-[1fr_1.1fr_0.9fr_0.7fr_1fr_0.8fr_0.7fr_0.9fr_1.2fr] gap-4 bg-[#F5F0EB] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-[#8896A4]">
+                  <div className="grid grid-cols-[1fr_1.2fr_0.9fr_0.7fr_1fr_0.8fr_0.7fr_0.9fr_1.2fr] gap-4 bg-[#F5F0EB] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-[#8896A4]">
                     <span>Payment ID</span><span>Patient Name</span><span>Payment Type</span><span>Amount</span><span>Razorpay Payment ID</span><span>Method</span><span>Status</span><span>Date</span><span>Receipt</span>
                   </div>
                   <div className="divide-y divide-[#1A1F36]/8">
@@ -2045,21 +2045,39 @@ function AdminDashboardContent() {
                       </div>
                     ) : paymentRows.map(payment => {
                       const patient = assessments.find(item => item.patient_id === payment.patient_id || item.id === payment.patient_id);
+                      const rawName = payment.patient_name;
+                      const isUuidName = rawName && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawName);
+                      const displayName = (!isUuidName && rawName)
+                        ? rawName
+                        : (patient ? getPatientName(patient) : (payment.patient_display_id || payment.patient_email || (payment.patient_id ? `Patient (${String(payment.patient_id).slice(0, 8)})` : 'Patient')));
+                      const subtitle = payment.patient_email || patient?.email || (payment.patient_display_id ? `#${payment.patient_display_id}` : '');
+
                       return (
-                        <div key={payment.id || payment.transaction_id} className="grid grid-cols-[1fr_1.1fr_0.9fr_0.7fr_1fr_0.8fr_0.7fr_0.9fr_1.2fr] gap-4 px-5 py-4 text-sm font-bold text-[#40516A]">
-                          <span className="font-mono text-xs">{payment.id || payment.transaction_id || 'N/A'}</span>
-                          <span className="font-black text-[#1A1F36]">{patient ? getPatientName(patient) : payment.patient_id || 'Patient'}</span>
+                        <div key={payment.id || payment.transaction_id} className="grid grid-cols-[1fr_1.2fr_0.9fr_0.7fr_1fr_0.8fr_0.7fr_0.9fr_1.2fr] gap-4 px-5 py-4 text-sm font-bold text-[#40516A] items-center">
+                          <span className="font-mono text-xs truncate" title={payment.id || payment.transaction_id}>{payment.id || payment.transaction_id || 'N/A'}</span>
+                          <div className="min-w-0">
+                            <button
+                              onClick={() => openPatientFromPayment(payment.patient_id)}
+                              className="text-left font-black text-[#1A1F36] hover:text-[#0D9488] transition-colors truncate block max-w-full cursor-pointer"
+                              title={displayName}
+                            >
+                              {displayName}
+                            </button>
+                            {subtitle && subtitle !== displayName && (
+                              <p className="text-[11px] font-medium text-[#8896A4] truncate">{subtitle}</p>
+                            )}
+                          </div>
                           <span className="capitalize">{payment.payment_type || 'payment'}</span>
                           <span>Rs {Number(payment.amount || 0).toLocaleString('en-IN')}</span>
-                          <span className="font-mono text-xs">{payment.transaction_id || payment.metadata?.razorpay_payment_id || 'N/A'}</span>
+                          <span className="font-mono text-xs truncate" title={payment.transaction_id || payment.metadata?.razorpay_payment_id}>{payment.transaction_id || payment.metadata?.razorpay_payment_id || 'N/A'}</span>
                           <span>{payment.payment_method || payment.metadata?.method || 'Razorpay'}</span>
-                          <span className={`w-fit rounded-full px-3 py-1 text-xs font-black ${['success', 'paid', 'captured'].includes(String(payment.status || '').toLowerCase()) ? 'bg-[#5C7A6B]/12 text-[#5C7A6B]' : ['failed', 'cancelled'].includes(String(payment.status || '').toLowerCase()) ? 'bg-[#D96A6A]/12 text-[#B94D4D]' : 'bg-[#D89A3D]/12 text-[#B7792F]'}`}>{payment.status || 'pending'}</span>
+                          <span className={`w-fit rounded-full px-3 py-1 text-xs font-black ${['success', 'paid', 'captured', 'completed'].includes(String(payment.status || '').toLowerCase()) ? 'bg-[#5C7A6B]/12 text-[#5C7A6B]' : ['failed', 'cancelled'].includes(String(payment.status || '').toLowerCase()) ? 'bg-[#D96A6A]/12 text-[#B94D4D]' : 'bg-[#D89A3D]/12 text-[#B7792F]'}`}>{payment.status || 'pending'}</span>
                           <span>{payment.created_at ? new Date(payment.created_at).toLocaleDateString('en-IN') : 'N/A'}</span>
                           <span className="flex flex-wrap gap-2">
-                            <button onClick={() => viewPaymentReceipt(payment)} className="rounded-lg border border-[#1A1F36]/10 px-2 py-1 text-[10px] font-black">View</button>
-                            <button onClick={() => downloadPaymentReceipt(payment)} className="rounded-lg border border-[#1A1F36]/10 px-2 py-1 text-[10px] font-black">Download</button>
-                            <button onClick={() => refundPayment(payment)} className="rounded-lg bg-[#D96A6A]/12 px-2 py-1 text-[10px] font-black text-[#B94D4D]">Refund</button>
-                            <button onClick={() => openPatientFromPayment(payment.patient_id)} className="rounded-lg bg-[#1A1F36]/8 px-2 py-1 text-[10px] font-black">Patient</button>
+                            <button onClick={() => viewPaymentReceipt(payment)} className="rounded-lg border border-[#1A1F36]/10 px-2 py-1 text-[10px] font-black cursor-pointer hover:bg-slate-50">View</button>
+                            <button onClick={() => downloadPaymentReceipt(payment)} className="rounded-lg border border-[#1A1F36]/10 px-2 py-1 text-[10px] font-black cursor-pointer hover:bg-slate-50">Download</button>
+                            <button onClick={() => refundPayment(payment)} className="rounded-lg bg-[#D96A6A]/12 px-2 py-1 text-[10px] font-black text-[#B94D4D] cursor-pointer hover:bg-red-100">Refund</button>
+                            <button onClick={() => openPatientFromPayment(payment.patient_id)} className="rounded-lg bg-[#1A1F36]/8 px-2 py-1 text-[10px] font-black cursor-pointer hover:bg-[#1A1F36]/15">Patient</button>
                           </span>
                         </div>
                       );

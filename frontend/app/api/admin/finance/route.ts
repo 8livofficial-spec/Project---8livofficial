@@ -220,6 +220,39 @@ export async function GET(request: Request) {
         paymentTransactions = fallbackPay.data || []
         paymentsCount = fallbackPay.count || 0
       }
+
+      // Enrich payment transactions with patient profile information
+      const patientIds = Array.from(new Set(paymentTransactions.map((p: any) => p.patient_id).filter(Boolean)))
+      if (patientIds.length > 0) {
+        let profilesMap = new Map()
+        let assessmentsMap = new Map()
+        try {
+          const [{ data: profs }, { data: assess }] = await Promise.all([
+            supabaseAdmin.from('profiles').select('id, first_name, last_name, display_id, email, phone_number').in('id', patientIds),
+            supabaseAdmin.from('health_assessments').select('patient_id, first_name, last_name, phone_number').in('patient_id', patientIds)
+          ])
+          if (profs) profilesMap = new Map(profs.map((p: any) => [p.id, p]))
+          if (assess) assessmentsMap = new Map(assess.map((a: any) => [a.patient_id, a]))
+        } catch (enrichErr) {
+          console.warn('[admin/finance] Failed to load patient profiles for payments:', enrichErr)
+        }
+
+        paymentTransactions = paymentTransactions.map((payment: any) => {
+          const prof = profilesMap.get(payment.patient_id) || {}
+          const assess = assessmentsMap.get(payment.patient_id) || {}
+          const firstName = assess.first_name || prof.first_name || prof.display_id || ''
+          const lastName = assess.last_name || prof.last_name || ''
+          const fullName = `${firstName} ${lastName}`.trim() || prof.email?.split('@')[0] || prof.display_id || (payment.patient_id ? `Patient (${String(payment.patient_id).slice(0, 8)})` : 'Patient')
+
+          return {
+            ...payment,
+            patient_name: fullName,
+            patient_email: prof.email || '',
+            patient_phone: assess.phone_number || prof.phone_number || '',
+            patient_display_id: prof.display_id || '',
+          }
+        })
+      }
     } catch (err) {
       console.warn('[admin/finance] Failed to load payment transactions:', err)
     }
