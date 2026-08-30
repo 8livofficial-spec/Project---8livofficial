@@ -201,10 +201,27 @@ export async function GET(request: Request) {
         }
       }
 
+      const completedCount = ownConsultations.filter((c: any) => ['approved', 'completed', 'attended'].includes(String(c.status || '').toLowerCase()) || c.is_completed).length
+      const dynamicEarned = completedCount * 300
+      const recordedEarned = Number(walletRes.data?.total_earned || 0)
+      const recordedWithdrawn = Number(walletRes.data?.total_withdrawn || 0)
+      const totalEarned = Math.max(recordedEarned, dynamicEarned)
+      const balance = Math.max(0, totalEarned - recordedWithdrawn)
+
+      const walletPayload = {
+        doctor_id: userId,
+        balance,
+        total_earned: totalEarned,
+        total_withdrawn: recordedWithdrawn,
+        pending_payout: 0,
+        completed_payout: recordedWithdrawn,
+        updated_at: walletRes.data?.updated_at || new Date().toISOString()
+      }
+
       return NextResponse.json({
         consultations: ownConsultations.map(enrich),
         availableRequests: availableRequests.map(enrich),
-        wallet: walletRes.data || { balance: 0, pending_payout: 0, completed_payout: 0, doctor_id: userId }
+        wallet: walletPayload
       })
     }
 

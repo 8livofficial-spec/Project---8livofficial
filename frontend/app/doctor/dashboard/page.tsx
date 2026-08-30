@@ -881,16 +881,11 @@ export default function DoctorDashboard() {
 
   const loadWallet = async (doctorId: string) => {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('doctor_wallet')
         .select('*')
         .eq('doctor_id', doctorId)
         .maybeSingle();
-      if (!error && data) {
-        setWallet(data);
-      } else {
-        setWallet({ balance: 0, total_earned: 0, total_withdrawn: 0 });
-      }
 
       const { data: txns } = await supabase
         .from('doctor_wallet_transactions')
@@ -899,6 +894,31 @@ export default function DoctorDashboard() {
         .order('created_at', { ascending: false })
         .limit(20);
       if (txns) setTransactions(txns);
+
+      // Check completed consultations count for dynamic accurate earnings
+      let completedCount = 0;
+      try {
+        const { count } = await supabase
+          .from('doctor_consultations')
+          .select('*', { count: 'exact', head: true })
+          .eq('doctor_id', doctorId)
+          .in('status', ['approved', 'completed', 'attended']);
+        completedCount = count || 0;
+      } catch {}
+
+      const dynamicEarned = completedCount * 300;
+      const recordedEarned = Number(data?.total_earned || 0);
+      const recordedWithdrawn = Number(data?.total_withdrawn || 0);
+      const total_earned = Math.max(recordedEarned, dynamicEarned);
+      const balance = Math.max(0, total_earned - recordedWithdrawn);
+
+      setWallet({
+        doctor_id: doctorId,
+        balance,
+        total_earned,
+        total_withdrawn: recordedWithdrawn,
+        ...(data || {})
+      });
     } catch (err) {
       console.warn('Doctor wallet query exception:', err);
       setWallet({ balance: 0, total_earned: 0, total_withdrawn: 0 });
