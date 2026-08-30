@@ -68,6 +68,35 @@ export async function POST(request: Request) {
     }
 
     const payoutStatus = mapWebhookStatus(event.event, payout.status)
+
+    // 1. Reconcile provider_payouts
+    const { data: matchedPayout } = await supabaseAdmin
+      .from('provider_payouts')
+      .select('id, payout_status')
+      .or(`payment_reference.eq.${payoutId},idempotency_key.ilike.%${payoutId}%`)
+      .maybeSingle()
+
+    if (matchedPayout) {
+      if (payoutStatus === 'PROCESSED') {
+        await supabaseAdmin.rpc('finalize_provider_payout', {
+          p_payout_id: matchedPayout.id,
+          p_status: 'COMPLETED',
+          p_payment_reference: payoutId,
+          p_failure_reason: null,
+          p_actor: null,
+        })
+      } else if (payoutStatus === 'FAILED') {
+        await supabaseAdmin.rpc('finalize_provider_payout', {
+          p_payout_id: matchedPayout.id,
+          p_status: 'FAILED',
+          p_payment_reference: payoutId,
+          p_failure_reason: `RazorpayX webhook reported status: ${payout.status || event.event}`,
+          p_actor: null,
+        })
+      }
+    }
+
+    // 2. Reconcile doctor_wallet_transactions for legacy compatibility
     const updatePayload: Record<string, string> = {
       payout_status: payoutStatus,
       updated_at: new Date().toISOString(),
@@ -77,13 +106,11 @@ export async function POST(request: Request) {
       updatePayload.payout_processed_at = new Date().toISOString()
     }
 
-    const { error } = await supabaseAdmin
+    await supabaseAdmin
       .from('doctor_wallet_transactions')
       .update(updatePayload)
       .eq('razorpay_payout_id', payoutId)
       .eq('type', 'CONSULTATION_PAYOUT')
-
-    if (error) throw error
 
     return NextResponse.json({ received: true })
   } catch (err: unknown) {

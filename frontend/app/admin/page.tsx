@@ -903,6 +903,27 @@ function AdminDashboardContent() {
     }
   };
 
+  const handleRejectPayout = async (payoutId: string, providerName: string, amount: number) => {
+    if (!adminUser) return;
+    const reason = window.prompt(`Enter reason for rejecting withdrawal of ₹${amount} for ${providerName || 'provider'}:`, 'Administrative review rejection');
+    if (reason === null) return;
+
+    try {
+      const res = await adminFetch('/api/admin/payouts/reject', {
+        method: 'POST',
+        body: JSON.stringify({ payoutId, reason: reason.trim() || 'Rejected by administrator' }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to reject payout.');
+      }
+      alert('Payout request rejected. Funds have been returned to the provider wallet balance.');
+      fetchPayoutsData();
+    } catch (err: any) {
+      alert('Error rejecting payout: ' + err.message);
+    }
+  };
+
   const handleAdjustWallet = async () => {
     if (!adminUser || !adjustingProvider) return;
     const amountVal = parseFloat(adjustAmount);
@@ -2180,7 +2201,10 @@ function AdminDashboardContent() {
                           <button onClick={() => { setManagementSearch(provider.name || ''); setProviderFilter('all'); }} className="rounded-lg border border-[#1A1F36]/10 px-2 py-1 text-[10px] font-black hover:bg-slate-50 transition-colors">View</button>
                           <button onClick={() => { setAdjustingProvider(provider); setAdjustAmount(''); setAdjustReason(''); setShowAdjustModal(true); }} className="rounded-lg bg-[#C4622D]/12 px-2 py-1 text-[10px] font-black text-[#C4622D] hover:bg-[#C4622D]/20 transition-colors">Adjust</button>
                           {activePayout ? (
-                            <button onClick={() => handleProcessRazorpayPayout(activePayout.id, provider.name, activePayout.payout_amount)} className="rounded-lg bg-[#1A1F36] px-2 py-1 text-[10px] font-black text-white hover:bg-slate-800 transition-colors">Approve</button>
+                            <>
+                              <button onClick={() => handleProcessRazorpayPayout(activePayout.id, provider.name, activePayout.payout_amount)} className="rounded-lg bg-[#1A1F36] px-2 py-1 text-[10px] font-black text-white hover:bg-slate-800 transition-colors cursor-pointer">Approve</button>
+                              <button onClick={() => handleRejectPayout(activePayout.id, provider.name, activePayout.payout_amount)} className="rounded-lg bg-[#D96A6A]/15 text-[#B94D4D] border border-[#D96A6A]/30 px-2 py-1 text-[10px] font-black hover:bg-[#D96A6A]/25 transition-colors cursor-pointer">Reject</button>
+                            </>
                           ) : (
                             <button disabled className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-400 cursor-not-allowed">Approve</button>
                           )}
@@ -2256,17 +2280,25 @@ function AdminDashboardContent() {
                           </div>
                           <span className="flex flex-wrap gap-2">
                             {status === 'PENDING' && (
-                              <button
-                                onClick={() => handleProcessRazorpayPayout(payout.id, providerName, payout.payout_amount)}
-                                className="rounded-lg bg-[#1A1F36] px-3 py-1 text-[10px] font-black text-white hover:bg-slate-800 transition-colors"
-                              >
-                                Approve
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleProcessRazorpayPayout(payout.id, providerName, payout.payout_amount)}
+                                  className="rounded-lg bg-[#1A1F36] px-3 py-1 text-[10px] font-black text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  onClick={() => handleRejectPayout(payout.id, providerName, payout.payout_amount)}
+                                  className="rounded-lg bg-[#D96A6A]/15 text-[#B94D4D] border border-[#D96A6A]/30 px-3 py-1 text-[10px] font-black hover:bg-[#D96A6A]/25 transition-colors cursor-pointer"
+                                >
+                                  Reject
+                                </button>
+                              </>
                             )}
                             {status === 'FAILED' && (
                               <button
                                 onClick={() => handleProcessRazorpayPayout(payout.id, providerName, payout.payout_amount)}
-                                className="rounded-lg bg-[#D96A6A] px-3 py-1 text-[10px] font-black text-white hover:bg-[#B94D4D] transition-colors"
+                                className="rounded-lg bg-[#D96A6A] px-3 py-1 text-[10px] font-black text-white hover:bg-[#B94D4D] transition-colors cursor-pointer"
                               >
                                 Retry
                               </button>
