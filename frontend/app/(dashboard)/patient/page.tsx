@@ -293,11 +293,15 @@ export default function PatientDashboardHome() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Unable to load available slots.')
-      setProviderSlots((data.slots || []).map((slot: Record<string, string>) => ({
-        ...slot,
-        available_date: slot.date,
-        time_slot: slot.startTime,
-      })))
+      setProviderSlots(
+        (data.slots || [])
+          .filter((slot: any) => Boolean(slot && (slot.startTime || slot.time_slot || slot.start_time)))
+          .map((slot: any) => ({
+            ...slot,
+            available_date: slot.date || slot.available_date || date || '',
+            time_slot: slot.startTime || slot.time_slot || slot.start_time || '',
+          }))
+      )
       setSelectedProviderTime('')
     } catch (err) {
       setProviderSlots([])

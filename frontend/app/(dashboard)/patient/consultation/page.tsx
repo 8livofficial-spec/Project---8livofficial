@@ -230,13 +230,15 @@ export default function ConsultationSchedulingPage() {
       }
 
       const uniqueTimes = new Map<string, AvailableDoctorSlot>()
-      for (const slot of data.slots || []) {
+      for (const slot of (data.slots || []).filter(Boolean)) {
+        const timeSlot = slot.startTime || slot.time_slot || slot.start_time || ''
+        if (!timeSlot) continue
         const mapped: AvailableDoctorSlot = {
           ...slot,
-          available_date: slot.date,
-          time_slot: slot.startTime,
+          available_date: slot.date || slot.available_date || date || '',
+          time_slot: timeSlot,
         }
-        const key = isActiveMemberFollowUp ? `${mapped.slotId || mapped.providerId}-${mapped.time_slot}` : mapped.time_slot
+        const key = isActiveMemberFollowUp ? `${mapped.slotId || mapped.providerId || 'doc'}-${mapped.time_slot}` : mapped.time_slot
         if (!uniqueTimes.has(key)) uniqueTimes.set(key, mapped)
       }
       const slotsList = Array.from(uniqueTimes.values())
