@@ -547,7 +547,11 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ error: 'Consultation payment must be PAID before completion payout.' }, { status: 402 });
       }
 
-      const normalizedDecision = String(decision || '').trim().toLowerCase();
+      const rawDecision = String(decision || '').trim().toLowerCase();
+      const normalizedDecision = rawDecision === 'accepted' || rawDecision === 'accept'
+        ? 'approved'
+        : (rawDecision === 'reject' ? 'rejected' : rawDecision);
+
       if (!['approved', 'rejected'].includes(normalizedDecision)) {
         return NextResponse.json({ error: 'Completion decision must be approved or rejected.' }, { status: 400 });
       }
@@ -575,9 +579,9 @@ export async function PATCH(req: Request) {
       }
       const normalizedMedicationType = String(recommendedMedicationType || '').toUpperCase();
       const finalMedicationType = normalizedDecision === 'approved'
-        ? (normalizedMedicationType === 'NONE' || normalizedMedicationType === 'NO_PRESCRIPTION'
+        ? (normalizedMedicationType === 'NONE' || normalizedMedicationType === 'NO_PRESCRIPTION' || !normalizedMedicationType
           ? 'none'
-          : normalizedMedicationType)
+          : (normalizedMedicationType === 'INJECTABLE' ? 'INJECTABLE' : normalizedMedicationType))
         : null;
 
       if (normalizedDecision === 'approved' && finalMedicationType !== 'none' && finalMedicationType !== 'INJECTABLE') {
