@@ -20,35 +20,177 @@ export async function GET(request: Request) {
     const paymentTab = searchParams.get('paymentTab') || 'all'
     const searchPattern = ilikePattern(searchParams.get('search') || '')
 
-    const [
-      profilesRes,
-      walletsRes,
-      totalEarnedRes,
-      lightPayoutsRes,
-      transactionsRes,
-      allPayRes,
-    ] = await Promise.all([
-      supabaseAdmin.from('doctor_profiles').select('id, full_name, specialty, specialization, consultation_type, profile_photo_url'),
-      supabaseAdmin.from('wallet_accounts').select('provider_id, current_balance, total_earned, total_paid, pending_balance'),
-      supabaseAdmin.from('wallet_ledger_transactions').select('amount').eq('transaction_type', 'CONSULTATION_CREDIT').eq('status', 'SUCCESS'),
-      supabaseAdmin.from('provider_payouts').select('provider_id, payout_status, payout_amount'),
-      supabaseAdmin
+    // 1. Fetch doctor profiles safely
+    let doctorProfiles: any[] = []
+    try {
+      const { data } = await supabaseAdmin
+        .from('doctor_profiles')
+        .select('id, full_name, specialty, profile_photo_url')
+      doctorProfiles = data || []
+    } catch (err) {
+      console.warn('[admin/finance] Failed to load doctor profiles:', err)
+    }
+
+    // 2. Fetch wallets (support both wallet_accounts and doctor_wallet)
+    let wallets: any[] = []
+    try {
+      const { data } = await supabaseAdmin
+        .from('wallet_accounts')
+        .select('provider_id, current_balance, total_earned, total_paid, pending_balance')
+      wallets = data || []
+    } catch {
+      try {
+        const { data } = await supabaseAdmin
+          .from('doctor_wallet')
+          .select('doctor_id, balance, total_earned, total_withdrawn')
+        wallets = (data || []).map((w: any) => ({
+          provider_id: w.doctor_id,
+          current_balance: w.balance,
+          total_earned: w.total_earned,
+          total_paid: w.total_withdrawn,
+          pending_balance: 0,
+        }))
+      } catch (err) {
+        console.warn('[admin/finance] Failed to load wallets:', err)
+      }
+    }
+
+    // 3. Total Earned
+    let totalEarnedData: any[] = []
+    try {
+      const { data } = await supabaseAdmin
+        .from('wallet_ledger_transactions')
+        .select('amount')
+        .eq('transaction_type', 'CONSULTATION_CREDIT')
+        .eq('status', 'SUCCESS')
+      totalEarnedData = data || []
+    } catch {
+      try {
+        const { data } = await supabaseAdmin
+          .from('doctor_wallet_transactions')
+          .select('amount')
+          .eq('type', 'credit')
+        totalEarnedData = data || []
+      } catch (err) {
+        console.warn('[admin/finance] Failed to load earned transactions:', err)
+      }
+    }
+
+    // 4. Provider Payouts
+    let lightPayoutsData: any[] = []
+    let paginatedPayouts: any[] = []
+    let payoutsCount = 0
+    try {
+      const { data } = await supabaseAdmin
+        .from('provider_payouts')
+        .select('provider_id, payout_status, payout_amount')
+      lightPayoutsData = data || []
+
+      const payoutsFrom = (payoutsPage - 1) * payoutsLimit
+      const payoutsTo = payoutsPage * payoutsLimit - 1
+      const pageRes = await supabaseAdmin
+        .from('provider_payouts')
+        .select('id, provider_id, payout_amount, payout_status, initiated_at, payment_reference, failure_reason, created_at, updated_at', { count: 'exact' })
+        .order('initiated_at', { ascending: false })
+        .range(payoutsFrom, payoutsTo)
+      paginatedPayouts = pageRes.data || []
+      payoutsCount = pageRes.count || 0
+    } catch (err) {
+      console.warn('[admin/finance] Failed to load provider payouts:', err)
+    }
+
+    // 5. Ledger / Wallet Transactions
+    let transactionsData: any[] = []
+    try {
+      const { data } = await supabaseAdmin
         .from('wallet_ledger_transactions')
         .select('id, provider_id, doctor_id, type, transaction_type, amount, status, payout_status, payment_reference, razorpay_payout_id, created_at, updated_at')
         .order('created_at', { ascending: false })
-        .limit(1000),
-      supabaseAdmin.from('payment_transactions').select('status, amount, payment_type, created_at'),
-    ])
+        .limit(1000)
+      transactionsData = data || []
+    } catch {
+      try {
+        const { data } = await supabaseAdmin
+          .from('doctor_wallet_transactions')
+          .select('id, doctor_id, type, amount, status, description, created_at')
+          .order('created_at', { ascending: false })
+          .limit(1000)
+        transactionsData = (data || []).map((t: any) => ({
+          ...t,
+          provider_id: t.doctor_id,
+          transaction_type: t.type,
+        }))
+      } catch (err) {
+        console.warn('[admin/finance] Failed to load transactions:', err)
+      }
+    }
 
-    if (profilesRes.error) throw profilesRes.error
-    if (walletsRes.error) throw walletsRes.error
-    if (totalEarnedRes.error) throw totalEarnedRes.error
-    if (lightPayoutsRes.error) throw lightPayoutsRes.error
-    if (transactionsRes.error) throw transactionsRes.error
-    if (allPayRes.error) throw allPayRes.error
+    // 6. Audit Logs
+    let auditLogs: any[] = []
+    let auditCount = 0
+    try {
+      const auditFrom = (auditPage - 1) * auditLimit
+      const auditTo = auditPage * auditLimit - 1
+      const auditRes = await supabaseAdmin
+        .from('wallet_audit_log')
+        .select('id, provider_id, actor_id, initiated_by, action, amount, reason, reference_id, created_at', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .range(auditFrom, auditTo)
+      auditLogs = auditRes.data || []
+      auditCount = auditRes.count || 0
+    } catch (err) {
+      console.warn('[admin/finance] Failed to load audit logs:', err)
+    }
 
-    const wallets = walletsRes.data || []
-    const doctors = (profilesRes.data || []).map((doc: any) => {
+    // 7. Payment Transactions (All + Paginated)
+    let allPayData: any[] = []
+    let paymentTransactions: any[] = []
+    let paymentsCount = 0
+    try {
+      const allPayRes = await supabaseAdmin
+        .from('payment_transactions')
+        .select('status, amount, payment_type, created_at')
+      allPayData = allPayRes.data || []
+
+      let payQuery = supabaseAdmin
+        .from('payment_transactions')
+        .select('id, patient_id, amount, status, payment_type, membership_tier, payment_method, payment_provider, transaction_id, created_at, metadata', { count: 'exact' })
+
+      if (paymentTab === 'consultation') payQuery = payQuery.eq('payment_type', 'consultation')
+      else if (paymentTab === 'membership') payQuery = payQuery.in('payment_type', ['membership', 'combined'])
+      else if (paymentTab === 'refunds') payQuery = payQuery.or('amount.lt.0,status.ilike.%refund%')
+      else if (paymentTab === 'failed') payQuery = payQuery.in('status', failedStatuses)
+
+      if (searchPattern) {
+        let patientIds: string[] = []
+        try {
+          const matchedPatients = await supabaseAdmin
+            .from('health_assessments')
+            .select('patient_id')
+            .or(`first_name.ilike.${searchPattern},last_name.ilike.${searchPattern}`)
+          patientIds = (matchedPatients.data || []).map((p: any) => p.patient_id)
+        } catch {}
+
+        const orConditions = [
+          `id.ilike.${searchPattern}`,
+          `transaction_id.ilike.${searchPattern}`,
+          `payment_type.ilike.${searchPattern}`,
+          `status.ilike.${searchPattern}`,
+        ]
+        if (patientIds.length > 0) orConditions.push(`patient_id.in.(${patientIds.join(',')})`)
+        payQuery = payQuery.or(orConditions.join(','))
+      }
+
+      const payFrom = (paymentsPage - 1) * paymentsLimit
+      const payTo = paymentsPage * paymentsLimit - 1
+      const payRes = await payQuery.order('created_at', { ascending: false }).range(payFrom, payTo)
+      paymentTransactions = payRes.data || []
+      paymentsCount = payRes.count || 0
+    } catch (err) {
+      console.warn('[admin/finance] Failed to load payment transactions:', err)
+    }
+
+    const doctors = doctorProfiles.map((doc: any) => {
       const wallet = wallets.find((w: any) => w.provider_id === doc.id) || { current_balance: 0, total_earned: 0, total_paid: 0, pending_balance: 0 }
       return {
         ...doc,
@@ -60,56 +202,6 @@ export async function GET(request: Request) {
       }
     })
 
-    const payoutsFrom = (payoutsPage - 1) * payoutsLimit
-    const payoutsTo = payoutsPage * payoutsLimit - 1
-    const payoutPageRes = await supabaseAdmin
-      .from('provider_payouts')
-      .select('id, provider_id, payout_amount, payout_status, initiated_at, payment_reference, failure_reason, created_at, updated_at', { count: 'exact' })
-      .order('initiated_at', { ascending: false })
-      .range(payoutsFrom, payoutsTo)
-    if (payoutPageRes.error) throw payoutPageRes.error
-
-    const auditFrom = (auditPage - 1) * auditLimit
-    const auditTo = auditPage * auditLimit - 1
-    const auditRes = await supabaseAdmin
-      .from('wallet_audit_log')
-      .select('id, provider_id, actor_id, initiated_by, action, amount, reason, reference_id, created_at', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(auditFrom, auditTo)
-    if (auditRes.error) throw auditRes.error
-
-    let payQuery = supabaseAdmin
-      .from('payment_transactions')
-      .select('id, patient_id, amount, status, payment_type, membership_tier, payment_method, payment_provider, transaction_id, created_at, metadata', { count: 'exact' })
-
-    if (paymentTab === 'consultation') payQuery = payQuery.eq('payment_type', 'consultation')
-    else if (paymentTab === 'membership') payQuery = payQuery.in('payment_type', ['membership', 'combined'])
-    else if (paymentTab === 'refunds') payQuery = payQuery.or('amount.lt.0,status.ilike.%refund%')
-    else if (paymentTab === 'failed') payQuery = payQuery.in('status', failedStatuses)
-
-    if (searchPattern) {
-      const matchedPatients = await supabaseAdmin
-        .from('health_assessments')
-        .select('patient_id')
-        .or(`full_name.ilike.${searchPattern},first_name.ilike.${searchPattern},last_name.ilike.${searchPattern}`)
-      if (matchedPatients.error) throw matchedPatients.error
-      const patientIds = (matchedPatients.data || []).map((p: any) => p.patient_id)
-      const orConditions = [
-        `id.ilike.${searchPattern}`,
-        `transaction_id.ilike.${searchPattern}`,
-        `payment_type.ilike.${searchPattern}`,
-        `status.ilike.${searchPattern}`,
-      ]
-      if (patientIds.length > 0) orConditions.push(`patient_id.in.(${patientIds.join(',')})`)
-      payQuery = payQuery.or(orConditions.join(','))
-    }
-
-    const payFrom = (paymentsPage - 1) * paymentsLimit
-    const payTo = paymentsPage * paymentsLimit - 1
-    const payRes = await payQuery.order('created_at', { ascending: false }).range(payFrom, payTo)
-    if (payRes.error) throw payRes.error
-
-    const allPayData = allPayRes.data || []
     const startOfMonth = new Date()
     startOfMonth.setDate(1)
     startOfMonth.setHours(0, 0, 0, 0)
@@ -118,16 +210,16 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       doctors,
-      providerPayouts: lightPayoutsRes.data || [],
-      paginatedPayouts: payoutPageRes.data || [],
-      payoutsTotalPages: Math.ceil((payoutPageRes.count || 0) / payoutsLimit),
-      auditLogs: auditRes.data || [],
-      auditTotalPages: Math.ceil((auditRes.count || 0) / auditLimit),
-      transactions: transactionsRes.data || [],
-      paymentTransactions: payRes.data || [],
-      paymentsTotalPages: Math.ceil((payRes.count || 0) / paymentsLimit),
+      providerPayouts: lightPayoutsData,
+      paginatedPayouts,
+      payoutsTotalPages: Math.ceil(payoutsCount / payoutsLimit),
+      auditLogs,
+      auditTotalPages: Math.ceil(auditCount / auditLimit),
+      transactions: transactionsData,
+      paymentTransactions,
+      paymentsTotalPages: Math.ceil(paymentsCount / paymentsLimit),
       summary: {
-        totalProviderEarnings: (totalEarnedRes.data || []).reduce((sum, tx) => sum + Number(tx.amount || 0), 0),
+        totalProviderEarnings: totalEarnedData.reduce((sum, tx) => sum + Number(tx.amount || 0), 0),
         monthlyRevenue: allPayData.filter((p: any) => isSuccess(p) && p.created_at && new Date(p.created_at) >= startOfMonth).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0),
         successfulPaymentsCount: allPayData.filter(isSuccess).length,
         pendingPaymentsCount: allPayData.filter((p: any) => pendingStatuses.includes(String(p.status || '').toLowerCase())).length,
