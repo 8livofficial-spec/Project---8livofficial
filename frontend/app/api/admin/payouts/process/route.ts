@@ -128,15 +128,55 @@ export async function POST(request: Request) {
     const limited = enforceRateLimit(request, `admin-provider-payout-process:${admin.id}`, APP_CONFIG.rateLimits.adminSensitive)
     if (limited) return limited
 
-    const { payoutId } = await request.json()
+    const body = await request.json()
+    const payoutId = body.payoutId || body.id || body.transactionId || body.txId
     if (!payoutId) return NextResponse.json({ error: 'payoutId is required.' }, { status: 400 })
 
-    const { data: payout, error: payoutError } = await supabaseAdmin
+    let { data: payout, error: payoutError } = await supabaseAdmin
       .from('provider_payouts')
       .select('id, provider_id, payout_amount, payout_status')
       .eq('id', payoutId)
       .maybeSingle()
+
     if (payoutError) return NextResponse.json({ error: payoutError.message }, { status: 500 })
+
+    // Fallback: If payoutId refers to a wallet_ledger_transaction or doctor_wallet_transaction
+    if (!payout) {
+      const { data: ledgerTx } = await supabaseAdmin
+        .from('wallet_ledger_transactions')
+        .select('id, provider_id, doctor_id, amount, status')
+        .eq('id', payoutId)
+        .maybeSingle()
+
+      const targetProviderId = ledgerTx?.provider_id || ledgerTx?.doctor_id
+      const targetAmount = Math.abs(Number(ledgerTx?.amount || 0))
+
+      if (targetProviderId && targetAmount > 0) {
+        // Find existing pending payout or create one via request_provider_payout
+        const { data: existingPayout } = await supabaseAdmin
+          .from('provider_payouts')
+          .select('id, provider_id, payout_amount, payout_status')
+          .eq('provider_id', targetProviderId)
+          .eq('payout_status', 'PENDING')
+          .maybeSingle()
+
+        if (existingPayout) {
+          payout = existingPayout
+        } else {
+          const { data: createdPayout, error: createErr } = await supabaseAdmin.rpc('request_provider_payout', {
+            p_provider_id: targetProviderId,
+            p_amount: targetAmount,
+            p_idempotency_key: `admin_process_${payoutId}`,
+            p_initiated_by: admin.id,
+          })
+          if (createErr) {
+            return NextResponse.json({ error: `Unable to initialize payout: ${createErr.message}` }, { status: 409 })
+          }
+          payout = createdPayout
+        }
+      }
+    }
+
     if (!payout) return NextResponse.json({ error: 'Payout not found.' }, { status: 404 })
     if (!['PENDING', 'FAILED'].includes(payout.payout_status)) return NextResponse.json({ error: 'Payout is already being processed or completed.' }, { status: 409 })
 

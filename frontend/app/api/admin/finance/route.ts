@@ -115,7 +115,8 @@ export async function GET(request: Request) {
     try {
       const { data } = await supabaseAdmin
         .from('provider_payouts')
-        .select('provider_id, payout_status, payout_amount')
+        .select('id, provider_id, payout_status, payout_amount, initiated_at, payment_reference, failure_reason, created_at, updated_at')
+        .order('created_at', { ascending: false })
       lightPayoutsData = data || []
 
       const payoutsFrom = (payoutsPage - 1) * payoutsLimit
