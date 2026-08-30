@@ -108,12 +108,7 @@ export default function RootLayout({
       className={`${inter.variable} ${sora.variable} h-full antialiased`}
     >
       <body className={`min-h-full flex flex-col font-sans bg-white text-[#0F172A]`}>
-
         {children}
-        <Script
-          src="https://checkout.razorpay.com/v1/checkout.js"
-          strategy="beforeInteractive"
-        />
       </body>
     </html>
   );
