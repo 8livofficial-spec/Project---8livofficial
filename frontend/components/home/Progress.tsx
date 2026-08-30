@@ -161,13 +161,13 @@ export default function Progress() {
     <section
       ref={sectionRef}
       id="realistic-outcomes"
-      className="relative bg-[#F9F6F0] border-b border-[#D46E53]/15 py-20 sm:py-28 overflow-hidden"
+      className="relative bg-white border-b border-[#0052FF]/10 py-20 sm:py-28 overflow-hidden"
     >
       {/* Watermark */}
       <div
         ref={bgTextRef}
         aria-hidden="true"
-        className="pointer-events-none absolute top-12 left-0 text-[5rem] sm:text-[10rem] md:text-[14rem] lg:text-[18rem] font-black text-[#D46E53]/[0.035] font-sora select-none whitespace-nowrap -z-0 will-change-transform"
+        className="pointer-events-none absolute top-12 left-0 text-[5rem] sm:text-[10rem] md:text-[14rem] lg:text-[18rem] font-black text-[#0052FF]/[0.03] font-sora select-none whitespace-nowrap -z-0 will-change-transform"
       >
         PROGRESSION
       </div>
@@ -176,12 +176,12 @@ export default function Progress() {
 
         {/* Section Header */}
         <div className="max-w-3xl mb-12 sm:mb-16">
-          <div className="text-[11px] font-bold uppercase tracking-[0.25em] text-[#A84A33] font-sora mb-3 select-none">
+          <div className="text-[11px] font-bold uppercase tracking-[0.25em] text-[#0052FF] font-sora mb-3 select-none">
             08 / REALISTIC OUTCOMES
           </div>
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#D46E53]/20 mb-4 sm:mb-5 shadow-xs">
-            <Sparkles className="w-3.5 h-3.5 text-[#D46E53]" />
-            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#A84A33] font-sora">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#0052FF]/20 mb-4 sm:mb-5 shadow-xs">
+            <Sparkles className="w-3.5 h-3.5 text-[#0052FF]" />
+            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#003BD4] font-sora">
               Patient Transformations
             </span>
           </div>
@@ -192,10 +192,10 @@ export default function Progress() {
               className="font-sora text-3xl sm:text-4xl md:text-5xl font-bold text-[#0F172A] leading-tight will-change-transform"
               style={{ transform: 'translateY(105%)' }}
             >
-              Your progress is <span className="teal-gradient-text">personal.</span>
+              Your progress is <span className="blue-gradient-text">personal.</span>
             </h2>
           </div>
-          <p className="text-sm sm:text-base md:text-lg text-[#5D7068] leading-relaxed mt-3 max-w-xl font-light">
+          <p className="text-sm sm:text-base md:text-lg text-[#475569] leading-relaxed mt-3 max-w-xl font-light">
             Different bodies need different paths. What matters is having the right clinical team beside you at every step.
           </p>
         </div>
@@ -206,7 +206,7 @@ export default function Progress() {
             <div
               key={idx}
               ref={(el) => { cardRefs.current[idx] = el }}
-              className="group relative rounded-[2.5rem] bg-white border border-[#D46E53]/15 hover:border-[#D46E53]/35 transition-all duration-300 shadow-md hover:shadow-xl flex flex-col justify-between overflow-hidden will-change-transform"
+              className="group relative rounded-[2.5rem] bg-white border border-slate-200 hover:border-[#0052FF]/30 transition-all duration-300 shadow-md hover:shadow-xl flex flex-col justify-between overflow-hidden will-change-transform"
             >
               <div>
                 {/* Visual Header Block */}
@@ -241,12 +241,12 @@ export default function Progress() {
                     />
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-[#0F172A]/75 via-transparent to-transparent pointer-events-none" />
-                  <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-white/95 text-[#A84A33] text-[9px] font-bold font-sora shadow-sm flex items-center gap-1.5">
-                    {story.type === 'video' && <Play className="w-2.5 h-2.5 fill-[#A84A33]" />}
+                  <div className="absolute top-4 left-4 px-3 py-1 rounded-full bg-white/95 text-[#0052FF] text-[9px] font-bold font-sora shadow-sm flex items-center gap-1.5">
+                    {story.type === 'video' && <Play className="w-2.5 h-2.5 fill-[#0052FF]" />}
                     <span>{story.tag}</span>
                   </div>
                   <div className="absolute bottom-4 left-4 right-4 text-white z-10">
-                    <p className="text-[9px] uppercase font-bold tracking-wider text-[#F3B89E] font-sora">
+                    <p className="text-[9px] uppercase font-bold tracking-wider text-[#93C5FD] font-sora">
                       {story.protocol}
                     </p>
                     <p className="font-sora font-bold text-sm">{story.patient} • {story.age}</p>
@@ -262,10 +262,10 @@ export default function Progress() {
                     {story.quote}
                   </p>
 
-                  <div className="p-3.5 rounded-xl bg-[#F9F6F0] border border-[#D46E53]/15 flex items-start gap-2.5">
-                    <Activity className="w-4 h-4 text-[#D46E53] shrink-0 mt-0.5" />
+                  <div className="p-3.5 rounded-xl bg-blue-50/60 border border-[#0052FF]/15 flex items-start gap-2.5">
+                    <Activity className="w-4 h-4 text-[#0052FF] shrink-0 mt-0.5" />
                     <p className="text-[11px] text-[#0F172A] font-medium leading-snug">
-                      <strong className="font-bold text-[#A84A33]">Clinical Note: </strong>
+                      <strong className="font-bold text-[#003BD4]">Clinical Note: </strong>
                       {story.doctorNote}
                     </p>
                   </div>
@@ -273,18 +273,18 @@ export default function Progress() {
               </div>
 
               {/* Bottom Metrics Grid */}
-              <div className="mx-6 mb-6 pt-4 border-t border-[#D46E53]/10 grid grid-cols-3 gap-2">
+              <div className="mx-6 mb-6 pt-4 border-t border-slate-100 grid grid-cols-3 gap-2">
                 {story.metrics.map((m, mIdx) => (
                   <div
                     key={mIdx}
                     className={`p-2 rounded-xl text-center border ${
-                      m.highlight ? 'bg-[#D46E53]/10 border-[#D46E53]/25' : 'bg-[#F9F6F0]/80 border-transparent'
+                      m.highlight ? 'bg-[#0052FF]/10 border-[#0052FF]/25' : 'bg-slate-50 border-slate-100'
                     }`}
                   >
                     <p className="text-[8px] font-semibold text-[#64748B] uppercase tracking-wider mb-0.5">
                       {m.label}
                     </p>
-                    <p className={`font-sora font-extrabold text-[11px] sm:text-xs ${m.highlight ? 'text-[#A84A33]' : 'text-[#0F172A]'}`}>
+                    <p className={`font-sora font-extrabold text-[11px] sm:text-xs ${m.highlight ? 'text-[#0052FF]' : 'text-[#0F172A]'}`}>
                       {m.value}
                     </p>
                   </div>

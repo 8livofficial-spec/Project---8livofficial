@@ -9,18 +9,18 @@ export default function PricingShaderCards() {
   return (
     <section className="relative py-20 sm:py-28 bg-white text-[#0F172A] overflow-hidden border-t border-slate-200">
       {/* Background Orbs */}
-      <div className="absolute top-0 right-1/3 w-96 h-96 bg-[#0D9488]/10 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute top-0 right-1/3 w-96 h-96 bg-[#00A884]/10 rounded-full blur-[140px] pointer-events-none" />
       <div className="absolute bottom-0 left-1/3 w-96 h-96 bg-amber-500/10 rounded-full blur-[140px] pointer-events-none" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-14 sm:mb-18">
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-[#0D9488]/20 text-[#0F766E] text-xs font-semibold uppercase tracking-widest mb-4 shadow-xs">
-            <Sparkles className="w-4 h-4 text-[#0D9488]" />
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white border border-[#00A884]/20 text-[#0F766E] text-xs font-semibold uppercase tracking-widest mb-4 shadow-xs">
+            <Sparkles className="w-4 h-4 text-[#00A884]" />
             <span>8liv Membership Plans</span>
           </div>
           <h2 className="text-3xl sm:text-4xl md:text-5xl font-black tracking-tight text-[#0F172A] font-sora">
-            Select Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#0D9488] to-[#0F766E]">Care Protocol</span>
+            Select Your <span className="green-gradient-text">Care Protocol</span>
           </h2>
           <p className="mt-4 text-[#475569] text-base md:text-lg leading-relaxed font-light">
             Doctor-led medical weight management with dedicated dietitian support. Choose the membership level that fits your goals.
@@ -30,11 +30,11 @@ export default function PricingShaderCards() {
         {/* 2-Column Pricing Cards Grid (Silver & Gold) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-5xl mx-auto">
           {/* SILVER CARE PLAN */}
-          <ShaderCard colorTheme="silver" className="flex flex-col justify-between p-8 sm:p-10 bg-white border border-[#0D9488]/20 shadow-xl rounded-3xl">
+          <ShaderCard colorTheme="silver" className="flex flex-col justify-between p-8 sm:p-10 bg-white border border-[#00A884]/20 shadow-xl rounded-3xl">
             <div>
               <div className="flex items-center justify-between mb-4">
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0D9488]/10 text-[#0F766E] border border-[#0D9488]/30 text-xs font-bold font-sora uppercase tracking-wider">
-                  <ShieldCheck className="w-3.5 h-3.5 text-[#0D9488]" />
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00A884]/10 text-[#0F766E] border border-[#00A884]/30 text-xs font-bold font-sora uppercase tracking-wider">
+                  <ShieldCheck className="w-3.5 h-3.5 text-[#00A884]" />
                   <span>Silver Protocol</span>
                 </div>
                 <span className="text-xs text-[#475569] font-medium">Standard Care</span>
@@ -55,27 +55,27 @@ export default function PricingShaderCards() {
               {/* Feature List */}
               <div className="space-y-3.5 mb-8">
                 <div className="flex items-start gap-3 text-xs sm:text-sm text-[#0F172A]">
-                  <CheckCircle2 className="w-4 h-4 text-[#0D9488] shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-[#00A884] shrink-0 mt-0.5" />
                   <span>Licensed Physician Video Consultations</span>
                 </div>
                 <div className="flex items-start gap-3 text-xs sm:text-sm text-[#0F172A]">
-                  <CheckCircle2 className="w-4 h-4 text-[#0D9488] shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-[#00A884] shrink-0 mt-0.5" />
                   <span>Custom High-Protein Indian Meal Blueprint</span>
                 </div>
                 <div className="flex items-start gap-3 text-xs sm:text-sm text-[#0F172A]">
-                  <CheckCircle2 className="w-4 h-4 text-[#0D9488] shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-[#00A884] shrink-0 mt-0.5" />
                   <span>GLP-1 Prescription & Dosing Guidance</span>
                 </div>
                 <div className="flex items-start gap-3 text-xs sm:text-sm text-[#0F172A]">
-                  <CheckCircle2 className="w-4 h-4 text-[#0D9488] shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-[#00A884] shrink-0 mt-0.5" />
                   <span>Bi-Weekly Dietitian Reviews & Check-ins</span>
                 </div>
                 <div className="flex items-start gap-3 text-xs sm:text-sm text-[#0F172A]">
-                  <CheckCircle2 className="w-4 h-4 text-[#0D9488] shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-[#00A884] shrink-0 mt-0.5" />
                   <span>Personalized Movement & Strength Roadmap</span>
                 </div>
                 <div className="flex items-start gap-3 text-xs sm:text-sm text-[#0F172A]">
-                  <CheckCircle2 className="w-4 h-4 text-[#0D9488] shrink-0 mt-0.5" />
+                  <CheckCircle2 className="w-4 h-4 text-[#00A884] shrink-0 mt-0.5" />
                   <span>Unified Patient Portal & Biomarker Tracker</span>
                 </div>
               </div>
@@ -83,7 +83,7 @@ export default function PricingShaderCards() {
 
             <Link
               href="/assessment"
-              className="w-full inline-flex items-center justify-center gap-2 py-4 rounded-2xl bg-[#0D9488] hover:bg-[#097A70] text-white font-sora font-bold text-sm shadow-xl transition-all hover:scale-[1.02] cursor-pointer"
+              className="w-full inline-flex items-center justify-center gap-2 py-4 rounded-2xl bg-[#00A884] hover:bg-[#0F766E] text-white font-sora font-bold text-sm shadow-xl transition-all hover:scale-[1.02] cursor-pointer"
             >
               <span>Get Started with Silver</span>
               <ArrowRight className="w-4 h-4 text-white" />

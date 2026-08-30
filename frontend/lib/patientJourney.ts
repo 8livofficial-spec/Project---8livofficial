@@ -25,7 +25,7 @@ export function getPatientJourneyTarget(state: PatientJourneyState) {
   if (state.consultationStatus !== 'COMPLETED') {
     return state.bookingId ? `/patient/appointments/${state.bookingId}` : '/patient/appointments'
   }
-  if (state.membershipStatus === 'NOT_SELECTED') return '/plans'
+  if (state.membershipStatus === 'NOT_SELECTED') return '/patient/onboarding/plan'
   if (state.membershipStatus === 'ACTIVE' || state.dashboardAccess) return '/patient'
   return '/membership-payment'
 }

@@ -2,29 +2,29 @@
 
 :root {
   --bg: #FFFFFF; /* Clean White Background */
-  --bg-cream: #F8FAFC; /* Clean Light Slate/Blue instead of Warm Cream */
-  --bg-card: rgba(255,255,255,0.85); /* Translucent white card */
+  --bg-cream: #F8FAFC; /* Clean Light Surface */
+  --bg-card: rgba(255,255,255,0.95); /* Crisp white card */
   --navy: #0F172A; /* Deep Slate typography */
-  --navy-bg: #0F172A; /* Slate Navy dark sections */
-  --teal: #0052FF; /* Royal Blue Brand Accent (MetaGo style) */
-  --teal-dark: #003BD4; /* Darker Indigo-Blue */
-  --teal-glow: rgba(0,82,255,0.08);
-  --sage: #475569; /* Supporting slate gray instead of sage green */
+  --navy-bg: #0B132B; /* Slate Navy dark sections */
+  --teal: #00A884; /* Official Logo Light/Emerald Green Brand Accent */
+  --teal-dark: #0F766E; /* Deep Forest/Teal Accent */
+  --teal-glow: rgba(0,168,132,0.18);
+  --sage: #475569; /* Supporting slate gray */
   --sage-bg: #F1F5F9; /* Light slate background */
   --text: #0F172A;
   --muted: #64748B;
-  --border: rgba(0,82,255,0.1);
+  --border: rgba(0,168,132,0.15);
 }
 
 @layer utilities {
   .glass-card {
-    background: rgba(255,255,255,0.65);
+    background: rgba(255,255,255,0.9);
     backdrop-filter: blur(12px);
-    border: 1px solid rgba(0,82,255,0.12);
+    border: 1px solid rgba(0,168,132,0.15);
     border-radius: 16px;
   }
   .teal-glow { 
-    box-shadow: 0 0 24px rgba(0,82,255,0.18); 
+    box-shadow: 0 0 24px rgba(0,168,132,0.25); 
   }
   .animate-fade-in-up { 
     animation: fadeInUp 0.6s ease forwards; 
@@ -36,7 +36,19 @@
     animation: float 3s ease-in-out infinite; 
   }
   .teal-gradient-text {
-    background: linear-gradient(to right, #00A884, #0D9488, #0F766E);
+    background: linear-gradient(135deg, #00A884 0%, #0D9488 45%, #2DD4BF 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .blue-gradient-text {
+    background: linear-gradient(135deg, #00A884 0%, #0D9488 45%, #2DD4BF 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  .green-gradient-text {
+    background: linear-gradient(135deg, #00A884 0%, #0D9488 45%, #2DD4BF 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -53,9 +65,9 @@
     transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
   }
   .input:focus {
-    border-color: #0D9488;
+    border-color: #00A884;
     background: #FFFFFF;
-    box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.14);
+    box-shadow: 0 0 0 3px rgba(0, 168, 132, 0.18);
   }
   .input::placeholder {
     color: #94A3B8;
@@ -66,7 +78,7 @@ body {
   color: #0F172A;
 }
 
-/* Warm Neutral & Terracotta Legacy Overrides to Modern White & Teal */
+/* Warm Neutral, Beige & Terracotta Legacy Overrides to Logo Light Green & Clean White */
 .bg-\[\#FDFBF7\] { background-color: #FFFFFF !important; }
 .bg-\[\#F9F6F0\] { background-color: #FFFFFF !important; }
 .bg-\[\#F9F6F0\]\/60 { background-color: #FFFFFF !important; }
@@ -74,37 +86,63 @@ body {
 .bg-\[\#F9F6F0\]\/90 { background-color: #FFFFFF !important; }
 .bg-\[\#F9F6F0\]\/95 { background-color: #FFFFFF !important; }
 .bg-\[\#F8FAFC\] { background-color: #F8FAFC !important; }
+.bg-\[\#F5F0EB\] { background-color: #F8FAFC !important; }
+.bg-\[\#F5F0EB\]\/45 { background-color: rgba(248, 250, 252, 0.6) !important; }
+.bg-\[\#F5F0EB\]\/50 { background-color: rgba(248, 250, 252, 0.8) !important; }
+.bg-\[\#F5F0EB\]\/60 { background-color: rgba(248, 250, 252, 0.9) !important; }
+.bg-\[\#F5F0EB\]\/70 { background-color: #F8FAFC !important; }
 
-.bg-\[\#D46E53\] { background-color: #0D9488 !important; }
-.bg-\[\#D46E53\]\/10 { background-color: rgba(13, 148, 136, 0.08) !important; }
-.bg-\[\#D46E53\]\/15 { background-color: rgba(13, 148, 136, 0.12) !important; }
-.bg-\[\#D46E53\]\/20 { background-color: rgba(13, 148, 136, 0.18) !important; }
-.bg-\[\#D46E53\]\/25 { background-color: rgba(13, 148, 136, 0.22) !important; }
+.bg-\[\#D46E53\] { background-color: #00A884 !important; }
+.bg-\[\#D46E53\]\/10 { background-color: rgba(0, 168, 132, 0.08) !important; }
+.bg-\[\#D46E53\]\/15 { background-color: rgba(0, 168, 132, 0.12) !important; }
+.bg-\[\#D46E53\]\/20 { background-color: rgba(0, 168, 132, 0.18) !important; }
+.bg-\[\#D46E53\]\/25 { background-color: rgba(0, 168, 132, 0.22) !important; }
 
 .bg-\[\#A84A33\] { background-color: #0F766E !important; }
 
-.text-\[\#D46E53\] { color: #0D9488 !important; }
+.text-\[\#D46E53\] { color: #00A884 !important; }
 .text-\[\#A84A33\] { color: #0F766E !important; }
 .text-\[\#5D7068\] { color: #475569 !important; }
 
-.border-\[\#D46E53\]\/8 { border-color: rgba(13, 148, 136, 0.08) !important; }
-.border-\[\#D46E53\]\/10 { border-color: rgba(13, 148, 136, 0.1) !important; }
-.border-\[\#D46E53\]\/12 { border-color: rgba(13, 148, 136, 0.12) !important; }
-.border-\[\#D46E53\]\/15 { border-color: rgba(13, 148, 136, 0.15) !important; }
-.border-\[\#D46E53\]\/20 { border-color: rgba(13, 148, 136, 0.2) !important; }
-.border-\[\#D46E53\]\/25 { border-color: rgba(13, 148, 136, 0.25) !important; }
-.border-\[\#D46E53\]\/30 { border-color: rgba(13, 148, 136, 0.3) !important; }
-.border-\[\#D46E53\]\/35 { border-color: rgba(13, 148, 136, 0.35) !important; }
+.border-\[\#D46E53\]\/8 { border-color: rgba(0, 168, 132, 0.08) !important; }
+.border-\[\#D46E53\]\/10 { border-color: rgba(0, 168, 132, 0.1) !important; }
+.border-\[\#D46E53\]\/12 { border-color: rgba(0, 168, 132, 0.12) !important; }
+.border-\[\#D46E53\]\/15 { border-color: rgba(0, 168, 132, 0.15) !important; }
+.border-\[\#D46E53\]\/20 { border-color: rgba(0, 168, 132, 0.2) !important; }
+.border-\[\#D46E53\]\/25 { border-color: rgba(0, 168, 132, 0.25) !important; }
+.border-\[\#D46E53\]\/30 { border-color: rgba(0, 168, 132, 0.3) !important; }
+.border-\[\#D46E53\]\/35 { border-color: rgba(0, 168, 132, 0.35) !important; }
 
 .border-\[\#E8DED4\] { border-color: #E2E8F0 !important; }
-.text-\[\#C4622D\] { color: #0D9488 !important; }
-.bg-\[\#C4622D\]\/10 { background-color: rgba(13, 148, 136, 0.1) !important; }
-.bg-\[\#C4622D\]\/15 { background-color: rgba(13, 148, 136, 0.15) !important; }
-.bg-\[\#C4622D\]\/25 { background-color: rgba(13, 148, 136, 0.25) !important; }
-.bg-\[\#C4622D\]\/40 { background-color: rgba(13, 148, 136, 0.4) !important; }
-.border-\[\#C4622D\]\/25 { border-color: rgba(13, 148, 136, 0.25) !important; }
+.text-\[\#C4622D\] { color: #00A884 !important; }
+.bg-\[\#C4622D\] { background-color: #00A884 !important; }
+.bg-\[\#C4622D\]\/10 { background-color: rgba(0, 168, 132, 0.1) !important; }
+.bg-\[\#C4622D\]\/15 { background-color: rgba(0, 168, 132, 0.15) !important; }
+.bg-\[\#C4622D\]\/20 { background-color: rgba(0, 168, 132, 0.2) !important; }
+.bg-\[\#C4622D\]\/25 { background-color: rgba(0, 168, 132, 0.25) !important; }
+.bg-\[\#C4622D\]\/40 { background-color: rgba(0, 168, 132, 0.4) !important; }
+.border-\[\#C4622D\]\/10 { border-color: rgba(0, 168, 132, 0.1) !important; }
+.border-\[\#C4622D\]\/12 { border-color: rgba(0, 168, 132, 0.12) !important; }
+.border-\[\#C4622D\]\/20 { border-color: rgba(0, 168, 132, 0.2) !important; }
+.border-\[\#C4622D\]\/25 { border-color: rgba(0, 168, 132, 0.25) !important; }
+.border-\[\#C4622D\]\/40 { border-color: rgba(0, 168, 132, 0.4) !important; }
 
+/* Teal / Green Brand Colors */
+.bg-\[\#0052FF\] { background-color: #00A884 !important; }
+.text-\[\#0052FF\] { color: #00A884 !important; }
+.bg-\[\#0D9488\] { background-color: #00A884 !important; }
+.bg-\[\#0D9488\]\/10 { background-color: rgba(0, 168, 132, 0.1) !important; }
+.bg-\[\#0D9488\]\/15 { background-color: rgba(0, 168, 132, 0.15) !important; }
+.bg-\[\#0D9488\]\/20 { background-color: rgba(0, 168, 132, 0.2) !important; }
+.bg-\[\#0D9488\]\/25 { background-color: rgba(0, 168, 132, 0.25) !important; }
+.bg-\[\#0D9488\]\/30 { background-color: rgba(0, 168, 132, 0.3) !important; }
 
+.text-\[\#0D9488\] { color: #00A884 !important; }
+.text-\[\#0F766E\] { color: #0F766E !important; }
+.border-\[\#0D9488\]\/10 { border-color: rgba(0, 168, 132, 0.1) !important; }
+.border-\[\#0D9488\]\/15 { border-color: rgba(0, 168, 132, 0.15) !important; }
+.border-\[\#0D9488\]\/20 { border-color: rgba(0, 168, 132, 0.2) !important; }
+.border-\[\#0D9488\]\/30 { border-color: rgba(0, 168, 132, 0.3) !important; }
 }
 
 @keyframes fadeInUp {

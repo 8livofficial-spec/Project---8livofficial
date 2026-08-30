@@ -361,12 +361,23 @@ export default function ConsultationSchedulingPage() {
   }
 
   // Strict Onboarding Guard: Patient must have completed the assessment before choosing slots
-  const assessmentCompleted = Boolean(assessment) && ((assessment as any)?.status === 'COMPLETED' || onboardingState.assessmentStatus === 'COMPLETED')
-  const isEligible = onboardingState.eligibilityStatus === 'ELIGIBLE' || onboardingState.eligibilityStatus === 'REVIEW_REQUIRED' || (assessment as any)?.eligibility_status === 'ELIGIBLE' || (assessment as any)?.eligibility_status === 'REVIEW_REQUIRED'
+  const rawEligibility = String(
+    onboardingState.eligibilityStatus ||
+    (assessment as any)?.medical_history?.eligibility_status ||
+    ((assessment as any)?.is_eligible ? 'ELIGIBLE' : '')
+  ).toUpperCase()
 
-  if (!assessmentCompleted || !isEligible) {
+  const assessmentCompleted = Boolean(
+    assessment?.id ||
+    (assessment as any)?.created_at ||
+    onboardingState.assessmentStatus === 'COMPLETED'
+  )
+  const isNotEligible = rawEligibility === 'NOT_ELIGIBLE'
+  const isEligible = rawEligibility === 'ELIGIBLE' || rawEligibility === 'REVIEW_REQUIRED' || Boolean((assessment as any)?.is_eligible)
+
+  if (!assessmentCompleted || isNotEligible || !isEligible) {
     if (typeof window !== 'undefined') {
-      router.replace(onboardingState.eligibilityStatus === 'NOT_ELIGIBLE' ? '/not-eligible' : '/assessment')
+      router.replace(isNotEligible ? '/not-eligible' : '/assessment')
     }
     return (
       <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">

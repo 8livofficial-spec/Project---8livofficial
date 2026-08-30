@@ -100,8 +100,8 @@ function FAQItem({ faq, index }: { faq: typeof faqs[0]; index: number }) {
     <div
       className={`rounded-2xl border transition-all duration-300 ${
         open
-          ? 'bg-white border-[#D46E53]/30 shadow-md shadow-[#D46E53]/5'
-          : 'bg-[#F9F6F0]/60 border-[#D46E53]/12 hover:bg-white hover:border-[#D46E53]/25 hover:shadow-sm'
+          ? 'bg-white border-[#0052FF]/40 shadow-md shadow-[#0052FF]/10 ring-1 ring-[#0052FF]/20'
+          : 'bg-slate-50/70 border-slate-200 hover:bg-white hover:border-[#0052FF]/30 hover:shadow-sm'
       }`}
     >
       <button
@@ -113,7 +113,7 @@ function FAQItem({ faq, index }: { faq: typeof faqs[0]; index: number }) {
       >
         <span
           className={`font-sora text-base font-semibold leading-snug transition-colors duration-200 ${
-            open ? 'text-[#A84A33]' : 'text-[#0F172A]'
+            open ? 'text-[#0052FF]' : 'text-[#0F172A]'
           }`}
         >
           {faq.question}
@@ -121,8 +121,8 @@ function FAQItem({ faq, index }: { faq: typeof faqs[0]; index: number }) {
         <span
           className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
             open
-              ? 'bg-[#D46E53]/15 text-[#A84A33] rotate-180'
-              : 'bg-white border border-[#D46E53]/20 text-[#64748B]'
+              ? 'bg-[#0052FF]/15 text-[#0052FF] rotate-180'
+              : 'bg-white border border-slate-200 text-[#64748B]'
           }`}
         >
           <ChevronDown className="w-4 h-4" />
@@ -191,32 +191,32 @@ export default function FAQ() {
     <section
       ref={sectionRef}
       id="faq"
-      className="py-20 sm:py-28 relative overflow-hidden bg-[#F9F6F0]"
+      className="py-20 sm:py-28 relative overflow-hidden bg-white border-b border-[#0052FF]/10"
     >
       {/* Ambient light */}
-      <div className="pointer-events-none absolute top-0 right-0 w-[500px] h-[400px] bg-[#D46E53]/6 rounded-full blur-[140px] -z-10" />
+      <div className="pointer-events-none absolute top-0 right-0 w-[500px] h-[400px] bg-[#0052FF]/5 rounded-full blur-[140px] -z-10" />
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
 
         {/* Header */}
         <div ref={headerRef} className="text-center mb-14 sm:mb-16">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#D46E53]/20 mb-4 shadow-sm">
-            <HelpCircle className="w-3.5 h-3.5 text-[#D46E53]" />
-            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#A84A33] font-sora">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#0052FF]/20 mb-4 shadow-sm">
+            <HelpCircle className="w-3.5 h-3.5 text-[#0052FF]" />
+            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#003BD4] font-sora">
               Common Questions
             </span>
           </div>
 
           <h2 className="font-sora text-3xl sm:text-4xl md:text-5xl font-bold text-[#0F172A] leading-tight mb-5">
             Answers to help you{' '}
-            <span className="teal-gradient-text">get started.</span>
+            <span className="blue-gradient-text">get started.</span>
           </h2>
 
           <p className="text-base sm:text-lg text-[#475569] leading-relaxed max-w-2xl mx-auto">
             If you have a question that isn&apos;t answered here, email us at{' '}
             <a
               href="mailto:8livofficial@gmail.com"
-              className="text-[#A84A33] font-medium hover:underline"
+              className="text-[#0052FF] font-semibold hover:underline"
             >
               8livofficial@gmail.com
             </a>

@@ -606,38 +606,41 @@ export default function ProviderPortal({ section }: { section: 'dashboard' | 'pa
 
   if (providerLoading) {
     return (
-      <main className="min-h-screen bg-[#F9F6F0] flex items-center justify-center">
-        <div className="rounded-[24px] bg-white px-8 py-6 shadow-xl border border-[#E8DED4] text-[#1A1F36] font-bold">Loading provider portal...</div>
+      <main className="min-h-screen bg-[#F8FAFC] flex items-center justify-center">
+        <div className="rounded-2xl bg-white px-8 py-6 shadow-xl border border-slate-200 text-[#0F172A] font-bold">Loading provider portal...</div>
       </main>
     )
   }
 
   if (error && !provider) {
     return (
-      <main className="min-h-screen bg-[#F9F6F0] flex items-center justify-center p-6">
-        <div className="max-w-md rounded-[24px] bg-white p-8 shadow-xl border border-[#F2C8BE]">
-          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#C4622D]">Access unavailable</p>
-          <h1 className="mt-3 text-2xl font-black text-[#1A1F36]">Provider portal could not load</h1>
-          <p className="mt-3 text-[#6B7A90]">{error}</p>
-          <Link href="/login" className="mt-6 inline-flex rounded-full bg-[#1A1F36] px-5 py-3 text-sm font-bold text-white">Back to login</Link>
+      <main className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-6">
+        <div className="max-w-md rounded-2xl bg-white p-8 shadow-xl border border-red-200">
+          <p className="text-sm font-black uppercase tracking-[0.24em] text-[#0052FF]">Access unavailable</p>
+          <h1 className="mt-3 text-2xl font-black text-[#0F172A]">Provider portal could not load</h1>
+          <p className="mt-3 text-slate-500">{error}</p>
+          <Link href="/login" className="mt-6 inline-flex rounded-full bg-[#0052FF] px-5 py-3 text-sm font-bold text-white shadow-md shadow-[#0052FF]/30">Back to login</Link>
         </div>
       </main>
     )
   }
 
   return (
-    <main className="min-h-screen bg-[#F9F6F0] text-[#1A1F36]">
+    <main className="min-h-screen bg-[#F8FAFC] text-[#0F172A]">
       <div className="flex min-h-screen">
-        <aside className="hidden w-[280px] shrink-0 border-r border-[#E8DED4] bg-[#1A1F36] text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
+        <aside className="hidden w-72 shrink-0 border-r border-white/10 bg-[#0B132B] text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
           <div className="shrink-0 p-5 pb-3">
-            <div className="rounded-[22px] bg-white/10 p-5">
-              <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[#D46E53]">8liv</p>
-              <h1 className="mt-2 text-xl font-black">Provider Care</h1>
-              <p className="mt-1 text-sm text-white/60">{copy.module}</p>
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-6 bg-[#00A884] rounded-full inline-block shadow-sm shadow-[#00A884]/50" />
+                <p className="text-lg font-black uppercase tracking-wider text-white font-sora">8liv Health</p>
+              </div>
+              <h1 className="mt-2 text-base font-bold text-slate-200">Provider Portal</h1>
+              <p className="mt-1 text-xs text-slate-400">{copy.module}</p>
             </div>
           </div>
 
-          <nav className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 py-3 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.25)_transparent]">
+          <nav className="min-h-0 flex-1 space-y-1.5 overflow-y-auto px-4 py-3 [scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.25)_transparent]">
             {nav.map((item) => {
               const Icon = item.icon
               const active = pathname === item.href
@@ -646,29 +649,31 @@ export default function ProviderPortal({ section }: { section: 'dashboard' | 'pa
                   key={item.href}
                   href={item.href}
                   className={classNames(
-                    'flex items-center gap-3 rounded-2xl px-4 py-3 text-sm font-bold transition',
-                    active ? 'bg-[#F9F6F0] text-[#1A1F36] shadow-lg' : 'text-white/72 hover:bg-white/10 hover:text-white'
+                    'flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition',
+                    active 
+                      ? 'bg-[#00A884] text-white font-bold shadow-md shadow-[#00A884]/30 ring-1 ring-white/20' 
+                      : 'text-slate-300 hover:bg-white/10 hover:text-white'
                   )}
                 >
-                  <Icon className={classNames('h-5 w-5', active && 'text-[#C4622D]')} />
+                  <Icon className={classNames('h-5 w-5', active ? 'text-white' : 'text-slate-400')} />
                   {item.label}
                 </Link>
               )
             })}
           </nav>
 
-          <div className="shrink-0 border-t border-white/10 bg-[#1A1F36] p-5">
-            <div className="rounded-[22px] bg-[#F9F6F0] p-4 text-[#1A1F36] shadow-2xl shadow-black/20">
+          <div className="shrink-0 border-t border-white/10 bg-[#0B132B] p-4">
+            <div className="rounded-2xl bg-white/5 border border-white/10 p-4 text-white shadow-xl">
               <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl text-white" style={{ background: `linear-gradient(135deg, ${copy.accent}, #1A1F36)` }}>
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-md" style={{ background: `linear-gradient(135deg, #00A884, #2DD4BF)` }}>
                   <RoleIcon className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="truncate text-sm font-black">{provider?.name}</p>
-                  <p className="text-xs font-bold text-[#6B7A90]">{copy.label}</p>
+                  <p className="truncate text-sm font-bold text-white">{provider?.name}</p>
+                  <p className="text-xs font-semibold text-slate-400">{copy.label}</p>
                 </div>
               </div>
-              <button onClick={signOut} className="mt-4 flex w-full items-center justify-center gap-2 rounded-full border border-[#1A1F36]/15 bg-white px-4 py-2 text-sm font-bold text-[#1A1F36]">
+              <button onClick={signOut} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 hover:bg-red-500/20 px-4 py-2.5 text-xs font-bold text-white transition-all cursor-pointer">
                 <LogOut className="h-4 w-4" /> Logout
               </button>
             </div>
@@ -676,14 +681,14 @@ export default function ProviderPortal({ section }: { section: 'dashboard' | 'pa
         </aside>
 
         <section className="flex-1 overflow-hidden">
-          <header className="sticky top-0 z-20 border-b border-[#E8DED4] bg-[#F9F6F0]/90 px-5 py-4 backdrop-blur md:px-8">
+          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 px-5 py-4 backdrop-blur md:px-8">
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
               <div>
-                <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[#C4622D]">{copy.title}</p>
-                <h2 className="mt-1 text-2xl font-black tracking-tight md:text-3xl">{sectionLabel(section)}</h2>
+                <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[#00A884] font-sora">{copy.title}</p>
+                <h2 className="mt-1 text-2xl font-black tracking-tight text-[#0F172A] font-sora md:text-3xl">{sectionLabel(section)}</h2>
               </div>
               <div className="hidden items-center gap-3 md:flex">
-                <span className="rounded-full bg-white px-4 py-2 text-sm font-bold text-[#5C7A6B] shadow-sm border border-[#E8DED4]">{provider?.status || 'active'}</span>
+                <span className="rounded-full bg-emerald-50 px-4 py-1.5 text-xs font-bold text-[#00A884] border border-[#00A884]/20 uppercase tracking-wider">{provider?.status || 'active'}</span>
               </div>
             </div>
             <nav className="mx-auto mt-4 flex max-w-7xl gap-2 overflow-x-auto pb-1 lg:hidden">
@@ -695,8 +700,8 @@ export default function ProviderPortal({ section }: { section: 'dashboard' | 'pa
                     key={item.href}
                     href={item.href}
                     className={classNames(
-                      'flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-xs font-black',
-                      active ? 'border-[#C4622D] bg-[#FFF4EC] text-[#C4622D]' : 'border-[#E8DED4] bg-white text-[#1A1F36]'
+                      'flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-xs font-bold',
+                      active ? 'border-[#00A884] bg-[#00A884] text-white shadow-sm' : 'border-slate-200 bg-white text-[#0F172A]'
                     )}
                   >
                     <Icon className="h-4 w-4" />

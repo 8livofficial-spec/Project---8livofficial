@@ -167,14 +167,14 @@ export default function FinalCTA() {
         TRANSFORM
       </div>
 
-      <div className="pointer-events-none absolute top-1/2 left-1/4 -translate-y-1/2 w-[450px] sm:w-[550px] h-[350px] sm:h-[450px] bg-[#D46E53]/25 rounded-full blur-[160px] -z-0" />
+      <div className="pointer-events-none absolute top-1/2 left-1/4 -translate-y-1/2 w-[450px] sm:w-[550px] h-[350px] sm:h-[450px] bg-[#00A884]/20 rounded-full blur-[160px] -z-0" />
 
       <div className="relative z-10 max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-16 sm:py-24 lg:py-32 w-full">
         <div ref={contentRef} className="max-w-2xl will-change-transform">
 
           {/* Eyebrow */}
           <div className="inline-flex items-center gap-2 px-3.5 sm:px-4 py-1.5 rounded-full bg-white/10 border border-white/20 backdrop-blur-sm mb-6 sm:mb-8 shadow-lg">
-            <Sparkles className="w-3.5 h-3.5 text-[#E8956F]" />
+            <Sparkles className="w-3.5 h-3.5 text-[#2DD4BF]" />
             <span className="text-[11px] sm:text-xs font-bold uppercase tracking-[0.2em] text-white/90 font-sora">
               YOUR NEXT CHAPTER
             </span>
@@ -187,7 +187,7 @@ export default function FinalCTA() {
               style={{ transform: 'translateY(105%)' }}
             >
               Your next chapter starts with{' '}
-              <span className="bg-gradient-to-r from-[#D46E53] via-[#E8956F] to-[#F3B89E] bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-[#00A884] via-[#0D9488] to-[#2DD4BF] bg-clip-text text-transparent">
                 understanding.
               </span>
             </h2>
@@ -202,7 +202,7 @@ export default function FinalCTA() {
             <Link
               href="/assessment"
               id="final-cta-start-journey"
-              className="group inline-flex items-center justify-center gap-3 px-8 sm:px-9 py-4 sm:py-4.5 rounded-full bg-[#D46E53] hover:bg-[#C05D43] text-white font-sora font-bold text-sm sm:text-base shadow-2xl shadow-[#D46E53]/40 hover:shadow-[#D46E53]/60 transition-all duration-300 ring-2 ring-white/20 active:scale-[0.98] cursor-pointer"
+              className="group inline-flex items-center justify-center gap-3 px-8 sm:px-9 py-4 sm:py-4.5 rounded-full bg-[#00A884] hover:bg-[#0F766E] text-white font-sora font-bold text-sm sm:text-base shadow-2xl shadow-[#00A884]/40 hover:shadow-[#00A884]/60 transition-all duration-300 ring-2 ring-white/20 active:scale-[0.98] cursor-pointer"
             >
               <span>Book A Consultation</span>
               <ArrowRight className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-white transition-transform duration-300 group-hover:translate-x-1.5" />
@@ -218,7 +218,7 @@ export default function FinalCTA() {
           </div>
 
           <div className="mt-8 flex items-center gap-2 text-white/70 text-xs font-medium">
-            <ShieldCheck className="w-4 h-4 text-[#E8956F] shrink-0" />
+            <ShieldCheck className="w-4 h-4 text-[#2DD4BF] shrink-0" />
             <span>100% Confidential · Doctor-Led Metabolic Care</span>
           </div>
 

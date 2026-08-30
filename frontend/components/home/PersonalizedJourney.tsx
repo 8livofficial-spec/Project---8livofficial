@@ -139,20 +139,20 @@ export default function PersonalizedJourney() {
     <section
       ref={sectionRef}
       id="personalized-journey"
-      className="relative bg-[#F9F6F0] border-b border-[#D46E53]/15 py-20 sm:py-28 overflow-hidden"
+      className="relative bg-white border-b border-[#0052FF]/10 py-20 sm:py-28 overflow-hidden"
     >
-      <div className="pointer-events-none absolute -bottom-10 right-0 w-[550px] h-[400px] bg-[#D46E53]/5 rounded-full blur-[140px] -z-0" />
+      <div className="pointer-events-none absolute -bottom-10 right-0 w-[550px] h-[400px] bg-[#0052FF]/5 rounded-full blur-[140px] -z-0" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
 
         {/* Section Header */}
         <div className="max-w-3xl mb-12 sm:mb-16">
-          <div className="text-[11px] font-bold uppercase tracking-[0.25em] text-[#A84A33] font-sora mb-3 select-none">
+          <div className="text-[11px] font-bold uppercase tracking-[0.25em] text-[#0052FF] font-sora mb-3 select-none">
             07 / NUTRITION &amp; LIFESTYLE
           </div>
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#D46E53]/20 mb-4 sm:mb-5 shadow-xs">
-            <Milestone className="w-3.5 h-3.5 text-[#D46E53]" />
-            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#A84A33] font-sora">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#0052FF]/20 mb-4 sm:mb-5 shadow-xs">
+            <Milestone className="w-3.5 h-3.5 text-[#0052FF]" />
+            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#003BD4] font-sora">
               Clinical Habits
             </span>
           </div>
@@ -162,11 +162,11 @@ export default function PersonalizedJourney() {
               ref={headingInnerRef}
               className="font-sora text-3xl sm:text-4xl md:text-5xl font-bold text-[#0F172A] leading-tight"
             >
-              Nourishment <span className="teal-gradient-text">meets habit.</span>
+              Nourishment <span className="blue-gradient-text">meets habit.</span>
             </h2>
           </div>
 
-          <p className="text-sm sm:text-base md:text-lg text-[#5D7068] leading-relaxed mt-3 max-w-xl font-light">
+          <p className="text-sm sm:text-base md:text-lg text-[#475569] leading-relaxed mt-3 max-w-xl font-light">
             Culturally aligned nutrition pacing and activity guidelines built for sustainable daily compliance.
           </p>
         </div>
@@ -183,10 +183,10 @@ export default function PersonalizedJourney() {
             ]}
             height={460}
             expandRatio={0.5}
-            accentColor="#0D9488"
-            overlayColor="#0F172A"
+            accentColor="#0052FF"
+            overlayColor="#0B132B"
             trigger="hover"
-            className="shadow-2xl border border-[#0D9488]/20"
+            className="shadow-2xl border border-slate-200"
           />
         </div>
       </div>

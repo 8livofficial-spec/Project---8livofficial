@@ -136,25 +136,25 @@ export default function Dashboard() {
     <section
       ref={sectionRef}
       id="metabolic-calculator"
-      className="relative bg-white border-b border-[#0D9488]/15 py-16 sm:py-24 overflow-hidden text-[#0F172A]"
+      className="relative bg-white border-b border-[#0052FF]/10 py-16 sm:py-24 overflow-hidden text-[#0F172A]"
     >
-      <div className="pointer-events-none absolute top-0 left-0 w-[500px] h-[500px] bg-[#0D9488]/5 rounded-full blur-[140px] -z-0" />
+      <div className="pointer-events-none absolute top-0 left-0 w-[500px] h-[500px] bg-[#0052FF]/5 rounded-full blur-[140px] -z-0" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
 
         {/* Section Header */}
         <div className="max-w-3xl mb-10 sm:mb-14">
-          <div className="text-[11px] font-bold uppercase tracking-[0.25em] text-[#0D9488] font-sora mb-3 select-none">
+          <div className="text-[11px] font-bold uppercase tracking-[0.25em] text-[#0052FF] font-sora mb-3 select-none">
             06 / METABOLIC DIAGNOSTIC
           </div>
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#0D9488]/20 mb-3.5 shadow-xs">
-            <Activity className="w-3.5 h-3.5 text-[#0D9488]" />
-            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#0F766E] font-sora">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#0052FF]/20 mb-3.5 shadow-xs">
+            <Activity className="w-3.5 h-3.5 text-[#0052FF]" />
+            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#003BD4] font-sora">
               Clinical Assessment Tool
             </span>
           </div>
           <h2 className="font-sora text-3xl sm:text-4xl md:text-5xl font-bold text-[#0F172A] leading-tight">
-            See your progress. <span className="teal-gradient-text">Understand what's changing.</span>
+            See your progress. <span className="blue-gradient-text">Understand what's changing.</span>
           </h2>
           <p className="text-sm sm:text-base text-[#475569] leading-relaxed mt-3 max-w-xl font-light">
             Determine your clinical BMI baseline and visceral fat status using our metabolic calculator tool.
@@ -170,7 +170,7 @@ export default function Dashboard() {
           <div className="w-full lg:w-[42%] bg-slate-50/80 p-6 sm:p-10 border-b lg:border-b-0 lg:border-r border-slate-200/60 flex flex-col justify-between">
             <div>
               <div className="flex items-center gap-2.5 mb-6">
-                <div className="w-8 h-8 rounded-lg bg-[#0D9488]/15 text-[#0D9488] flex items-center justify-center">
+                <div className="w-8 h-8 rounded-lg bg-[#0052FF]/10 text-[#0052FF] flex items-center justify-center">
                   <User className="w-4 h-4" />
                 </div>
                 <h3 className="font-sora font-bold text-sm text-[#0F172A] uppercase tracking-wider">
@@ -188,7 +188,7 @@ export default function Dashboard() {
                     onClick={() => setGender('female')}
                     className={`py-2 px-4 rounded-xl text-xs font-bold font-sora transition-all duration-300 cursor-pointer ${
                       gender === 'female'
-                        ? 'bg-[#0D9488] text-white shadow-md scale-[1.02]'
+                        ? 'bg-[#0052FF] text-white shadow-md scale-[1.02]'
                         : 'text-[#475569] hover:text-[#0F172A]'
                     }`}
                   >
@@ -198,7 +198,7 @@ export default function Dashboard() {
                     onClick={() => setGender('male')}
                     className={`py-2 px-4 rounded-xl text-xs font-bold font-sora transition-all duration-300 cursor-pointer ${
                       gender === 'male'
-                        ? 'bg-[#0D9488] text-white shadow-md scale-[1.02]'
+                        ? 'bg-[#0052FF] text-white shadow-md scale-[1.02]'
                         : 'text-[#475569] hover:text-[#0F172A]'
                     }`}
                   >
@@ -213,7 +213,7 @@ export default function Dashboard() {
                   <label className="text-[11px] font-bold uppercase tracking-wider text-[#475569] font-sora">
                     Age range
                   </label>
-                  <span className="text-xs font-bold text-[#0F766E] font-sora px-3 py-0.5 rounded-full bg-[#0D9488]/10 border border-[#0D9488]/20">
+                  <span className="text-xs font-bold text-[#003BD4] font-sora px-3 py-0.5 rounded-full bg-[#0052FF]/10 border border-[#0052FF]/20">
                     {age} years
                   </span>
                 </div>
@@ -223,7 +223,7 @@ export default function Dashboard() {
                   max="80"
                   value={age}
                   onChange={(e) => setAge(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#0D9488]"
+                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#0052FF]"
                 />
               </div>
 
@@ -233,7 +233,7 @@ export default function Dashboard() {
                   <label className="text-[11px] font-bold uppercase tracking-wider text-[#475569] font-sora">
                     Height (Stature)
                   </label>
-                  <span className="text-xs font-bold text-[#0F766E] font-sora px-3 py-0.5 rounded-full bg-[#0D9488]/10 border border-[#0D9488]/20">
+                  <span className="text-xs font-bold text-[#003BD4] font-sora px-3 py-0.5 rounded-full bg-[#0052FF]/10 border border-[#0052FF]/20">
                     {height} cm • ({feet}'{inches}")
                   </span>
                 </div>
@@ -243,7 +243,7 @@ export default function Dashboard() {
                   max="210"
                   value={height}
                   onChange={(e) => setHeight(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#0D9488]"
+                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#0052FF]"
                 />
               </div>
 
@@ -253,7 +253,7 @@ export default function Dashboard() {
                   <label className="text-[11px] font-bold uppercase tracking-wider text-[#475569] font-sora">
                     Weight (Mass)
                   </label>
-                  <span className="text-xs font-bold text-[#0F766E] font-sora px-3 py-0.5 rounded-full bg-[#0D9488]/10 border border-[#0D9488]/20">
+                  <span className="text-xs font-bold text-[#003BD4] font-sora px-3 py-0.5 rounded-full bg-[#0052FF]/10 border border-[#0052FF]/20">
                     {weight} kg • ({lbs} lbs)
                   </span>
                 </div>
@@ -263,7 +263,7 @@ export default function Dashboard() {
                   max="160"
                   value={weight}
                   onChange={(e) => setWeight(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#0D9488]"
+                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#0052FF]"
                 />
               </div>
 
@@ -273,7 +273,7 @@ export default function Dashboard() {
                   <label className="text-[11px] font-bold uppercase tracking-wider text-[#475569] font-sora">
                     Waist Circumference
                   </label>
-                  <span className="text-xs font-bold text-[#0F766E] font-sora px-3 py-0.5 rounded-full bg-[#0D9488]/10 border border-[#0D9488]/20">
+                  <span className="text-xs font-bold text-[#003BD4] font-sora px-3 py-0.5 rounded-full bg-[#0052FF]/10 border border-[#0052FF]/20">
                     {waist} cm • ({waistInches}")
                   </span>
                 </div>
@@ -283,13 +283,13 @@ export default function Dashboard() {
                   max="135"
                   value={waist}
                   onChange={(e) => setWaist(Number(e.target.value))}
-                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#0D9488]"
+                  className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#0052FF]"
                 />
               </div>
             </div>
 
             <div className="pt-6 border-t border-slate-200/60 text-[11px] text-[#475569] flex items-start gap-2.5 leading-relaxed font-light">
-              <ShieldCheck className="w-4 h-4 text-[#0D9488] shrink-0 mt-0.5" />
+              <ShieldCheck className="w-4 h-4 text-[#0052FF] shrink-0 mt-0.5" />
               <span>
                 Calculations follow medical guidelines from the WHO and the Genotype-Tissue Expression Set-Point benchmarks.
               </span>
@@ -306,8 +306,8 @@ export default function Dashboard() {
                   <p className="text-xs text-[#64748B] mt-0.5">Clinically supervised calculations</p>
                 </div>
                 <div className="flex items-center gap-2 self-start sm:self-auto">
-                  <span className="w-2 h-2 rounded-full bg-[#0D9488] animate-pulse" />
-                  <span className="text-[10px] font-bold text-[#0F766E] bg-[#0D9488]/10 border border-[#0D9488]/20 px-3 py-1 rounded-full uppercase tracking-wider">
+                  <span className="w-2 h-2 rounded-full bg-[#0052FF] animate-pulse" />
+                  <span className="text-[10px] font-bold text-[#003BD4] bg-[#0052FF]/10 border border-[#0052FF]/20 px-3 py-1 rounded-full uppercase tracking-wider">
                     Diagnostic Active
                   </span>
                 </div>
@@ -373,10 +373,10 @@ export default function Dashboard() {
               </div>
 
               {/* Metabolic Insight Report */}
-              <div className="p-5 rounded-2xl bg-[#0D9488]/5 border border-[#0D9488]/20 flex items-start gap-3.5">
-                <AlertCircle className="w-5 h-5 text-[#0D9488] shrink-0 mt-0.5" />
+              <div className="p-5 rounded-2xl bg-[#0052FF]/5 border border-[#0052FF]/15 flex items-start gap-3.5">
+                <AlertCircle className="w-5 h-5 text-[#0052FF] shrink-0 mt-0.5" />
                 <div className="text-xs leading-relaxed text-[#0F172A]">
-                  <p className="font-bold text-[#0F766E] mb-1 uppercase tracking-wide font-sora text-[10px]">
+                  <p className="font-bold text-[#003BD4] mb-1 uppercase tracking-wide font-sora text-[10px]">
                     Clinical Endocrinology Note
                   </p>
                   {bmi >= 25 ? (
@@ -395,14 +395,14 @@ export default function Dashboard() {
             {/* Bottom Ideal Range & CTA */}
             <div className="pt-6 border-t border-slate-100 mt-6 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4">
               <div className="flex items-center gap-2.5">
-                <Heart className="w-4 h-4 text-[#0D9488]" />
+                <Heart className="w-4 h-4 text-[#0052FF]" />
                 <span className="text-xs text-[#475569] font-medium">
                   Ideal weight range for height: <strong className="font-bold text-[#0F172A]">{idealMin} kg – {idealMax} kg</strong>
                 </span>
               </div>
               <Link
                 href="/assessment"
-                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold font-sora shadow-lg shadow-[#0D9488]/30 transition-all text-center cursor-pointer hover:scale-105 active:scale-95"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-full bg-[#0052FF] hover:bg-[#003BD4] text-white text-xs font-bold font-sora shadow-lg shadow-[#0052FF]/30 transition-all text-center cursor-pointer hover:scale-105 active:scale-95"
               >
                 <span>Request Clinical Consultation</span>
                 <CheckCircle2 className="w-4 h-4 text-white" />
@@ -415,8 +415,8 @@ export default function Dashboard() {
         {/* Visual Progress Comparison Slider Block */}
         <div className="mt-16 sm:mt-24 max-w-5xl mx-auto">
           <div className="text-center max-w-2xl mx-auto mb-8 sm:mb-10">
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#0D9488]/10 border border-[#0D9488]/20 text-[#0F766E] text-xs font-semibold uppercase tracking-wider mb-3">
-              <Sparkles className="w-3.5 h-3.5 text-[#0D9488]" />
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-[#0052FF]/10 border border-[#0052FF]/20 text-[#003BD4] text-xs font-semibold uppercase tracking-wider mb-3">
+              <Sparkles className="w-3.5 h-3.5 text-[#0052FF]" />
               <span>Real Biometric Transformation</span>
             </div>
             <h3 className="font-sora text-2xl sm:text-3xl md:text-4xl font-bold text-[#0F172A]">

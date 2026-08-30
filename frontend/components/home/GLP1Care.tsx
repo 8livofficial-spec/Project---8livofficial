@@ -100,21 +100,21 @@ export default function GLP1Care() {
     <section
       ref={sectionRef}
       id="glp1-care"
-      className="py-16 sm:py-24 relative bg-white border-b border-[#0D9488]/15 overflow-hidden text-[#0F172A]"
+      className="py-16 sm:py-24 relative bg-white border-b border-[#0052FF]/10 overflow-hidden text-[#0F172A]"
     >
-      <div className="pointer-events-none absolute -top-10 left-1/3 w-[600px] h-[500px] bg-[#0D9488]/5 rounded-full blur-[150px] -z-0" />
+      <div className="pointer-events-none absolute -top-10 left-1/3 w-[600px] h-[500px] bg-[#0052FF]/5 rounded-full blur-[150px] -z-0" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
 
         {/* Section Header */}
-        <div className="text-[11px] font-bold uppercase tracking-[0.25em] text-[#0D9488] font-sora mb-3 select-none">
+        <div className="text-[11px] font-bold uppercase tracking-[0.25em] text-[#0052FF] font-sora mb-3 select-none">
           07 / MEDICAL SUPPORT
         </div>
         <div className="grid lg:grid-cols-2 gap-8 lg:gap-10 items-end mb-10 sm:mb-14">
           <div>
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#0D9488]/20 mb-4 sm:mb-5 shadow-xs">
-              <Pill className="w-3.5 h-3.5 text-[#0D9488]" />
-              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#0F766E] font-sora">
+            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#0052FF]/20 mb-4 sm:mb-5 shadow-xs">
+              <Pill className="w-3.5 h-3.5 text-[#0052FF]" />
+              <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#003BD4] font-sora">
                 Medical Support
               </span>
             </div>
@@ -126,7 +126,7 @@ export default function GLP1Care() {
                 style={{ transform: 'translateY(0%)' }}
               >
                 Clinical assistance, <br className="hidden sm:block" />
-                <span className="teal-gradient-text">when appropriate.</span>
+                <span className="blue-gradient-text">when appropriate.</span>
               </h2>
             </div>
           </div>
@@ -135,9 +135,9 @@ export default function GLP1Care() {
             <p className="text-sm sm:text-base text-[#475569] leading-relaxed mb-5 font-light">
               Evidence-based medication is prescribed only when clinically indicated based on your biological safety screening. Never a standalone solution. Every prescription requires thorough physician evaluation.
             </p>
-            <div className="p-4 rounded-2xl bg-white border border-[#0D9488]/20 shadow-xs flex items-center gap-3.5">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#0D9488]/15 flex items-center justify-center shrink-0">
-                <HeartHandshake className="w-4 h-4 sm:w-5 sm:h-5 text-[#0D9488]" />
+            <div className="p-4 rounded-2xl bg-white border border-slate-200/80 shadow-xs flex items-center gap-3.5">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-[#0052FF]/10 flex items-center justify-center shrink-0">
+                <HeartHandshake className="w-4 h-4 sm:w-5 sm:h-5 text-[#0052FF]" />
               </div>
               <div>
                 <p className="text-xs font-bold text-[#0F172A] font-sora">Medically Governed Care</p>

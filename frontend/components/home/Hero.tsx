@@ -205,7 +205,7 @@ export default function Hero() {
         {/* Soft responsive gradient overlay */}
         <div ref={overlayRef} className="absolute inset-0 bg-gradient-to-t from-[#0B1120]/95 via-[#0B1120]/60 to-[#0B1120]/30 md:bg-gradient-to-r md:from-[#0F172A]/85 md:via-[#0F172A]/40 md:to-transparent pointer-events-none z-10 transition-opacity" />
         <div className="absolute inset-0 bg-gradient-to-t from-[#0B1120]/80 via-transparent to-transparent pointer-events-none z-10" />
-        <div className="absolute top-0 left-0 w-[320px] sm:w-[500px] md:w-[600px] h-[320px] sm:h-[500px] md:h-[600px] bg-[#0D9488]/10 rounded-full blur-[100px] sm:blur-[140px] pointer-events-none" />
+        <div className="absolute top-0 left-0 w-[320px] sm:w-[500px] md:w-[600px] h-[320px] sm:h-[500px] md:h-[600px] bg-[#00A884]/15 rounded-full blur-[100px] sm:blur-[140px] pointer-events-none" />
       </div>
 
       {/* TOP HEADER SPACER */}
@@ -221,9 +221,9 @@ export default function Hero() {
           {/* Eyebrow badge */}
           <div
             ref={eyebrowRef}
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#0D9488]/20 border border-[#0D9488]/40 shadow-lg mb-3 sm:mb-4 backdrop-blur-md opacity-0"
+            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00A884]/20 border border-[#00A884]/40 shadow-lg mb-3 sm:mb-4 backdrop-blur-md opacity-0"
           >
-            <span className="flex h-1.5 w-1.5 rounded-full bg-[#0D9488] animate-pulse" />
+            <span className="flex h-1.5 w-1.5 rounded-full bg-[#2DD4BF] animate-pulse" />
             <span className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.16em] text-[#5EEAD4] font-sora">
               Doctor-Led &amp; Trainer-Coached Metabolic Care
             </span>
@@ -238,7 +238,7 @@ export default function Hero() {
             </span>
             <span className="block overflow-hidden">
               <span ref={headlineLine2Ref} className="block will-change-transform">
-                <span className="bg-gradient-to-r from-[#00A884] via-[#0D9488] to-[#5EEAD4] bg-clip-text text-transparent">
+                <span className="bg-gradient-to-r from-[#00A884] via-[#0D9488] to-[#2DD4BF] bg-clip-text text-transparent">
                   guided by people who understand your health.
                 </span>
               </span>
@@ -259,7 +259,7 @@ export default function Hero() {
             className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 opacity-0 will-change-transform"
           >
             <Link href="/assessment" id="hero-start-assessment-cta">
-              <CornerButton accentColor="#0D9488">
+              <CornerButton accentColor="#00A884">
                 Book A Consultation
               </CornerButton>
             </Link>
@@ -275,7 +275,7 @@ export default function Hero() {
         className="relative z-20 mx-auto flex flex-col items-center gap-1 pb-4 sm:pb-6 opacity-0"
       >
         <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-[0.2em] text-white/70">Scroll Down</span>
-        <ChevronDown className="w-4 h-4 text-[#D46E53] animate-bounce" />
+        <ChevronDown className="w-4 h-4 text-[#2DD4BF] animate-bounce" />
       </div>
     </section>
   )

@@ -1,7 +1,7 @@
 'use client'
 
-import React, { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import React, { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import {
   Check, X, ArrowRight, ShieldCheck, Stethoscope,
   HeartPulse, Salad, Dumbbell, MessageSquare, FlaskConical,
@@ -80,8 +80,21 @@ function Cell({ val, color }: { val: boolean | string; color: string }) {
 
 export default function PlanSelectionPage() {
   const router = useRouter()
-  const [selected, setSelected] = useState<string>('Gold Plan')
+  const searchParams = useSearchParams()
+  const planParam = searchParams.get('plan')
+  const [selected, setSelected] = useState<string>(() => {
+    if (planParam?.toLowerCase() === 'silver') return 'Silver Plan'
+    return 'Gold Plan'
+  })
   const [saving, setSaving] = useState(false)
+
+  useEffect(() => {
+    if (planParam?.toLowerCase() === 'silver') {
+      setSelected('Silver Plan')
+    } else if (planParam?.toLowerCase() === 'gold') {
+      setSelected('Gold Plan')
+    }
+  }, [planParam])
 
   const selectedPlan = PLANS.find(p => p.id === selected)!
 

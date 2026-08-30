@@ -130,7 +130,7 @@ function DashboardLayoutContent({
         targetPath = consultationPaymentStatus === 'PAID' ? '/appointments/select-slot' : '/consultation-payment'
       }
     } else if (flowStep === 'needs_plan') {
-      if (!isOnboardingPlanPage) targetPath = '/plans'
+      if (!isOnboardingPlanPage) targetPath = '/patient/onboarding/plan'
     } else if (flowStep === 'needs_payment') {
       if (!isOnboardingPaymentPage) targetPath = '/membership-payment'
     }

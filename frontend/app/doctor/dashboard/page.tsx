@@ -16,8 +16,8 @@ import ProviderAvailabilityScheduler, { GeneratedSlot, AvailabilitySubmission } 
 import StreamConsultationCall from '@/components/video/StreamConsultationCall';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 
-const inputCls = 'w-full border border-[#1A1F36]/10 rounded-2xl p-3 bg-[#F5F0EB]/60 outline-none transition-all text-[#1A1F36] placeholder-[#8896A4] font-medium focus:bg-white focus:border-[#C4622D] focus:ring-4 focus:ring-[#C4622D]/10 [color-scheme:light]';
-const labelCls = 'block text-xs font-bold text-[#40516A] mb-1 uppercase tracking-wider';
+const inputCls = 'w-full border border-slate-200 rounded-2xl p-3 bg-white outline-none transition-all text-[#0F172A] placeholder-[#94A3B8] font-medium focus:bg-white focus:border-[#0052FF] focus:ring-4 focus:ring-[#0052FF]/10 [color-scheme:light]';
+const labelCls = 'block text-xs font-bold text-[#475569] mb-1 uppercase tracking-wider';
 
 function formatDuration(startedAt: string | null, endedAt: string | null): string {
   if (!startedAt) return '—';
@@ -72,7 +72,7 @@ function getStatusClass(status: string) {
   if (s === 'draft') return 'bg-slate-100 text-slate-700';
   if (s === 'updated') return 'bg-blue-100 text-blue-700';
   if (s === 'archived') return 'bg-gray-100 text-gray-500';
-  return 'bg-[#5C7A6B]/12 text-[#5C7A6B]';
+  return 'bg-blue-50 text-[#0052FF] border border-blue-200/60';
 }
 
 function handlePrintPrescription(c: any) {
@@ -90,15 +90,15 @@ function handlePrintPrescription(c: any) {
       <head>
         <title>Prescription - ${c.patient_name}</title>
         <style>
-          body { font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #1A1F36; padding: 40px; line-height: 1.5; }
-          .header { text-align: center; border-bottom: 2px solid #C4622D; padding-bottom: 20px; margin-bottom: 30px; }
-          .title { font-size: 24px; font-weight: 800; color: #1A1F36; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
-          .subtitle { font-size: 14px; font-weight: 600; color: #8896A4; margin: 5px 0 0 0; }
+          body { font-family: 'Inter', system-ui, -apple-system, sans-serif; color: #0F172A; padding: 40px; line-height: 1.5; }
+          .header { text-align: center; border-bottom: 2px solid #0052FF; padding-bottom: 20px; margin-bottom: 30px; }
+          .title { font-size: 24px; font-weight: 800; color: #0F172A; margin: 0; text-transform: uppercase; letter-spacing: 1px; }
+          .subtitle { font-size: 14px; font-weight: 600; color: #64748B; margin: 5px 0 0 0; }
           .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px; font-size: 14px; }
-          .meta-item { background: #F5F0EB; padding: 15px; border-radius: 12px; border: 1px solid rgba(26, 31, 54, 0.08); }
-          .meta-label { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #8896A4; margin: 0 0 5px 0; }
-          .meta-value { font-weight: 700; color: #1A1F36; margin: 0; }
-          .rx-symbol { font-size: 32px; font-weight: 800; color: #C4622D; margin-bottom: 10px; }
+          .meta-item { background: #F8FAFC; padding: 15px; border-radius: 12px; border: 1px solid #E2E8F0; }
+          .meta-label { font-size: 11px; font-weight: 800; text-transform: uppercase; color: #64748B; margin: 0 0 5px 0; }
+          .meta-value { font-weight: 700; color: #0F172A; margin: 0; }
+          .rx-symbol { font-size: 32px; font-weight: 800; color: #0052FF; margin-bottom: 10px; }
           .section { margin-bottom: 30px; }
           .section-title { font-size: 12px; font-weight: 800; text-transform: uppercase; color: #8896A4; border-bottom: 1px solid rgba(26, 31, 54, 0.08); padding-bottom: 5px; margin-bottom: 15px; }
           .content { font-size: 15px; font-weight: 600; color: #40516A; white-space: pre-wrap; margin: 0; }
@@ -1738,54 +1738,59 @@ export default function DoctorDashboard() {
         </div>
       )}
 
-      {/* ── SIDEBAR ── */}
-      <div className="flex min-h-screen">
+      {/* ── SIDEBAR & PORTAL LAYOUT ── */}
+      <div className="flex min-h-screen bg-[#F8FAFC]">
         {/* Mobile Sidebar Slide-out Drawer */}
         {mobileSidebarOpen && (
           <div className="fixed inset-0 z-50 flex lg:hidden">
             {/* Overlay */}
             <div 
-              className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
               onClick={() => setMobileSidebarOpen(false)}
             />
             {/* Sidebar Drawer */}
-            <div className="relative z-55 w-64 h-full bg-[#1A1F36] flex flex-col shadow-2xl animate-slide-in">
+            <div className="relative z-55 w-72 h-full bg-[#0B132B] text-white flex flex-col shadow-2xl animate-slide-in border-r border-white/10">
               <button
                 onClick={() => setMobileSidebarOpen(false)}
-                className="absolute top-4 right-4 z-50 p-1.5 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all"
+                className="absolute top-4 right-4 z-50 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
-              <div className="p-6 border-b border-white/10">
+
+              {/* Portal Brand Header */}
+              <div className="p-6 pb-4 border-b border-white/10">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-12 h-12 bg-gradient-to-br from-[#C4622D] to-[#E7A06A] rounded-2xl flex items-center justify-center shadow-lg shadow-[#C4622D]/25">
-                    <Stethoscope className="w-6 h-6 text-white"/>
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#0052FF] to-[#0284C7] flex items-center justify-center text-white font-bold font-sora shadow-lg shadow-[#0052FF]/30 text-lg">
+                    8L
                   </div>
-                  <div className="flex-1 col-span-1">
-                    <p className="font-black text-white text-sm leading-tight">{doctorProfile?.full_name || doctor?.email?.split('@')[0] || 'Doctor'}</p>
-                    <p className="text-xs text-white/55 font-semibold">Endocrinologist</p>
+                  <div>
+                    <h2 className="font-black text-white text-base font-sora tracking-tight leading-none">8Liv Health</h2>
+                    <p className="text-[10px] text-[#60A5FA] font-bold uppercase tracking-widest mt-1">Doctor Portal</p>
                   </div>
                 </div>
-                {/* Online Indicator */}
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-[#5C7A6B]/15 rounded-full border border-[#5C7A6B]/25">
-                  <span className="relative flex w-2 h-2">
-                    <span className="absolute inline-flex w-full h-full bg-[#5C7A6B] rounded-full opacity-75 animate-ping"></span>
-                    <span className="relative inline-flex w-2 h-2 bg-[#5C7A6B] rounded-full"></span>
-                  </span>
-                  <span className="text-xs font-medium text-[#DCE8E0]">Online</span>
+
+                {/* Doctor Profile Info */}
+                <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-[#0052FF] to-[#0284C7] rounded-xl flex items-center justify-center shadow-md shrink-0">
+                    <Stethoscope className="w-5 h-5 text-white"/>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-bold text-white text-xs truncate leading-tight">{doctorProfile?.full_name || doctor?.email?.split('@')[0] || 'Dr. Physician'}</p>
+                    <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">Endocrinologist</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Nav */}
-              <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
+              {/* Nav Links */}
+              <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
                 {tabs.map(t => (
                   <button key={t.key} onClick={() => { setActiveTab(t.key); setMobileSidebarOpen(false); }}
-                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-r-2xl text-sm transition-all ${activeTab === t.key
-                      ? 'bg-[#F5F0EB] text-[#C4622D] font-bold border-l-4 border-[#C4622D] shadow-sm'
-                      : 'text-white/70 hover:bg-white/10 hover:text-white'}`}>
+                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${activeTab === t.key
+                      ? 'bg-[#00A884] text-white font-bold shadow-md shadow-[#00A884]/30'
+                      : 'text-slate-300 hover:bg-white/10 hover:text-white'}`}>
                     {t.icon} {t.label}
                     {t.key === 'consultations' && pendingCases > 0 && (
-                      <span className="ml-auto bg-[#D89A3D] text-white text-[10px] font-black px-2 py-0.5 rounded-full">{pendingCases}</span>
+                      <span className="ml-auto bg-[#2DD4BF] text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-full">{pendingCases}</span>
                     )}
                   </button>
                 ))}
@@ -1794,18 +1799,15 @@ export default function DoctorDashboard() {
               {/* Wallet quick view */}
               <div className="p-4 border-t border-white/10">
                 {wallet.balance > 0 ? (
-                  <div className="bg-[#F5F0EB] rounded-2xl p-4 text-[#1A1F36] shadow-lg shadow-black/10 border border-white/10">
-                    <p className="text-xs text-[#40516A] font-bold uppercase tracking-wider mb-1">Wallet Balance</p>
-                    <p className="text-2xl font-black">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
+                  <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 text-white border border-white/15 shadow-sm">
+                    <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wider mb-1">Wallet Balance</p>
+                    <p className="text-xl font-black font-sora">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
                   </div>
                 ) : (
-                  <div className="bg-[#F5F0EB] rounded-2xl p-4 text-[#1A1F36] shadow-lg shadow-black/10 border border-white/10">
-                    <p className="text-xs text-[#40516A] font-bold uppercase tracking-wider mb-1">Wallet Status</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <div className="w-8 h-8 rounded-full bg-[#1A1F36] flex items-center justify-center">
-                        <Wallet className="w-4 h-4 text-white/50" />
-                      </div>
-                      <p className="text-xs font-medium text-white/60">Complete a consult to earn</p>
+                  <div className="bg-white/5 rounded-2xl p-3.5 text-center border border-white/10">
+                    <div className="flex items-center justify-center gap-2">
+                      <Wallet className="w-4 h-4 text-[#5EEAD4]" />
+                      <p className="text-xs font-semibold text-slate-300">Complete consults to earn</p>
                     </div>
                   </div>
                 )}
@@ -1814,130 +1816,146 @@ export default function DoctorDashboard() {
               {/* Logout */}
               <div className="p-4 pt-0">
                 <button onClick={handleLogout}
-                  className="w-full flex items-center justify-center gap-2 text-sm text-white/55 hover:text-white transition-colors py-2 px-3 rounded-xl hover:bg-[#D96A6A]/20">
-                  <LogOut className="w-5 h-5"/> Sign Out
+                  className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors py-2.5 px-3 rounded-xl hover:bg-red-500/20 cursor-pointer">
+                  <LogOut className="w-4 h-4"/> Sign Out
                 </button>
               </div>
             </div>
           </div>
         )}
 
+        {/* Desktop Fixed & Sticky Full Height Sidebar */}
         <motion.aside
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5 }}
-          className="sticky top-0 hidden h-screen w-72 flex-shrink-0 flex-col bg-[#1A1F36] text-white shadow-2xl shadow-[#1A1F36]/20 lg:flex">
-          {/* Doctor info */}
-          <div className="p-6 border-b border-white/10">
+          transition={{ duration: 0.4 }}
+          className="sticky top-0 hidden h-screen w-72 flex-shrink-0 flex-col bg-[#0B132B] text-white shadow-xl border-r border-white/10 lg:flex z-30"
+        >
+          {/* Brand Header */}
+          <div className="p-6 pb-4 border-b border-white/10">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-12 h-12 bg-gradient-to-br from-[#C4622D] to-[#E7A06A] rounded-2xl flex items-center justify-center shadow-lg shadow-[#C4622D]/25">
-                <Stethoscope className="w-6 h-6 text-white"/>
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#00A884] to-[#2DD4BF] flex items-center justify-center text-white font-bold font-sora shadow-lg shadow-[#00A884]/30 text-lg">
+                8L
               </div>
-              <div className="flex-1">
-                <p className="font-black text-white text-sm leading-tight">{doctorProfile?.full_name || doctor?.email?.split('@')[0] || 'Doctor'}</p>
-                <p className="text-xs text-white/55 font-semibold">Endocrinologist</p>
+              <div>
+                <h2 className="font-black text-white text-base font-sora tracking-tight leading-none">8Liv Health</h2>
+                <p className="text-[10px] text-[#5EEAD4] font-bold uppercase tracking-widest mt-1">Doctor Portal</p>
               </div>
-              {/* Notification Bell */}
-              <button
-                onClick={() => { setUpcomingCallAlert(null); setDoctorNotifBell(false); }}
-                className="relative p-1.5 rounded-xl hover:bg-white/10 transition-colors"
-                title="Notifications"
-              >
-                {doctorNotifBell
-                  ? <BellRing className="w-5 h-5 text-[#C4622D] animate-bounce"/>
-                  : <Bell className="w-5 h-5 text-white/55"/>}
-                {doctorNotifBell && (
-                  <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-[#D96A6A] rounded-full border-2 border-[#1A1F36]"/>
-                )}
-              </button>
             </div>
-            {/* Online Indicator */}
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#5C7A6B]/15 rounded-full border border-[#5C7A6B]/25">
-              <span className="relative flex w-2 h-2">
-                <span className="absolute inline-flex w-full h-full bg-[#5C7A6B] rounded-full opacity-75 animate-ping"></span>
-                <span className="relative inline-flex w-2 h-2 bg-[#5C7A6B] rounded-full"></span>
-              </span>
-              <span className="text-xs font-medium text-[#DCE8E0]">Online</span>
-            </div>
-          </div>
 
-          {/* Nav */}
-          <nav className="flex-1 space-y-1 overflow-y-auto p-4 pr-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {tabs.map(t => (
-              <button key={t.key} onClick={() => setActiveTab(t.key)}
-                className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-r-2xl text-sm transition-all ${activeTab === t.key
-                  ? 'bg-[#F5F0EB] text-[#C4622D] font-bold border-l-4 border-[#C4622D] shadow-sm'
-                  : 'text-white/70 hover:bg-white/10 hover:text-white'}`}>
-                {t.icon} {t.label}
-                {t.key === 'consultations' && pendingCases > 0 && (
-                  <span className="ml-auto bg-[#D89A3D] text-white text-[10px] font-black px-2 py-0.5 rounded-full">{pendingCases}</span>
-                )}
-              </button>
-            ))}
-          </nav>
+            {/* Doctor Profile info */}
+              <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-10 h-10 bg-gradient-to-br from-[#00A884] to-[#2DD4BF] rounded-xl flex items-center justify-center shadow-md shrink-0">
+                    <Stethoscope className="w-5 h-5 text-white"/>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-white text-xs truncate leading-tight">{doctorProfile?.full_name || doctor?.email?.split('@')[0] || 'Dr. Physician'}</p>
+                    <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">Endocrinologist</p>
+                  </div>
+                </div>
 
-          {/* Wallet quick view */}
-          <div className="p-4 border-t border-white/10">
-            {/* FIX: Bug 4 — Hide ₹0 wallet balance and show a placeholder instead */}
-            {wallet.balance > 0 ? (
-              <div className="bg-[#F5F0EB] rounded-2xl p-4 text-[#1A1F36] shadow-lg shadow-black/10 border border-white/10">
-                <p className="text-xs text-[#40516A] font-bold uppercase tracking-wider mb-1">Wallet Balance</p>
-                <p className="text-2xl font-black">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
-                <button onClick={() => setActiveTab('wallet')}
-                  className="mt-3 w-full bg-[#1A1F36] hover:bg-[#0D101C] text-white text-xs font-bold py-2 rounded-xl transition-all flex items-center justify-center gap-1">
-                  <ArrowDownToLine className="w-3.5 h-3.5"/> Withdraw
+                {/* Notification Bell */}
+                <button
+                  onClick={() => { setUpcomingCallAlert(null); setDoctorNotifBell(false); }}
+                  className="relative p-2 rounded-xl hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+                  title="Notifications"
+                >
+                  {doctorNotifBell
+                    ? <BellRing className="w-4 h-4 text-[#5EEAD4] animate-bounce"/>
+                    : <Bell className="w-4 h-4 text-slate-400"/>}
+                  {doctorNotifBell && (
+                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0B132B]"/>
+                  )}
                 </button>
               </div>
-            ) : (
-              <div className="bg-white/8 rounded-2xl p-4 text-center border border-dashed border-white/20">
-                <p className="text-[11px] font-bold text-white/45 uppercase tracking-wider mb-2">Wallet</p>
-                <div className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center mx-auto mb-2">
-                  <Wallet className="w-4 h-4 text-white/50" />
-                </div>
-                <p className="text-xs font-medium text-white/60">Complete a consult to earn</p>
-              </div>
-            )}
-          </div>
 
-          {/* Logout */}
-          <div className="p-4 pt-0">
-            <button onClick={handleLogout}
-              className="w-full flex items-center justify-center gap-2 text-sm text-white/55 hover:text-white transition-colors py-2 px-3 rounded-xl hover:bg-[#D96A6A]/20">
-              <LogOut className="w-5 h-5"/> Sign Out
-            </button>
-          </div>
+              {/* Online Indicator */}
+              <div className="mt-3 flex items-center gap-2 px-3 py-1.5 bg-[#00A884]/15 rounded-full border border-[#00A884]/25">
+                <span className="relative flex w-2 h-2">
+                  <span className="absolute inline-flex w-full h-full bg-[#2DD4BF] rounded-full opacity-75 animate-ping"></span>
+                  <span className="relative inline-flex w-2 h-2 bg-[#2DD4BF] rounded-full"></span>
+                </span>
+                <span className="text-[11px] font-semibold text-[#5EEAD4]">Active & Available</span>
+              </div>
+            </div>
+
+            {/* Navigation Items */}
+            <nav className="flex-1 space-y-1.5 overflow-y-auto p-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              {tabs.map(t => (
+                <button key={t.key} onClick={() => setActiveTab(t.key)}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${activeTab === t.key
+                    ? 'bg-[#00A884] text-white font-bold shadow-md shadow-[#00A884]/30 ring-1 ring-white/20'
+                    : 'text-slate-300 hover:bg-white/10 hover:text-white'}`}>
+                  {t.icon} {t.label}
+                  {t.key === 'consultations' && pendingCases > 0 && (
+                    <span className="ml-auto bg-[#2DD4BF] text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-full">{pendingCases}</span>
+                  )}
+                </button>
+              ))}
+            </nav>
+
+              {/* Wallet Quick View */}
+              <div className="p-4 border-t border-white/10">
+                {wallet.balance > 0 ? (
+                  <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 text-white border border-white/15 shadow-sm">
+                    <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wider mb-1">Wallet Balance</p>
+                    <p className="text-2xl font-black font-sora">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
+                    <button onClick={() => setActiveTab('wallet')}
+                      className="mt-3 w-full bg-[#00A884] hover:bg-[#0F766E] text-white text-xs font-bold py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md cursor-pointer">
+                      <ArrowDownToLine className="w-3.5 h-3.5"/> Withdraw Funds
+                    </button>
+                  </div>
+                ) : (
+                  <div className="bg-white/5 rounded-2xl p-3.5 text-center border border-white/10">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Earnings</p>
+                    <div className="flex items-center justify-center gap-2">
+                      <Wallet className="w-4 h-4 text-[#5EEAD4]" />
+                      <p className="text-xs font-medium text-slate-300">Complete consults to earn</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Logout */}
+              <div className="p-4 pt-0">
+                <button onClick={handleLogout}
+                  className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors py-2.5 px-3 rounded-xl hover:bg-red-500/20 cursor-pointer">
+                  <LogOut className="w-4 h-4"/> Sign Out
+                </button>
+              </div>
         </motion.aside>
 
         {/* ── MAIN CONTENT ── */}
         <motion.main
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.1 }}
-          className="min-w-0 flex-1 bg-[#F5F0EB] p-4 sm:p-8">
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="min-w-0 flex-1 bg-[#F8FAFC] p-4 sm:p-8">
 
           {/* Mobile Header Bar */}
-          <div className="lg:hidden flex items-center justify-between bg-[#1A1F36] text-white px-5 py-4 border-b border-white/10 shadow-md mb-6 rounded-2xl">
+          <div className="lg:hidden flex items-center justify-between bg-[#0B132B] text-white px-5 py-4 border-b border-white/10 shadow-md mb-6 rounded-2xl">
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setMobileSidebarOpen(true)}
-                className="p-1.5 hover:bg-white/10 rounded-xl transition-colors"
+                className="p-1.5 hover:bg-white/10 rounded-xl transition-colors cursor-pointer"
               >
                 <Menu className="w-6 h-6 text-white" />
               </button>
-              <span className="font-black text-base tracking-tight font-sora">8liv Doctor</span>
+              <span className="font-black text-base tracking-tight font-sora">8Liv Doctor</span>
             </div>
-            <span className="text-xs font-bold bg-[#C4622D]/20 border border-[#C4622D]/40 text-[#D8E6DE] px-3 py-1 rounded-full capitalize">
+            <span className="text-xs font-bold bg-[#0052FF]/20 border border-[#0052FF]/40 text-[#BAE6FD] px-3 py-1 rounded-full capitalize">
               {activeTab}
             </span>
           </div>
 
           {/* ── TAB: OVERVIEW ── */}
           {activeTab === 'overview' && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ staggerChildren: 0.1 }} className="space-y-8">
-              <div className="border-b border-[#1A1F36]/8 pb-4 mb-6 flex justify-between items-end">
+            <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ staggerChildren: 0.08 }} className="space-y-8">
+              <div className="border-b border-slate-200/80 pb-4 mb-6 flex justify-between items-end">
                 <div>
-                  <h1 className="text-2xl font-bold text-[#1A1F36]">Dashboard</h1>
-                  <p className="text-sm text-[#8896A4] mt-0.5">Overview of your practice and upcoming appointments. Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, Dr. {doctorProfile?.full_name?.split(' ')[0] || 'Doctor'} 👋</p>
+                  <h1 className="text-2xl font-bold text-[#0F172A] font-sora">Doctor Dashboard</h1>
+                  <p className="text-sm text-[#64748B] mt-0.5 font-light">Overview of your clinical practice and upcoming appointments. Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, Dr. {doctorProfile?.full_name?.split(' ')[0] || 'Doctor'} 👋</p>
                 </div>
                 <div className="flex gap-3"></div>
               </div>

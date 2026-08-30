@@ -355,14 +355,17 @@ function usePatientDataInternal() {
           setFlowStep('needs_plan')
         }
 
+        const isUserEligible = eligibilityStatus === 'ELIGIBLE' || eligibilityStatus === 'REVIEW_REQUIRED' || Boolean(assessRow?.is_eligible)
+        const isUserNotEligible = eligibilityStatus === 'NOT_ELIGIBLE' || (assessRow && assessRow.is_eligible === false && !isUserEligible)
+
         const journeyFlowStep: FlowStep = dashboardAccess
           || (membershipStatus === 'ACTIVE' && firstConsultationCompleted)
           ? 'ready'
           : assessmentStatus !== 'COMPLETED'
             ? 'needs_assessment'
-            : eligibilityStatus === 'NOT_ELIGIBLE'
+            : isUserNotEligible
               ? 'not_eligible'
-              : eligibilityStatus !== 'ELIGIBLE' && eligibilityStatus !== 'REVIEW_REQUIRED'
+              : !isUserEligible
               ? 'needs_assessment'
               : consultationPaymentStatus === 'PAID' && appointmentStatus === 'SCHEDULED' && consultationStatus !== 'COMPLETED'
                 ? 'appointment_scheduled'
@@ -438,14 +441,17 @@ function usePatientDataInternal() {
           setFlowStep('needs_plan')
         }
 
+        const isUserEligible = eligibilityStatus === 'ELIGIBLE' || eligibilityStatus === 'REVIEW_REQUIRED' || Boolean(assessRow?.is_eligible)
+        const isUserNotEligible = eligibilityStatus === 'NOT_ELIGIBLE' || (assessRow && assessRow.is_eligible === false && !isUserEligible)
+
         const journeyFlowStep: FlowStep = dashboardAccess
           || (membershipStatus === 'ACTIVE' && firstConsultationCompleted)
           ? 'ready'
           : assessmentStatus !== 'COMPLETED'
             ? 'needs_assessment'
-            : eligibilityStatus === 'NOT_ELIGIBLE'
+            : isUserNotEligible
               ? 'not_eligible'
-              : eligibilityStatus !== 'ELIGIBLE' && eligibilityStatus !== 'REVIEW_REQUIRED'
+              : !isUserEligible
               ? 'needs_assessment'
               : consultationPaymentStatus === 'PAID' && appointmentStatus === 'SCHEDULED' && consultationStatus !== 'COMPLETED'
                 ? 'appointment_scheduled'
