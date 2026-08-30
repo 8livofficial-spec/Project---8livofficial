@@ -1745,11 +1745,11 @@ export default function DoctorDashboard() {
           <div className="fixed inset-0 z-50 flex lg:hidden">
             {/* Overlay */}
             <div 
-              className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm"
+              className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm transition-opacity"
               onClick={() => setMobileSidebarOpen(false)}
             />
             {/* Sidebar Drawer */}
-            <div className="relative z-55 w-72 h-full bg-[#0B132B] text-white flex flex-col shadow-2xl animate-slide-in border-r border-white/10">
+            <div className="relative z-55 w-76 h-full bg-[#0B1120] text-white flex flex-col shadow-2xl animate-slide-in border-r border-slate-800">
               <button
                 onClick={() => setMobileSidebarOpen(false)}
                 className="absolute top-4 right-4 z-50 p-2 bg-white/10 hover:bg-white/20 text-white rounded-full transition-all cursor-pointer"
@@ -1758,65 +1758,76 @@ export default function DoctorDashboard() {
               </button>
 
               {/* Portal Brand Header */}
-              <div className="p-6 pb-4 border-b border-white/10">
+              <div className="p-5 border-b border-white/10 bg-white/[0.02]">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#0052FF] to-[#0284C7] flex items-center justify-center text-white font-bold font-sora shadow-lg shadow-[#0052FF]/30 text-lg">
+                  <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#0D9488] to-[#10B981] flex items-center justify-center text-white font-black font-sora shadow-lg shadow-[#0D9488]/30 text-lg">
                     8L
                   </div>
                   <div>
-                    <h2 className="font-black text-white text-base font-sora tracking-tight leading-none">8Liv Health</h2>
-                    <p className="text-[10px] text-[#60A5FA] font-bold uppercase tracking-widest mt-1">Doctor Portal</p>
+                    <div className="flex items-center gap-1.5">
+                      <h2 className="font-black text-white text-base font-sora tracking-tight leading-none">8Liv Health</h2>
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]" />
+                    </div>
+                    <p className="text-[10px] text-[#5EEAD4] font-bold uppercase tracking-widest mt-1">Doctor Portal</p>
                   </div>
                 </div>
 
                 {/* Doctor Profile Info */}
-                <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-[#0052FF] to-[#0284C7] rounded-xl flex items-center justify-center shadow-md shrink-0">
-                    <Stethoscope className="w-5 h-5 text-white"/>
+                <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3 flex items-center gap-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-[#0D9488] to-[#10B981] rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-md shrink-0">
+                    {doctorProfile?.full_name ? doctorProfile.full_name.replace(/^Dr\.\s*/i, '').slice(0, 2).toUpperCase() : <Stethoscope className="w-5 h-5"/>}
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="font-bold text-white text-xs truncate leading-tight">{doctorProfile?.full_name || doctor?.email?.split('@')[0] || 'Dr. Physician'}</p>
-                    <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">Endocrinologist</p>
+                    <p className="text-[11px] text-[#5EEAD4] font-medium truncate mt-0.5">{doctorProfile?.specialty || 'Endocrinologist'}</p>
                   </div>
                 </div>
               </div>
 
               {/* Nav Links */}
-              <nav className="flex-1 p-4 space-y-1.5 overflow-y-auto">
-                {tabs.map(t => (
-                  <button key={t.key} onClick={() => { setActiveTab(t.key); setMobileSidebarOpen(false); }}
-                    className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${activeTab === t.key
-                      ? 'bg-[#00A884] text-white font-bold shadow-md shadow-[#00A884]/30'
-                      : 'text-slate-300 hover:bg-white/10 hover:text-white'}`}>
-                    {t.icon} {t.label}
-                    {t.key === 'consultations' && pendingCases > 0 && (
-                      <span className="ml-auto bg-[#2DD4BF] text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-full">{pendingCases}</span>
-                    )}
-                  </button>
-                ))}
+              <nav className="flex-1 p-3 space-y-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                {tabs.map(t => {
+                  const isActive = activeTab === t.key
+                  return (
+                    <button key={t.key} onClick={() => { setActiveTab(t.key); setMobileSidebarOpen(false); }}
+                      className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer font-sora ${isActive
+                        ? 'bg-gradient-to-r from-[#0D9488] to-[#0F766E] text-white shadow-md shadow-[#0D9488]/30 ring-1 ring-white/15'
+                        : 'text-slate-400 hover:bg-white/[0.06] hover:text-white'}`}>
+                      <span className={isActive ? 'text-white' : 'text-slate-400'}>{t.icon}</span>
+                      <span>{t.label}</span>
+                      {t.key === 'consultations' && pendingCases > 0 && (
+                        <span className="ml-auto bg-[#2DD4BF] text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-full">{pendingCases}</span>
+                      )}
+                    </button>
+                  )
+                })}
               </nav>
 
               {/* Wallet quick view */}
-              <div className="p-4 border-t border-white/10">
+              <div className="p-3.5 border-t border-white/10 bg-white/[0.02]">
                 {wallet.balance > 0 ? (
-                  <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 text-white border border-white/15 shadow-sm">
-                    <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wider mb-1">Wallet Balance</p>
-                    <p className="text-xl font-black font-sora">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
+                  <div className="bg-white/[0.06] backdrop-blur-md rounded-2xl p-3.5 text-white border border-white/10 shadow-sm">
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Available Balance</p>
+                    <p className="text-lg font-black font-sora text-white">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
+                    <button onClick={() => { setActiveTab('wallet'); setMobileSidebarOpen(false); }}
+                      className="mt-2 w-full bg-[#0D9488] hover:bg-[#0A7066] text-white text-[11px] font-bold py-1.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer">
+                      <ArrowDownToLine className="w-3 h-3"/> Withdraw Funds
+                    </button>
                   </div>
                 ) : (
-                  <div className="bg-white/5 rounded-2xl p-3.5 text-center border border-white/10">
+                  <div className="bg-white/[0.04] rounded-2xl p-3 text-center border border-white/10">
                     <div className="flex items-center justify-center gap-2">
                       <Wallet className="w-4 h-4 text-[#5EEAD4]" />
-                      <p className="text-xs font-semibold text-slate-300">Complete consults to earn</p>
+                      <p className="text-[11px] font-medium text-slate-300">Complete consults to earn</p>
                     </div>
                   </div>
                 )}
               </div>
 
               {/* Logout */}
-              <div className="p-4 pt-0">
+              <div className="p-3 pt-0">
                 <button onClick={handleLogout}
-                  className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors py-2.5 px-3 rounded-xl hover:bg-red-500/20 cursor-pointer">
+                  className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-red-300 transition-colors py-2 px-3 rounded-xl hover:bg-red-500/10 cursor-pointer">
                   <LogOut className="w-4 h-4"/> Sign Out
                 </button>
               </div>
@@ -1826,104 +1837,123 @@ export default function DoctorDashboard() {
 
         {/* Desktop Fixed & Sticky Full Height Sidebar */}
         <motion.aside
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="sticky top-0 hidden h-screen w-72 flex-shrink-0 flex-col bg-[#0B132B] text-white shadow-xl border-r border-white/10 lg:flex z-30"
+          initial={{ opacity: 0, x: -15 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.3 }}
+          className="sticky top-0 hidden h-screen w-72 flex-shrink-0 flex-col bg-[#0B1120] text-white shadow-2xl border-r border-slate-800/90 lg:flex z-30 overflow-hidden select-none"
         >
-          {/* Brand Header */}
-          <div className="p-6 pb-4 border-b border-white/10">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#00A884] to-[#2DD4BF] flex items-center justify-center text-white font-bold font-sora shadow-lg shadow-[#00A884]/30 text-lg">
+          {/* Top Brand Header */}
+          <div className="p-4 border-b border-slate-800 bg-white/[0.02]">
+            <div className="flex items-center gap-3 mb-3.5">
+              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#0D9488] to-[#10B981] flex items-center justify-center text-white font-black font-sora shadow-lg shadow-[#0D9488]/30 text-base">
                 8L
               </div>
-              <div>
-                <h2 className="font-black text-white text-base font-sora tracking-tight leading-none">8Liv Health</h2>
-                <p className="text-[10px] text-[#5EEAD4] font-bold uppercase tracking-widest mt-1">Doctor Portal</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <h2 className="font-black text-white text-sm font-sora tracking-tight leading-none">8Liv Health</h2>
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]" />
+                </div>
+                <p className="text-[9px] text-[#5EEAD4] font-bold uppercase tracking-widest mt-1">Doctor Portal</p>
+              </div>
+
+              {/* Notification Bell */}
+              <button
+                onClick={() => { setUpcomingCallAlert(null); setDoctorNotifBell(false); }}
+                className="relative p-2 rounded-xl hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+                title="Notifications"
+              >
+                {doctorNotifBell
+                  ? <BellRing className="w-4 h-4 text-[#5EEAD4] animate-bounce"/>
+                  : <Bell className="w-4 h-4 text-slate-400"/>}
+                {doctorNotifBell && (
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0B1120]"/>
+                )}
+              </button>
+            </div>
+
+            {/* Doctor Profile Info Card */}
+            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3 flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 bg-gradient-to-br from-[#0D9488] to-[#10B981] rounded-xl flex items-center justify-center text-white font-bold text-xs shadow-md shrink-0">
+                  {doctorProfile?.full_name ? doctorProfile.full_name.replace(/^Dr\.\s*/i, '').slice(0, 2).toUpperCase() : <Stethoscope className="w-4 h-4"/>}
+                </div>
+                <div className="min-w-0">
+                  <p className="font-bold text-white text-xs truncate leading-tight">{doctorProfile?.full_name || doctor?.email?.split('@')[0] || 'Dr. Physician'}</p>
+                  <p className="text-[10px] text-[#5EEAD4] font-semibold truncate mt-0.5">{doctorProfile?.specialty || 'Endocrinologist'}</p>
+                </div>
               </div>
             </div>
 
-            {/* Doctor Profile info */}
-              <div className="bg-white/5 border border-white/10 rounded-2xl p-3.5 flex items-center justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 bg-gradient-to-br from-[#00A884] to-[#2DD4BF] rounded-xl flex items-center justify-center shadow-md shrink-0">
-                    <Stethoscope className="w-5 h-5 text-white"/>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-bold text-white text-xs truncate leading-tight">{doctorProfile?.full_name || doctor?.email?.split('@')[0] || 'Dr. Physician'}</p>
-                    <p className="text-[11px] text-slate-400 font-medium truncate mt-0.5">Endocrinologist</p>
-                  </div>
-                </div>
-
-                {/* Notification Bell */}
-                <button
-                  onClick={() => { setUpcomingCallAlert(null); setDoctorNotifBell(false); }}
-                  className="relative p-2 rounded-xl hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
-                  title="Notifications"
-                >
-                  {doctorNotifBell
-                    ? <BellRing className="w-4 h-4 text-[#5EEAD4] animate-bounce"/>
-                    : <Bell className="w-4 h-4 text-slate-400"/>}
-                  {doctorNotifBell && (
-                    <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0B132B]"/>
-                  )}
-                </button>
-              </div>
-
-              {/* Online Indicator */}
-              <div className="mt-3 flex items-center gap-2 px-3 py-1.5 bg-[#00A884]/15 rounded-full border border-[#00A884]/25">
+            {/* Online Status Pill */}
+            <div className="mt-2.5 flex items-center justify-between px-3 py-1.5 bg-[#0D9488]/15 rounded-xl border border-[#0D9488]/30">
+              <div className="flex items-center gap-2">
                 <span className="relative flex w-2 h-2">
                   <span className="absolute inline-flex w-full h-full bg-[#2DD4BF] rounded-full opacity-75 animate-ping"></span>
                   <span className="relative inline-flex w-2 h-2 bg-[#2DD4BF] rounded-full"></span>
                 </span>
-                <span className="text-[11px] font-semibold text-[#5EEAD4]">Active & Available</span>
+                <span className="text-[10px] font-bold text-[#5EEAD4] uppercase tracking-wider">Active &amp; Available</span>
               </div>
+              <span className="text-[9px] text-white/50 font-semibold">Online</span>
             </div>
+          </div>
 
-            {/* Navigation Items */}
-            <nav className="flex-1 space-y-1.5 overflow-y-auto p-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {tabs.map(t => (
-                <button key={t.key} onClick={() => setActiveTab(t.key)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold transition-all cursor-pointer ${activeTab === t.key
-                    ? 'bg-[#00A884] text-white font-bold shadow-md shadow-[#00A884]/30 ring-1 ring-white/20'
-                    : 'text-slate-300 hover:bg-white/10 hover:text-white'}`}>
-                  {t.icon} {t.label}
+          {/* Navigation Items */}
+          <nav className="flex-1 space-y-1 overflow-y-auto p-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+            {tabs.map(t => {
+              const isActive = activeTab === t.key
+              return (
+                <button 
+                  key={t.key} 
+                  onClick={() => setActiveTab(t.key)}
+                  className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer font-sora ${isActive
+                    ? 'bg-gradient-to-r from-[#0D9488] to-[#0F766E] text-white shadow-md shadow-[#0D9488]/25 ring-1 ring-white/20'
+                    : 'text-slate-400 hover:bg-white/[0.06] hover:text-white'}`}
+                >
+                  <span className={isActive ? 'text-white' : 'text-slate-400'}>{t.icon}</span>
+                  <span>{t.label}</span>
                   {t.key === 'consultations' && pendingCases > 0 && (
-                    <span className="ml-auto bg-[#2DD4BF] text-slate-900 text-[10px] font-black px-2 py-0.5 rounded-full">{pendingCases}</span>
+                    <span className="ml-auto bg-[#2DD4BF] text-slate-950 text-[10px] font-black px-2 py-0.5 rounded-full shadow-xs">
+                      {pendingCases}
+                    </span>
                   )}
                 </button>
-              ))}
-            </nav>
+              )
+            })}
+          </nav>
 
-              {/* Wallet Quick View */}
-              <div className="p-4 border-t border-white/10">
-                {wallet.balance > 0 ? (
-                  <div className="bg-white/10 backdrop-blur-md rounded-2xl p-4 text-white border border-white/15 shadow-sm">
-                    <p className="text-[10px] text-slate-300 font-bold uppercase tracking-wider mb-1">Wallet Balance</p>
-                    <p className="text-2xl font-black font-sora">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
-                    <button onClick={() => setActiveTab('wallet')}
-                      className="mt-3 w-full bg-[#00A884] hover:bg-[#0F766E] text-white text-xs font-bold py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-md cursor-pointer">
-                      <ArrowDownToLine className="w-3.5 h-3.5"/> Withdraw Funds
-                    </button>
-                  </div>
-                ) : (
-                  <div className="bg-white/5 rounded-2xl p-3.5 text-center border border-white/10">
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">Earnings</p>
-                    <div className="flex items-center justify-center gap-2">
-                      <Wallet className="w-4 h-4 text-[#5EEAD4]" />
-                      <p className="text-xs font-medium text-slate-300">Complete consults to earn</p>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Logout */}
-              <div className="p-4 pt-0">
-                <button onClick={handleLogout}
-                  className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors py-2.5 px-3 rounded-xl hover:bg-red-500/20 cursor-pointer">
-                  <LogOut className="w-4 h-4"/> Sign Out
+          {/* Wallet / Earnings Widget */}
+          <div className="p-3.5 border-t border-slate-800 bg-white/[0.02]">
+            {wallet.balance > 0 ? (
+              <div className="bg-white/[0.05] backdrop-blur-md rounded-2xl p-3.5 text-white border border-white/10 shadow-xs">
+                <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Available Balance</p>
+                <p className="text-lg font-black font-sora text-white">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
+                <button 
+                  onClick={() => setActiveTab('wallet')}
+                  className="mt-2.5 w-full bg-[#0D9488] hover:bg-[#0A7066] text-white text-[11px] font-bold py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer font-sora"
+                >
+                  <ArrowDownToLine className="w-3.5 h-3.5"/> Withdraw Funds
                 </button>
               </div>
+            ) : (
+              <div className="bg-white/[0.04] rounded-2xl p-3 border border-white/10">
+                <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1 text-center">Earnings</p>
+                <div className="flex items-center justify-center gap-2">
+                  <Wallet className="w-3.5 h-3.5 text-[#5EEAD4]" />
+                  <p className="text-[11px] font-medium text-slate-300">Complete consults to earn</p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Logout */}
+          <div className="p-3 pt-0">
+            <button 
+              onClick={handleLogout}
+              className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-red-300 transition-colors py-2.5 px-3 rounded-xl hover:bg-red-500/10 cursor-pointer font-sora"
+            >
+              <LogOut className="w-4 h-4"/> Sign Out
+            </button>
+          </div>
         </motion.aside>
 
         {/* ── MAIN CONTENT ── */}
