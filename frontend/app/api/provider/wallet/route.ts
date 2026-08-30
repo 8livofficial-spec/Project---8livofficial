@@ -35,8 +35,7 @@ export async function GET(request: Request) {
       earnings: result.earnings,
     })
   } catch (error) {
-    const safe = toSafeError(error)
-    if (safe.status !== 404) return NextResponse.json(safe.body, { status: safe.status })
+    // If not onboarded via provider platform v2 or not found, fall back to core wallet ledger
   }
 
   const provider = await getAuthenticatedProvider(request)

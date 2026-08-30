@@ -459,9 +459,13 @@ type Consultation = {
 };
 
 type WalletData = {
+  doctor_id?: string;
   balance: number;
+  pending_payout?: number;
+  completed_payout?: number;
   total_earned: number;
   total_withdrawn: number;
+  lifetime_earnings?: number;
 };
 
 type Transaction = {
@@ -881,47 +885,121 @@ export default function DoctorDashboard() {
 
   const loadWallet = async (doctorId: string) => {
     try {
-      const { data } = await supabase
-        .from('doctor_wallet')
-        .select('*')
+      const res = await authedFetch('/api/provider/wallet');
+      if (res.ok) {
+        const data = await res.json();
+        const w = data.wallet || {};
+        const balance = Number(w.balance ?? w.current_balance ?? 0);
+        const pendingPayout = Number(w.pending_payout ?? w.pending_balance ?? 0);
+        const completedPayout = Number(w.completed_payout ?? w.total_paid ?? 0);
+        const totalEarned = Number(w.lifetime_earnings ?? w.total_earned ?? 0);
+
+        setWallet({
+          doctor_id: doctorId,
+          balance,
+          pending_payout: pendingPayout,
+          completed_payout: completedPayout,
+          total_earned: totalEarned || (balance + completedPayout + pendingPayout),
+          total_withdrawn: completedPayout,
+          lifetime_earnings: totalEarned || (balance + completedPayout + pendingPayout),
+        });
+
+        // Combine ledger transactions and payouts for unified history
+        const rawTxns = Array.isArray(data.transactions) ? data.transactions : [];
+        const rawPayouts = Array.isArray(data.payouts) ? data.payouts : [];
+
+        const normalizedTxns: Transaction[] = [
+          ...rawTxns.map((t: any) => ({
+            id: t.id || `tx-${Math.random()}`,
+            type: t.transaction_type === 'PAYOUT' || Number(t.amount) < 0 ? 'withdrawal' : 'credit',
+            amount: Math.abs(Number(t.amount || 0)),
+            description: t.description || (t.transaction_type === 'CONSULTATION_CREDIT' ? 'Consultation Earning' : t.transaction_type || 'Wallet Transaction'),
+            status: String(t.status || 'SUCCESS').toLowerCase(),
+            created_at: t.created_at || new Date().toISOString()
+          })),
+          ...rawPayouts.map((p: any) => ({
+            id: p.id || `payout-${Math.random()}`,
+            type: 'withdrawal',
+            amount: Number(p.payout_amount ?? p.net_amount ?? p.gross_amount ?? 0),
+            description: p.failure_reason ? `Withdrawal Failed: ${p.failure_reason}` : 'Bank Account Withdrawal',
+            status: String(p.payout_status ?? p.status ?? 'PENDING').toLowerCase(),
+            created_at: p.initiated_at || p.created_at || new Date().toISOString()
+          }))
+        ];
+
+        // Deduplicate and sort by created_at DESC
+        const seenIds = new Set<string>();
+        const uniqueTxns = normalizedTxns
+          .filter(t => {
+            if (seenIds.has(t.id)) return false;
+            seenIds.add(t.id);
+            return true;
+          })
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+        setTransactions(uniqueTxns);
+        return;
+      }
+    } catch (err) {
+      console.warn('Doctor wallet backend fetch error:', err);
+    }
+
+    // Fallback if needed
+    try {
+      const { count } = await supabase
+        .from('doctor_consultations')
+        .select('*', { count: 'exact', head: true })
         .eq('doctor_id', doctorId)
-        .maybeSingle();
-
-      const { data: txns } = await supabase
-        .from('doctor_wallet_transactions')
-        .select('*')
-        .eq('doctor_id', doctorId)
-        .order('created_at', { ascending: false })
-        .limit(20);
-      if (txns) setTransactions(txns);
-
-      // Check completed consultations count for dynamic accurate earnings
-      let completedCount = 0;
-      try {
-        const { count } = await supabase
-          .from('doctor_consultations')
-          .select('*', { count: 'exact', head: true })
-          .eq('doctor_id', doctorId)
-          .in('status', ['approved', 'completed', 'attended']);
-        completedCount = count || 0;
-      } catch {}
-
+        .in('status', ['approved', 'completed', 'attended']);
+      const completedCount = count || 0;
       const dynamicEarned = completedCount * 300;
-      const recordedEarned = Number(data?.total_earned || 0);
-      const recordedWithdrawn = Number(data?.total_withdrawn || 0);
-      const total_earned = Math.max(recordedEarned, dynamicEarned);
-      const balance = Math.max(0, total_earned - recordedWithdrawn);
-
       setWallet({
         doctor_id: doctorId,
-        balance,
-        total_earned,
-        total_withdrawn: recordedWithdrawn,
-        ...(data || {})
+        balance: dynamicEarned,
+        total_earned: dynamicEarned,
+        total_withdrawn: 0,
+        pending_payout: 0,
+        completed_payout: 0,
+        lifetime_earnings: dynamicEarned,
       });
-    } catch (err) {
-      console.warn('Doctor wallet query exception:', err);
-      setWallet({ balance: 0, total_earned: 0, total_withdrawn: 0 });
+    } catch {
+      setWallet({ balance: 0, total_earned: 0, total_withdrawn: 0, pending_payout: 0, completed_payout: 0 });
+    }
+  };
+
+  const handleWithdraw = async () => {
+    if (!doctor) return;
+    const amountVal = parseFloat(withdrawAmount);
+    const availableBalance = (wallet.balance || 0) - (wallet.pending_payout || 0);
+
+    if (isNaN(amountVal) || amountVal <= 0) {
+      alert('Please enter a valid payout amount.');
+      return;
+    }
+    if (amountVal > availableBalance) {
+      alert(`Requested amount exceeds available balance (₹${availableBalance.toLocaleString('en-IN')}).`);
+      return;
+    }
+
+    setWithdrawing(true);
+    try {
+      const idempotencyKey = `doctor-payout:${doctor.id}:${Date.now()}:${Math.random().toString(36).substring(2, 9)}`;
+      const res = await authedFetch('/api/provider/payout/request', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount: amountVal, idempotencyKey }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to submit withdrawal request.');
+      }
+      alert('Withdrawal request submitted successfully! Funds will transfer within 2 business days. ✅');
+      setWithdrawAmount('');
+      await loadWallet(doctor.id);
+    } catch (err: any) {
+      alert(err.message || 'Something went wrong while requesting withdrawal.');
+    } finally {
+      setWithdrawing(false);
     }
   };
 
@@ -1304,30 +1382,7 @@ export default function DoctorDashboard() {
     }
   };
 
-  // ── Wallet ────────────────────────────────────────────────────────────
-  const handleWithdraw = async () => {
-    const amt = parseFloat(withdrawAmount);
-    if (!amt || amt <= 0 || amt > wallet.balance) { alert('Invalid amount.'); return; }
-    setWithdrawing(true);
-    const newBalance = wallet.balance - amt;
-    const newWithdrawn = wallet.total_withdrawn + amt;
-    await supabase.from('doctor_wallet').update({
-      balance: newBalance,
-      total_withdrawn: newWithdrawn,
-      updated_at: new Date().toISOString(),
-    }).eq('doctor_id', doctor.id);
-    await supabase.from('doctor_wallet_transactions').insert({
-      doctor_id: doctor.id,
-      type: 'withdrawal',
-      amount: amt,
-      description: 'Bank withdrawal',
-      status: 'pending',
-    });
-    await loadWallet(doctor.id);
-    setWithdrawAmount('');
-    alert(`₹${amt} withdrawal initiated! ✅`);
-    setWithdrawing(false);
-  };
+
 
   // ── Derived stats ─────────────────────────────────────────────────────
   const today = new Date().toLocaleDateString('en-IN');
@@ -1952,10 +2007,10 @@ export default function DoctorDashboard() {
 
           {/* Wallet / Earnings Widget */}
           <div className="p-3.5 border-t border-slate-800 bg-white/[0.02]">
-            {wallet.balance > 0 ? (
+            {Math.max(0, (wallet?.balance ?? 0) - (wallet?.pending_payout ?? 0)) > 0 ? (
               <div className="bg-white/[0.05] backdrop-blur-md rounded-2xl p-3.5 text-white border border-white/10 shadow-xs">
                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Available Balance</p>
-                <p className="text-lg font-black font-sora text-white">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
+                <p className="text-lg font-black font-sora text-white">₹{Number(Math.max(0, (wallet?.balance ?? 0) - (wallet?.pending_payout ?? 0))).toLocaleString('en-IN')}</p>
                 <button 
                   onClick={() => setActiveTab('wallet')}
                   className="mt-2.5 w-full bg-[#0D9488] hover:bg-[#0A7066] text-white text-[11px] font-bold py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer font-sora"
@@ -2565,20 +2620,25 @@ export default function DoctorDashboard() {
               </div>
 
               {/* Wallet cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div className="bg-[#1A1F36] p-8 rounded-[20px] text-white shadow-2xl shadow-[#1A1F36]/20">
-                  <p className="text-xs text-white/55 font-black uppercase tracking-widest mb-3">Available Balance</p>
-                  <p className="text-5xl font-black">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                <div className="bg-[#1A1F36] p-6 sm:p-8 rounded-[20px] text-white shadow-2xl shadow-[#1A1F36]/20">
+                  <p className="text-xs text-white/55 font-black uppercase tracking-widest mb-2">Available Balance</p>
+                  <p className="text-4xl sm:text-5xl font-black">₹{Number(Math.max(0, (wallet?.balance ?? 0) - (wallet?.pending_payout ?? 0))).toLocaleString('en-IN')}</p>
                   <p className="text-xs text-white/50 mt-2 font-semibold">Ready to withdraw</p>
                 </div>
-                <div className="bg-[#5C7A6B]/10 border border-[#5C7A6B]/20 p-8 rounded-[20px] text-center shadow-[0_12px_32px_rgba(26,31,54,0.06)]">
-                  <p className="text-xs text-[#5C7A6B] font-black uppercase tracking-widest mb-3">Total Earned</p>
-                  <p className="text-4xl font-black text-[#5C7A6B]">₹{Number(wallet?.total_earned ?? 0).toLocaleString('en-IN')}</p>
-                  <p className="text-xs text-[#5C7A6B]/75 mt-2 font-semibold">From {approvedCases} consultations</p>
+                <div className="bg-[#D89A3D]/10 border border-[#D89A3D]/25 p-6 sm:p-8 rounded-[20px] text-center shadow-[0_12px_32px_rgba(26,31,54,0.06)]">
+                  <p className="text-xs text-[#B7792F] font-black uppercase tracking-widest mb-2">Pending Payout</p>
+                  <p className="text-3xl sm:text-4xl font-black text-[#B7792F]">₹{Number(wallet?.pending_payout ?? 0).toLocaleString('en-IN')}</p>
+                  <p className="text-xs text-[#B7792F]/75 mt-2 font-semibold">Processing transfer</p>
                 </div>
-                <div className="bg-[#40516A]/10 border border-[#40516A]/18 p-8 rounded-[20px] text-center shadow-[0_12px_32px_rgba(26,31,54,0.06)]">
-                  <p className="text-xs text-[#40516A] font-black uppercase tracking-widest mb-3">Total Withdrawn</p>
-                  <p className="text-4xl font-black text-[#40516A]">₹{Number(wallet?.total_withdrawn ?? 0).toLocaleString('en-IN')}</p>
+                <div className="bg-[#5C7A6B]/10 border border-[#5C7A6B]/20 p-6 sm:p-8 rounded-[20px] text-center shadow-[0_12px_32px_rgba(26,31,54,0.06)]">
+                  <p className="text-xs text-[#5C7A6B] font-black uppercase tracking-widest mb-2">Total Earned</p>
+                  <p className="text-3xl sm:text-4xl font-black text-[#5C7A6B]">₹{Number(wallet?.total_earned ?? 0).toLocaleString('en-IN')}</p>
+                  <p className="text-xs text-[#5C7A6B]/75 mt-2 font-semibold">From completed consults</p>
+                </div>
+                <div className="bg-[#40516A]/10 border border-[#40516A]/18 p-6 sm:p-8 rounded-[20px] text-center shadow-[0_12px_32px_rgba(26,31,54,0.06)]">
+                  <p className="text-xs text-[#40516A] font-black uppercase tracking-widest mb-2">Total Withdrawn</p>
+                  <p className="text-3xl sm:text-4xl font-black text-[#40516A]">₹{Number(wallet?.total_withdrawn ?? 0).toLocaleString('en-IN')}</p>
                   <p className="text-xs text-[#40516A]/75 mt-2 font-semibold">To bank account</p>
                 </div>
               </div>
@@ -2595,21 +2655,21 @@ export default function DoctorDashboard() {
                       value={withdrawAmount}
                       onChange={e => setWithdrawAmount(e.target.value)}
                       className={inputCls}
-                      placeholder={`Max ₹${wallet.balance}`}
-                      max={wallet.balance}
+                      placeholder={`Max ₹${Math.max(0, (wallet?.balance ?? 0) - (wallet?.pending_payout ?? 0))}`}
+                      max={Math.max(0, (wallet?.balance ?? 0) - (wallet?.pending_payout ?? 0))}
                       min={1}
                     />
                   </div>
                   <button
                     onClick={handleWithdraw}
-                    disabled={withdrawing || !withdrawAmount || parseFloat(withdrawAmount) <= 0 || parseFloat(withdrawAmount) > wallet.balance}
-                    className="bg-[#1A1F36] hover:bg-[#0D101C] disabled:opacity-50 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-md hover:shadow-lg hover:shadow-[#1A1F36]/20"
+                    disabled={withdrawing || !withdrawAmount || parseFloat(withdrawAmount) <= 0 || parseFloat(withdrawAmount) > Math.max(0, (wallet?.balance ?? 0) - (wallet?.pending_payout ?? 0))}
+                    className="bg-[#1A1F36] hover:bg-[#0D101C] disabled:opacity-50 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-md hover:shadow-lg hover:shadow-[#1A1F36]/20 cursor-pointer"
                   >
                     {withdrawing ? 'Processing...' : 'Withdraw Now'}
                   </button>
                 </div>
-                {wallet.balance === 0 && (
-                  <p className="text-sm text-[#B7792F] font-bold mt-3 bg-[#D89A3D]/10 p-3 rounded-xl border border-[#D89A3D]/22">No balance available. Complete consultations to earn.</p>
+                {Math.max(0, (wallet?.balance ?? 0) - (wallet?.pending_payout ?? 0)) === 0 && (
+                  <p className="text-sm text-[#B7792F] font-bold mt-3 bg-[#D89A3D]/10 p-3 rounded-xl border border-[#D89A3D]/22">No available balance ready to withdraw. Complete consultations to earn.</p>
                 )}
               </div>
 
