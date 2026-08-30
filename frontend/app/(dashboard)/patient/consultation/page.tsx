@@ -165,7 +165,7 @@ const periodMeta = {
 export default function ConsultationSchedulingPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const { reloadData, user, profile, assessment, onboardingState, loading: patientDataLoading } = usePatientData()
+  const { reloadData, user, profile, assessment, careTeam, onboardingState, loading: patientDataLoading } = usePatientData()
   const reusePaymentFromBookingId = searchParams.get('rescheduleFrom') || ''
   const isActiveMemberFollowUp = onboardingState.membershipStatus === 'ACTIVE' && onboardingState.firstConsultationCompleted === true
   const isBookingPending = onboardingState.appointmentStatus === 'BOOKING_PENDING' || onboardingState.consultationPaymentStatus === 'PAID'
@@ -784,349 +784,620 @@ export default function ConsultationSchedulingPage() {
       )}
 
       {/* Main Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        {isBookingPending && (
-          <div className="mb-8 p-4 rounded-2xl border-2 bg-amber-50 border-amber-200 text-amber-900 flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 mt-0.5 shrink-0 text-amber-600" />
-            <div>
-              <h4 className="font-bold text-sm">Complete Your Consultation Booking</h4>
-              <p className="text-xs mt-1 leading-relaxed">
-                Your payment was processed successfully, but the consultation slot could not be finalized. 
-                Please choose any available time below to complete your appointment scheduling. 
-                <strong> You do not need to pay again.</strong>
-              </p>
-            </div>
-          </div>
-        )}
-        <div className="mb-12">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h1 className="text-3xl font-bold" style={{ color: designTokens.colors.textPrimary }}>
-                Choose Your Preferred Consultation Time
-              </h1>
-                <p className="text-base mt-2" style={{ color: designTokens.colors.textSecondary }}>
-                {reusePaymentFromBookingId
-                  ? 'Choose a new consultation slot. Your eligible consultation payment will be reused.'
-                  : isActiveMemberFollowUp
-                    ? 'Select a follow-up time that fits your schedule. Your active membership covers this consultation.'
-                  : 'Select a consultation time that fits your schedule. We will reserve your chosen time with an eligible doctor.'}
-              </p>
-            </div>
-          </div>
-        </div>
+      {isActiveMemberFollowUp ? (
+        /* ═════════════════════════════════════════════════════════════════════
+           IN-APP CONSULTATION UI (Active Members / Follow-Up Care)
+           ═════════════════════════════════════════════════════════════════════ */
+        <div className="min-h-screen bg-slate-50/70 pb-16 font-sans">
+          {/* Top Bar Navigation */}
+          <div className="bg-white border-b border-slate-200/80 sticky top-0 z-20 backdrop-blur-md bg-white/90">
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => router.push('/patient')}
+                  className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl transition-colors cursor-pointer font-sora"
+                >
+                  <span className="text-base leading-none">←</span> Dashboard
+                </button>
+                <div className="h-5 w-[1px] bg-slate-200 hidden sm:block" />
+                <span className="text-xs sm:text-sm font-extrabold text-slate-800 font-sora hidden sm:inline-block">
+                  Schedule Care Consultation
+                </span>
+              </div>
 
-        {/* Specialist Assignment Card */}
-        <div className="mb-8 rounded-2xl p-6 border-2" style={{ backgroundColor: designTokens.colors.surface, borderColor: designTokens.colors.border }}>
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-            <div>
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white" style={{ backgroundColor: designTokens.colors.primary }}>
-                  AD
-                </div>
+              <div className="flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-[#0D9488]/10 text-[#0D9488] border border-[#0D9488]/20 font-sora">
+                  <span className="w-2 h-2 rounded-full bg-[#0D9488] animate-pulse" />
+                  Active Member Benefit • ₹0 Covered
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+            {/* Header Hero Banner */}
+            <div className="bg-gradient-to-br from-[#0B1120] via-[#0F172A] to-[#0D9488]/90 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-slate-900/10 mb-8">
+              <div className="absolute top-0 right-0 w-80 h-80 bg-[#5EEAD4]/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: designTokens.colors.textTertiary }}>
-                    {isActiveMemberFollowUp ? 'Primary Doctor Follow-up' : 'Initial Doctor Assignment'}
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 backdrop-blur-md text-[10px] font-extrabold uppercase tracking-widest text-[#5EEAD4] font-sora mb-3">
+                    <Video className="w-3.5 h-3.5" /> 1-on-1 Doctor Video Session
+                  </div>
+                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold font-sora tracking-tight">
+                    Book Your Follow-up Consultation
+                  </h1>
+                  <p className="text-white/70 text-xs sm:text-sm mt-2 max-w-xl font-light leading-relaxed">
+                    Review your GLP-1 therapy, discuss lab reports, adjust dosing, or get clinical answers directly from your assigned 8Liv physician.
                   </p>
-                  <h3 className="text-lg font-bold" style={{ color: designTokens.colors.textPrimary }}>
-                    {isActiveMemberFollowUp ? 'Your assigned doctor' : 'You choose the time'}
-                  </h3>
-                </div>
-              </div>
-              <p className="text-sm" style={{ color: designTokens.colors.textSecondary }}>
-                {isActiveMemberFollowUp
-                  ? 'Follow-up slots are limited to your active primary doctor. 8Liv will not switch you to another doctor automatically.'
-                  : 'Doctor names and photos are hidden during booking. Once you confirm a time, 8Liv reserves that slot with an eligible healthcare professional.'}
-              </p>
-            </div>
-
-            <div className="text-center">
-                <Video className="w-6 h-6 mx-auto mb-1" style={{ color: designTokens.colors.primary }} />
-                <p className="text-xs" style={{ color: designTokens.colors.textSecondary }}>Video Call</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Main Booking Layout - Two Column on Desktop */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-          <div className="lg:col-span-2 rounded-2xl p-8 border-2" style={{ backgroundColor: designTokens.colors.surface, borderColor: designTokens.colors.border }}>
-            <div className="flex items-start justify-between gap-4 mb-8">
-              <div>
-                <h2 className="text-xl font-bold" style={{ color: designTokens.colors.textPrimary }}>
-                  Available Consultation Times
-                </h2>
-                <p className="text-sm max-w-2xl mt-2" style={{ color: designTokens.colors.textSecondary }}>
-                  Choose a time that works for you. Booked and unavailable slots are hidden automatically.
-                </p>
-              </div>
-              <Clock className="w-6 h-6 shrink-0" style={{ color: designTokens.colors.secondary }} />
-            </div>
-
-            {slotsLoading ? (
-              <div className="flex items-center gap-3 rounded-xl p-5 border" style={{ borderColor: designTokens.colors.border }}>
-                <div className="w-8 h-8 border-4 border-[#F5F0EB] border-t-[#C4622D] rounded-full animate-spin" />
-                <p className="text-sm font-semibold" style={{ color: designTokens.colors.textSecondary }}>
-                  Checking available consultation dates...
-                </p>
-              </div>
-            ) : selectableDates.length > 0 ? (
-              <div className="space-y-6">
-                <div>
-                  <div className="mb-3 flex items-center gap-2">
-                    <CalendarDays className="w-4 h-4" style={{ color: designTokens.colors.secondary }} />
-                    <p className="text-xs font-bold uppercase tracking-wider" style={{ color: designTokens.colors.textSecondary }}>
-                      Select Consultation Date
-                    </p>
-                  </div>
-                  <div className="flex gap-3 overflow-x-auto pb-2">
-                    {selectableDates.map((date) => {
-                      const selected = selectedDate === date
-                      const parts = getDateParts(date)
-                      return (
-                        <button
-                          key={date}
-                          type="button"
-                          onClick={() => {
-                            setSelectedSlot(null)
-                            setSelectedDate(date)
-                            void loadSlotsForDate(date)
-                          }}
-                          className="min-w-24 rounded-2xl border-2 px-4 py-3 text-center transition-all duration-200 hover:-translate-y-0.5"
-                          style={{
-                            borderColor: selected ? designTokens.colors.primary : designTokens.colors.border,
-                            backgroundColor: selected ? designTokens.colors.primary : designTokens.colors.surface,
-                            color: selected ? '#FFFFFF' : designTokens.colors.textPrimary,
-                            boxShadow: selected ? designTokens.shadows.md : 'none'
-                          }}
-                        >
-                          <span className="block text-xs font-bold">{getDateHeading(date)}</span>
-                          <span className="block text-2xl font-bold leading-tight mt-1">{parts.day}</span>
-                          <span className="block text-[11px] font-semibold opacity-75">{parts.weekday}</span>
-                        </button>
-                      )
-                    })}
-                  </div>
                 </div>
 
-                <div className="rounded-2xl border p-5" style={{ borderColor: designTokens.colors.border, backgroundColor: `${designTokens.colors.background}70` }}>
-                  <div className="mb-5">
-                    <h3 className="text-lg font-bold" style={{ color: designTokens.colors.textPrimary }}>
-                      {selectedDate ? getDateHeading(selectedDate) : 'Selected Date'}
-                    </h3>
-                    <p className="text-xs font-semibold mt-1" style={{ color: designTokens.colors.textTertiary }}>
-                      {selectedDate ? formatSlotDate(selectedDate, true) : 'Choose a date above'}
-                    </p>
+                <div className="bg-white/10 border border-white/15 rounded-2xl p-4 backdrop-blur-md flex items-center gap-4 shrink-0">
+                  <div className="w-12 h-12 rounded-xl bg-[#0D9488] flex items-center justify-center font-bold text-white text-lg font-sora shadow-sm">
+                    {careTeam?.doctor?.name ? careTeam.doctor.name.slice(0, 2).toUpperCase() : 'MD'}
                   </div>
+                  <div>
+                    <p className="text-[10px] uppercase font-bold text-white/60 tracking-wider">Assigned Physician</p>
+                    <p className="text-sm font-bold font-sora text-white">
+                      {careTeam?.doctor?.name ? `Dr. ${careTeam.doctor.name}` : 'Your Primary Doctor'}
+                    </p>
+                    <p className="text-[11px] text-[#5EEAD4] font-medium">Metabolic Health Specialist</p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
-                  {dateSlotsLoading ? (
-                    <div className="flex items-center gap-3 rounded-xl p-5 border bg-white" style={{ borderColor: designTokens.colors.border }}>
-                      <div className="w-7 h-7 border-4 border-[#F5F0EB] border-t-[#C4622D] rounded-full animate-spin" />
-                      <p className="text-sm font-semibold" style={{ color: designTokens.colors.textSecondary }}>
-                        Loading available slots for this date...
+            {/* Two Column Booking Workspace */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Left 2 Cols: Slot Selection & Calendar */}
+              <div className="lg:col-span-2 space-y-6">
+                <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs">
+                  <div className="flex items-center justify-between gap-4 mb-6">
+                    <div>
+                      <h2 className="text-lg sm:text-xl font-extrabold font-sora text-slate-900">
+                        Choose Date & Time
+                      </h2>
+                      <p className="text-slate-500 text-xs sm:text-sm mt-1">
+                        Select an available slot with your doctor. Times are in Indian Standard Time (IST).
                       </p>
                     </div>
-                  ) : selectedDateSlots.length > 0 ? (
-                    <div className="space-y-5">
-                      {(['morning', 'afternoon', 'evening'] as const).map((period) => {
-                        const slots = groupedSlots[period]
-                        if (slots.length === 0) return null
-                        const Icon = periodMeta[period].icon
-                        return (
-                          <div key={period}>
-                            <div className="flex items-center gap-2 mb-3">
-                              <Icon className="w-4 h-4" style={{ color: designTokens.colors.secondary }} />
-                              <p className="text-xs font-bold uppercase tracking-wider" style={{ color: designTokens.colors.textSecondary }}>
-                                {periodMeta[period].label}
-                              </p>
-                            </div>
-                            <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-                              {slots.map((slot) => {
-                                const selected = selectedSlot?.available_date === slot.available_date && selectedSlot?.time_slot === slot.time_slot
-                                return (
-                                  <button
-                                    key={`${slot.available_date}-${slot.time_slot}`}
-                                    type="button"
-                                    onClick={() => setSelectedSlot(slot)}
-                                    className="rounded-2xl border-2 px-4 py-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                                    style={{
-                                      borderColor: selected ? designTokens.colors.primary : designTokens.colors.border,
-                                      backgroundColor: selected ? `${designTokens.colors.primary}10` : designTokens.colors.surface,
-                                      color: selected ? designTokens.colors.primary : designTokens.colors.textPrimary,
-                                      boxShadow: selected ? designTokens.shadows.md : 'none'
-                                    }}
-                                  >
-                                    <span className="block text-base font-bold">{formatSlotTime(slot.time_slot)}</span>
-                                    <span className="block text-[11px] font-semibold mt-1" style={{ color: designTokens.colors.textTertiary }}>
-                                      Video consultation
-                                    </span>
-                                  </button>
-                                )
-                              })}
-                            </div>
+                    <div className="w-10 h-10 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-[#0D9488] shrink-0">
+                      <Clock className="w-5 h-5" />
+                    </div>
+                  </div>
+
+                  {slotsLoading ? (
+                    <div className="flex items-center justify-center py-12 gap-3">
+                      <div className="w-7 h-7 border-3 border-teal-200 border-t-[#0D9488] rounded-full animate-spin" />
+                      <span className="text-sm font-semibold text-slate-600 font-sora">Loading available slots...</span>
+                    </div>
+                  ) : selectableDates.length > 0 ? (
+                    <div className="space-y-6">
+                      {/* Date Carousel */}
+                      <div>
+                        <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-3 font-sora flex items-center gap-2">
+                          <CalendarDays className="w-4 h-4 text-[#0D9488]" /> Select Date
+                        </p>
+                        <div className="flex gap-2.5 overflow-x-auto pb-2 scrollbar-thin">
+                          {selectableDates.map((date) => {
+                            const isSelected = selectedDate === date
+                            const parts = getDateParts(date)
+                            const heading = getDateHeading(date)
+                            return (
+                              <button
+                                key={date}
+                                type="button"
+                                onClick={() => {
+                                  setSelectedSlot(null)
+                                  setSelectedDate(date)
+                                  void loadSlotsForDate(date)
+                                }}
+                                className={`min-w-22 py-3 px-3 rounded-2xl border text-center transition-all cursor-pointer ${
+                                  isSelected
+                                    ? 'bg-[#0D9488] border-[#0D9488] text-white shadow-md shadow-[#0D9488]/25 scale-[1.02]'
+                                    : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
+                                }`}
+                              >
+                                <span className="block text-[10px] font-bold uppercase tracking-wider opacity-85">
+                                  {heading}
+                                </span>
+                                <span className="block text-xl font-extrabold font-sora my-0.5">
+                                  {parts.day}
+                                </span>
+                                <span className="block text-[10px] font-semibold opacity-75">
+                                  {parts.weekday}
+                                </span>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Time Slots Area */}
+                      <div className="bg-slate-50/80 rounded-2xl p-5 border border-slate-200/80">
+                        <div className="flex items-center justify-between mb-4">
+                          <div>
+                            <h3 className="font-bold text-sm font-sora text-slate-900">
+                              {selectedDate ? formatSlotDate(selectedDate, true) : 'Available Slots'}
+                            </h3>
+                            <p className="text-xs text-slate-500">Pick the best time for your 30-minute consultation</p>
                           </div>
-                        )
-                      })}
+                        </div>
+
+                        {dateSlotsLoading ? (
+                          <div className="flex items-center justify-center py-8 gap-3">
+                            <div className="w-6 h-6 border-2 border-teal-200 border-t-[#0D9488] rounded-full animate-spin" />
+                            <span className="text-xs font-semibold text-slate-600">Updating slots...</span>
+                          </div>
+                        ) : selectedDateSlots.length > 0 ? (
+                          <div className="space-y-4">
+                            {(['morning', 'afternoon', 'evening'] as const).map((period) => {
+                              const slots = groupedSlots[period]
+                              if (slots.length === 0) return null
+                              const Icon = periodMeta[period].icon
+                              return (
+                                <div key={period}>
+                                  <div className="flex items-center gap-1.5 mb-2.5">
+                                    <Icon className="w-3.5 h-3.5 text-[#0D9488]" />
+                                    <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-600 font-sora">
+                                      {periodMeta[period].label}
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+                                    {slots.map((slot) => {
+                                      const isSelected = selectedSlot?.available_date === slot.available_date && selectedSlot?.time_slot === slot.time_slot
+                                      return (
+                                        <button
+                                          key={`${slot.available_date}-${slot.time_slot}`}
+                                          type="button"
+                                          onClick={() => setSelectedSlot(slot)}
+                                          className={`py-3 px-3.5 rounded-xl border text-center font-sora text-xs font-bold transition-all cursor-pointer ${
+                                            isSelected
+                                              ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-md shadow-[#0D9488]/20 scale-[1.02]'
+                                              : 'bg-white hover:bg-teal-50/50 border-slate-200 text-slate-800 hover:border-teal-300'
+                                          }`}
+                                        >
+                                          {formatSlotTime(slot.time_slot)}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                </div>
+                              )
+                            })}
+                          </div>
+                        ) : (
+                          <div className="text-center py-8 bg-white rounded-xl border border-dashed border-slate-200">
+                            <p className="text-xs font-bold text-slate-700 font-sora">No slots available on this date</p>
+                            <p className="text-xs text-slate-500 mt-1">Please pick another date from the carousel above.</p>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ) : (
-                    <div className="rounded-xl p-5 border border-dashed text-center bg-white" style={{ borderColor: designTokens.colors.border }}>
-                      <h3 className="text-base font-bold" style={{ color: designTokens.colors.textPrimary }}>
-                        No slots available on this date.
-                      </h3>
-                      <p className="text-sm mt-2" style={{ color: designTokens.colors.textSecondary }}>
-                        Please choose another available date above.
+                    <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                      <p className="text-sm font-bold text-slate-800 font-sora">No consultation slots currently open</p>
+                      <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+                        Your doctor will open new schedule availability shortly. You can also request an urgent callback from support.
                       </p>
                     </div>
                   )}
                 </div>
               </div>
-            ) : (
-              <div className="rounded-xl p-5 border border-dashed text-center" style={{ borderColor: designTokens.colors.border }}>
-                <h3 className="text-base font-bold" style={{ color: designTokens.colors.textPrimary }}>
-                  No consultation times are currently available.
-                </h3>
-                <p className="text-sm mt-2" style={{ color: designTokens.colors.textSecondary }}>
-                  You can join the waiting list, request a callback, or check again for future availability.
-                </p>
-              </div>
-            )}
-          </div>
-          {/* Right: Sticky Summary Card */}
-          <div className="lg:col-span-1">
-            <div className="sticky top-8 rounded-2xl p-6 border-2 space-y-6" style={{ backgroundColor: designTokens.colors.surface, borderColor: designTokens.colors.border }}>
-              <h3 className="font-bold text-lg" style={{ color: designTokens.colors.textPrimary }}>
-                Booking Summary
-              </h3>
 
-              {/* Summary Details */}
-              <div className="space-y-4">
-                <div className="pb-4 border-b-2" style={{ borderColor: designTokens.colors.border }}>
-                  <p className="text-xs font-semibold uppercase" style={{ color: designTokens.colors.textTertiary }}>
-                    Selected Consultation
-                  </p>
-                  <p className="text-base font-bold mt-2" style={{ color: designTokens.colors.textPrimary }}>
-                    {selectedSlot ? formatSlotDate(selectedSlot.available_date, true) : 'Not selected'}
-                  </p>
-                  <p className="text-sm mt-1" style={{ color: designTokens.colors.textSecondary }}>
-                    {selectedSlot ? formatSlotTime(selectedSlot.time_slot) : 'Choose an available time'}
-                  </p>
-                </div>
-
-                <div className="pb-4 border-b-2" style={{ borderColor: designTokens.colors.border }}>
-                  <p className="text-xs font-semibold uppercase" style={{ color: designTokens.colors.textTertiary }}>
-                    Type
-                  </p>
-                  <div className="flex items-center gap-2 mt-2">
-                    <Video className="w-4 h-4" style={{ color: designTokens.colors.primary }} />
-                    <span className="font-semibold" style={{ color: designTokens.colors.textPrimary }}>
-                      Video Consultation
+              {/* Right 1 Col: Summary & Action Card */}
+              <div className="lg:col-span-1 space-y-6">
+                <div className="bg-white rounded-3xl p-6 sm:p-7 border border-slate-200/80 shadow-xs sticky top-24">
+                  <h3 className="font-extrabold text-base font-sora text-slate-900 mb-4 flex items-center justify-between">
+                    <span>Session Summary</span>
+                    <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
+                      Follow-up
                     </span>
+                  </h3>
+
+                  <div className="space-y-3.5 text-xs text-slate-600 pb-4 border-b border-slate-100">
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Doctor</span>
+                      <span className="font-bold text-slate-900 font-sora">
+                        {careTeam?.doctor?.name ? `Dr. ${careTeam.doctor.name}` : 'Assigned Physician'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Date</span>
+                      <span className="font-bold text-slate-900 font-sora">
+                        {selectedSlot ? formatSlotDate(selectedSlot.available_date, true) : 'Select a date'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Time</span>
+                      <span className="font-bold text-slate-900 font-sora">
+                        {selectedSlot ? formatSlotTime(selectedSlot.time_slot) : 'Select a time'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Format</span>
+                      <span className="font-bold text-slate-900 font-sora flex items-center gap-1">
+                        <Video className="w-3.5 h-3.5 text-[#0D9488]" /> 1:1 Video Call
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+                      <span className="text-slate-500">Consultation Fee</span>
+                      <div className="text-right">
+                        <span className="line-through text-slate-400 mr-2 text-[11px]">₹499</span>
+                        <span className="font-extrabold text-[#0D9488] font-sora text-sm">₹0 Free</span>
+                      </div>
+                    </div>
                   </div>
-                </div>
 
-                <div>
-                  <p className="text-xs font-semibold uppercase" style={{ color: designTokens.colors.textTertiary }}>
-                    Healthcare Professional
-                  </p>
-                  <p className="font-semibold mt-2" style={{ color: designTokens.colors.textPrimary }}>
-                    {isActiveMemberFollowUp ? 'Primary Doctor' : 'Automatically Assigned'}
-                  </p>
-                </div>
-
-                <div className="pt-4 border-t-2" style={{ borderColor: designTokens.colors.border }}>
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-semibold uppercase" style={{ color: designTokens.colors.textTertiary }}>
-                    {isActiveMemberFollowUp ? 'Included in membership' : 'Consultation Fee'}
-                    </p>
-                    <p className="font-bold" style={{ color: designTokens.colors.textPrimary }}>
-                      {isActiveMemberFollowUp ? 'INR 0' : `INR ${CONSULTATION_FEE}`}
+                  <div className="mt-5 space-y-3">
+                    <button
+                      type="button"
+                      onClick={handleConfirmBooking}
+                      disabled={!selectedSlot || loading}
+                      className="w-full py-4 px-4 rounded-2xl font-bold font-sora text-sm text-white bg-[#0D9488] hover:bg-[#097A70] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-[#0D9488]/20 hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      {loading ? (
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      ) : (
+                        <>
+                          <span>Confirm Doctor Appointment</span>
+                          <span className="text-base leading-none">→</span>
+                        </>
+                      )}
+                    </button>
+                    <p className="text-[11px] text-center text-slate-400 font-medium">
+                      Free cancellation &amp; reschedule anytime from your portal
                     </p>
                   </div>
                 </div>
               </div>
-
-              {/* CTA Button */}
-              <button
-                onClick={handleConfirmBooking}
-                disabled={!selectedSlot || loading}
-                className="w-full py-4 px-6 rounded-xl font-bold text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg"
-                style={{
-                  backgroundColor: selectedSlot ? designTokens.colors.primary : designTokens.colors.textTertiary,
-                }}
-              >
-                {loading ? 'Processing...' : reusePaymentFromBookingId || isActiveMemberFollowUp ? 'Confirm Appointment' : 'Confirm Appointment'}
-              </button>
-
-              <p className="text-xs text-center" style={{ color: designTokens.colors.textTertiary }}>
-                You can reschedule anytime in your account
-              </p>
             </div>
           </div>
         </div>
-
-        {/* Guidance Section */}
-        <div className="rounded-2xl p-8 border-2 mb-8" style={{ backgroundColor: `${designTokens.colors.secondary}08`, borderColor: `${designTokens.colors.secondary}20` }}>
-          <div className="flex items-center gap-3 mb-6">
-            <Shield className="w-6 h-6" style={{ color: designTokens.colors.secondary }} />
-            <div>
-              <h2 className="text-xl font-bold" style={{ color: designTokens.colors.textPrimary }}>
-                What Happens Next
-              </h2>
-              <p className="text-sm mt-1" style={{ color: designTokens.colors.textSecondary }}>
-                Here is how 8Liv handles your consultation after payment.
-              </p>
+      ) : (
+        /* ═════════════════════════════════════════════════════════════════════
+           ONBOARDING CONSULTATION UI (Initial Intake & Razorpay Flow)
+           ═════════════════════════════════════════════════════════════════════ */
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+          {isBookingPending && (
+            <div className="mb-8 p-4 rounded-2xl border-2 bg-amber-50 border-amber-200 text-amber-900 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 mt-0.5 shrink-0 text-amber-600" />
+              <div>
+                <h4 className="font-bold text-sm">Complete Your Consultation Booking</h4>
+                <p className="text-xs mt-1 leading-relaxed">
+                  Your payment was processed successfully, but the consultation slot could not be finalized. 
+                  Please choose any available time below to complete your appointment scheduling. 
+                  <strong> You do not need to pay again.</strong>
+                </p>
+              </div>
+            </div>
+          )}
+          <div className="mb-12">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h1 className="text-3xl font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                  Choose Your Preferred Consultation Time
+                </h1>
+                <p className="text-base mt-2" style={{ color: designTokens.colors.textSecondary }}>
+                  {reusePaymentFromBookingId
+                    ? 'Choose a new consultation slot. Your eligible consultation payment will be reused.'
+                    : 'Select a consultation time that fits your schedule. We will reserve your chosen time with an eligible doctor.'}
+                </p>
+              </div>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              {
-                title: 'Automatic matching',
-                description: 'You choose a convenient time, then we assign an available specialist with workload balancing.'
-              },
-              {
-                title: 'Clear appointment card',
-                description: 'Your dashboard will show the doctor, date, time, status, and countdown once the appointment is assigned.'
-              },
-              {
-                title: 'Join window',
-                description: 'The video room becomes available 15 minutes before your scheduled consultation time.'
-              },
-              {
-                title: 'After the call',
-                description: 'You can return to the dashboard to view appointment details, prescriptions, and next care steps.'
-              }
-            ].map((item, index) => (
-              <div key={item.title} className="rounded-xl p-5 border bg-white" style={{ borderColor: designTokens.colors.border }}>
-                <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white mb-4" style={{ backgroundColor: index === 0 ? designTokens.colors.primary : designTokens.colors.secondary }}>
-                  {index + 1}
+          {/* Specialist Assignment Card */}
+          <div className="mb-8 rounded-2xl p-6 border-2" style={{ backgroundColor: designTokens.colors.surface, borderColor: designTokens.colors.border }}>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+              <div>
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white" style={{ backgroundColor: designTokens.colors.primary }}>
+                    AD
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: designTokens.colors.textTertiary }}>
+                      Initial Doctor Assignment
+                    </p>
+                    <h3 className="text-lg font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                      You choose the time
+                    </h3>
+                  </div>
                 </div>
-                <h3 className="text-sm font-bold" style={{ color: designTokens.colors.textPrimary }}>
-                  {item.title}
+                <p className="text-sm" style={{ color: designTokens.colors.textSecondary }}>
+                  Doctor names and photos are hidden during booking. Once you confirm a time, 8Liv reserves that slot with an eligible healthcare professional.
+                </p>
+              </div>
+
+              <div className="text-center">
+                  <Video className="w-6 h-6 mx-auto mb-1" style={{ color: designTokens.colors.primary }} />
+                  <p className="text-xs" style={{ color: designTokens.colors.textSecondary }}>Video Call</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Main Booking Layout - Two Column on Desktop */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+            <div className="lg:col-span-2 rounded-2xl p-8 border-2" style={{ backgroundColor: designTokens.colors.surface, borderColor: designTokens.colors.border }}>
+              <div className="flex items-start justify-between gap-4 mb-8">
+                <div>
+                  <h2 className="text-xl font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                    Available Consultation Times
+                  </h2>
+                  <p className="text-sm max-w-2xl mt-2" style={{ color: designTokens.colors.textSecondary }}>
+                    Choose a time that works for you. Booked and unavailable slots are hidden automatically.
+                  </p>
+                </div>
+                <Clock className="w-6 h-6 shrink-0" style={{ color: designTokens.colors.secondary }} />
+              </div>
+
+              {slotsLoading ? (
+                <div className="flex items-center gap-3 rounded-xl p-5 border" style={{ borderColor: designTokens.colors.border }}>
+                  <div className="w-8 h-8 border-4 border-[#F5F0EB] border-t-[#C4622D] rounded-full animate-spin" />
+                  <p className="text-sm font-semibold" style={{ color: designTokens.colors.textSecondary }}>
+                    Checking available consultation dates...
+                  </p>
+                </div>
+              ) : selectableDates.length > 0 ? (
+                <div className="space-y-6">
+                  <div>
+                    <div className="mb-3 flex items-center gap-2">
+                      <CalendarDays className="w-4 h-4" style={{ color: designTokens.colors.secondary }} />
+                      <p className="text-xs font-bold uppercase tracking-wider" style={{ color: designTokens.colors.textSecondary }}>
+                        Select Consultation Date
+                      </p>
+                    </div>
+                    <div className="flex gap-3 overflow-x-auto pb-2">
+                      {selectableDates.map((date) => {
+                        const selected = selectedDate === date
+                        const parts = getDateParts(date)
+                        return (
+                          <button
+                            key={date}
+                            type="button"
+                            onClick={() => {
+                              setSelectedSlot(null)
+                              setSelectedDate(date)
+                              void loadSlotsForDate(date)
+                            }}
+                            className="min-w-24 rounded-2xl border-2 px-4 py-3 text-center transition-all duration-200 hover:-translate-y-0.5"
+                            style={{
+                              borderColor: selected ? designTokens.colors.primary : designTokens.colors.border,
+                              backgroundColor: selected ? designTokens.colors.primary : designTokens.colors.surface,
+                              color: selected ? '#FFFFFF' : designTokens.colors.textPrimary,
+                              boxShadow: selected ? designTokens.shadows.md : 'none'
+                            }}
+                          >
+                            <span className="block text-xs font-bold">{getDateHeading(date)}</span>
+                            <span className="block text-2xl font-bold leading-tight mt-1">{parts.day}</span>
+                            <span className="block text-[11px] font-semibold opacity-75">{parts.weekday}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl border p-5" style={{ borderColor: designTokens.colors.border, backgroundColor: `${designTokens.colors.background}70` }}>
+                    <div className="mb-5">
+                      <h3 className="text-lg font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                        {selectedDate ? getDateHeading(selectedDate) : 'Selected Date'}
+                      </h3>
+                      <p className="text-xs font-semibold mt-1" style={{ color: designTokens.colors.textTertiary }}>
+                        {selectedDate ? formatSlotDate(selectedDate, true) : 'Choose a date above'}
+                      </p>
+                    </div>
+
+                    {dateSlotsLoading ? (
+                      <div className="flex items-center gap-3 rounded-xl p-5 border bg-white" style={{ borderColor: designTokens.colors.border }}>
+                        <div className="w-7 h-7 border-4 border-[#F5F0EB] border-t-[#C4622D] rounded-full animate-spin" />
+                        <p className="text-sm font-semibold" style={{ color: designTokens.colors.textSecondary }}>
+                          Loading available slots for this date...
+                        </p>
+                      </div>
+                    ) : selectedDateSlots.length > 0 ? (
+                      <div className="space-y-5">
+                        {(['morning', 'afternoon', 'evening'] as const).map((period) => {
+                          const slots = groupedSlots[period]
+                          if (slots.length === 0) return null
+                          const Icon = periodMeta[period].icon
+                          return (
+                            <div key={period}>
+                              <div className="flex items-center gap-2 mb-3">
+                                <Icon className="w-4 h-4" style={{ color: designTokens.colors.secondary }} />
+                                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: designTokens.colors.textSecondary }}>
+                                  {periodMeta[period].label}
+                                </p>
+                              </div>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
+                                {slots.map((slot) => {
+                                  const selected = selectedSlot?.available_date === slot.available_date && selectedSlot?.time_slot === slot.time_slot
+                                  return (
+                                    <button
+                                      key={`${slot.available_date}-${slot.time_slot}`}
+                                      type="button"
+                                      onClick={() => setSelectedSlot(slot)}
+                                      className="rounded-2xl border-2 px-4 py-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
+                                      style={{
+                                        borderColor: selected ? designTokens.colors.primary : designTokens.colors.border,
+                                        backgroundColor: selected ? `${designTokens.colors.primary}10` : designTokens.colors.surface,
+                                        color: selected ? designTokens.colors.primary : designTokens.colors.textPrimary,
+                                        boxShadow: selected ? designTokens.shadows.md : 'none'
+                                      }}
+                                    >
+                                      <span className="block text-base font-bold">{formatSlotTime(slot.time_slot)}</span>
+                                      <span className="block text-[11px] font-semibold mt-1" style={{ color: designTokens.colors.textTertiary }}>
+                                        Video consultation
+                                      </span>
+                                    </button>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : (
+                      <div className="rounded-xl p-5 border border-dashed text-center bg-white" style={{ borderColor: designTokens.colors.border }}>
+                        <h3 className="text-base font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                          No slots available on this date.
+                        </h3>
+                        <p className="text-sm mt-2" style={{ color: designTokens.colors.textSecondary }}>
+                          Please choose another available date above.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-xl p-5 border border-dashed text-center" style={{ borderColor: designTokens.colors.border }}>
+                  <h3 className="text-base font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                    No consultation times are currently available.
+                  </h3>
+                  <p className="text-sm mt-2" style={{ color: designTokens.colors.textSecondary }}>
+                    You can join the waiting list, request a callback, or check again for future availability.
+                  </p>
+                </div>
+              )}
+            </div>
+            {/* Right: Sticky Summary Card */}
+            <div className="lg:col-span-1">
+              <div className="sticky top-8 rounded-2xl p-6 border-2 space-y-6" style={{ backgroundColor: designTokens.colors.surface, borderColor: designTokens.colors.border }}>
+                <h3 className="font-bold text-lg" style={{ color: designTokens.colors.textPrimary }}>
+                  Booking Summary
                 </h3>
-                <p className="text-xs mt-2 leading-relaxed" style={{ color: designTokens.colors.textSecondary }}>
-                  {item.description}
+
+                {/* Summary Details */}
+                <div className="space-y-4">
+                  <div className="pb-4 border-b-2" style={{ borderColor: designTokens.colors.border }}>
+                    <p className="text-xs font-semibold uppercase" style={{ color: designTokens.colors.textTertiary }}>
+                      Selected Consultation
+                    </p>
+                    <p className="text-base font-bold mt-2" style={{ color: designTokens.colors.textPrimary }}>
+                      {selectedSlot ? formatSlotDate(selectedSlot.available_date, true) : 'Not selected'}
+                    </p>
+                    <p className="text-sm mt-1" style={{ color: designTokens.colors.textSecondary }}>
+                      {selectedSlot ? formatSlotTime(selectedSlot.time_slot) : 'Choose an available time'}
+                    </p>
+                  </div>
+
+                  <div className="pb-4 border-b-2" style={{ borderColor: designTokens.colors.border }}>
+                    <p className="text-xs font-semibold uppercase" style={{ color: designTokens.colors.textTertiary }}>
+                      Type
+                    </p>
+                    <div className="flex items-center gap-2 mt-2">
+                      <Video className="w-4 h-4" style={{ color: designTokens.colors.primary }} />
+                      <span className="font-semibold" style={{ color: designTokens.colors.textPrimary }}>
+                        Video Consultation
+                      </span>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="text-xs font-semibold uppercase" style={{ color: designTokens.colors.textTertiary }}>
+                      Healthcare Professional
+                    </p>
+                    <p className="font-semibold mt-2" style={{ color: designTokens.colors.textPrimary }}>
+                      Automatically Assigned
+                    </p>
+                  </div>
+
+                  <div className="pt-4 border-t-2" style={{ borderColor: designTokens.colors.border }}>
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold uppercase" style={{ color: designTokens.colors.textTertiary }}>
+                        Consultation Fee
+                      </p>
+                      <p className="font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                        INR {CONSULTATION_FEE}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* CTA Button */}
+                <button
+                  onClick={handleConfirmBooking}
+                  disabled={!selectedSlot || loading}
+                  className="w-full py-4 px-6 rounded-xl font-bold text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg cursor-pointer"
+                  style={{
+                    backgroundColor: selectedSlot ? designTokens.colors.primary : designTokens.colors.textTertiary,
+                  }}
+                >
+                  {loading ? 'Processing...' : 'Confirm Appointment'}
+                </button>
+
+                <p className="text-xs text-center" style={{ color: designTokens.colors.textTertiary }}>
+                  You can reschedule anytime in your account
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Guidance Section */}
+          <div className="rounded-2xl p-8 border-2 mb-8" style={{ backgroundColor: `${designTokens.colors.secondary}08`, borderColor: `${designTokens.colors.secondary}20` }}>
+            <div className="flex items-center gap-3 mb-6">
+              <Shield className="w-6 h-6" style={{ color: designTokens.colors.secondary }} />
+              <div>
+                <h2 className="text-xl font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                  What Happens Next
+                </h2>
+                <p className="text-sm mt-1" style={{ color: designTokens.colors.textSecondary }}>
+                  Here is how 8Liv handles your consultation after payment.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                {
+                  title: 'Automatic matching',
+                  description: 'You choose a convenient time, then we assign an available specialist with workload balancing.'
+                },
+                {
+                  title: 'Clear appointment card',
+                  description: 'Your dashboard will show the doctor, date, time, status, and countdown once the appointment is assigned.'
+                },
+                {
+                  title: 'Join window',
+                  description: 'The video room becomes available 15 minutes before your scheduled consultation time.'
+                },
+                {
+                  title: 'After the call',
+                  description: 'You can return to the dashboard to view appointment details, prescriptions, and next care steps.'
+                }
+              ].map((item, index) => (
+                <div key={item.title} className="rounded-xl p-5 border bg-white" style={{ borderColor: designTokens.colors.border }}>
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold text-white mb-4" style={{ backgroundColor: index === 0 ? designTokens.colors.primary : designTokens.colors.secondary }}>
+                    {index + 1}
+                  </div>
+                  <h3 className="text-sm font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                    {item.title}
+                  </h3>
+                  <p className="text-xs mt-2 leading-relaxed" style={{ color: designTokens.colors.textSecondary }}>
+                    {item.description}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Trust Badges */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {[
+              { icon: Lock, label: 'Secure & Encrypted', color: '#1A1F36' },
+              { icon: Shield, label: 'HIPAA Compliant', color: '#5C7A6B' },
+              { icon: Users, label: 'Licensed Doctors', color: '#C4622D' },
+              { icon: MapPin, label: 'Private Sessions', color: '#8896A4' }
+            ].map((badge, idx) => (
+              <div key={idx} className="text-center p-4 rounded-lg" style={{ backgroundColor: `${badge.color}08`, borderRadius: designTokens.borderRadius.lg }}>
+                <badge.icon className="w-6 h-6 mx-auto mb-2" style={{ color: badge.color }} />
+                <p className="text-xs font-semibold" style={{ color: designTokens.colors.textPrimary }}>
+                  {badge.label}
                 </p>
               </div>
             ))}
           </div>
         </div>
-
-        {/* Trust Badges */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          {[
-            { icon: Lock, label: 'Secure & Encrypted', color: '#1A1F36' },
-            { icon: Shield, label: 'HIPAA Compliant', color: '#5C7A6B' },
-            { icon: Users, label: 'Licensed Doctors', color: '#C4622D' },
-            { icon: MapPin, label: 'Private Sessions', color: '#8896A4' }
-          ].map((badge, idx) => (
-            <div key={idx} className="text-center p-4 rounded-lg" style={{ backgroundColor: `${badge.color}08`, borderRadius: designTokens.borderRadius.lg }}>
-              <badge.icon className="w-6 h-6 mx-auto mb-2" style={{ color: badge.color }} />
-              <p className="text-xs font-semibold" style={{ color: designTokens.colors.textPrimary }}>
-                {badge.label}
-              </p>
-            </div>
-          ))}
-        </div>
-      </div>
+      )}
     </div>
   )
 }
