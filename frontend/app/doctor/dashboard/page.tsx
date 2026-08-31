@@ -1088,10 +1088,11 @@ export default function DoctorDashboard() {
       if (!res.ok) {
         if (data.code === 'PAYOUT_ACCOUNT_REQUIRED' || (data.error && data.error.toLowerCase().includes('configure your bank'))) {
           setShowBankSettingsModal(true);
-          setBankModalMsg({ type: 'error', text: 'Please configure your bank or UPI payout account before requesting a withdrawal.' });
+          setBankModalMsg({ type: 'error', text: data.error || 'Please configure your bank or UPI payout account before requesting a withdrawal.' });
           return;
         }
-        throw new Error(data.error || 'Failed to submit withdrawal request.');
+        alert(data.error || 'Failed to submit withdrawal request.');
+        return;
       }
       alert('Withdrawal request submitted successfully! Funds will transfer within 2 business days. ✅');
       setWithdrawAmount('');
