@@ -33,7 +33,14 @@ export default function Sidebar({
   const pathname = usePathname()
   const router = useRouter()
 
-  const navLinks = [
+  type NavLink = {
+    icon: any
+    label: string
+    href: string
+    badge?: number
+  }
+
+  const navLinks: NavLink[] = [
     { icon: LayoutDashboard, label: 'Overview', href: '/patient' },
     { icon: Calendar, label: 'Appointments', href: '/patient/appointments' },
     { icon: TrendingDown, label: 'My Progress', href: '/patient/progress' },
