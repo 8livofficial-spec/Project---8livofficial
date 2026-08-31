@@ -25,7 +25,19 @@ export async function POST(request: Request) {
   try {
     const admin = await assertAdmin(request)
     const body = await request.json()
-    const { email, password, role, firstName, lastName, phoneNumber } = body
+    const {
+      email,
+      password,
+      role,
+      firstName,
+      lastName,
+      phoneNumber,
+      accountNumber,
+      ifsc,
+      bankName,
+      beneficiaryName,
+      upiId
+    } = body
 
     if (!email || !password || !role) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
@@ -53,6 +65,7 @@ export async function POST(request: Request) {
       .from('profiles')
       .upsert({
         id: newUserId,
+        email,
         first_name: firstName || '',
         last_name: lastName || '',
         phone_number: phoneNumber || '',
@@ -63,13 +76,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: profileErr.message }, { status: 500 })
     }
 
-    // 4. If the role is doctor, set up their doctor profile & wallet
+    // 4. Save bank / UPI payout account if provided
+    const fullName = `${firstName || ''} ${lastName || ''}`.trim() || 'Provider'
+    const accountHolder = beneficiaryName?.trim() || (role === 'doctor' ? `Dr. ${fullName}` : fullName)
+    const cleanAccountNumber = accountNumber?.trim() || null
+    const cleanIfsc = ifsc?.trim().toUpperCase() || null
+    const cleanUpiId = upiId?.trim() || null
+    const cleanBankName = bankName?.trim() || ''
+
     if (role === 'doctor') {
       const { error: docErr } = await supabaseAdmin
         .from('doctor_profiles')
         .upsert({
           id: newUserId,
-          full_name: `Dr. ${firstName} ${lastName}`.trim()
+          full_name: `Dr. ${fullName}`
         })
 
       if (docErr) {
@@ -88,6 +108,46 @@ export async function POST(request: Request) {
       if (walletErr) {
         console.error('Failed to create doctor wallet:', walletErr.message)
       }
+
+      // Upsert doctor_payout_accounts if bank or UPI is provided
+      if (cleanAccountNumber || cleanUpiId) {
+        const accountType = cleanUpiId && !cleanAccountNumber ? 'vpa' : 'bank_account'
+        await supabaseAdmin
+          .from('doctor_payout_accounts')
+          .upsert({
+            doctor_id: newUserId,
+            account_type: accountType,
+            beneficiary_name: accountHolder,
+            account_number: cleanAccountNumber,
+            ifsc: cleanIfsc,
+            vpa: cleanUpiId,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'doctor_id' })
+      }
+    }
+
+    // Also upsert provider_profiles for provider ecosystem compatibility
+    try {
+      await supabaseAdmin.from('provider_profiles').upsert({
+        provider_id: newUserId,
+        role: role === 'trainer' ? 'fitness_coach' : role,
+        full_name: role === 'doctor' ? `Dr. ${fullName}` : fullName,
+        email,
+        phone_number: phoneNumber || '',
+        consultation_type: 'video',
+        payout_amount: role === 'doctor' ? 300 : 0,
+        status: 'active',
+        upi_id: cleanUpiId || '',
+        bank_account_details: cleanAccountNumber ? {
+          account_number: cleanAccountNumber,
+          ifsc: cleanIfsc,
+          bank_name: cleanBankName,
+          beneficiary_name: accountHolder
+        } : {},
+        updated_at: new Date().toISOString()
+      })
+    } catch (pErr) {
+      console.warn('Optional provider_profiles sync skipped:', pErr)
     }
 
     try {

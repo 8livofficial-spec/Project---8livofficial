@@ -217,6 +217,23 @@ export async function POST(request: Request) {
 
     if (role === 'doctor') {
       await supabaseAdmin.from('doctor_profiles').upsert({ id: providerId, full_name: `Dr. ${fullName}` })
+      
+      const accNum = bankAccountDetails?.account_number || bankAccountDetails?.accountNumber || null
+      const ifscCode = bankAccountDetails?.ifsc || bankAccountDetails?.ifscCode || null
+      const bName = bankAccountDetails?.beneficiary_name || bankAccountDetails?.accountHolderName || `Dr. ${fullName}`
+      const cleanUpi = upiId?.trim() || null
+
+      if (accNum || cleanUpi) {
+        await supabaseAdmin.from('doctor_payout_accounts').upsert({
+          doctor_id: providerId,
+          account_type: cleanUpi && !accNum ? 'vpa' : 'bank_account',
+          beneficiary_name: bName,
+          account_number: accNum,
+          ifsc: ifscCode ? ifscCode.toUpperCase() : null,
+          vpa: cleanUpi,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'doctor_id' })
+      }
     }
 
     await supabaseAdmin.from('doctor_wallet').upsert({
@@ -310,6 +327,26 @@ export async function PATCH(request: Request) {
       }
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
+
+    if (updates.bank_account_details || updates.upi_id) {
+      const accNum = updates.bank_account_details?.account_number || updates.bank_account_details?.accountNumber || null
+      const ifscCode = updates.bank_account_details?.ifsc || updates.bank_account_details?.ifscCode || null
+      const bName = updates.bank_account_details?.beneficiary_name || updates.bank_account_details?.accountHolderName || updates.full_name || 'Doctor'
+      const cleanUpi = updates.upi_id?.trim() || null
+
+      if (accNum || cleanUpi) {
+        await supabaseAdmin.from('doctor_payout_accounts').upsert({
+          doctor_id: providerId,
+          account_type: cleanUpi && !accNum ? 'vpa' : 'bank_account',
+          beneficiary_name: bName,
+          account_number: accNum,
+          ifsc: ifscCode ? ifscCode.toUpperCase() : null,
+          vpa: cleanUpi,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'doctor_id' })
+      }
+    }
+
     return NextResponse.json({ success: true })
   } catch (err: any) {
     const status = err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500)

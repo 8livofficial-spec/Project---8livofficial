@@ -5,7 +5,7 @@ import { Suspense, useState, useEffect, useRef, type FormEvent } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
-import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Package, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer, Trash2, GitMerge, ClipboardList, DollarSign, Calendar, UserCheck, XCircle, TrendingUp, BadgeCheck, Menu, X } from 'lucide-react';
+import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Package, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer, Trash2, GitMerge, ClipboardList, DollarSign, Calendar, UserCheck, XCircle, TrendingUp, BadgeCheck, Menu, X, Copy, KeyRound, Sparkles, Check } from 'lucide-react';
 import { motion } from 'framer-motion';
 import SessionMonitor from '@/components/admin/SessionMonitor';
 import { authedFetch } from '@/lib/apiClient';
@@ -216,9 +216,40 @@ function AdminDashboardContent() {
   const [staffFirstName, setStaffFirstName] = useState('');
   const [staffLastName, setStaffLastName] = useState('');
   const [staffPhone, setStaffPhone] = useState('');
+  const [staffAccountNumber, setStaffAccountNumber] = useState('');
+  const [staffIfsc, setStaffIfsc] = useState('');
+  const [staffBankName, setStaffBankName] = useState('');
+  const [staffBeneficiaryName, setStaffBeneficiaryName] = useState('');
+  const [staffUpiId, setStaffUpiId] = useState('');
   const [staffSubmitting, setStaffSubmitting] = useState(false);
   const [staffDeleting, setStaffDeleting] = useState(false);
   const [providerSubmitting, setProviderSubmitting] = useState(false);
+
+  // ── Credentials Success Modal state ─────────────────────────────────────
+  const [createdCredentialsModal, setCreatedCredentialsModal] = useState<{
+    isOpen: boolean;
+    name: string;
+    email: string;
+    password: string;
+    role: string;
+  }>({
+    isOpen: false,
+    name: '',
+    email: '',
+    password: '',
+    role: '',
+  });
+  const [copiedField, setCopiedField] = useState<'all' | 'email' | 'password' | null>(null);
+
+  // ── Helper to generate secure random password ───────────────────────────
+  const generateRandomPassword = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*';
+    let pwd = '8Liv@';
+    for (let i = 0; i < 7; i++) {
+      pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return pwd;
+  };
 
   // ── Plan Form state ─────────────────────────────────────────────────────
   const [planName, setPlanName] = useState('');
@@ -249,7 +280,10 @@ function AdminDashboardContent() {
   const [providerConsultationType, setProviderConsultationType] = useState('Video Consultation');
   const [providerPayoutAmount, setProviderPayoutAmount] = useState('300');
   const [providerStatus, setProviderStatus] = useState<'active' | 'inactive'>('active');
-  const [providerBankDetails, setProviderBankDetails] = useState('');
+  const [providerAccountNumber, setProviderAccountNumber] = useState('');
+  const [providerIfsc, setProviderIfsc] = useState('');
+  const [providerBankName, setProviderBankName] = useState('');
+  const [providerBeneficiaryName, setProviderBeneficiaryName] = useState('');
   const [providerUpi, setProviderUpi] = useState('');
 
   useEffect(() => {
@@ -266,11 +300,16 @@ function AdminDashboardContent() {
 
   const resetStaffForm = () => {
     setStaffEmail('');
-    setStaffPassword('');
+    setStaffPassword(generateRandomPassword());
     setStaffRole('doctor');
     setStaffFirstName('');
     setStaffLastName('');
     setStaffPhone('');
+    setStaffAccountNumber('');
+    setStaffIfsc('');
+    setStaffBankName('');
+    setStaffBeneficiaryName('');
+    setStaffUpiId('');
   };
 
   const providerSpecializationOptions: Record<string, string[]> = {
@@ -283,7 +322,7 @@ function AdminDashboardContent() {
   const resetProviderForm = () => {
     setProviderFullName('');
     setProviderEmail('');
-    setProviderPassword('');
+    setProviderPassword(generateRandomPassword());
     setProviderPhone('');
     setProviderRole('doctor');
     setProviderSpecialization('Endocrinologist');
@@ -294,7 +333,10 @@ function AdminDashboardContent() {
     setProviderConsultationType('Video Consultation');
     setProviderPayoutAmount('300');
     setProviderStatus('active');
-    setProviderBankDetails('');
+    setProviderAccountNumber('');
+    setProviderIfsc('');
+    setProviderBankName('');
+    setProviderBeneficiaryName('');
     setProviderUpi('');
     setSelectedProvider(null);
   };
@@ -332,6 +374,13 @@ function AdminDashboardContent() {
 
     setProviderSubmitting(true);
     try {
+      const bankDetailsObj = {
+        account_number: providerAccountNumber || '',
+        ifsc: providerIfsc ? providerIfsc.toUpperCase() : '',
+        bank_name: providerBankName || '',
+        beneficiary_name: providerBeneficiaryName || providerFullName,
+      };
+
       const payload = selectedProvider
         ? {
           providerId: selectedProvider.provider_id,
@@ -348,7 +397,7 @@ function AdminDashboardContent() {
             consultation_type: providerConsultationType,
             payout_amount: Number(providerPayoutAmount || 0),
             status: providerStatus,
-            bank_account_details: providerBankDetails ? { notes: providerBankDetails } : {},
+            bank_account_details: bankDetailsObj,
             upi_id: providerUpi,
           },
         }
@@ -366,7 +415,11 @@ function AdminDashboardContent() {
           consultationType: providerConsultationType,
           payoutAmount: providerPayoutAmount,
           status: providerStatus,
-          bankAccountDetails: providerBankDetails ? { notes: providerBankDetails } : {},
+          bankAccountDetails: bankDetailsObj,
+          accountNumber: providerAccountNumber,
+          ifsc: providerIfsc,
+          bankName: providerBankName,
+          beneficiaryName: providerBeneficiaryName,
           upiId: providerUpi,
         };
       const res = await adminFetch('/api/admin/providers', {
@@ -380,7 +433,19 @@ function AdminDashboardContent() {
         return;
       }
       if (!res.ok) throw new Error(data.error || 'Failed to save provider.');
-      alert(selectedProvider ? 'Provider updated successfully.' : 'Provider created successfully.');
+
+      if (!selectedProvider) {
+        setCreatedCredentialsModal({
+          isOpen: true,
+          name: providerFullName,
+          email: providerEmail,
+          password: providerPassword,
+          role: providerRole,
+        });
+      } else {
+        alert('Provider updated successfully.');
+      }
+
       resetProviderForm();
       await Promise.all([fetchProviders(), fetchStaffProfiles(), fetchPayoutsData()]);
     } catch (err: any) {
@@ -439,7 +504,11 @@ function AdminDashboardContent() {
     setProviderConsultationType(provider.consultation_type || 'Video Consultation');
     setProviderPayoutAmount(String(provider.payout_amount || 0));
     setProviderStatus(provider.status || 'active');
-    setProviderBankDetails(provider.bank_account_details?.notes || '');
+    const bankObj = provider.bank_account_details || {};
+    setProviderAccountNumber(bankObj.account_number || bankObj.accountNumber || '');
+    setProviderIfsc(bankObj.ifsc || bankObj.ifscCode || '');
+    setProviderBankName(bankObj.bank_name || bankObj.bankName || '');
+    setProviderBeneficiaryName(bankObj.beneficiary_name || bankObj.accountHolderName || provider.full_name || '');
     setProviderUpi(provider.upi_id || '');
   };
 
@@ -1892,44 +1961,77 @@ function AdminDashboardContent() {
                   <h3 className="mt-1 text-2xl font-black text-[#1A1F36]">{selectedProvider ? 'Provider Profile' : 'Provider Login + Profile'}</h3>
                   <p className="mt-2 text-sm font-semibold text-[#8896A4]">Creates login access, provider profile, wallet inclusion, and schedule eligibility.</p>
                 </div>
-                <div className="space-y-4">
-                  <input value={providerFullName} onChange={e => setProviderFullName(e.target.value)} placeholder="Full Name *" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <input value={providerEmail} onChange={e => setProviderEmail(e.target.value)} placeholder="Email *" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                    <input value={providerPassword} onChange={e => setProviderPassword(e.target.value)} placeholder="Temporary Password *" type="password" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                  </div>
-                  <input value={providerPhone} onChange={e => setProviderPhone(e.target.value)} placeholder="Phone Number" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <select value={providerRole} onChange={e => { const role = e.target.value as typeof providerRole; setProviderRole(role); setProviderSpecialization(providerSpecializationOptions[role][0]); }} className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none">
-                      <option value="doctor">Doctor</option>
-                      <option value="dietitian">Dietitian</option>
-                      <option value="nutritionist">Nutritionist</option>
-                      <option value="fitness_coach">Fitness Coach</option>
+                  <div className="space-y-4">
+                    <input value={providerFullName} onChange={e => setProviderFullName(e.target.value)} placeholder="Full Name *" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <input value={providerEmail} onChange={e => setProviderEmail(e.target.value)} placeholder="Email *" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                      <div>
+                        <div className="relative flex items-center">
+                          <input
+                            value={providerPassword}
+                            onChange={e => setProviderPassword(e.target.value)}
+                            placeholder={selectedProvider ? 'Leave empty to keep current password' : 'Auto-generated Password *'}
+                            type="text"
+                            className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 pl-4 pr-10 py-3 text-sm font-bold outline-none font-mono text-indigo-700"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setProviderPassword(generateRandomPassword())}
+                            title="Generate Strong Password"
+                            className="absolute right-2.5 p-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-600 transition-colors"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                          </button>
+                        </div>
+                        <p className="text-[10px] text-slate-400 font-semibold mt-1">Click sparkle icon to regenerate a secure password</p>
+                      </div>
+                    </div>
+                    <input value={providerPhone} onChange={e => setProviderPhone(e.target.value)} placeholder="Phone Number" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <select value={providerRole} onChange={e => { const role = e.target.value as typeof providerRole; setProviderRole(role); setProviderSpecialization(providerSpecializationOptions[role][0]); }} className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none">
+                        <option value="doctor">Doctor</option>
+                        <option value="dietitian">Dietitian</option>
+                        <option value="nutritionist">Nutritionist</option>
+                        <option value="fitness_coach">Fitness Coach</option>
+                      </select>
+                      <select value={providerSpecialization} onChange={e => setProviderSpecialization(e.target.value)} className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none">
+                        {providerSpecializationOptions[providerRole].map(option => <option key={option} value={option}>{option}</option>)}
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <input value={providerQualification} onChange={e => setProviderQualification(e.target.value)} placeholder="Qualification" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                      <input value={providerExperience} onChange={e => setProviderExperience(e.target.value)} placeholder="Years of Experience" type="number" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                    </div>
+                    <input value={providerLicense} onChange={e => setProviderLicense(e.target.value)} placeholder="Medical License / Registration Number" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                    <input value={providerPhoto} onChange={e => setProviderPhoto(e.target.value)} placeholder="Profile Photo URL" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <input value={providerConsultationType} onChange={e => setProviderConsultationType(e.target.value)} placeholder="Consultation Type" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                      <input value={providerPayoutAmount} onChange={e => setProviderPayoutAmount(e.target.value)} placeholder="Payout Amount" type="number" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                    </div>
+                    <select value={providerStatus} onChange={e => setProviderStatus(e.target.value as 'active' | 'inactive')} className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none">
+                      <option value="active">Active</option>
+                      <option value="inactive">Inactive</option>
                     </select>
-                    <select value={providerSpecialization} onChange={e => setProviderSpecialization(e.target.value)} className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none">
-                      {providerSpecializationOptions[providerRole].map(option => <option key={option} value={option}>{option}</option>)}
-                    </select>
+
+                    <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100 space-y-3">
+                      <p className="text-xs font-black text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
+                        <Wallet className="w-3.5 h-3.5 text-indigo-600" /> Payout & Bank Account Details
+                      </p>
+                      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                        <input value={providerBeneficiaryName} onChange={e => setProviderBeneficiaryName(e.target.value)} placeholder="Account Holder Name" className="rounded-xl border border-[#1A1F36]/10 bg-white px-3.5 py-2.5 text-xs font-bold outline-none" />
+                        <input value={providerAccountNumber} onChange={e => setProviderAccountNumber(e.target.value)} placeholder="Bank Account Number" className="rounded-xl border border-[#1A1F36]/10 bg-white px-3.5 py-2.5 text-xs font-bold outline-none font-mono" />
+                      </div>
+                      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+                        <input value={providerIfsc} onChange={e => setProviderIfsc(e.target.value.toUpperCase())} placeholder="IFSC Code (e.g. HDFC0001234)" className="rounded-xl border border-[#1A1F36]/10 bg-white px-3.5 py-2.5 text-xs font-bold outline-none uppercase font-mono" />
+                        <input value={providerBankName} onChange={e => setProviderBankName(e.target.value)} placeholder="Bank Name (e.g. HDFC Bank)" className="rounded-xl border border-[#1A1F36]/10 bg-white px-3.5 py-2.5 text-xs font-bold outline-none" />
+                      </div>
+                      <input value={providerUpi} onChange={e => setProviderUpi(e.target.value)} placeholder="UPI ID / VPA (e.g. doctor@okhdfcbank)" className="w-full rounded-xl border border-[#1A1F36]/10 bg-white px-3.5 py-2.5 text-xs font-bold outline-none" />
+                    </div>
+
+                    <button disabled={providerSubmitting} className="w-full rounded-xl bg-[#1A1F36] px-5 py-4 text-xs font-black uppercase tracking-wider text-white transition-all hover:bg-[#11162A] disabled:opacity-60">
+                      {providerSubmitting ? 'Saving Provider...' : selectedProvider ? 'Save Provider' : 'Create Provider'}
+                    </button>
                   </div>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <input value={providerQualification} onChange={e => setProviderQualification(e.target.value)} placeholder="Qualification" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                    <input value={providerExperience} onChange={e => setProviderExperience(e.target.value)} placeholder="Years of Experience" type="number" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                  </div>
-                  <input value={providerLicense} onChange={e => setProviderLicense(e.target.value)} placeholder="Medical License / Registration Number" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                  <input value={providerPhoto} onChange={e => setProviderPhoto(e.target.value)} placeholder="Profile Photo URL" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <input value={providerConsultationType} onChange={e => setProviderConsultationType(e.target.value)} placeholder="Consultation Type" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                    <input value={providerPayoutAmount} onChange={e => setProviderPayoutAmount(e.target.value)} placeholder="Payout Amount" type="number" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                  </div>
-                  <select value={providerStatus} onChange={e => setProviderStatus(e.target.value as 'active' | 'inactive')} className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none">
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                  </select>
-                  <textarea value={providerBankDetails} onChange={e => setProviderBankDetails(e.target.value)} placeholder="Bank Account Details" rows={3} className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                  <input value={providerUpi} onChange={e => setProviderUpi(e.target.value)} placeholder="UPI ID" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                  <button disabled={providerSubmitting} className="w-full rounded-xl bg-[#1A1F36] px-5 py-4 text-xs font-black uppercase tracking-wider text-white transition-all hover:bg-[#11162A] disabled:opacity-60">
-                    {providerSubmitting ? 'Saving Provider...' : selectedProvider ? 'Save Provider' : 'Create Provider'}
-                  </button>
-                </div>
               </form>
             </div>
           </motion.div>
@@ -2924,12 +3026,23 @@ function AdminDashboardContent() {
                           role: staffRole,
                           firstName: staffFirstName,
                           lastName: staffLastName,
-                          phoneNumber: staffPhone
+                          phoneNumber: staffPhone,
+                          accountNumber: staffAccountNumber,
+                          ifsc: staffIfsc,
+                          bankName: staffBankName,
+                          beneficiaryName: staffBeneficiaryName,
+                          upiId: staffUpiId
                         })
                       });
 
                       if (res.ok) {
-                        alert('New staff member appointed successfully! ✅');
+                        setCreatedCredentialsModal({
+                          isOpen: true,
+                          name: `${staffFirstName} ${staffLastName}`.trim(),
+                          email: staffEmail,
+                          password: staffPassword,
+                          role: staffRole
+                        });
                         resetStaffForm();
                         await fetchStaffProfiles();
                       } else {
@@ -2982,14 +3095,23 @@ function AdminDashboardContent() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Initial Password *</label>
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Generated Password *</label>
+                        <button
+                          type="button"
+                          onClick={() => setStaffPassword(generateRandomPassword())}
+                          className="text-[11px] font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                        >
+                          <Sparkles className="w-3 h-3" /> Regenerate
+                        </button>
+                      </div>
                       <input
-                        type="password"
+                        type="text"
                         required
                         value={staffPassword}
                         onChange={(e) => setStaffPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                        placeholder="8Liv@XXXXX"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-mono font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                       />
                     </div>
                   </div>
@@ -3016,6 +3138,73 @@ function AdminDashboardContent() {
                         onChange={(e) => setStaffPhone(e.target.value)}
                         placeholder="+91 9876543210"
                         className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Bank & Payout Configuration */}
+                  <div className="p-6 rounded-3xl bg-slate-50 border border-slate-200 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-black uppercase tracking-widest text-slate-600 flex items-center gap-2">
+                        <Wallet className="w-4 h-4 text-indigo-600" /> Bank & UPI Payout Details
+                      </h4>
+                      <span className="text-[10px] font-bold text-slate-400">Required for doctor wallet payouts</span>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-slate-500">Account Holder Name</label>
+                        <input
+                          type="text"
+                          value={staffBeneficiaryName}
+                          onChange={(e) => setStaffBeneficiaryName(e.target.value)}
+                          placeholder="e.g. Dr. Jane Doe"
+                          className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-slate-500">Bank Account Number</label>
+                        <input
+                          type="text"
+                          value={staffAccountNumber}
+                          onChange={(e) => setStaffAccountNumber(e.target.value)}
+                          placeholder="Account Number"
+                          className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs font-mono font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-slate-500">IFSC Code</label>
+                        <input
+                          type="text"
+                          value={staffIfsc}
+                          onChange={(e) => setStaffIfsc(e.target.value.toUpperCase())}
+                          placeholder="e.g. HDFC0001234"
+                          className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs font-mono font-bold text-slate-700 uppercase focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <label className="text-[11px] font-bold text-slate-500">Bank Name</label>
+                        <input
+                          type="text"
+                          value={staffBankName}
+                          onChange={(e) => setStaffBankName(e.target.value)}
+                          placeholder="e.g. HDFC Bank"
+                          className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-bold text-slate-500">UPI ID / VPA</label>
+                      <input
+                        type="text"
+                        value={staffUpiId}
+                        onChange={(e) => setStaffUpiId(e.target.value)}
+                        placeholder="e.g. doctor@okhdfcbank"
+                        className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3.5 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                       />
                     </div>
                   </div>
@@ -4002,6 +4191,120 @@ function AdminDashboardContent() {
           </>
         )}
       </motion.div>
+
+      {/* ── NEW PROVIDER / STAFF CREDENTIALS MODAL ── */}
+      {createdCredentialsModal.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-md bg-white rounded-3xl p-6 md:p-8 shadow-2xl border border-slate-100 space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                  <CheckCircle2 className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 leading-tight">Account Created!</h3>
+                  <p className="text-xs font-semibold text-slate-400 capitalize">{createdCredentialsModal.role} Access Profile</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCreatedCredentialsModal({ isOpen: false, name: '', email: '', password: '', role: '' })}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-3.5 text-xs text-amber-800 font-medium leading-relaxed flex items-start gap-2.5">
+              <KeyRound className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <span>
+                Please copy and share these credentials with <strong className="font-bold text-amber-900">{createdCredentialsModal.name}</strong> immediately so they can log in.
+              </span>
+            </div>
+
+            <div className="space-y-3.5 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+              <div>
+                <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Full Name</span>
+                <p className="text-sm font-bold text-slate-800">{createdCredentialsModal.name}</p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Email Address</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(createdCredentialsModal.email);
+                      setCopiedField('email');
+                      setTimeout(() => setCopiedField(null), 2000);
+                    }}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                  >
+                    {copiedField === 'email' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedField === 'email' ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <p className="text-sm font-mono font-bold text-slate-900 bg-white px-3 py-2 rounded-xl border border-slate-200 mt-1">
+                  {createdCredentialsModal.email}
+                </p>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Temporary Password</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(createdCredentialsModal.password);
+                      setCopiedField('password');
+                      setTimeout(() => setCopiedField(null), 2000);
+                    }}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                  >
+                    {copiedField === 'password' ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                    {copiedField === 'password' ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+                <p className="text-sm font-mono font-black text-indigo-700 bg-white px-3 py-2 rounded-xl border border-slate-200 mt-1">
+                  {createdCredentialsModal.password}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  const credsText = `8liv Clinician Credentials:\nRole: ${createdCredentialsModal.role}\nName: ${createdCredentialsModal.name}\nEmail: ${createdCredentialsModal.email}\nPassword: ${createdCredentialsModal.password}\nLogin at: ${window.location.origin}/login`;
+                  navigator.clipboard.writeText(credsText);
+                  setCopiedField('all');
+                  setTimeout(() => setCopiedField(null), 2000);
+                }}
+                className="w-full py-3.5 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition-all active:scale-95"
+              >
+                {copiedField === 'all' ? (
+                  <>
+                    <Check className="w-4 h-4 text-white" />
+                    Copied All Credentials!
+                  </>
+                ) : (
+                  <>
+                    <Copy className="w-4 h-4" />
+                    Copy All Credentials
+                  </>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setCreatedCredentialsModal({ isOpen: false, name: '', email: '', password: '', role: '' })}
+                className="w-full py-3 px-4 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold transition-colors"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

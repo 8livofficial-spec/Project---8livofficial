@@ -1085,13 +1085,23 @@ export default function DoctorDashboard() {
       });
       const data = await res.json();
       if (!res.ok) {
+        if (data.code === 'PAYOUT_ACCOUNT_REQUIRED' || (data.error && data.error.toLowerCase().includes('configure your bank'))) {
+          setShowBankSettingsModal(true);
+          setBankModalMsg({ type: 'error', text: 'Please configure your bank or UPI payout account before requesting a withdrawal.' });
+          return;
+        }
         throw new Error(data.error || 'Failed to submit withdrawal request.');
       }
       alert('Withdrawal request submitted successfully! Funds will transfer within 2 business days. ✅');
       setWithdrawAmount('');
       await loadWallet(doctor.id);
     } catch (err: any) {
-      alert(err.message || 'Something went wrong while requesting withdrawal.');
+      if (err.message && err.message.toLowerCase().includes('configure your bank')) {
+        setShowBankSettingsModal(true);
+        setBankModalMsg({ type: 'error', text: err.message });
+      } else {
+        alert(err.message || 'Something went wrong while requesting withdrawal.');
+      }
     } finally {
       setWithdrawing(false);
     }
