@@ -37,7 +37,6 @@ export default function Sidebar({
     { icon: LayoutDashboard, label: 'Overview', href: '/patient' },
     { icon: Calendar, label: 'Appointments', href: '/patient/appointments' },
     { icon: TrendingDown, label: 'My Progress', href: '/patient/progress' },
-    { icon: MessageCircle, label: 'Messages', href: '/patient/messages', badge: unreadMessagesCount },
     { icon: Pill, label: 'Prescriptions', href: '/patient/prescriptions' },
     { icon: Package, label: 'Medicine Orders', href: '/patient/medicine-orders' },
     { icon: Video, label: 'Consultations', href: '/patient/consultation' },

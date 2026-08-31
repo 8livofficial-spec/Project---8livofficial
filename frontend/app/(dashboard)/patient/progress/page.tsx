@@ -223,27 +223,37 @@ export default function ProgressPage() {
         </div>
       </div>
 
-      {/* Auxiliary Charts Grid */}
+      {/* Authentic Weight Trajectory Telemetry Grid */}
       <div className="grid grid-cols-1 gap-6">
-        {/* Calories BarChart */}
         <div className="bg-white rounded-2xl p-5 border border-[#1A1F36]/6 shadow-sm">
           <div className="flex justify-between items-center mb-4">
-            <h4 className="font-bold text-sm font-sora">Calorie Intake</h4>
-            <span className="text-[9px] font-bold bg-[#C4622D]/10 text-[#C4622D] px-2 py-0.5 rounded-full select-none">Fitbit Sync</span>
+            <div>
+              <h4 className="font-bold text-sm font-sora">Weight Telemetry Log</h4>
+              <p className="text-xs text-[#8896A4] mt-0.5">Recorded check-in logs over your program trajectory.</p>
+            </div>
+            <span className="text-[10px] font-bold bg-[#5C7A6B]/10 text-[#5C7A6B] px-2.5 py-1 rounded-full select-none">
+              {weightLogs.length} Verified Entries
+            </span>
           </div>
-          <div className="h-44 w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={caloriesData} margin={{ left: -25 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(26,31,54,0.06)" vertical={false} />
-                <XAxis dataKey="day" tick={{ fill: '#8896A4', fontSize: 9 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: '#8896A4', fontSize: 9 }} axisLine={false} tickLine={false} />
-                <Tooltip />
-                <Bar dataKey="calories" fill="#C4622D" radius={[4, 4, 0, 0]} opacity={0.8} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {weightLogs.length > 0 ? (
+            <div className="divide-y divide-[#1A1F36]/6 max-h-56 overflow-y-auto pr-1">
+              {weightLogs.slice().reverse().map((log: any, idx: number) => (
+                <div key={log.id || idx} className="py-2.5 flex items-center justify-between text-xs font-semibold">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#C4622D]" />
+                    <span className="text-[#1A1F36]">Entry #{weightLogs.length - idx}</span>
+                    <span className="text-[#8896A4] text-[10px]">{new Date(log.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                  </div>
+                  <span className="font-bold font-sora text-[#1A1F36]">{log.weight_kg} kg</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="py-8 text-center text-xs text-[#8896A4]">
+              No individual logs submitted yet. Start logging via the Overview dashboard.
+            </div>
+          )}
         </div>
-
       </div>
 
       {/* Timeline milestones */}

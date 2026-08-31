@@ -2013,19 +2013,13 @@ function AdminDashboardContent() {
                       <option value="inactive">Inactive</option>
                     </select>
 
-                    <div className="p-4 rounded-2xl bg-indigo-50/50 border border-indigo-100 space-y-3">
-                      <p className="text-xs font-black text-indigo-900 uppercase tracking-wider flex items-center gap-1.5">
-                        <Wallet className="w-3.5 h-3.5 text-indigo-600" /> Payout & Bank Account Details
+                    <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1.5">
+                      <p className="text-xs font-black text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Self-Service Financial Security
                       </p>
-                      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                        <input value={providerBeneficiaryName} onChange={e => setProviderBeneficiaryName(e.target.value)} placeholder="Account Holder Name" className="rounded-xl border border-[#1A1F36]/10 bg-white px-3.5 py-2.5 text-xs font-bold outline-none" />
-                        <input value={providerAccountNumber} onChange={e => setProviderAccountNumber(e.target.value)} placeholder="Bank Account Number" className="rounded-xl border border-[#1A1F36]/10 bg-white px-3.5 py-2.5 text-xs font-bold outline-none font-mono" />
-                      </div>
-                      <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-                        <input value={providerIfsc} onChange={e => setProviderIfsc(e.target.value.toUpperCase())} placeholder="IFSC Code (e.g. HDFC0001234)" className="rounded-xl border border-[#1A1F36]/10 bg-white px-3.5 py-2.5 text-xs font-bold outline-none uppercase font-mono" />
-                        <input value={providerBankName} onChange={e => setProviderBankName(e.target.value)} placeholder="Bank Name (e.g. HDFC Bank)" className="rounded-xl border border-[#1A1F36]/10 bg-white px-3.5 py-2.5 text-xs font-bold outline-none" />
-                      </div>
-                      <input value={providerUpi} onChange={e => setProviderUpi(e.target.value)} placeholder="UPI ID / VPA (e.g. doctor@okhdfcbank)" className="w-full rounded-xl border border-[#1A1F36]/10 bg-white px-3.5 py-2.5 text-xs font-bold outline-none" />
+                      <p className="text-[11px] font-semibold text-emerald-800 leading-relaxed">
+                        Provider bank accounts, UPI IDs, and KYC credentials will be securely configured and verified directly by the provider during self-onboarding.
+                      </p>
                     </div>
 
                     <button disabled={providerSubmitting} className="w-full rounded-xl bg-[#1A1F36] px-5 py-4 text-xs font-black uppercase tracking-wider text-white transition-all hover:bg-[#11162A] disabled:opacity-60">

@@ -506,7 +506,7 @@ export default function PatientDashboardHome() {
 
       {/* 5. Column Rows 2: Meds + Messages + Ring */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-        <div className="col-span-1">
+        <div className="col-span-1 md:col-span-2 xl:col-span-2">
           <MedicationCard
             medicationName={medicationName}
             dosage={dosage}
@@ -515,12 +515,6 @@ export default function PatientDashboardHome() {
             nextRefillDate={refillDetails.date}
             daysToRefill={refillDetails.days}
             isApproved={isMedicationApproved}
-          />
-        </div>
-        <div className="col-span-1">
-          <MessagesPreview 
-            notifications={notifications}
-            doctorName={physicianName}
           />
         </div>
         <div className="col-span-1 md:col-span-2 xl:col-span-1">
