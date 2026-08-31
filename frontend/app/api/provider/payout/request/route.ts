@@ -14,15 +14,15 @@ export async function POST(request: Request) {
 
     // Verify provider has a bank or UPI destination configured
     const [{ data: docAcc }, { data: v2Acc }, { data: legacyProfile }] = await Promise.all([
-      supabaseAdmin.from('doctor_payout_accounts').select('id, account_number, vpa').eq('doctor_id', provider.user.id).maybeSingle(),
-      supabaseAdmin.from('provider_payout_profiles').select('id, bank_verification_status, encrypted_account_number, upi_id').eq('provider_id', provider.user.id).maybeSingle(),
-      supabaseAdmin.from('provider_profiles').select('id, bank_account_details, upi_id').eq('provider_id', provider.user.id).maybeSingle(),
+      supabaseAdmin.from('doctor_payout_accounts').select('id, account_number, vpa').or(`doctor_id.eq.${provider.user.id},doctor_id.eq.${provider.profile.id}`).maybeSingle(),
+      supabaseAdmin.from('provider_payout_profiles').select('id, bank_verification_status, encrypted_account_number, upi_id').or(`provider_id.eq.${provider.user.id},provider_id.eq.${provider.profile.id}`).maybeSingle(),
+      supabaseAdmin.from('provider_profiles').select('id, bank_account_details, upi_id').or(`provider_id.eq.${provider.user.id},id.eq.${provider.user.id},provider_id.eq.${provider.profile.id},id.eq.${provider.profile.id}`).maybeSingle(),
     ])
 
     const hasConfiguredAccount = Boolean(
       (docAcc && (docAcc.account_number || docAcc.vpa)) ||
       (v2Acc && (v2Acc.encrypted_account_number || v2Acc.upi_id)) ||
-      (legacyProfile && (legacyProfile.upi_id || (legacyProfile.bank_account_details && Object.keys(legacyProfile.bank_account_details).length > 0)))
+      (legacyProfile && (legacyProfile.upi_id || (legacyProfile.bank_account_details && (legacyProfile.bank_account_details.account_number || legacyProfile.bank_account_details.accountNumber || legacyProfile.bank_account_details.upi_id || legacyProfile.bank_account_details.upiId || Object.keys(legacyProfile.bank_account_details).length > 0))))
     )
 
     if (!hasConfiguredAccount) {
