@@ -12,11 +12,12 @@ export async function POST(request: Request) {
     const amount = Number(body.amount)
     if (!Number.isFinite(amount) || amount <= 0) return NextResponse.json({ error: 'A valid payout amount is required.' }, { status: 400 })
 
+    const profileId = provider.profile?.id || provider.user.id
     // Verify provider has a bank or UPI destination configured
     const [{ data: docAcc }, { data: v2Acc }, { data: legacyProfile }] = await Promise.all([
-      supabaseAdmin.from('doctor_payout_accounts').select('id, account_number, vpa').or(`doctor_id.eq.${provider.user.id},doctor_id.eq.${provider.profile.id}`).maybeSingle(),
-      supabaseAdmin.from('provider_payout_profiles').select('id, bank_verification_status, encrypted_account_number, upi_id').or(`provider_id.eq.${provider.user.id},provider_id.eq.${provider.profile.id}`).maybeSingle(),
-      supabaseAdmin.from('provider_profiles').select('id, bank_account_details, upi_id').or(`provider_id.eq.${provider.user.id},id.eq.${provider.user.id},provider_id.eq.${provider.profile.id},id.eq.${provider.profile.id}`).maybeSingle(),
+      supabaseAdmin.from('doctor_payout_accounts').select('id, account_number, vpa').or(`doctor_id.eq.${provider.user.id},doctor_id.eq.${profileId}`).maybeSingle(),
+      supabaseAdmin.from('provider_payout_profiles').select('id, bank_verification_status, encrypted_account_number, upi_id').or(`provider_id.eq.${provider.user.id},provider_id.eq.${profileId}`).maybeSingle(),
+      supabaseAdmin.from('provider_profiles').select('id, bank_account_details, upi_id').or(`provider_id.eq.${provider.user.id},id.eq.${provider.user.id},provider_id.eq.${profileId},id.eq.${profileId}`).maybeSingle(),
     ])
 
     const hasConfiguredAccount = Boolean(
