@@ -685,6 +685,7 @@ export default function DoctorDashboard() {
         loadAvailability(doctor.id);
       } else if (activeTab === 'wallet') {
         loadWallet(doctor.id);
+        loadBankDetails();
       }
     };
     loadTabDetails();
@@ -2758,8 +2759,26 @@ export default function DoctorDashboard() {
 
               {/* Withdraw */}
               <div className="bg-white rounded-[20px] p-8 shadow-[0_12px_32px_rgba(26,31,54,0.08)] border border-[#1A1F36]/8">
-                <h3 className="text-lg font-black text-[#1A1F36] mb-2 flex items-center gap-2"><ArrowDownToLine className="w-5 h-5 text-[#C4622D]"/> Withdraw to Bank Account</h3>
-                <p className="text-sm text-[#8896A4] font-semibold mb-6">Funds transfer directly to your registered bank account within 2 business days.</p>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                  <div>
+                    <h3 className="text-lg font-black text-[#1A1F36] flex items-center gap-2">
+                      <ArrowDownToLine className="w-5 h-5 text-[#C4622D]"/> Withdraw to Bank Account
+                    </h3>
+                    <p className="text-sm text-[#8896A4] font-semibold mt-1">Funds transfer directly to your registered bank account within 2 business days.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      loadBankDetails();
+                      setShowBankSettingsModal(true);
+                    }}
+                    className="rounded-xl border border-[#1A1F36]/15 bg-[#F5F0EB]/60 hover:bg-[#F5F0EB] text-[#1A1F36] px-4 py-2 text-xs font-black transition-all flex items-center gap-1.5 self-start sm:self-auto"
+                  >
+                    <Settings className="w-3.5 h-3.5 text-[#C4622D]" />
+                    {bankMaskedAccount || bankUpiId ? 'Edit Bank Account' : 'Set Up Bank Account'}
+                  </button>
+                </div>
+
                 <div className="flex gap-4 items-end">
                   <div className="flex-1">
                     <label className={labelCls}>Amount (₹)</label>
