@@ -9,7 +9,7 @@ import {
   Activity, Users, CheckCircle2, XCircle, Video, Calendar, Wallet,
   ArrowDownToLine, Pill, FileText, Clock, AlertCircle, LogOut,
   Stethoscope, ChevronRight, Plus, X, TrendingUp, BadgeCheck, Bell, BellRing, UserCheck, Check, PhoneOff, MessageCircle,
-  Eye, Printer, Download, Menu,
+  Eye, Printer, Download, Menu, Settings,
 } from 'lucide-react';
 import StaffChat from '@/components/StaffChat';
 import ProviderAvailabilityScheduler, { GeneratedSlot, AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler';
@@ -565,11 +565,24 @@ export default function DoctorDashboard() {
   const [rejectNote, setRejectNote] = useState('');
   const [rejecting, setRejecting] = useState(false);
 
-  // Wallet
+  // Wallet & Bank Settings
   const [wallet, setWallet] = useState<WalletData>({ balance: 0, total_earned: 0, total_withdrawn: 0 });
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawing, setWithdrawing] = useState(false);
+
+  const [showBankSettingsModal, setShowBankSettingsModal] = useState(false);
+  const [loadingBankDetails, setLoadingBankDetails] = useState(false);
+  const [savingBankDetails, setSavingBankDetails] = useState(false);
+  const [bankMethod, setBankMethod] = useState<'BANK_TRANSFER' | 'UPI'>('BANK_TRANSFER');
+  const [bankBeneficiaryName, setBankBeneficiaryName] = useState('');
+  const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [bankConfirmAccountNumber, setBankConfirmAccountNumber] = useState('');
+  const [bankIfsc, setBankIfsc] = useState('');
+  const [bankName, setBankName] = useState('');
+  const [bankUpiId, setBankUpiId] = useState('');
+  const [bankMaskedAccount, setBankMaskedAccount] = useState('');
+  const [bankModalMsg, setBankModalMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
   // ── Auth check ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -964,6 +977,87 @@ export default function DoctorDashboard() {
       });
     } catch {
       setWallet({ balance: 0, total_earned: 0, total_withdrawn: 0, pending_payout: 0, completed_payout: 0 });
+    }
+  };
+
+  const loadBankDetails = async () => {
+    try {
+      setLoadingBankDetails(true);
+      setBankModalMsg(null);
+      const res = await authedFetch('/api/provider/payout/account');
+      const data = await res.json();
+      if (res.ok && data.account) {
+        const acc = data.account;
+        setBankMethod(acc.preferredPayoutMethod === 'UPI' ? 'UPI' : 'BANK_TRANSFER');
+        setBankBeneficiaryName(acc.beneficiaryName || doctorProfile?.full_name || '');
+        setBankIfsc(acc.ifsc || '');
+        setBankName(acc.bankName || '');
+        setBankUpiId(acc.vpa || '');
+        setBankMaskedAccount(acc.accountNumberMasked || (acc.accountNumber ? `••••${acc.accountNumber.slice(-4)}` : ''));
+      }
+    } catch (err: any) {
+      setBankModalMsg({ type: 'error', text: err.message || 'Unable to load bank account details.' });
+    } finally {
+      setLoadingBankDetails(false);
+    }
+  };
+
+  const handleSaveBankDetails = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBankModalMsg(null);
+
+    if (bankMethod === 'BANK_TRANSFER') {
+      if (!bankAccountNumber) {
+        setBankModalMsg({ type: 'error', text: 'Please enter your bank account number.' });
+        return;
+      }
+      if (bankAccountNumber !== bankConfirmAccountNumber) {
+        setBankModalMsg({ type: 'error', text: 'Bank account numbers do not match.' });
+        return;
+      }
+      if (!bankIfsc || !/^[A-Z]{4}0[A-Z0-9]{6}$/i.test(bankIfsc)) {
+        setBankModalMsg({ type: 'error', text: 'Please enter a valid 11-character IFSC code.' });
+        return;
+      }
+      if (!bankBeneficiaryName) {
+        setBankModalMsg({ type: 'error', text: 'Account holder / beneficiary name is required.' });
+        return;
+      }
+    } else {
+      if (!bankUpiId || !bankUpiId.includes('@')) {
+        setBankModalMsg({ type: 'error', text: 'Please enter a valid UPI ID (e.g. name@oksbi).' });
+        return;
+      }
+    }
+
+    try {
+      setSavingBankDetails(true);
+      const res = await authedFetch('/api/provider/payout/account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          preferredPayoutMethod: bankMethod,
+          beneficiaryName: bankBeneficiaryName,
+          accountNumber: bankAccountNumber,
+          ifsc: bankIfsc.toUpperCase(),
+          bankName,
+          upiId: bankUpiId,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update payment details.');
+      }
+      setBankModalMsg({ type: 'success', text: 'Payout account updated successfully! ✅' });
+      if (data.account?.accountNumberMasked) {
+        setBankMaskedAccount(data.account.accountNumberMasked);
+      }
+      setBankAccountNumber('');
+      setBankConfirmAccountNumber('');
+    } catch (err: any) {
+      setBankModalMsg({ type: 'error', text: err.message || 'Unable to update payment details.' });
+    } finally {
+      setSavingBankDetails(false);
     }
   };
 
@@ -2612,11 +2706,20 @@ export default function DoctorDashboard() {
           {/* ── TAB: WALLET ── */}
           {activeTab === 'wallet' && (
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-8">
-              <div className="border-b border-[#1A1F36]/8 pb-4 mb-6 flex justify-between items-end">
+              <div className="border-b border-[#1A1F36]/8 pb-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <h1 className="text-2xl font-bold text-[#1A1F36]">8liv Doctor Wallet</h1>
                   <p className="text-sm text-[#8896A4] mt-0.5">Manage your earnings and withdrawals.</p>
                 </div>
+                <button
+                  onClick={() => {
+                    loadBankDetails();
+                    setShowBankSettingsModal(true);
+                  }}
+                  className="rounded-full border border-[#1A1F36]/15 bg-white hover:bg-[#F5F0EB] text-[#1A1F36] px-5 py-2.5 text-xs font-black transition-all flex items-center gap-2 shadow-sm cursor-pointer"
+                >
+                  <Settings className="w-4 h-4 text-[#C4622D]" /> Payout / Bank Settings
+                </button>
               </div>
 
               {/* Wallet cards */}
@@ -3058,6 +3161,164 @@ export default function DoctorDashboard() {
               </div>
             </motion.div>
           )}
+        {/* ── BANK / PAYOUT SETTINGS MODAL ── */}
+        {showBankSettingsModal && (
+          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[28px] p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-[#1A1F36]/8 my-8">
+              <div className="flex items-center justify-between pb-4 border-b border-[#1A1F36]/8">
+                <div>
+                  <p className="text-xs font-black uppercase tracking-wider text-[#C4622D]">Payout Account</p>
+                  <h3 className="text-xl font-black text-[#1A1F36]">Payment & Bank Details</h3>
+                </div>
+                <button
+                  onClick={() => setShowBankSettingsModal(false)}
+                  className="rounded-full p-2 hover:bg-[#F5F0EB] text-[#8896A4] hover:text-[#1A1F36] transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {loadingBankDetails ? (
+                <div className="py-12 text-center text-sm font-bold text-[#8896A4]">
+                  Loading payment details...
+                </div>
+              ) : (
+                <form onSubmit={handleSaveBankDetails} className="mt-6 space-y-4">
+                  {bankModalMsg && (
+                    <div className={`p-4 rounded-2xl text-xs font-bold flex items-center gap-2.5 ${bankModalMsg.type === 'success' ? 'bg-[#5C7A6B]/12 text-[#5C7A6B] border border-[#5C7A6B]/20' : 'bg-[#D96A6A]/12 text-[#B94D4D] border border-[#D96A6A]/20'}`}>
+                      {bankModalMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                      <span>{bankModalMsg.text}</span>
+                    </div>
+                  )}
+
+                  {bankMaskedAccount && (
+                    <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#F5F0EB]/60 border border-[#1A1F36]/8 text-xs">
+                      <div>
+                        <span className="font-semibold text-[#8896A4]">Current Account:</span>{' '}
+                        <span className="font-mono font-black text-[#1A1F36]">{bankMaskedAccount}</span>
+                      </div>
+                      <span className="text-[10px] font-black uppercase text-[#5C7A6B] bg-[#5C7A6B]/15 px-2.5 py-0.5 rounded-full">Active</span>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className={labelCls}>Payout Method</label>
+                    <div className="grid grid-cols-2 gap-2 mt-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setBankMethod('BANK_TRANSFER')}
+                        className={`p-3 rounded-xl text-xs font-black border transition-all ${bankMethod === 'BANK_TRANSFER' ? 'bg-[#1A1F36] text-white border-[#1A1F36]' : 'bg-[#F5F0EB]/50 text-[#8896A4] border-transparent hover:bg-[#F5F0EB]'}`}
+                      >
+                        Bank Transfer (NEFT/IMPS)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBankMethod('UPI')}
+                        className={`p-3 rounded-xl text-xs font-black border transition-all ${bankMethod === 'UPI' ? 'bg-[#1A1F36] text-white border-[#1A1F36]' : 'bg-[#F5F0EB]/50 text-[#8896A4] border-transparent hover:bg-[#F5F0EB]'}`}
+                      >
+                        UPI Transfer
+                      </button>
+                    </div>
+                  </div>
+
+                  {bankMethod === 'BANK_TRANSFER' ? (
+                    <>
+                      <div>
+                        <label className={labelCls}>Account Holder Name *</label>
+                        <input
+                          type="text"
+                          required
+                          value={bankBeneficiaryName}
+                          onChange={(e) => setBankBeneficiaryName(e.target.value)}
+                          placeholder="As printed on bank records"
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Account Number *</label>
+                        <input
+                          type="password"
+                          required
+                          value={bankAccountNumber}
+                          onChange={(e) => setBankAccountNumber(e.target.value)}
+                          placeholder="Enter account number"
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Confirm Account Number *</label>
+                        <input
+                          type="text"
+                          required
+                          value={bankConfirmAccountNumber}
+                          onChange={(e) => setBankConfirmAccountNumber(e.target.value)}
+                          placeholder="Re-enter account number"
+                          className={inputCls}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className={labelCls}>IFSC Code *</label>
+                          <input
+                            type="text"
+                            required
+                            maxLength={11}
+                            value={bankIfsc}
+                            onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
+                            placeholder="e.g. HDFC0001234"
+                            className={`${inputCls} uppercase font-mono`}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Bank Name (Optional)</label>
+                          <input
+                            type="text"
+                            value={bankName}
+                            onChange={(e) => setBankName(e.target.value)}
+                            placeholder="e.g. HDFC Bank"
+                            className={inputCls}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <div>
+                      <label className={labelCls}>UPI ID / VPA *</label>
+                      <input
+                        type="text"
+                        required
+                        value={bankUpiId}
+                        onChange={(e) => setBankUpiId(e.target.value)}
+                        placeholder="e.g. doctor@oksbi"
+                        className={inputCls}
+                      />
+                      <p className="text-[11px] text-[#8896A4] font-semibold mt-1">
+                        Instant payouts will be sent directly to this address.
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end gap-3 pt-4 border-t border-[#1A1F36]/8">
+                    <button
+                      type="button"
+                      onClick={() => setShowBankSettingsModal(false)}
+                      className="px-5 py-2.5 rounded-xl border border-[#1A1F36]/15 text-xs font-black text-[#8896A4] hover:bg-[#F5F0EB] transition-colors"
+                    >
+                      Close
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={savingBankDetails}
+                      className="bg-[#1A1F36] hover:bg-[#0D101C] disabled:opacity-50 text-white font-black px-6 py-2.5 rounded-xl text-xs transition-all shadow-md cursor-pointer"
+                    >
+                      {savingBankDetails ? 'Saving...' : 'Save Details'}
+                    </button>
+                  </div>
+                </form>
+              )}
+            </motion.div>
+          </div>
+        )}
         </motion.main>
       </div>
     </div>

@@ -1172,21 +1172,29 @@ function WalletModule({
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <p className="text-xs font-black uppercase tracking-[0.18em] text-[#C4622D]">Financial Settlements</p>
           <h2 className="text-3xl font-black text-[#1A1F36]">Provider Earnings Wallet</h2>
         </div>
-        <button
-          onClick={() => {
-            setModalError('')
-            setPayoutAmount('')
-            setShowPayoutModal(true)
-          }}
-          className="rounded-full bg-[#1A1F36] hover:bg-[#1A1F36]/90 text-white px-6 py-3 text-sm font-black transition-colors"
-        >
-          Request Payout
-        </button>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/provider/banking"
+            className="rounded-full border border-[#E8DED4] bg-white hover:bg-[#F9F6F0] text-[#1A1F36] px-5 py-3 text-sm font-black transition-colors flex items-center gap-2 shadow-sm"
+          >
+            <Settings className="w-4 h-4 text-[#C4622D]" /> Payout Settings
+          </Link>
+          <button
+            onClick={() => {
+              setModalError('')
+              setPayoutAmount('')
+              setShowPayoutModal(true)
+            }}
+            className="rounded-full bg-[#1A1F36] hover:bg-[#1A1F36]/90 text-white px-6 py-3 text-sm font-black transition-colors"
+          >
+            Request Payout
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
