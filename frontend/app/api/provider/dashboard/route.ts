@@ -201,7 +201,13 @@ export async function GET(request: Request) {
         }
       }
 
-      const completedCount = ownConsultations.filter((c: any) => ['approved', 'completed', 'attended'].includes(String(c.status || '').toLowerCase()) || c.is_completed).length
+      const { count: completedConsultsCount } = await supabaseAdmin
+        .from('doctor_consultations')
+        .select('*', { count: 'exact', head: true })
+        .eq('doctor_id', userId)
+        .in('status', ['approved', 'completed', 'attended']);
+
+      const completedCount = completedConsultsCount || ownConsultations.filter((c: any) => ['approved', 'completed', 'attended'].includes(String(c.status || '').toLowerCase()) || c.is_completed).length
       const dynamicEarned = completedCount * 300
       const recordedEarned = Number(walletRes.data?.total_earned || 0)
       const recordedWithdrawn = Number(walletRes.data?.total_withdrawn || 0)

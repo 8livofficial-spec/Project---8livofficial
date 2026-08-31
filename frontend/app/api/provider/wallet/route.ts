@@ -43,6 +43,71 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: provider.error }, { status: provider.status })
   }
 
+  if (provider.role === 'doctor') {
+    const [{ data: docWallet }, { data: docTxns }, { data: consultationsCount }] = await Promise.all([
+      supabaseAdmin
+        .from('doctor_wallet')
+        .select('doctor_id, balance, total_earned, total_withdrawn, updated_at')
+        .eq('doctor_id', provider.user.id)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('doctor_wallet_transactions')
+        .select('id, doctor_id, patient_id, appointment_id, type, amount, status, payout_status, created_at')
+        .eq('doctor_id', provider.user.id)
+        .order('created_at', { ascending: false })
+        .limit(100),
+      supabaseAdmin
+        .from('doctor_consultations')
+        .select('id, status, is_completed')
+        .eq('doctor_id', provider.user.id),
+    ])
+
+    const completedConsults = (consultationsCount || []).filter(
+      (c: any) => ['approved', 'completed', 'attended'].includes(String(c.status || '').toLowerCase()) || c.is_completed
+    ).length
+
+    const dynamicEarned = completedConsults * 300
+    const recordedEarned = Number(docWallet?.total_earned || 0)
+    const recordedWithdrawn = Number(docWallet?.total_withdrawn || 0)
+    const totalEarned = Math.max(recordedEarned, dynamicEarned)
+    const balance = Math.max(0, totalEarned - recordedWithdrawn)
+
+    // Also check for any pending payouts in provider_payouts or doctor_wallet_transactions
+    const { data: pendingDocPayouts } = await supabaseAdmin
+      .from('provider_payouts')
+      .select('id, payout_amount, payout_status, created_at')
+      .eq('provider_id', provider.user.id)
+      .in('payout_status', ['PENDING', 'PROCESSING'])
+
+    const pendingAmount = (pendingDocPayouts || []).reduce((sum, p) => sum + Number(p.payout_amount || 0), 0)
+
+    const normalizedTxns = (docTxns || []).map((t: any) => ({
+      id: t.id,
+      transaction_type: t.type === 'withdrawal' ? 'PAYOUT' : 'CONSULTATION_CREDIT',
+      amount: Number(t.amount || 0),
+      status: t.payout_status || t.status || 'SUCCESS',
+      description: t.type === 'withdrawal' ? 'Bank Account Withdrawal' : 'Consultation Earning',
+      created_at: t.created_at || new Date().toISOString()
+    }))
+
+    return NextResponse.json({
+      wallet: {
+        provider_id: provider.user.id,
+        balance,
+        current_balance: balance,
+        pending_payout: pendingAmount,
+        pending_balance: pendingAmount,
+        completed_payout: recordedWithdrawn,
+        total_paid: recordedWithdrawn,
+        lifetime_earnings: totalEarned,
+        total_earned: totalEarned,
+        last_payout: null,
+      },
+      transactions: normalizedTxns,
+      payouts: pendingDocPayouts || [],
+    })
+  }
+
   const [{ data: wallet, error: walletError }, { data: transactions, error: txError }, { data: payouts, error: payoutError }] = await Promise.all([
     supabaseAdmin
       .from('wallet_accounts')
