@@ -14,6 +14,95 @@ export default function Navbar() {
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [role, setRole] = useState<string>('patient')
 
+  const resolveDashboardUrl = (userRole: string) => {
+    const r = (userRole || 'patient').toLowerCase().trim()
+    if (r === 'admin') return '/admin'
+    if (r === 'doctor') return '/doctor/dashboard'
+    if (r === 'dietitian') return '/dietitian/dashboard'
+    if (r === 'trainer' || r === 'fitness_coach' || r === 'coach') return '/trainer/dashboard'
+    if (r === 'provider') return '/provider/dashboard'
+    if (r === 'pharmacy') return '/pharmacy/dashboard'
+    return '/patient'
+  }
+
+  const fetchUserRole = async (currentUser: SupabaseUser) => {
+    try {
+      if (currentUser.email === '8livofficial@gmail.com') {
+        setRole('admin')
+        document.cookie = 'user_role=admin; path=/; max-age=86400; SameSite=Lax'
+        return
+      }
+
+      const cookieMatch = document.cookie.match(/user_role=([^;]+)/)
+      if (cookieMatch && cookieMatch[1]) {
+        setRole(cookieMatch[1])
+        return
+      }
+
+      const [{ data: doc }, { data: prov }, { data: prof }] = await Promise.all([
+        supabase.from('doctor_profiles').select('id').eq('id', currentUser.id).maybeSingle(),
+        supabase.from('provider_profiles_v2').select('role').or(`id.eq.${currentUser.id},user_id.eq.${currentUser.id}`).maybeSingle(),
+        supabase.from('profiles').select('role').eq('id', currentUser.id).maybeSingle(),
+      ])
+
+      let resolvedRole = 'patient'
+      if (doc) resolvedRole = 'doctor'
+      else if (prov?.role) resolvedRole = prov.role
+      else if (prof?.role) resolvedRole = prof.role
+      else resolvedRole = currentUser.user_metadata?.role || 'patient'
+
+      setRole(resolvedRole)
+      document.cookie = `user_role=${resolvedRole}; path=/; max-age=86400; SameSite=Lax`
+    } catch (err) {
+      console.warn('Failed to resolve user role:', err)
+    }
+  }
+
+  const handleDashboardClick = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    setMobileMenuOpen(false)
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.user) {
+        window.location.href = '/login'
+        return
+      }
+
+      let userRole = role
+      if (!userRole || userRole === 'patient') {
+        const cookieMatch = document.cookie.match(/user_role=([^;]+)/)
+        if (cookieMatch && cookieMatch[1]) {
+          userRole = cookieMatch[1]
+        } else if (session.user.email === '8livofficial@gmail.com') {
+          userRole = 'admin'
+        } else {
+          const [{ data: doc }, { data: prov }, { data: prof }] = await Promise.all([
+            supabase.from('doctor_profiles').select('id').eq('id', session.user.id).maybeSingle(),
+            supabase.from('provider_profiles_v2').select('role').or(`id.eq.${session.user.id},user_id.eq.${session.user.id}`).maybeSingle(),
+            supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle(),
+          ])
+          if (doc) userRole = 'doctor'
+          else if (prov?.role) userRole = prov.role
+          else if (prof?.role) userRole = prof.role
+          else userRole = session.user.user_metadata?.role || 'patient'
+        }
+      }
+
+      document.cookie = `user_role=${userRole}; path=/; max-age=86400; SameSite=Lax`
+      window.location.href = resolveDashboardUrl(userRole)
+    } catch (_) {
+      window.location.href = '/patient'
+    }
+  }
+
+  const handleSignOut = async () => {
+    setMobileMenuOpen(false)
+    await supabase.auth.signOut()
+    document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax'
+    window.location.href = '/'
+  }
+
   useEffect(() => {
     const handleScroll = () => {
       if (window.scrollY > 30) {
@@ -28,16 +117,14 @@ export default function Navbar() {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user || null)
       if (session?.user) {
-        const match = document.cookie.match(/user_role=([^;]+)/)
-        setRole(match ? match[1] : 'patient')
+        fetchUserRole(session.user)
       }
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user || null)
       if (session?.user) {
-        const match = document.cookie.match(/user_role=([^;]+)/)
-        setRole(match ? match[1] : 'patient')
+        fetchUserRole(session.user)
       }
     })
 
@@ -74,11 +161,6 @@ export default function Navbar() {
               alt="8LIV Official Logo" 
               className="h-6 sm:h-7 md:h-8 w-auto object-contain cursor-pointer transition-transform duration-300 hover:scale-105"
             />
-
-
-
-
-
           </Link>
 
           {/* Desktop Links */}
@@ -97,23 +179,18 @@ export default function Navbar() {
             </Link>
           </nav>
 
-
           {/* Right Action */}
           <div className="hidden md:flex items-center shrink-0 gap-3">
             {user ? (
               <>
-                <a 
-                  href={role === 'admin' ? '/admin' : role === 'doctor' ? '/doctor/dashboard' : '/patient'} 
-                  className="px-3 py-1 rounded-full text-[11px] font-bold text-[#0F172A] bg-white border border-[#D46E53]/25 hover:bg-[#F9F6F0] transition-all flex items-center gap-1.5 font-sora shadow-2xs"
+                <button 
+                  onClick={handleDashboardClick}
+                  className="px-3 py-1 rounded-full text-[11px] font-bold text-[#0F172A] bg-white border border-[#D46E53]/25 hover:bg-[#F9F6F0] transition-all flex items-center gap-1.5 font-sora shadow-2xs cursor-pointer"
                 >
                   <User size={12} /> My Dashboard
-                </a>
+                </button>
                 <button 
-                  onClick={async () => {
-                    await supabase.auth.signOut()
-                    document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax'
-                    window.location.href = '/'
-                  }}
+                  onClick={handleSignOut}
                   className="bg-[#0F172A] text-white font-semibold rounded-full px-3 py-1 text-[11px] hover:bg-rose-600 transition-all border border-transparent flex items-center gap-1.5 cursor-pointer font-sora"
                 >
                   <LogOut size={12} /> Sign Out
@@ -154,20 +231,14 @@ export default function Navbar() {
               <Link href="/about" onClick={() => setMobileMenuOpen(false)} className="border-b border-[#D46E53]/10 py-3 px-2 text-left text-sm font-semibold text-[#0F172A] font-sora">Company</Link>
               {user ? (
                 <>
-                  <a 
-                    href={role === 'admin' ? '/admin' : role === 'doctor' ? '/doctor/dashboard' : '/patient'} 
-                    onClick={() => setMobileMenuOpen(false)}
-                    className="w-full text-center bg-white border border-[#D46E53]/20 text-[#0F172A] font-bold rounded-full px-5 py-3 mt-3 block text-sm font-sora"
+                  <button 
+                    onClick={handleDashboardClick}
+                    className="w-full text-center bg-white border border-[#D46E53]/20 text-[#0F172A] font-bold rounded-full px-5 py-3 mt-3 block text-sm font-sora cursor-pointer"
                   >
                     My Dashboard
-                  </a>
+                  </button>
                   <button 
-                    onClick={async () => {
-                      setMobileMenuOpen(false)
-                      await supabase.auth.signOut()
-                      document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax'
-                      window.location.href = '/'
-                    }}
+                    onClick={handleSignOut}
                     className="w-full text-center bg-rose-600 text-white font-bold rounded-full px-5 py-3 mt-2 block text-sm font-sora cursor-pointer"
                   >
                     Sign Out

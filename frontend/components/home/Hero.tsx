@@ -258,8 +258,8 @@ export default function Hero() {
             ref={ctaRef}
             className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 opacity-0 will-change-transform"
           >
-            <Link href="/assessment" id="hero-start-assessment-cta">
-              <CornerButton accentColor="#00A884">
+            <Link href="/assessment" id="hero-start-assessment-cta" className="block cursor-pointer">
+              <CornerButton accentColor="#00A884" onClick={() => { window.location.href = '/assessment' }}>
                 Book A Consultation
               </CornerButton>
             </Link>
