@@ -929,23 +929,75 @@ function AdminDashboardContent() {
     }
   };
 
-  const handleMarkAsPaid = async (txId: string, doctorName: string, amount: number) => {
-    const confirmed = window.confirm(
-      `Mark this ₹${amount} withdrawal request from ${doctorName || 'the doctor'} as paid?\n\nMake sure you have personally / manually sent the money to the doctor's bank account.`
-    );
-    if (!confirmed) return;
+  const [approvingPayout, setApprovingPayout] = useState<any>(null);
+  const [approvalRef, setApprovalRef] = useState('');
+  const [approvalSubmitting, setApprovalSubmitting] = useState(false);
+  const [copiedPayoutField, setCopiedPayoutField] = useState<string | null>(null);
 
+  const handleCopyPayout = (text: string, label: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedPayoutField(label);
+    setTimeout(() => setCopiedPayoutField(null), 2000);
+  };
+
+  const handleMarkAsPaid = (payoutOrId: any, doctorName?: string, amount?: number) => {
+    const rawId = typeof payoutOrId === 'string' ? payoutOrId : payoutOrId?.id;
+    const resolvedPayout = typeof payoutOrId === 'object' ? payoutOrId : (providerPayouts.find(p => p.id === rawId) || {});
+    const docObj = doctors.find(d => d.id === resolvedPayout.provider_id || d.doctor_id === resolvedPayout.provider_id || d.user_id === resolvedPayout.provider_id || d.provider_profile_id === resolvedPayout.provider_profile_id);
+    const provObj = providers.find(p => p.provider_id === resolvedPayout.provider_id || p.provider_id === docObj?.id || p.provider_id === docObj?.doctor_id);
+
+    let account = resolvedPayout.payout_account || docObj?.payout_account;
+    if (!account && provObj?.bank_account_details) {
+      const b = provObj.bank_account_details;
+      if (b.account_number || b.accountNumber) {
+        account = {
+          account_type: 'bank_account',
+          beneficiary_name: b.beneficiary_name || b.accountHolderName || provObj.full_name || doctorName,
+          account_number: b.account_number || b.accountNumber,
+          ifsc: b.ifsc || b.ifscCode,
+          bank_name: b.bank_name || b.bankName,
+        };
+      } else if (provObj.upi_id || b.upi_id || b.upiId) {
+        account = {
+          account_type: 'vpa',
+          beneficiary_name: provObj.full_name || doctorName,
+          upi_id: provObj.upi_id || b.upi_id || b.upiId,
+          vpa: provObj.upi_id || b.upi_id || b.upiId,
+        };
+      }
+    }
+
+    setApprovingPayout({
+      id: rawId,
+      provider_id: resolvedPayout.provider_id || docObj?.id,
+      providerName: doctorName || resolvedPayout.provider_name || docObj?.name || provObj?.full_name || 'Provider',
+      amount: amount || resolvedPayout.payout_amount || resolvedPayout.amount || 0,
+      payout_account: account,
+    });
+    setApprovalRef('');
+  };
+
+  const handleConfirmPayoutApproval = async () => {
+    if (!approvingPayout) return;
+    setApprovalSubmitting(true);
     try {
       const res = await adminFetch('/api/admin/provider-payouts', {
         method: 'PATCH',
-        body: JSON.stringify({ transactionId: txId, transactionStatus: 'paid' }),
+        body: JSON.stringify({
+          transactionId: approvingPayout.id,
+          transactionStatus: 'paid',
+          paymentReference: approvalRef.trim() || 'MANUAL_OFFLINE_SETTLED',
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update transaction status.');
       alert('Withdrawal request successfully marked as paid!');
+      setApprovingPayout(null);
       fetchPayoutsData();
     } catch (err: any) {
       alert('Error: ' + err.message);
+    } finally {
+      setApprovalSubmitting(false);
     }
   };
 
@@ -2647,6 +2699,178 @@ function AdminDashboardContent() {
                       className="rounded-xl bg-[#C4622D] px-5 py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-[#A84E1F] transition-colors disabled:opacity-50"
                     >
                       {adjustSubmitting ? 'Submitting...' : 'Submit Adjustment'}
+                    </button>
+                  </div>
+                </motion.div>
+              </div>
+            )}
+
+            {approvingPayout && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  onClick={() => setApprovingPayout(null)}
+                  className="absolute inset-0 bg-[#1A1F36]/60 backdrop-blur-sm"
+                />
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.95, y: 20 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  className="relative w-full max-w-lg overflow-hidden rounded-[28px] border border-[#1A1F36]/8 bg-white p-6 shadow-[0_24px_48px_rgba(26,31,54,0.16)] max-h-[90vh] overflow-y-auto"
+                >
+                  {/* Header */}
+                  <div className="flex items-center justify-between border-b border-[#1A1F36]/8 pb-4 mb-4">
+                    <div>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-[#5C7A6B] bg-[#5C7A6B]/10 px-2.5 py-1 rounded-full">
+                        Manual Payout Settlement
+                      </span>
+                      <h3 className="text-xl font-black text-[#1A1F36] mt-2">Approve & Pay Provider</h3>
+                      <p className="text-xs font-semibold text-[#8896A4]">
+                        Transfer to <span className="font-bold text-[#1A1F36]">{approvingPayout.providerName}</span>
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] block">Amount Due</span>
+                      <p className="text-2xl font-black text-[#1A1F36]">
+                        ₹{Number(approvingPayout.amount || 0).toLocaleString('en-IN')}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Provider Account / Scanner Details */}
+                  <div className="rounded-2xl bg-[#F5F0EB] p-4 mb-5 border border-[#1A1F36]/5">
+                    <h4 className="text-xs font-black uppercase tracking-wider text-[#1A1F36] mb-3 flex items-center gap-2">
+                      <span>💳</span> Doctor / Provider Account Details
+                    </h4>
+
+                    {/* Mode 1: UPI / VPA */}
+                    {approvingPayout.payout_account?.upi_id || approvingPayout.payout_account?.vpa ? (
+                      <div className="space-y-3">
+                        <div className="flex flex-col items-center justify-center p-4 bg-white rounded-xl border border-[#1A1F36]/8 shadow-sm text-center">
+                          <span className="text-[11px] font-bold text-[#5C7A6B] uppercase tracking-wider mb-2">
+                            📱 Scan QR with any UPI App to Pay
+                          </span>
+                          <img
+                            src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
+                              `upi://pay?pa=${approvingPayout.payout_account.upi_id || approvingPayout.payout_account.vpa}&pn=${encodeURIComponent(approvingPayout.payout_account.beneficiary_name || approvingPayout.providerName)}&am=${approvingPayout.amount}&cu=INR&tn=8liv Settlement`
+                            )}`}
+                            alt="UPI QR Scanner"
+                            className="w-44 h-44 rounded-xl border-2 border-[#1A1F36]/10 p-1.5 bg-white shadow-sm"
+                          />
+                          <span className="text-[10px] text-[#8896A4] mt-2 font-bold">Google Pay • PhonePe • Paytm • BHIM</span>
+                        </div>
+
+                        <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-[#1A1F36]/8">
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] block">UPI ID / VPA</span>
+                            <span className="text-sm font-black text-[#1A1F36] select-all font-mono">
+                              {approvingPayout.payout_account.upi_id || approvingPayout.payout_account.vpa}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPayout(approvingPayout.payout_account.upi_id || approvingPayout.payout_account.vpa, 'upi')}
+                            className="px-3 py-1.5 rounded-lg bg-[#1A1F36]/5 hover:bg-[#1A1F36]/10 text-xs font-black text-[#1A1F36] transition-colors"
+                          >
+                            {copiedPayoutField === 'upi' ? '✓ Copied' : 'Copy UPI'}
+                          </button>
+                        </div>
+
+                        {approvingPayout.payout_account.beneficiary_name && (
+                          <div className="bg-white p-3 rounded-xl border border-[#1A1F36]/8">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] block">Beneficiary Name</span>
+                            <span className="text-sm font-bold text-[#1A1F36]">{approvingPayout.payout_account.beneficiary_name}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : approvingPayout.payout_account?.account_number ? (
+                      /* Mode 2: Bank Account Transfer */
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-[#1A1F36]/8">
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] block">Account Number</span>
+                            <span className="text-sm font-black text-[#1A1F36] font-mono select-all tracking-wider">
+                              {approvingPayout.payout_account.account_number}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPayout(approvingPayout.payout_account.account_number, 'acc')}
+                            className="px-3 py-1.5 rounded-lg bg-[#1A1F36]/5 hover:bg-[#1A1F36]/10 text-xs font-black text-[#1A1F36] transition-colors"
+                          >
+                            {copiedPayoutField === 'acc' ? '✓ Copied' : 'Copy A/C'}
+                          </button>
+                        </div>
+
+                        <div className="flex items-center justify-between bg-white p-3 rounded-xl border border-[#1A1F36]/8">
+                          <div>
+                            <span className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] block">IFSC Code</span>
+                            <span className="text-sm font-black text-[#1A1F36] font-mono select-all">
+                              {approvingPayout.payout_account.ifsc}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyPayout(approvingPayout.payout_account.ifsc, 'ifsc')}
+                            className="px-3 py-1.5 rounded-lg bg-[#1A1F36]/5 hover:bg-[#1A1F36]/10 text-xs font-black text-[#1A1F36] transition-colors"
+                          >
+                            {copiedPayoutField === 'ifsc' ? '✓ Copied' : 'Copy IFSC'}
+                          </button>
+                        </div>
+
+                        <div className="bg-white p-3 rounded-xl border border-[#1A1F36]/8">
+                          <span className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] block">Account Holder / Beneficiary</span>
+                          <span className="text-sm font-bold text-[#1A1F36]">
+                            {approvingPayout.payout_account.beneficiary_name || approvingPayout.providerName}
+                          </span>
+                        </div>
+
+                        {approvingPayout.payout_account.bank_name && (
+                          <div className="bg-white p-3 rounded-xl border border-[#1A1F36]/8">
+                            <span className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] block">Bank Name</span>
+                            <span className="text-sm font-bold text-[#1A1F36]">{approvingPayout.payout_account.bank_name}</span>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      /* Fallback: No Account Info */
+                      <div className="bg-white p-4 rounded-xl text-center border border-[#1A1F36]/8">
+                        <p className="text-sm font-bold text-[#1A1F36]">{approvingPayout.providerName}</p>
+                        <p className="text-xs text-[#8896A4] mt-1">No custom bank or UPI account record found. Please verify payment details with provider directly before marking as paid.</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Payment Reference Input */}
+                  <div className="mb-6">
+                    <label className="block text-xs font-black uppercase tracking-wider text-[#8896A4] mb-2">
+                      Payment Reference / Bank UTR (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={approvalRef}
+                      onChange={(e) => setApprovalRef(e.target.value)}
+                      placeholder="e.g. UPI Ref 429183491028 or IMPS 981240"
+                      className="w-full rounded-xl border border-[#1A1F36]/10 px-4 py-3 text-sm font-bold outline-none focus:border-[#5C7A6B]"
+                    />
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex justify-end gap-3 border-t border-[#1A1F36]/8 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => setApprovingPayout(null)}
+                      className="rounded-xl border border-[#1A1F36]/10 px-4 py-2.5 text-xs font-black uppercase tracking-wider hover:bg-slate-50 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={approvalSubmitting}
+                      onClick={handleConfirmPayoutApproval}
+                      className="rounded-xl bg-[#5C7A6B] px-5 py-2.5 text-xs font-black uppercase tracking-wider text-white hover:bg-[#486355] transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {approvalSubmitting ? 'Confirming...' : '✓ Confirm & Mark Paid'}
                     </button>
                   </div>
                 </motion.div>

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { assertAdmin } from '@/lib/apiSecurity'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { ilikePattern } from '@/lib/queryFilters'
+import { decryptSensitiveValue } from '@/lib/providerPlatform/crypto'
 
 const successStatuses = ['success', 'paid', 'captured', 'completed', 'authorized']
 const pendingStatuses = ['pending', 'created', 'processing']
@@ -208,7 +209,10 @@ export async function GET(request: Request) {
         docTxRes,
         ledgerTxRes,
         allProfilesRes,
-        allV2ProfilesRes
+        allV2ProfilesRes,
+        docAccountsRes,
+        v2AccountsRes,
+        legacyAccountsRes,
       ] = await Promise.all([
         supabaseAdmin.from('provider_payouts').select('*').order('created_at', { ascending: false }),
         supabaseAdmin.from('provider_payout_records').select('*').order('created_at', { ascending: false }),
@@ -217,6 +221,9 @@ export async function GET(request: Request) {
         supabaseAdmin.from('wallet_ledger_transactions').select('*').or('transaction_type.eq.PAYOUT,amount.lt.0').order('created_at', { ascending: false }),
         supabaseAdmin.from('profiles').select('id, first_name, last_name, email, role'),
         supabaseAdmin.from('provider_profiles_v2').select('id, user_id, full_name, email, role'),
+        supabaseAdmin.from('doctor_payout_accounts').select('*'),
+        supabaseAdmin.from('provider_payout_profiles').select('*'),
+        supabaseAdmin.from('provider_profiles').select('id, provider_id, full_name, bank_account_details, upi_id'),
       ])
 
       const legacyPayouts = legacyRes.data || []
@@ -226,6 +233,9 @@ export async function GET(request: Request) {
       const ledgerTxPayouts = ledgerTxRes.data || []
       const allProfiles = allProfilesRes.data || []
       const allV2Profiles = allV2ProfilesRes.data || []
+      const docAccounts = docAccountsRes.data || []
+      const v2Accounts = v2AccountsRes.data || []
+      const legacyAccounts = legacyAccountsRes.data || []
 
       const profilesById = new Map((allProfiles || []).map((p: any) => [p.id, p]))
       const v2ById = new Map((allV2Profiles || []).map((p: any) => [p.id, p]))
@@ -237,6 +247,94 @@ export async function GET(request: Request) {
         const p = profilesById.get(id)
         if (p) return { name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email || 'Provider', role: p.role || 'provider' }
         return { name: 'Provider', role: 'provider' }
+      }
+
+      // Helper to resolve payout account for any provider ID
+      const resolveAccountDetails = (providerId?: string) => {
+        if (!providerId) return null
+
+        // Check 1: doctor_payout_accounts
+        const docAcc = docAccounts.find(a => a.doctor_id === providerId)
+        if (docAcc && (docAcc.account_number || docAcc.vpa)) {
+          const isUpi = docAcc.account_type === 'vpa' || Boolean(docAcc.vpa)
+          return {
+            account_type: isUpi ? 'vpa' : 'bank_account',
+            beneficiary_name: docAcc.beneficiary_name || 'Provider',
+            account_number: docAcc.account_number || null,
+            ifsc: docAcc.ifsc || null,
+            vpa: docAcc.vpa || null,
+            upi_id: docAcc.vpa || null,
+            source: 'doctor_payout_accounts',
+          }
+        }
+
+        // Check 2: provider_payout_profiles (linked to provider_profiles_v2)
+        const v2Prof = allV2Profiles.find(v => v.id === providerId || v.user_id === providerId)
+        const v2Acc = v2Accounts.find(a => a.provider_id === providerId || (v2Prof && a.provider_id === v2Prof.id))
+        if (v2Acc) {
+          let plainAccount = ''
+          let plainIfsc = ''
+          try {
+            if (v2Acc.encrypted_account_number) plainAccount = decryptSensitiveValue(v2Acc.encrypted_account_number)
+            if (v2Acc.ifsc_encrypted) plainIfsc = decryptSensitiveValue(v2Acc.ifsc_encrypted)
+          } catch (_) {}
+
+          if (v2Acc.preferred_payout_method === 'UPI' && v2Acc.upi_id) {
+            return {
+              account_type: 'vpa',
+              beneficiary_name: v2Acc.beneficiary_name || v2Prof?.full_name || 'Provider',
+              vpa: v2Acc.upi_id,
+              upi_id: v2Acc.upi_id,
+              source: 'provider_payout_profiles',
+            }
+          } else if (plainAccount && plainIfsc) {
+            return {
+              account_type: 'bank_account',
+              beneficiary_name: v2Acc.beneficiary_name || v2Prof?.full_name || 'Provider',
+              account_number: plainAccount,
+              ifsc: plainIfsc,
+              source: 'provider_payout_profiles',
+            }
+          } else if (v2Acc.upi_id) {
+            return {
+              account_type: 'vpa',
+              beneficiary_name: v2Acc.beneficiary_name || v2Prof?.full_name || 'Provider',
+              vpa: v2Acc.upi_id,
+              upi_id: v2Acc.upi_id,
+              source: 'provider_payout_profiles',
+            }
+          }
+        }
+
+        // Check 3: provider_profiles (legacy)
+        const legProf = legacyAccounts.find(p => p.provider_id === providerId || p.id === providerId)
+        if (legProf) {
+          const details = legProf.bank_account_details || {}
+          const accNum = details.account_number || details.accountNumber || details.account_no || details.notes
+          const ifsc = details.ifsc || details.ifscCode
+          const upi = legProf.upi_id || details.upi_id || details.upiId
+
+          if (accNum && ifsc) {
+            return {
+              account_type: 'bank_account',
+              beneficiary_name: details.beneficiary_name || details.accountHolderName || legProf.full_name || 'Provider',
+              account_number: accNum,
+              ifsc,
+              bank_name: details.bank_name || details.bankName || null,
+              source: 'provider_profiles',
+            }
+          } else if (upi) {
+            return {
+              account_type: 'vpa',
+              beneficiary_name: legProf.full_name || 'Provider',
+              vpa: upi,
+              upi_id: upi,
+              source: 'provider_profiles',
+            }
+          }
+        }
+
+        return null
       }
 
       const normalizedLegacy = (legacyPayouts || []).map((p: any) => {
@@ -253,6 +351,7 @@ export async function GET(request: Request) {
           payment_reference: p.payment_reference || null,
           created_at: p.created_at,
           source: 'provider_payouts',
+          payout_account: resolveAccountDetails(p.provider_id),
         }
       })
 
@@ -278,6 +377,7 @@ export async function GET(request: Request) {
           payment_reference: null,
           created_at: p.created_at,
           source: 'provider_payout_records',
+          payout_account: resolveAccountDetails(p.provider_id) || resolveAccountDetails(targetUserId),
         }
       })
 
@@ -301,6 +401,7 @@ export async function GET(request: Request) {
           payment_reference: null,
           created_at: t.created_at,
           source: 'provider_wallet_transactions',
+          payout_account: resolveAccountDetails(t.provider_id) || resolveAccountDetails(targetUserId),
         }
       })
 
@@ -321,6 +422,7 @@ export async function GET(request: Request) {
           payment_reference: null,
           created_at: t.created_at,
           source: 'doctor_wallet_transactions',
+          payout_account: resolveAccountDetails(t.doctor_id),
         }
       })
 
@@ -342,6 +444,7 @@ export async function GET(request: Request) {
           payment_reference: t.payment_reference || null,
           created_at: t.created_at,
           source: 'wallet_ledger_transactions',
+          payout_account: resolveAccountDetails(id),
         }
       })
 
@@ -366,12 +469,13 @@ export async function GET(request: Request) {
             ['PENDING', 'PROCESSING', 'INITIATED', 'REQUESTED', 'APPROVED'].includes(String(p.payout_status || '').toUpperCase())
           )
           if (!hasExistingPending) {
-            const syntheticId = `wallet-pending-${doc.doctor_id || doc.user_id || doc.id}`
+            const targetId = doc.doctor_id || doc.user_id || doc.id
+            const syntheticId = `wallet-pending-${targetId}`
             if (!seenPayoutIds.has(syntheticId)) {
               seenPayoutIds.add(syntheticId)
               combinedPayouts.unshift({
                 id: syntheticId,
-                provider_id: doc.doctor_id || doc.user_id || doc.id,
+                provider_id: targetId,
                 provider_profile_id: doc.provider_profile_id || doc.id,
                 provider_name: doc.full_name || doc.name || 'Provider',
                 role: doc.role || 'doctor',
@@ -382,6 +486,7 @@ export async function GET(request: Request) {
                 payment_reference: null,
                 created_at: new Date().toISOString(),
                 source: 'wallet_processing_balance',
+                payout_account: resolveAccountDetails(doc.id) || resolveAccountDetails(doc.doctor_id) || resolveAccountDetails(doc.user_id) || resolveAccountDetails(doc.provider_profile_id),
               })
             }
           }
