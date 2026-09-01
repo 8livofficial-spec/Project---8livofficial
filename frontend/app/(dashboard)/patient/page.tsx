@@ -9,7 +9,6 @@ import OverviewCards from '@/components/patient/OverviewCards'
 import WeightChart from '@/components/patient/WeightChart'
 import UpcomingAppointments from '@/components/patient/UpcomingAppointments'
 import MedicationCard from '@/components/patient/MedicationCard'
-import MessagesPreview from '@/components/patient/MessagesPreview'
 import ProgressRing from '@/components/patient/ProgressRing'
 import QuickActions from '@/components/patient/QuickActions'
 const getGreeting = () =>{

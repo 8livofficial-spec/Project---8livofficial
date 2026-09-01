@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Calendar, TrendingDown, MessageCircle, Package, Video, X, PhoneCall } from 'lucide-react'
+import { LayoutDashboard, Calendar, TrendingDown, Package, Video, X, PhoneCall } from 'lucide-react'
 import { usePatientData, PatientDataProvider } from '@/hooks/usePatientData'
 import { supabase } from '@/lib/supabaseClient'
 import Sidebar from '@/components/patient/Sidebar'
@@ -224,14 +224,12 @@ function DashboardLayoutContent({
   const programWeek = assessment?.created_at ? getProgramWeek(assessment.created_at) : 1
   const totalWeeks = 12
 
-  const unreadMessages = notifications.filter(n => n.type === 'message' && !n.is_read).length
   const notificationsCount = notifications.filter(n => !n.is_read).length
 
   const mobileNavItems = [
     { icon: LayoutDashboard, label: 'Overview', href: '/patient' },
     { icon: Calendar, label: 'Appointments', href: '/patient/appointments' },
     { icon: TrendingDown, label: 'Progress', href: '/patient/progress' },
-    { icon: MessageCircle, label: 'Messages', href: '/patient/messages', badge: unreadMessages },
     { icon: Package, label: 'Orders', href: '/patient/medicine-orders' }
   ]
 
@@ -309,7 +307,6 @@ function DashboardLayoutContent({
           membershipTier={membershipTier}
           programWeek={programWeek}
           totalWeeks={totalWeeks}
-          unreadMessagesCount={unreadMessages}
           email={user?.email || undefined}
         />
       </div>
@@ -336,7 +333,6 @@ function DashboardLayoutContent({
               membershipTier={membershipTier}
               programWeek={programWeek}
               totalWeeks={totalWeeks}
-              unreadMessagesCount={unreadMessages}
               email={user?.email || undefined}
               onCloseMobile={() => setMobileSidebarOpen(false)}
             />
@@ -381,9 +377,6 @@ function DashboardLayoutContent({
               >
                 <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} />
                 <span className="text-[10px] font-medium">{tab.label}</span>
-                {tab.badge && tab.badge > 0 ? (
-                  <span className="absolute top-1.5 right-6 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                ) : null}
               </Link>
             )
           })}

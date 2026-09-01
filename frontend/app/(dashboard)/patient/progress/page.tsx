@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import { 
-  AreaChart, Area, BarChart, Bar,
+  AreaChart, Area,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts'
 import { TrendingDown, Award, Flame, Zap } from 'lucide-react'
@@ -34,16 +34,6 @@ export default function ProgressPage() {
   const currentBmi = currentWeight / (heightM * heightM)
   const bmiChange = startBmi - currentBmi
 
-  // Mock data for auxiliary charts
-  const caloriesData = [
-    { day: 'Mon', calories: 1800 },
-    { day: 'Tue', calories: 1650 },
-    { day: 'Wed', calories: 1720 },
-    { day: 'Thu', calories: 1590 },
-    { day: 'Fri', calories: 1910 },
-    { day: 'Sat', calories: 1680 },
-    { day: 'Sun', calories: 1750 }
-  ]
 
   const getMilestones = () => {
     const startProgramDate = assessment?.created_at 

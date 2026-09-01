@@ -4,7 +4,7 @@ import React from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { 
-  LayoutDashboard, Calendar, TrendingDown, MessageCircle, Package,
+  LayoutDashboard, Calendar, TrendingDown, Package,
   Pill, Video, CreditCard, Settings, LogOut 
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
@@ -15,7 +15,6 @@ interface SidebarProps {
   membershipTier: string
   programWeek: number
   totalWeeks: number
-  unreadMessagesCount?: number
   email?: string
   onCloseMobile?: () => void
 }
@@ -26,7 +25,6 @@ export default function Sidebar({
   membershipTier,
   programWeek,
   totalWeeks,
-  unreadMessagesCount = 0,
   email = 'patient@8liv.com',
   onCloseMobile
 }: SidebarProps) {

@@ -39,8 +39,13 @@ export async function getAuthenticatedUser(request: Request) {
   const user = data.user
   const email = normalizeEmail(user.email)
 
-  // Explicit email check overrides for admin accounts
-  if (email === '8livofficial@gmail.com' || email === 'admin@8liv.com') {
+  // SECURITY: Admin bypass emails are driven EXCLUSIVELY by ADMIN_BYPASS_EMAILS env var (comma-separated).
+  // Default is empty — no email bypass exists unless explicitly configured in environment.
+  const adminBypassEmails = (process.env.ADMIN_BYPASS_EMAILS || '')
+    .split(',')
+    .map(e => e.trim().toLowerCase())
+    .filter(Boolean)
+  if (adminBypassEmails.length > 0 && adminBypassEmails.includes(email)) {
     return { user, role: 'admin' }
   }
 

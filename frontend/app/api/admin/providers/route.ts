@@ -161,8 +161,8 @@ export async function POST(request: Request) {
       consultationType,
       payoutAmount,
       status,
-      bankAccountDetails,
-      upiId,
+      // SECURITY: bankAccountDetails and upiId are intentionally NOT accepted from admin.
+      // Providers must configure their own payout accounts through the self-service onboarding flow.
     } = body
 
     if (!fullName || !email || !password || !role) {
@@ -208,8 +208,9 @@ export async function POST(request: Request) {
       consultation_type: consultationType || 'video',
       payout_amount: Number(payoutAmount || 0),
       status: status || 'active',
-      bank_account_details: bankAccountDetails || {},
-      upi_id: upiId || '',
+      // SECURITY: bank_account_details and upi_id are never written by admin — provider self-configures.
+      bank_account_details: {},
+      upi_id: '',
       updated_at: new Date().toISOString(),
     })
     const usingProfilesFallback = Boolean(providerErr && isMissingProviderProfilesTable(providerErr))
@@ -217,23 +218,8 @@ export async function POST(request: Request) {
 
     if (role === 'doctor') {
       await supabaseAdmin.from('doctor_profiles').upsert({ id: providerId, full_name: `Dr. ${fullName}` })
-      
-      const accNum = bankAccountDetails?.account_number || bankAccountDetails?.accountNumber || null
-      const ifscCode = bankAccountDetails?.ifsc || bankAccountDetails?.ifscCode || null
-      const bName = bankAccountDetails?.beneficiary_name || bankAccountDetails?.accountHolderName || `Dr. ${fullName}`
-      const cleanUpi = upiId?.trim() || null
-
-      if (accNum || cleanUpi) {
-        await supabaseAdmin.from('doctor_payout_accounts').upsert({
-          doctor_id: providerId,
-          account_type: cleanUpi && !accNum ? 'vpa' : 'bank_account',
-          beneficiary_name: bName,
-          account_number: accNum,
-          ifsc: ifscCode ? ifscCode.toUpperCase() : null,
-          vpa: cleanUpi,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'doctor_id' })
-      }
+      // SECURITY: doctor_payout_accounts is NOT pre-populated by admin.
+      // The doctor self-configures bank/UPI details through their provider onboarding flow.
     }
 
     await supabaseAdmin.from('doctor_wallet').upsert({

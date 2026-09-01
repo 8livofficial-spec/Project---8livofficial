@@ -101,7 +101,12 @@ export async function findUserByEmail(email: string) {
 
 export async function getUserRole(userId: string, email?: string | null) {
   const normalizedEmail = normalizeEmail(email)
-  if (normalizedEmail === '8livofficial@gmail.com') return 'admin'
+  // SECURITY: Admin bypass emails are driven EXCLUSIVELY by ADMIN_BYPASS_EMAILS env var (comma-separated).
+  const adminBypassEmails = (process.env.ADMIN_BYPASS_EMAILS || '')
+    .split(',')
+    .map(e => e.trim().toLowerCase())
+    .filter(Boolean)
+  if (adminBypassEmails.length > 0 && adminBypassEmails.includes(normalizedEmail)) return 'admin'
 
   const { data: profile } = await supabaseAdmin
     .from('profiles')

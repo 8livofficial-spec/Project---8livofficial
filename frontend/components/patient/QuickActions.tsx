@@ -2,7 +2,7 @@
 
 import React from 'react'
 import Link from 'next/link'
-import { CalendarCheck, MessageCircle, Pill, Scale } from 'lucide-react'
+import { CalendarCheck, TrendingDown, Pill, Scale } from 'lucide-react'
 
 interface QuickActionsProps {
   onLogWeightClick: () => void
@@ -20,13 +20,13 @@ export default function QuickActions({ onLogWeightClick }: QuickActionsProps) {
       href: ''
     },
     {
-      icon: MessageCircle,
-      title: 'Chat Doctor',
-      sub: 'Send follow-up',
+      icon: TrendingDown,
+      title: 'My Progress',
+      sub: 'View weight trends',
       color: '#C4622D',
       bg: 'rgba(196,98,45,0.08)',
       onClick: undefined,
-      href: '/patient/messages'
+      href: '/patient/progress'
     },
     {
       icon: CalendarCheck,
