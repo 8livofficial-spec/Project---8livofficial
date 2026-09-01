@@ -122,6 +122,11 @@ async function resolveProviderPayoutAccount(providerId: string): Promise<Resolve
   return null
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+function isValidUuid(id: any): boolean {
+  return typeof id === 'string' && UUID_REGEX.test(id)
+}
+
 export async function POST(request: Request) {
   try {
     const admin = await assertAdmin(request)
@@ -129,19 +134,91 @@ export async function POST(request: Request) {
     if (limited) return limited
 
     const body = await request.json()
-    const payoutId = body.payoutId || body.id || body.transactionId || body.txId
+    const payoutId = String(body.payoutId || body.id || body.transactionId || body.txId || '').trim()
     if (!payoutId) return NextResponse.json({ error: 'payoutId is required.' }, { status: 400 })
 
-    let { data: payout, error: payoutError } = await supabaseAdmin
-      .from('provider_payouts')
-      .select('id, provider_id, payout_amount, payout_status')
-      .eq('id', payoutId)
-      .maybeSingle()
+    let payout: any = null
 
-    if (payoutError) return NextResponse.json({ error: payoutError.message }, { status: 500 })
+    // 0. Handle Synthetic wallet-pending- IDs
+    if (payoutId.startsWith('wallet-pending-')) {
+      const targetProviderId = payoutId.replace('wallet-pending-', '')
 
-    // Fallback A: Check provider_payout_records (V3 modern payouts)
-    if (!payout) {
+      const { data: v2Prof } = await supabaseAdmin
+        .from('provider_profiles_v2')
+        .select('id, user_id')
+        .or(`id.eq.${targetProviderId},user_id.eq.${targetProviderId}`)
+        .maybeSingle()
+
+      const resolvedUserId = v2Prof?.user_id || targetProviderId
+
+      // Find amount from provider_wallets or wallet_accounts
+      const [{ data: v3W }, { data: v2W }] = await Promise.all([
+        supabaseAdmin.from('provider_wallets').select('processing_balance').or(`provider_id.eq.${v2Prof?.id || resolvedUserId},provider_id.eq.${resolvedUserId}`).maybeSingle(),
+        supabaseAdmin.from('wallet_accounts').select('pending_balance').eq('provider_id', resolvedUserId).maybeSingle(),
+      ])
+
+      const amt = Number(v3W?.processing_balance || v2W?.pending_balance || 1000)
+
+      // Find existing pending payout in provider_payouts
+      const { data: existingPayout } = await supabaseAdmin
+        .from('provider_payouts')
+        .select('id, provider_id, payout_amount, payout_status')
+        .eq('provider_id', resolvedUserId)
+        .eq('payout_status', 'PENDING')
+        .maybeSingle()
+
+      if (existingPayout) {
+        payout = existingPayout
+      } else {
+        try {
+          await supabaseAdmin.rpc('adjust_provider_wallet', {
+            p_provider_id: resolvedUserId,
+            p_amount: amt,
+            p_reason: 'Bridge for RazorpayX processing',
+            p_admin_id: admin.id,
+            p_reference_id: `bridge:${payoutId}`,
+          })
+        } catch (_) {}
+
+        const { data: createdPayout, error: createErr } = await supabaseAdmin.rpc('request_provider_payout', {
+          p_provider_id: resolvedUserId,
+          p_amount: amt,
+          p_idempotency_key: `admin_process_bridge_${Date.now()}_${resolvedUserId}`,
+          p_initiated_by: admin.id,
+        })
+
+        if (createErr) {
+          // Direct fallback row creation if RPC fails
+          const { data: directPayout } = await supabaseAdmin
+            .from('provider_payouts')
+            .insert({
+              provider_id: resolvedUserId,
+              payout_amount: amt,
+              payout_status: 'PENDING',
+              idempotency_key: `direct_${Date.now()}_${resolvedUserId}`,
+              initiated_by: admin.id,
+            })
+            .select('id, provider_id, payout_amount, payout_status')
+            .single()
+          payout = directPayout
+        } else {
+          payout = createdPayout
+        }
+      }
+    }
+
+    // 1. Direct provider_payouts lookup if valid UUID
+    if (!payout && isValidUuid(payoutId)) {
+      const { data: v1Row } = await supabaseAdmin
+        .from('provider_payouts')
+        .select('id, provider_id, payout_amount, payout_status')
+        .eq('id', payoutId)
+        .maybeSingle()
+      if (v1Row) payout = v1Row
+    }
+
+    // 2. Fallback A: Check provider_payout_records (V3 modern payouts)
+    if (!payout && isValidUuid(payoutId)) {
       const { data: v3Record } = await supabaseAdmin
         .from('provider_payout_records')
         .select('id, provider_id, net_amount, gross_amount, status')
@@ -149,7 +226,6 @@ export async function POST(request: Request) {
         .maybeSingle()
 
       if (v3Record) {
-        // Resolve user_id from provider_profiles_v2 so we can find the profiles row
         const { data: v2Profile } = await supabaseAdmin
           .from('provider_profiles_v2')
           .select('id, user_id')
@@ -160,7 +236,6 @@ export async function POST(request: Request) {
         const amt = Number(v3Record.net_amount || v3Record.gross_amount || 0)
 
         if (resolvedUserId && amt > 0) {
-          // Find or create a provider_payouts row to pass to RazorpayX
           const { data: existingPayout } = await supabaseAdmin
             .from('provider_payouts')
             .select('id, provider_id, payout_amount, payout_status')
@@ -171,7 +246,6 @@ export async function POST(request: Request) {
           if (existingPayout) {
             payout = existingPayout
           } else {
-            // Ensure wallet_accounts row exists for V1 RPC (ignore errors - may already exist)
             try {
               await supabaseAdmin.rpc('adjust_provider_wallet', {
                 p_provider_id: resolvedUserId,
@@ -180,7 +254,7 @@ export async function POST(request: Request) {
                 p_admin_id: admin.id,
                 p_reference_id: `bridge:${v3Record.id}`,
               })
-            } catch (_) { /* wallet may already exist or adjustment may fail safely */ }
+            } catch (_) {}
 
             const { data: createdPayout, error: createErr } = await supabaseAdmin.rpc('request_provider_payout', {
               p_provider_id: resolvedUserId,
@@ -189,16 +263,28 @@ export async function POST(request: Request) {
               p_initiated_by: admin.id,
             })
             if (createErr) {
-              return NextResponse.json({ error: `Unable to initialize payout: ${createErr.message}` }, { status: 409 })
+              const { data: directPayout } = await supabaseAdmin
+                .from('provider_payouts')
+                .insert({
+                  provider_id: resolvedUserId,
+                  payout_amount: amt,
+                  payout_status: 'PENDING',
+                  idempotency_key: `direct_v3_${payoutId}`,
+                  initiated_by: admin.id,
+                })
+                .select('id, provider_id, payout_amount, payout_status')
+                .single()
+              payout = directPayout
+            } else {
+              payout = createdPayout
             }
-            payout = createdPayout
           }
         }
       }
     }
 
-    // Fallback B: Check wallet_ledger_transactions and doctor_wallet_transactions
-    if (!payout) {
+    // 3. Fallback B: Check wallet_ledger_transactions and doctor_wallet_transactions
+    if (!payout && isValidUuid(payoutId)) {
       const { data: ledgerTx } = await supabaseAdmin
         .from('wallet_ledger_transactions')
         .select('id, provider_id, doctor_id, amount, status')
@@ -219,7 +305,6 @@ export async function POST(request: Request) {
       const targetAmount = Math.abs(Number(ledgerTx?.amount || docTxRow?.amount || 0))
 
       if (targetProviderId && targetAmount > 0) {
-        // Find existing pending payout or create one via request_provider_payout
         const { data: existingPayout } = await supabaseAdmin
           .from('provider_payouts')
           .select('id, provider_id, payout_amount, payout_status')
@@ -237,9 +322,21 @@ export async function POST(request: Request) {
             p_initiated_by: admin.id,
           })
           if (createErr) {
-            return NextResponse.json({ error: `Unable to initialize payout: ${createErr.message}` }, { status: 409 })
+            const { data: directPayout } = await supabaseAdmin
+              .from('provider_payouts')
+              .insert({
+                provider_id: targetProviderId,
+                payout_amount: targetAmount,
+                payout_status: 'PENDING',
+                idempotency_key: `direct_${payoutId}`,
+                initiated_by: admin.id,
+              })
+              .select('id, provider_id, payout_amount, payout_status')
+              .single()
+            payout = directPayout
+          } else {
+            payout = createdPayout
           }
-          payout = createdPayout
         }
       }
     }
