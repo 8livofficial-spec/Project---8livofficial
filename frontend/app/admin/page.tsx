@@ -2380,8 +2380,16 @@ function AdminDashboardContent() {
                                 <button
                                   onClick={() => handleProcessRazorpayPayout(payout.id, providerName, payout.payout_amount)}
                                   className="rounded-lg bg-[#1A1F36] px-3 py-1 text-[10px] font-black text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                                  title="Approve & Send via RazorpayX"
                                 >
-                                  Approve
+                                  RazorpayX
+                                </button>
+                                <button
+                                  onClick={() => handleMarkAsPaid(payout.id, providerName, payout.payout_amount)}
+                                  className="rounded-lg bg-[#5C7A6B] px-3 py-1 text-[10px] font-black text-white hover:bg-[#486355] transition-colors cursor-pointer"
+                                  title="Mark as Manually Paid (Bank/UPI)"
+                                >
+                                  Mark Paid
                                 </button>
                                 <button
                                   onClick={() => handleRejectPayout(payout.id, providerName, payout.payout_amount)}
@@ -2392,15 +2400,31 @@ function AdminDashboardContent() {
                               </>
                             )}
                             {status === 'FAILED' && (
-                              <button
-                                onClick={() => handleProcessRazorpayPayout(payout.id, providerName, payout.payout_amount)}
-                                className="rounded-lg bg-[#D96A6A] px-3 py-1 text-[10px] font-black text-white hover:bg-[#B94D4D] transition-colors cursor-pointer"
-                              >
-                                Retry
-                              </button>
+                              <>
+                                <button
+                                  onClick={() => handleProcessRazorpayPayout(payout.id, providerName, payout.payout_amount)}
+                                  className="rounded-lg bg-[#D96A6A] px-3 py-1 text-[10px] font-black text-white hover:bg-[#B94D4D] transition-colors cursor-pointer"
+                                >
+                                  Retry
+                                </button>
+                                <button
+                                  onClick={() => handleMarkAsPaid(payout.id, providerName, payout.payout_amount)}
+                                  className="rounded-lg bg-[#5C7A6B] px-3 py-1 text-[10px] font-black text-white hover:bg-[#486355] transition-colors cursor-pointer"
+                                >
+                                  Mark Paid
+                                </button>
+                              </>
                             )}
                             {status === 'PROCESSING' && (
-                              <span className="text-xs text-[#8896A4] italic font-semibold">Processing...</span>
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs text-[#8896A4] italic font-semibold">Processing...</span>
+                                <button
+                                  onClick={() => handleMarkAsPaid(payout.id, providerName, payout.payout_amount)}
+                                  className="rounded-lg bg-[#5C7A6B] px-2 py-0.5 text-[9px] font-black text-white hover:bg-[#486355] transition-colors cursor-pointer"
+                                >
+                                  Force Complete
+                                </button>
+                              </div>
                             )}
                             {status === 'COMPLETED' && (
                               <span className="text-xs text-[#5C7A6B] font-black">✓ Completed</span>

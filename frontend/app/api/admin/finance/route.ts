@@ -108,28 +108,87 @@ export async function GET(request: Request) {
     // 5. Total Provider Earnings across platform
     const totalProviderEarnings = doctors.reduce((sum, d) => sum + d.total_earned, 0)
 
-    // 6. Provider Payouts
+    // 6. Provider Payouts (Unified across provider_payouts & provider_payout_records)
     let lightPayoutsData: any[] = []
     let paginatedPayouts: any[] = []
     let payoutsCount = 0
     try {
-      const { data } = await supabaseAdmin
-        .from('provider_payouts')
-        .select('id, provider_id, payout_status, payout_amount, initiated_at, payment_reference, failure_reason, created_at, updated_at')
-        .order('created_at', { ascending: false })
-      lightPayoutsData = data || []
+      const [{ data: legacyPayouts }, { data: v2Payouts }, { data: allProfiles }, { data: allV2Profiles }] = await Promise.all([
+        supabaseAdmin
+          .from('provider_payouts')
+          .select('id, provider_id, payout_status, payout_amount, initiated_at, payment_reference, failure_reason, created_at, updated_at')
+          .order('created_at', { ascending: false }),
+        supabaseAdmin
+          .from('provider_payout_records')
+          .select('id, provider_id, status, net_amount, gross_amount, initiated_at, failure_reason, created_at, updated_at')
+          .order('created_at', { ascending: false }),
+        supabaseAdmin.from('profiles').select('id, first_name, last_name, email, role'),
+        supabaseAdmin.from('provider_profiles_v2').select('id, user_id, full_name, email, role'),
+      ])
+
+      const profilesById = new Map((allProfiles || []).map((p: any) => [p.id, p]))
+      const v2ById = new Map((allV2Profiles || []).map((p: any) => [p.id, p]))
+
+      const normalizedLegacy = (legacyPayouts || []).map((p: any) => {
+        const prof = profilesById.get(p.provider_id) || v2ById.get(p.provider_id)
+        return {
+          id: p.id,
+          provider_id: p.provider_id,
+          provider_name: prof ? (prof.full_name || `${prof.first_name || ''} ${prof.last_name || ''}`.trim() || prof.email) : 'Provider',
+          role: prof?.role || 'doctor',
+          payout_amount: Number(p.payout_amount || 0),
+          payout_status: String(p.payout_status || 'PENDING').toUpperCase(),
+          failure_reason: p.failure_reason || null,
+          initiated_at: p.initiated_at || p.created_at,
+          payment_reference: p.payment_reference || null,
+          created_at: p.created_at,
+          source: 'provider_payouts',
+        }
+      })
+
+      const normalizedV2 = (v2Payouts || []).map((p: any) => {
+        const v2Prof = v2ById.get(p.provider_id)
+        const userProf = v2Prof ? profilesById.get(v2Prof.user_id) : profilesById.get(p.provider_id)
+        const name = v2Prof?.full_name || (userProf ? `${userProf.first_name || ''} ${userProf.last_name || ''}`.trim() : null) || userProf?.email || 'Provider'
+        
+        let status = String(p.status || 'PENDING').toUpperCase()
+        if (status === 'SUCCESS') status = 'COMPLETED'
+        if (status === 'APPROVED') status = 'PENDING'
+
+        return {
+          id: p.id,
+          provider_id: v2Prof?.user_id || p.provider_id,
+          provider_profile_id: p.provider_id,
+          provider_name: name,
+          role: v2Prof?.role || userProf?.role || 'provider',
+          payout_amount: Number(p.net_amount || p.gross_amount || 0),
+          payout_status: status,
+          failure_reason: p.failure_reason || null,
+          initiated_at: p.initiated_at || p.created_at,
+          payment_reference: null,
+          created_at: p.created_at,
+          source: 'provider_payout_records',
+        }
+      })
+
+      // Combine and deduplicate
+      const seenPayoutIds = new Set<string>()
+      const combinedPayouts: any[] = []
+
+      for (const p of [...normalizedV2, ...normalizedLegacy]) {
+        if (!seenPayoutIds.has(p.id)) {
+          seenPayoutIds.add(p.id)
+          combinedPayouts.push(p)
+        }
+      }
+
+      combinedPayouts.sort((a, b) => new Date(b.created_at || b.initiated_at || 0).getTime() - new Date(a.created_at || a.initiated_at || 0).getTime())
+
+      lightPayoutsData = combinedPayouts
+      payoutsCount = combinedPayouts.length
 
       const payoutsFrom = (payoutsPage - 1) * payoutsLimit
-      const payoutsTo = payoutsPage * payoutsLimit - 1
-      const pageRes = await supabaseAdmin
-        .from('provider_payouts')
-        .select('id, provider_id, payout_amount, payout_status, initiated_at, payment_reference, failure_reason, created_at, updated_at', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .range(payoutsFrom, payoutsTo)
-      if (!pageRes.error && pageRes.data) {
-        paginatedPayouts = pageRes.data
-        payoutsCount = pageRes.count || 0
-      }
+      paginatedPayouts = combinedPayouts.slice(payoutsFrom, payoutsFrom + payoutsLimit)
     } catch (err) {
       console.warn('[admin/finance] Failed to load provider payouts:', err)
     }
