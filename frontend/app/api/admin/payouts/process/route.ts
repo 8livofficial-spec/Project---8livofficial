@@ -140,7 +140,64 @@ export async function POST(request: Request) {
 
     if (payoutError) return NextResponse.json({ error: payoutError.message }, { status: 500 })
 
-    // Fallback: If payoutId refers to a wallet_ledger_transaction or doctor_wallet_transaction
+    // Fallback A: Check provider_payout_records (V3 modern payouts)
+    if (!payout) {
+      const { data: v3Record } = await supabaseAdmin
+        .from('provider_payout_records')
+        .select('id, provider_id, net_amount, gross_amount, status')
+        .eq('id', payoutId)
+        .maybeSingle()
+
+      if (v3Record) {
+        // Resolve user_id from provider_profiles_v2 so we can find the profiles row
+        const { data: v2Profile } = await supabaseAdmin
+          .from('provider_profiles_v2')
+          .select('id, user_id')
+          .eq('id', v3Record.provider_id)
+          .maybeSingle()
+
+        const resolvedUserId = v2Profile?.user_id || v3Record.provider_id
+        const amt = Number(v3Record.net_amount || v3Record.gross_amount || 0)
+
+        if (resolvedUserId && amt > 0) {
+          // Find or create a provider_payouts row to pass to RazorpayX
+          const { data: existingPayout } = await supabaseAdmin
+            .from('provider_payouts')
+            .select('id, provider_id, payout_amount, payout_status')
+            .eq('provider_id', resolvedUserId)
+            .eq('payout_status', 'PENDING')
+            .maybeSingle()
+
+          if (existingPayout) {
+            payout = existingPayout
+          } else {
+            // Ensure wallet_accounts row exists for V1 RPC (ignore errors - may already exist)
+            try {
+              await supabaseAdmin.rpc('adjust_provider_wallet', {
+                p_provider_id: resolvedUserId,
+                p_amount: amt,
+                p_reason: 'Cross-schema payout bridge for RazorpayX processing',
+                p_admin_id: admin.id,
+                p_reference_id: `bridge:${v3Record.id}`,
+              })
+            } catch (_) { /* wallet may already exist or adjustment may fail safely */ }
+
+            const { data: createdPayout, error: createErr } = await supabaseAdmin.rpc('request_provider_payout', {
+              p_provider_id: resolvedUserId,
+              p_amount: amt,
+              p_idempotency_key: `admin_process_v3_${payoutId}`,
+              p_initiated_by: admin.id,
+            })
+            if (createErr) {
+              return NextResponse.json({ error: `Unable to initialize payout: ${createErr.message}` }, { status: 409 })
+            }
+            payout = createdPayout
+          }
+        }
+      }
+    }
+
+    // Fallback B: Check wallet_ledger_transactions and doctor_wallet_transactions
     if (!payout) {
       const { data: ledgerTx } = await supabaseAdmin
         .from('wallet_ledger_transactions')
@@ -148,8 +205,18 @@ export async function POST(request: Request) {
         .eq('id', payoutId)
         .maybeSingle()
 
-      const targetProviderId = ledgerTx?.provider_id || ledgerTx?.doctor_id
-      const targetAmount = Math.abs(Number(ledgerTx?.amount || 0))
+      let docTxRow: any = null
+      if (!ledgerTx) {
+        const { data: docTx } = await supabaseAdmin
+          .from('doctor_wallet_transactions')
+          .select('id, doctor_id, amount, status')
+          .eq('id', payoutId)
+          .maybeSingle()
+        docTxRow = docTx
+      }
+
+      const targetProviderId = ledgerTx?.provider_id || ledgerTx?.doctor_id || docTxRow?.doctor_id
+      const targetAmount = Math.abs(Number(ledgerTx?.amount || docTxRow?.amount || 0))
 
       if (targetProviderId && targetAmount > 0) {
         // Find existing pending payout or create one via request_provider_payout

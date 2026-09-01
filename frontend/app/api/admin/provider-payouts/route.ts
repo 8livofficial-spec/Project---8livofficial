@@ -11,141 +11,142 @@ export async function PATCH(request: Request) {
 
     const body = await request.json()
     const payoutId = body.transactionId || body.payoutId || body.id
-    const payoutStatus = String(body.payoutStatus || body.transactionStatus || body.status || '').toUpperCase()
+    const rawStatus = String(body.payoutStatus || body.transactionStatus || body.status || '').toUpperCase()
     const paymentReference = body.paymentReference || body.reference || 'MANUAL_PAYOUT_APPROVED'
     const notes = body.notes || body.reason || null
 
-    if (!payoutId || !payoutStatus) {
+    if (!payoutId || !rawStatus) {
       return NextResponse.json({ error: 'payoutId and status are required.' }, { status: 400 })
     }
 
     const now = new Date().toISOString()
-    const isCompleted = ['COMPLETED', 'PAID', 'SUCCESS', 'PROCESSED'].includes(payoutStatus)
-    const isFailed = ['FAILED', 'REJECTED', 'CANCELLED'].includes(payoutStatus)
-    const isProcessing = ['PROCESSING', 'PENDING'].includes(payoutStatus)
-
+    const isCompleted = ['COMPLETED', 'PAID', 'SUCCESS', 'PROCESSED'].includes(rawStatus)
+    const isFailed = ['FAILED', 'REJECTED', 'CANCELLED'].includes(rawStatus)
     const normalizedStatus = isCompleted ? 'COMPLETED' : (isFailed ? 'FAILED' : 'PROCESSING')
 
-    let matched = false
-
-    // 1. Check provider_payouts table
-    const { data: payoutRow } = await supabaseAdmin
-      .from('provider_payouts')
-      .select('id, provider_id, payout_amount, payout_status, wallet_id')
-      .eq('id', payoutId)
-      .maybeSingle()
-
-    if (payoutRow) {
-      matched = true
-      if (isCompleted) {
-        try {
-          await supabaseAdmin.rpc('finalize_provider_payout', {
-            p_payout_id: payoutRow.id,
-            p_status: 'COMPLETED',
-            p_payment_reference: paymentReference,
-            p_failure_reason: null,
-            p_actor: admin.id,
-          })
-        } catch (rpcErr) {
-          console.warn('finalize_provider_payout RPC failed, updating directly:', rpcErr)
-          await supabaseAdmin
-            .from('provider_payouts')
-            .update({ payout_status: 'COMPLETED', payment_reference: paymentReference, completed_at: now, updated_at: now })
-            .eq('id', payoutRow.id)
-
-          // Direct ledger update
-          if (payoutRow.wallet_id) {
-            await supabaseAdmin.rpc('recalculate_wallet_account', { p_wallet_id: payoutRow.wallet_id })
-          }
-        }
-      } else if (isFailed) {
-        try {
-          await supabaseAdmin.rpc('finalize_provider_payout', {
-            p_payout_id: payoutRow.id,
-            p_status: 'FAILED',
-            p_payment_reference: null,
-            p_failure_reason: notes || 'Rejected by admin',
-            p_actor: admin.id,
-          })
-        } catch (rpcErr) {
-          await supabaseAdmin
-            .from('provider_payouts')
-            .update({ payout_status: 'FAILED', failure_reason: notes, updated_at: now })
-            .eq('id', payoutRow.id)
-        }
-      } else {
-        await supabaseAdmin
-          .from('provider_payouts')
-          .update({ payout_status: 'PROCESSING', updated_at: now })
-          .eq('id', payoutRow.id)
-      }
-    }
-
-    // 2. Check provider_payout_records (V2 / V3 table)
-    const { data: v2Payout } = await supabaseAdmin
+    // ─── 1. provider_payout_records (V3 / Modern path) ───────────────────────────
+    const { data: v3Record } = await supabaseAdmin
       .from('provider_payout_records')
       .select('id, provider_id, net_amount, gross_amount, status')
       .eq('id', payoutId)
       .maybeSingle()
 
-    if (v2Payout) {
-      matched = true
-      const v2Status = isCompleted ? 'SUCCESS' : (isFailed ? 'FAILED' : 'APPROVED')
-      await supabaseAdmin
-        .from('provider_payout_records')
-        .update({
-          status: v2Status,
-          processed_at: isCompleted || isProcessing ? now : null,
-          completed_at: isCompleted ? now : null,
-          failed_at: isFailed ? now : null,
-          failure_reason: isFailed ? notes : null,
-          updated_at: now,
-        })
-        .eq('id', v2Payout.id)
+    if (v3Record) {
+      // Try the new atomic RPC first; fall back to direct UPDATE
+      const rpcStatus = isCompleted ? 'SUCCESS' : (isFailed ? 'FAILED' : 'APPROVED')
+      const { error: rpcErr } = await supabaseAdmin.rpc('finalize_provider_payout_record', {
+        p_record_id: v3Record.id,
+        p_status: rpcStatus,
+        p_failure_reason: isFailed ? (notes || 'Rejected by admin') : null,
+        p_actor: admin.id,
+      })
 
-      // Synchronize provider_wallets balances
-      const amt = Number(v2Payout.net_amount || v2Payout.gross_amount || 0)
-      if (amt > 0) {
-        const { data: currentWallet } = await supabaseAdmin
-          .from('provider_wallets')
-          .select('id, processing_balance, paid_total, eligible_balance')
-          .eq('provider_id', v2Payout.provider_id)
-          .maybeSingle()
+      if (rpcErr) {
+        console.warn('[provider-payouts PATCH] finalize_provider_payout_record RPC failed, updating directly:', rpcErr)
+        await supabaseAdmin
+          .from('provider_payout_records')
+          .update({
+            status: rpcStatus,
+            processed_at: isCompleted || !isFailed ? now : null,
+            completed_at: isCompleted ? now : null,
+            failed_at: isFailed ? now : null,
+            failure_reason: isFailed ? (notes || 'Rejected by admin') : null,
+            updated_at: now,
+          })
+          .eq('id', v3Record.id)
 
-        if (currentWallet) {
-          if (isCompleted) {
-            await supabaseAdmin
-              .from('provider_wallets')
-              .update({
-                processing_balance: Math.max(0, Number(currentWallet.processing_balance || 0) - amt),
-                paid_total: Number(currentWallet.paid_total || 0) + amt,
+        // Manual wallet sync
+        const amt = Number(v3Record.net_amount || v3Record.gross_amount || 0)
+        if (amt > 0) {
+          const { data: wallet } = await supabaseAdmin
+            .from('provider_wallets')
+            .select('id, processing_balance, paid_total, eligible_balance')
+            .eq('provider_id', v3Record.provider_id)
+            .maybeSingle()
+
+          if (wallet) {
+            if (isCompleted) {
+              await supabaseAdmin.from('provider_wallets').update({
+                processing_balance: Math.max(0, Number(wallet.processing_balance || 0) - amt),
+                paid_total: Number(wallet.paid_total || 0) + amt,
                 updated_at: now,
-              })
-              .eq('id', currentWallet.id)
-          } else if (isFailed) {
-            // Restore funds to eligible_balance
-            await supabaseAdmin
-              .from('provider_wallets')
-              .update({
-                processing_balance: Math.max(0, Number(currentWallet.processing_balance || 0) - amt),
-                eligible_balance: Number(currentWallet.eligible_balance || 0) + amt,
+              }).eq('id', wallet.id)
+            } else if (isFailed) {
+              await supabaseAdmin.from('provider_wallets').update({
+                processing_balance: Math.max(0, Number(wallet.processing_balance || 0) - amt),
+                eligible_balance: Number(wallet.eligible_balance || 0) + amt,
                 updated_at: now,
-              })
-              .eq('id', currentWallet.id)
+              }).eq('id', wallet.id)
+            }
           }
         }
       }
+
+      return NextResponse.json({
+        success: true,
+        message: `Payout marked as ${normalizedStatus}.`,
+        status: normalizedStatus,
+        source: 'provider_payout_records',
+      })
     }
 
-    // 3. Check doctor_wallet_transactions (Legacy table)
+    // ─── 2. provider_payouts (V1 / Production Ledger) ────────────────────────────
+    const { data: v1Payout } = await supabaseAdmin
+      .from('provider_payouts')
+      .select('id, provider_id, payout_amount, payout_status, wallet_id')
+      .eq('id', payoutId)
+      .maybeSingle()
+
+    if (v1Payout) {
+      if (isCompleted || isFailed) {
+        const { error: rpcErr } = await supabaseAdmin.rpc('finalize_provider_payout', {
+          p_payout_id: v1Payout.id,
+          p_status: isCompleted ? 'COMPLETED' : 'FAILED',
+          p_payment_reference: isCompleted ? paymentReference : null,
+          p_failure_reason: isFailed ? (notes || 'Rejected by admin') : null,
+          p_actor: admin.id,
+        })
+
+        if (rpcErr) {
+          console.warn('[provider-payouts PATCH] finalize_provider_payout RPC failed, updating directly:', rpcErr)
+          await supabaseAdmin
+            .from('provider_payouts')
+            .update({
+              payout_status: isCompleted ? 'COMPLETED' : 'FAILED',
+              payment_reference: isCompleted ? paymentReference : undefined,
+              failure_reason: isFailed ? (notes || 'Rejected by admin') : null,
+              completed_at: isCompleted ? now : null,
+              updated_at: now,
+            })
+            .eq('id', v1Payout.id)
+
+          if (v1Payout.wallet_id) {
+            try { await supabaseAdmin.rpc('recalculate_wallet_account', { p_wallet_id: v1Payout.wallet_id }) } catch (_) {}
+          }
+        }
+      } else {
+        await supabaseAdmin
+          .from('provider_payouts')
+          .update({ payout_status: 'PROCESSING', updated_at: now })
+          .eq('id', v1Payout.id)
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Payout marked as ${normalizedStatus}.`,
+        status: normalizedStatus,
+        source: 'provider_payouts',
+      })
+    }
+
+    // ─── 3. doctor_wallet_transactions (Legacy) ───────────────────────────────────
     const { data: docTx } = await supabaseAdmin
       .from('doctor_wallet_transactions')
-      .select('id, doctor_id, amount, status')
+      .select('id, doctor_id, amount, status, payout_status')
       .eq('id', payoutId)
       .maybeSingle()
 
     if (docTx) {
-      matched = true
       const txStatus = isCompleted ? 'paid' : (isFailed ? 'failed' : 'processing')
       await supabaseAdmin
         .from('doctor_wallet_transactions')
@@ -165,42 +166,52 @@ export async function PATCH(request: Request) {
           .maybeSingle()
 
         if (docW) {
-          await supabaseAdmin
-            .from('doctor_wallet')
-            .update({
-              total_withdrawn: Number(docW.total_withdrawn || 0) + amt,
-              balance: Math.max(0, Number(docW.balance || 0) - amt),
-              updated_at: now,
-            })
-            .eq('doctor_id', docTx.doctor_id)
+          await supabaseAdmin.from('doctor_wallet').update({
+            total_withdrawn: Number(docW.total_withdrawn || 0) + amt,
+            balance: Math.max(0, Number(docW.balance || 0) - amt),
+            updated_at: now,
+          }).eq('doctor_id', docTx.doctor_id)
+        } else if (isFailed) {
+          // Nothing to restore for legacy — balance tracking is on doctor_wallet
         }
       }
-    }
 
-    // 4. Check wallet_ledger_transactions
-    await supabaseAdmin
-      .from('wallet_ledger_transactions')
-      .update({
-        status: isCompleted ? 'SUCCESS' : (isFailed ? 'FAILED' : 'PENDING'),
-        updated_at: now,
+      return NextResponse.json({
+        success: true,
+        message: `Payout marked as ${normalizedStatus}.`,
+        status: normalizedStatus,
+        source: 'doctor_wallet_transactions',
       })
-      .eq('id', payoutId)
-
-    if (!matched) {
-      // Fallback: try updating by reference or search in all tables
-      await Promise.all([
-        supabaseAdmin.from('provider_payouts').update({ payout_status: normalizedStatus, updated_at: now }).eq('id', payoutId),
-        supabaseAdmin.from('provider_payout_records').update({ status: isCompleted ? 'SUCCESS' : normalizedStatus, updated_at: now }).eq('id', payoutId),
-        supabaseAdmin.from('doctor_wallet_transactions').update({ payout_status: normalizedStatus, status: isCompleted ? 'paid' : 'pending', updated_at: now }).eq('id', payoutId),
-      ])
     }
 
-    return NextResponse.json({
-      success: true,
-      message: `Payout marked as ${normalizedStatus}.`,
-      status: normalizedStatus,
-    })
+    // ─── 4. wallet_ledger_transactions ────────────────────────────────────────────
+    const { data: ledgerTx } = await supabaseAdmin
+      .from('wallet_ledger_transactions')
+      .select('id, provider_id, amount, status')
+      .eq('id', payoutId)
+      .maybeSingle()
+
+    if (ledgerTx) {
+      await supabaseAdmin
+        .from('wallet_ledger_transactions')
+        .update({
+          status: isCompleted ? 'SUCCESS' : (isFailed ? 'FAILED' : 'PENDING'),
+          updated_at: now,
+        })
+        .eq('id', payoutId)
+
+      return NextResponse.json({
+        success: true,
+        message: `Payout marked as ${normalizedStatus}.`,
+        status: normalizedStatus,
+        source: 'wallet_ledger_transactions',
+      })
+    }
+
+    return NextResponse.json({ error: `Payout ID "${payoutId}" not found in any table.` }, { status: 404 })
+
   } catch (err: any) {
+    console.error('[provider-payouts PATCH] Error:', err)
     return NextResponse.json({ error: err.message || 'Failed to update payout.' }, { status: 500 })
   }
 }
