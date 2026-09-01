@@ -1266,11 +1266,16 @@ function AdminDashboardContent() {
   const providerRoles = ['doctor', 'dietitian', 'nutritionist', 'fitness_coach'];
   const providerRows = [
     ...providers.map(provider => {
-      const wallet = doctors.find(doc => doc.doctor_id === provider.provider_id) || {};
+      const wallet = doctors.find(doc => 
+        doc.doctor_id === provider.provider_id || 
+        doc.id === provider.provider_id || 
+        doc.user_id === provider.provider_id || 
+        doc.provider_profile_id === provider.provider_id
+      ) || {};
       return {
         ...provider,
         provider_id: provider.provider_id,
-        name: provider.full_name || provider.email || 'Provider',
+        name: provider.full_name || provider.name || provider.email || 'Provider',
         specialization: provider.specialization || 'Clinical support',
         balance: Number(wallet.balance || 0),
         pending_balance: Number(wallet.pending_balance || 0),
@@ -1279,11 +1284,11 @@ function AdminDashboardContent() {
       };
     }),
     ...doctors
-      .filter(doc => !providers.some(provider => provider.provider_id === doc.doctor_id))
+      .filter(doc => !providers.some(provider => provider.provider_id === doc.doctor_id || provider.provider_id === doc.id || provider.provider_id === doc.user_id))
       .map(doc => ({
         ...doc,
-        role: 'doctor',
-        provider_id: doc.doctor_id,
+        role: doc.role || 'doctor',
+        provider_id: doc.doctor_id || doc.id,
         name: doc.full_name || 'Doctor',
         specialization: doc.specialty || doc.specialization || 'Endocrinology',
         balance: Number(doc.balance || 0),
@@ -1292,9 +1297,9 @@ function AdminDashboardContent() {
         total_earned: Number(doc.total_earned || 0),
       })),
     ...allStaff
-      .filter(staff => providerRoles.includes(String(staff.role || '').toLowerCase()) && !doctors.some(doc => doc.doctor_id === staff.id) && !providers.some(provider => provider.provider_id === staff.id))
+      .filter(staff => providerRoles.includes(String(staff.role || '').toLowerCase()) && !doctors.some(doc => doc.doctor_id === staff.id || doc.id === staff.id) && !providers.some(provider => provider.provider_id === staff.id))
       .map(staff => {
-        const wallet = doctors.find(doc => doc.doctor_id === staff.id) || {};
+        const wallet = doctors.find(doc => doc.doctor_id === staff.id || doc.id === staff.id || doc.user_id === staff.id) || {};
         return {
           ...staff,
           provider_id: staff.id,

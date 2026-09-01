@@ -25,18 +25,25 @@ export async function GET(request: Request) {
     const paymentTab = searchParams.get('paymentTab') || 'all'
     const searchRaw = searchParams.get('search')?.trim() || ''
 
-    // 1. Fetch Doctor Profiles & Consultations for Dynamic Payout & Earnings Calculation
+    // 1. Fetch Profiles across all provider schemas
     let doctorProfiles: any[] = []
+    let providerProfilesV2: any[] = []
+    let careTeamProfiles: any[] = []
     let allDoctorConsultations: any[] = []
+
     try {
-      const [{ data: docData }, { data: consultData }] = await Promise.all([
+      const [{ data: docData }, { data: v2Data }, { data: staffData }, { data: consultData }] = await Promise.all([
         supabaseAdmin.from('doctor_profiles').select('id, full_name, specialty, profile_photo_url, payout_amount'),
-        supabaseAdmin.from('doctor_consultations').select('id, doctor_id, status, is_completed, created_at, completed_at')
+        supabaseAdmin.from('provider_profiles_v2').select('id, user_id, full_name, role, email, phone_number, specialization, status'),
+        supabaseAdmin.from('profiles').select('id, first_name, last_name, email, role, phone_number').in('role', ['doctor', 'dietitian', 'nutritionist', 'fitness_coach', 'trainer']),
+        supabaseAdmin.from('doctor_consultations').select('id, doctor_id, status, is_completed, created_at, completed_at'),
       ])
       doctorProfiles = docData || []
+      providerProfilesV2 = v2Data || []
+      careTeamProfiles = staffData || []
       allDoctorConsultations = consultData || []
     } catch (err) {
-      console.warn('[admin/finance] Failed to load doctors / consultations:', err)
+      console.warn('[admin/finance] Failed to load provider profiles / consultations:', err)
     }
 
     // 2. Fetch Health Assessments for Membership & Consultation fallback revenue
@@ -50,63 +57,143 @@ export async function GET(request: Request) {
       console.warn('[admin/finance] Failed to load health assessments:', err)
     }
 
-    // 3. Fetch wallets (support both wallet_accounts and doctor_wallet)
-    let wallets: any[] = []
+    // 3. Fetch Wallets across all 3 schema generations
+    let v3Wallets: any[] = []
+    let v2Wallets: any[] = []
+    let legacyWallets: any[] = []
+
     try {
-      const { data, error } = await supabaseAdmin
-        .from('wallet_accounts')
-        .select('provider_id, current_balance, total_earned, total_paid, pending_balance')
-      if (!error && data && data.length > 0) {
-        wallets = data
-      } else {
-        throw error || new Error('wallet_accounts empty')
-      }
-    } catch {
-      try {
-        const { data } = await supabaseAdmin
-          .from('doctor_wallet')
-          .select('doctor_id, balance, total_earned, total_withdrawn')
-        wallets = (data || []).map((w: any) => ({
-          provider_id: w.doctor_id,
-          current_balance: Number(w.balance || 0),
-          total_earned: Number(w.total_earned || 0),
-          total_paid: Number(w.total_withdrawn || 0),
-          pending_balance: 0,
-        }))
-      } catch (err) {
-        console.warn('[admin/finance] Failed to load wallets:', err)
+      const [{ data: v3W }, { data: v2W }, { data: legW }] = await Promise.all([
+        supabaseAdmin.from('provider_wallets').select('id, provider_id, eligible_balance, processing_balance, paid_total, lifetime_earnings'),
+        supabaseAdmin.from('wallet_accounts').select('id, provider_id, current_balance, pending_balance, total_paid, total_earned'),
+        supabaseAdmin.from('doctor_wallet').select('id, doctor_id, balance, total_earned, total_withdrawn'),
+      ])
+      v3Wallets = v3W || []
+      v2Wallets = v2W || []
+      legacyWallets = legW || []
+    } catch (err) {
+      console.warn('[admin/finance] Failed to load wallet tables:', err)
+    }
+
+    // Map linking V2 Profile UUID <-> User Auth UUID
+    const v2ToUserMap = new Map<string, string>()
+    const userToV2Map = new Map<string, string>()
+    for (const v2 of providerProfilesV2) {
+      if (v2.id && v2.user_id) {
+        v2ToUserMap.set(v2.id, v2.user_id)
+        userToV2Map.set(v2.user_id, v2.id)
       }
     }
 
-    // 4. Calculate Dynamic Doctor Earnings (if wallet table is uninitialized or 0)
+    // Helper to resolve wallet metrics for any provider ID (user.id, v2.id, or doctor_profiles.id)
+    const resolveWalletMetrics = (id: string) => {
+      const altId = v2ToUserMap.get(id) || userToV2Map.get(id) || id
+
+      const w3 = v3Wallets.find(w => w.provider_id === id || w.provider_id === altId)
+      const w2 = v2Wallets.find(w => w.provider_id === id || w.provider_id === altId)
+      const w1 = legacyWallets.find(w => w.doctor_id === id || w.doctor_id === altId)
+
+      const balance = Math.max(
+        Number(w3?.eligible_balance || 0),
+        Number(w2?.current_balance || 0),
+        Number(w1?.balance || 0)
+      )
+
+      const pending_balance = Math.max(
+        Number(w3?.processing_balance || 0),
+        Number(w2?.pending_balance || 0)
+      )
+
+      const total_paid = Math.max(
+        Number(w3?.paid_total || 0),
+        Number(w2?.total_paid || 0),
+        Number(w1?.total_withdrawn || 0)
+      )
+
+      const total_earned = Math.max(
+        Number(w3?.lifetime_earnings || 0),
+        Number(w2?.total_earned || 0),
+        Number(w1?.total_earned || 0),
+        balance + total_paid + pending_balance
+      )
+
+      return { balance, pending_balance, total_paid, total_earned }
+    }
+
+    // 4. Calculate Unified Doctor & Provider list with real balances
     const completedStatuses = ['approved', 'completed', 'attended']
-    const doctors = doctorProfiles.map((doc: any) => {
+    const combinedDoctorsMap = new Map<string, any>()
+
+    // Add doctor_profiles
+    for (const doc of doctorProfiles) {
       const docConsults = allDoctorConsultations.filter((c: any) => c.doctor_id === doc.id)
       const completedCount = docConsults.filter((c: any) => completedStatuses.includes(String(c.status || '').toLowerCase()) || c.is_completed).length
       const rate = Number(doc.payout_amount) || DOCTOR_PAYOUT_PER_CONSULT
       const dynamicEarned = completedCount * rate
 
-      const wallet = wallets.find((w: any) => w.provider_id === doc.id)
-      const recordedEarned = Number(wallet?.total_earned || 0)
-      const recordedPaid = Number(wallet?.total_paid || 0)
+      const wallet = resolveWalletMetrics(doc.id)
+      const total_earned = Math.max(wallet.total_earned, dynamicEarned)
+      const balance = Math.max(wallet.balance, Math.max(0, total_earned - wallet.total_paid - wallet.pending_balance))
 
-      const total_earned = Math.max(recordedEarned, dynamicEarned)
-      const total_paid = recordedPaid
-      const balance = Math.max(0, total_earned - total_paid)
-
-      return {
+      combinedDoctorsMap.set(doc.id, {
         ...doc,
         doctor_id: doc.id,
+        role: 'doctor',
         completed_consultations: completedCount,
         balance,
+        pending_balance: wallet.pending_balance,
+        total_paid: wallet.total_paid,
         total_earned,
-        total_paid,
-        pending_balance: 0,
-      }
-    })
+      })
+    }
 
-    // 5. Total Provider Earnings across platform
-    const totalProviderEarnings = doctors.reduce((sum, d) => sum + d.total_earned, 0)
+    // Add provider_profiles_v2
+    for (const v2 of providerProfilesV2) {
+      const id = v2.user_id || v2.id
+      const existing = combinedDoctorsMap.get(id) || combinedDoctorsMap.get(v2.id)
+      const wallet = resolveWalletMetrics(v2.id)
+
+      const name = v2.full_name || (existing ? existing.full_name : null) || v2.email || 'Provider'
+      combinedDoctorsMap.set(id, {
+        id,
+        doctor_id: id,
+        provider_profile_id: v2.id,
+        user_id: v2.user_id,
+        full_name: name,
+        role: v2.role === 'trainer' ? 'fitness_coach' : (v2.role || 'provider'),
+        specialty: v2.specialization || 'Clinical Support',
+        completed_consultations: existing?.completed_consultations || 0,
+        balance: Math.max(existing?.balance || 0, wallet.balance),
+        pending_balance: Math.max(existing?.pending_balance || 0, wallet.pending_balance),
+        total_paid: Math.max(existing?.total_paid || 0, wallet.total_paid),
+        total_earned: Math.max(existing?.total_earned || 0, wallet.total_earned),
+      })
+    }
+
+    // Add careTeamProfiles (profiles table fallback)
+    for (const staff of careTeamProfiles) {
+      if (!combinedDoctorsMap.has(staff.id)) {
+        const wallet = resolveWalletMetrics(staff.id)
+        const name = `${staff.first_name || ''} ${staff.last_name || ''}`.trim() || staff.email || 'Staff'
+        combinedDoctorsMap.set(staff.id, {
+          id: staff.id,
+          doctor_id: staff.id,
+          full_name: name,
+          role: staff.role === 'trainer' ? 'fitness_coach' : staff.role,
+          specialty: 'Clinical Support',
+          completed_consultations: 0,
+          balance: wallet.balance,
+          pending_balance: wallet.pending_balance,
+          total_paid: wallet.total_paid,
+          total_earned: wallet.total_earned,
+        })
+      }
+    }
+
+    const doctors = Array.from(combinedDoctorsMap.values())
+
+    // 5. Total Provider Earnings & Balances across platform
+    const totalProviderEarnings = doctors.reduce((sum, d) => sum + Number(d.total_earned || 0), 0)
 
     // 6. Provider Payouts (Unified across provider_payouts & provider_payout_records)
     let lightPayoutsData: any[] = []
