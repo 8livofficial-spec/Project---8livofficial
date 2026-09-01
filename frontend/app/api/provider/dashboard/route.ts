@@ -232,7 +232,7 @@ export async function GET(request: Request) {
     }
 
     // Default provider logic (dietitians, nutritionists, fitness coaches)
-    const [{ patients, summary }, consultationsRes, walletRes] = await Promise.all([
+    const [{ patients, summary }, consultationsRes, v2ProfileRes] = await Promise.all([
       loadAssignedProviderPatients(userId, role, { page: 1, limit: 4 }),
       supabaseAdmin
         .from('staff_consultations')
@@ -242,13 +242,56 @@ export async function GET(request: Request) {
         .order('booking_time', { ascending: true })
         .limit(8),
       supabaseAdmin
-        .from('provider_wallets')
-        .select('balance, pending_payout, completed_payout, lifetime_earnings')
-        .eq('provider_id', userId)
+        .from('provider_profiles_v2')
+        .select('id')
+        .or(`id.eq.${userId},user_id.eq.${userId}`)
         .maybeSingle(),
     ])
 
     if (consultationsRes.error) throw new Error(consultationsRes.error.message)
+
+    const v2ProfileId = v2ProfileRes.data?.id
+    let walletPayload = { balance: 0, pending_payout: 0, completed_payout: 0, lifetime_earnings: 0 }
+
+    if (v2ProfileId) {
+      const { data: v2Wallet } = await supabaseAdmin
+        .from('provider_wallets')
+        .select('eligible_balance, processing_balance, paid_total, pending_balance, on_hold_balance')
+        .eq('provider_id', v2ProfileId)
+        .eq('currency', 'INR')
+        .maybeSingle()
+
+      if (v2Wallet) {
+        const eligible = Number(v2Wallet.eligible_balance || 0)
+        const processing = Number(v2Wallet.processing_balance || 0)
+        const paid = Number(v2Wallet.paid_total || 0)
+        const pending = Number(v2Wallet.pending_balance || 0)
+        const onHold = Number(v2Wallet.on_hold_balance || 0)
+        walletPayload = {
+          balance: eligible,
+          pending_payout: processing,
+          completed_payout: paid,
+          lifetime_earnings: eligible + processing + paid + pending + onHold,
+        }
+      }
+    }
+
+    if (walletPayload.balance === 0 && walletPayload.lifetime_earnings === 0) {
+      const { data: legacyWallet } = await supabaseAdmin
+        .from('wallet_accounts')
+        .select('current_balance, pending_balance, total_paid, total_earned')
+        .eq('provider_id', userId)
+        .maybeSingle()
+
+      if (legacyWallet) {
+        walletPayload = {
+          balance: Number(legacyWallet.current_balance || 0),
+          pending_payout: Number(legacyWallet.pending_balance || 0),
+          completed_payout: Number(legacyWallet.total_paid || 0),
+          lifetime_earnings: Number(legacyWallet.total_earned || 0),
+        }
+      }
+    }
 
     const patientIds = Array.from(new Set((consultationsRes.data || []).map((row: any) => row.patient_id).filter(Boolean)))
     const profilesRes = patientIds.length
@@ -281,7 +324,7 @@ export async function GET(request: Request) {
       patients: patients.slice(0, 4),
       consultations,
       stats,
-      wallet: walletRes.data || { balance: 0, pending_payout: 0, completed_payout: 0, lifetime_earnings: 0 },
+      wallet: walletPayload,
     })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to load provider dashboard.' }, { status: 500 })
