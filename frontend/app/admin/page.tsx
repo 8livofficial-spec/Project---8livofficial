@@ -2292,8 +2292,12 @@ function AdminDashboardContent() {
                     const lastPayout = providerTx.filter(tx => tx.created_at && tx.transaction_type === 'PAYOUT').sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
                     const completed = consultationRows.filter(c => (c.doctor_id || c.staff_id) === provider.provider_id && completedStatuses.includes(String(c.status || '').toLowerCase())).length;
                     
-                    // Find if there's any pending payout in provider_payouts table
-                    const activePayout = providerPayouts.find(p => p.provider_id === provider.provider_id && p.payout_status === 'PENDING');
+                    // Find any pending payout across all schemas for this provider
+                    const PENDING_STATUSES = ['PENDING', 'INITIATED', 'REQUESTED', 'APPROVED'];
+                    const activePayout = providerPayouts.find(p =>
+                      (p.provider_id === provider.provider_id || p.provider_profile_id === provider.provider_id || p.provider_profile_id === provider.provider_profile_id) &&
+                      PENDING_STATUSES.includes(String(p.payout_status || '').toUpperCase())
+                    );
 
                     return (
                       <div key={provider.provider_id} className="grid min-w-[1200px] grid-cols-[1.1fr_0.7fr_1fr_0.8fr_0.8fr_0.8fr_0.8fr_0.9fr_0.9fr_1.3fr] gap-4 px-5 py-4 text-sm font-bold text-[#40516A] hover:bg-gray-50 transition-colors">
@@ -2303,8 +2307,26 @@ function AdminDashboardContent() {
                           <button onClick={() => { setAdjustingProvider(provider); setAdjustAmount(''); setAdjustReason(''); setShowAdjustModal(true); }} className="rounded-lg bg-[#C4622D]/12 px-2 py-1 text-[10px] font-black text-[#C4622D] hover:bg-[#C4622D]/20 transition-colors">Adjust</button>
                           {activePayout ? (
                             <>
-                              <button onClick={() => handleProcessRazorpayPayout(activePayout.id, provider.name, activePayout.payout_amount)} className="rounded-lg bg-[#1A1F36] px-2 py-1 text-[10px] font-black text-white hover:bg-slate-800 transition-colors cursor-pointer">Approve</button>
-                              <button onClick={() => handleRejectPayout(activePayout.id, provider.name, activePayout.payout_amount)} className="rounded-lg bg-[#D96A6A]/15 text-[#B94D4D] border border-[#D96A6A]/30 px-2 py-1 text-[10px] font-black hover:bg-[#D96A6A]/25 transition-colors cursor-pointer">Reject</button>
+                              <button
+                                onClick={() => handleMarkAsPaid(activePayout.id, provider.name, activePayout.payout_amount)}
+                                className="rounded-lg bg-[#5C7A6B] px-2 py-1 text-[10px] font-black text-white hover:bg-[#486355] transition-colors cursor-pointer"
+                                title="Mark as manually paid (bank transfer / UPI)"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => handleProcessRazorpayPayout(activePayout.id, provider.name, activePayout.payout_amount)}
+                                className="rounded-lg bg-[#1A1F36] px-2 py-1 text-[10px] font-black text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                                title="Send via RazorpayX automated transfer"
+                              >
+                                RazorpayX
+                              </button>
+                              <button
+                                onClick={() => handleRejectPayout(activePayout.id, provider.name, activePayout.payout_amount)}
+                                className="rounded-lg bg-[#D96A6A]/15 text-[#B94D4D] border border-[#D96A6A]/30 px-2 py-1 text-[10px] font-black hover:bg-[#D96A6A]/25 transition-colors cursor-pointer"
+                              >
+                                Reject
+                              </button>
                             </>
                           ) : (
                             <button disabled className="rounded-lg bg-slate-100 px-2 py-1 text-[10px] font-black text-slate-400 cursor-not-allowed">Approve</button>
