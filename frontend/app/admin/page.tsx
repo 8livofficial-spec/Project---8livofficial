@@ -1284,13 +1284,19 @@ function AdminDashboardContent() {
       };
     }),
     ...doctors
-      .filter(doc => !providers.some(provider => provider.provider_id === doc.doctor_id || provider.provider_id === doc.id || provider.provider_id === doc.user_id))
+      .filter(doc => !providers.some(provider =>
+        provider.provider_id === doc.doctor_id ||
+        provider.provider_id === doc.id ||
+        provider.provider_id === doc.user_id ||
+        provider.provider_id === doc.provider_profile_id
+      ))
       .map(doc => ({
         ...doc,
         role: doc.role || 'doctor',
-        provider_id: doc.doctor_id || doc.id,
-        name: doc.full_name || 'Doctor',
-        specialization: doc.specialty || doc.specialization || 'Endocrinology',
+        provider_id: doc.doctor_id || doc.user_id || doc.id,
+        provider_profile_id: doc.provider_profile_id || doc.id,
+        name: doc.full_name || doc.name || `${doc.first_name || ''} ${doc.last_name || ''}`.trim() || doc.email || doc.role || 'Provider',
+        specialization: doc.specialty || doc.specialization || doc.role || 'Clinical Support',
         balance: Number(doc.balance || 0),
         pending_balance: Number(doc.pending_balance || 0),
         total_paid: Number(doc.total_paid || 0),
@@ -1313,9 +1319,14 @@ function AdminDashboardContent() {
       }),
   ].filter(provider => {
     const role = String(provider.role || '').toLowerCase();
-    const pending = providerPayouts.some(p => p.provider_id === provider.provider_id && (p.payout_status === 'PENDING' || p.payout_status === 'PROCESSING'));
-    const failed = providerPayouts.some(p => p.provider_id === provider.provider_id && p.payout_status === 'FAILED');
-    const paid = providerPayouts.some(p => p.provider_id === provider.provider_id && p.payout_status === 'COMPLETED');
+    const ALL_PENDING = ['PENDING', 'PROCESSING', 'INITIATED', 'REQUESTED', 'APPROVED'];
+    const matchesProvider = (p: any) =>
+      p.provider_id === provider.provider_id ||
+      p.provider_profile_id === provider.provider_id ||
+      p.provider_profile_id === provider.provider_profile_id;
+    const pending = providerPayouts.some(p => matchesProvider(p) && ALL_PENDING.includes(String(p.payout_status || '').toUpperCase()));
+    const failed = providerPayouts.some(p => matchesProvider(p) && p.payout_status === 'FAILED');
+    const paid = providerPayouts.some(p => matchesProvider(p) && p.payout_status === 'COMPLETED');
     const matchesFilter =
       providerFilter === 'all' ||
       providerFilter === role ||
@@ -1326,6 +1337,7 @@ function AdminDashboardContent() {
     return matchesFilter && (!normalizedSearch || text.includes(normalizedSearch));
   });
 
+  const ALL_PENDING_STATUSES = ['PENDING', 'PROCESSING', 'INITIATED', 'REQUESTED', 'APPROVED'];
   const paginatedProviderRows = providerRows.slice((providersPage - 1) * providersLimit, providersPage * providersLimit);
   const providersTotalPages = Math.ceil(providerRows.length / providersLimit) || 1;
   const processedPayouts = providerPayouts
@@ -1334,10 +1346,13 @@ function AdminDashboardContent() {
   const failedPayouts = providerPayouts.filter(p => p.payout_status === 'FAILED').length;
   const walletBalance = providerRows.reduce((sum, provider) => sum + Number(provider.balance || 0), 0);
   const pendingPayouts = providerPayouts
-    .filter(p => p.payout_status === 'PENDING' || p.payout_status === 'PROCESSING')
+    .filter(p => ALL_PENDING_STATUSES.includes(String(p.payout_status || '').toUpperCase()))
     .reduce((sum, p) => sum + Number(p.payout_amount || 0), 0);
-  const providersAwaitingSettlement = providerRows.filter(provider => 
-    providerPayouts.some(p => p.provider_id === provider.provider_id && p.payout_status === 'PENDING')
+  const providersAwaitingSettlement = providerRows.filter(provider =>
+    providerPayouts.some(p =>
+      (p.provider_id === provider.provider_id || p.provider_profile_id === provider.provider_id || p.provider_profile_id === provider.provider_profile_id) &&
+      ALL_PENDING_STATUSES.includes(String(p.payout_status || '').toUpperCase())
+    )
   ).length;
 
   const membershipMembers = assessments.filter(patient => ['gold', 'silver'].some(plan => getPatientMembership(patient).toLowerCase().includes(plan)));
