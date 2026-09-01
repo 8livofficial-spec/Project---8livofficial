@@ -15,9 +15,17 @@ export async function POST(request: Request) {
     const profileId = provider.profile?.id || provider.user.id
 
     // Verify provider has a bank or UPI destination configured
+    const { data: v2Profile } = await supabaseAdmin
+      .from('provider_profiles_v2')
+      .select('id')
+      .or(`id.eq.${provider.user.id},user_id.eq.${provider.user.id},id.eq.${profileId},user_id.eq.${profileId}`)
+      .maybeSingle()
+
     const [{ data: docAcc }, { data: v2Acc }, { data: legacyProfile }] = await Promise.all([
       supabaseAdmin.from('doctor_payout_accounts').select('id, account_number, vpa').or(`doctor_id.eq.${provider.user.id},doctor_id.eq.${profileId}`).maybeSingle(),
-      supabaseAdmin.from('provider_payout_profiles').select('id, bank_verification_status, encrypted_account_number, upi_id').or(`provider_id.eq.${provider.user.id},provider_id.eq.${profileId}`).maybeSingle(),
+      v2Profile?.id
+        ? supabaseAdmin.from('provider_payout_profiles').select('id, bank_verification_status, encrypted_account_number, upi_id').eq('provider_id', v2Profile.id).maybeSingle()
+        : supabaseAdmin.from('provider_payout_profiles').select('id, bank_verification_status, encrypted_account_number, upi_id').or(`provider_id.eq.${provider.user.id},provider_id.eq.${profileId}`).maybeSingle(),
       supabaseAdmin.from('provider_profiles').select('id, bank_account_details, upi_id').or(`provider_id.eq.${provider.user.id},id.eq.${provider.user.id},provider_id.eq.${profileId},id.eq.${profileId}`).maybeSingle(),
     ])
 
