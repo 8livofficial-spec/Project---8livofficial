@@ -2384,13 +2384,30 @@ function AdminDashboardContent() {
                   <span>Provider Name</span><span>Role</span><span>Date Requested</span><span>Amount</span><span>Status</span><span>Actions</span>
                 </div>
                 <div className="overflow-x-auto divide-y divide-[#1A1F36]/8">
-                  {providerPayouts.length === 0 ? (
-                    <div className="p-10 text-center text-sm font-bold text-[#8896A4]">
-                      <p>No payout requests found.</p>
-                    </div>
-                  ) : (
-                    providerPayouts.map(payout => {
-                      const providerProfile = providers.find(p => p.provider_id === payout.provider_id) || doctors.find(d => d.doctor_id === payout.provider_id || d.id === payout.provider_id) || allStaff.find(s => s.id === payout.provider_id);
+                  {(() => {
+                    const displayPayouts = (providerPayouts || []).filter(payout => {
+                      const role = String(payout.role || '').toLowerCase();
+                      const status = String(payout.payout_status || '').toUpperCase();
+                      const matchesFilter =
+                        providerFilter === 'all' ||
+                        providerFilter === role ||
+                        (providerFilter === 'pending' && ['PENDING', 'PROCESSING', 'INITIATED', 'REQUESTED', 'APPROVED'].includes(status)) ||
+                        (providerFilter === 'paid' && status === 'COMPLETED') ||
+                        (providerFilter === 'failed' && status === 'FAILED');
+                      const text = `${payout.provider_name || ''} ${role} ${status}`.toLowerCase();
+                      return matchesFilter && (!normalizedSearch || text.includes(normalizedSearch));
+                    });
+
+                    if (displayPayouts.length === 0) {
+                      return (
+                        <div className="p-10 text-center text-sm font-bold text-[#8896A4]">
+                          <p>No payout requests found.</p>
+                        </div>
+                      );
+                    }
+
+                    return displayPayouts.map(payout => {
+                      const providerProfile = providers.find(p => p.provider_id === payout.provider_id || p.provider_id === payout.provider_profile_id) || doctors.find(d => d.doctor_id === payout.provider_id || d.id === payout.provider_id || d.user_id === payout.provider_id || d.provider_profile_id === payout.provider_profile_id) || allStaff.find(s => s.id === payout.provider_id);
                       const providerName = payout.provider_name || (providerProfile ? (providerProfile.full_name || providerProfile.name || `${providerProfile.first_name || ''} ${providerProfile.last_name || ''}`.trim() || providerProfile.email) : 'Provider');
                       const role = payout.role || providerProfile?.role || 'provider';
                       const status = String(payout.payout_status || 'PENDING').toUpperCase();
@@ -2474,8 +2491,8 @@ function AdminDashboardContent() {
                           </span>
                         </div>
                       );
-                    })
-                  )}
+                    });
+                  })()}
                 </div>
                 <div className="p-4 border-t border-[#1A1F36]/8">
                   <div className="flex items-center justify-between">

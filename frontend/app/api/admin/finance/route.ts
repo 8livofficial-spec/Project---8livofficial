@@ -195,38 +195,37 @@ export async function GET(request: Request) {
     // 5. Total Provider Earnings & Balances across platform
     const totalProviderEarnings = doctors.reduce((sum, d) => sum + Number(d.total_earned || 0), 0)
 
-    // 6. Provider Payouts (Unified across provider_payout_records, provider_payouts, doctor_wallet_transactions, wallet_ledger_transactions)
+    // 6. Provider Payouts (Unified across provider_payout_records, provider_payouts, provider_wallet_transactions, doctor_wallet_transactions, wallet_ledger_transactions)
     let lightPayoutsData: any[] = []
     let paginatedPayouts: any[] = []
     let payoutsCount = 0
 
     try {
-      const [{ data: legacyPayouts }, { data: v2Payouts }, { data: docTxPayouts }, { data: ledgerTxPayouts }, { data: allProfiles }, { data: allV2Profiles }] = await Promise.all([
-        supabaseAdmin
-          .from('provider_payouts')
-          .select('id, provider_id, payout_status, payout_amount, initiated_at, payment_reference, failure_reason, created_at, updated_at')
-          .order('created_at', { ascending: false })
-          .then(res => res, () => ({ data: [] })),
-        supabaseAdmin
-          .from('provider_payout_records')
-          .select('id, provider_id, status, net_amount, gross_amount, initiated_at, failure_reason, created_at, updated_at')
-          .order('created_at', { ascending: false })
-          .then(res => res, () => ({ data: [] })),
-        supabaseAdmin
-          .from('doctor_wallet_transactions')
-          .select('id, doctor_id, type, amount, status, payout_status, description, created_at')
-          .or('type.ilike.%withdrawal%,type.eq.CONSULTATION_PAYOUT,amount.lt.0')
-          .order('created_at', { ascending: false })
-          .then(res => res, () => ({ data: [] })),
-        supabaseAdmin
-          .from('wallet_ledger_transactions')
-          .select('id, provider_id, doctor_id, transaction_type, type, amount, status, payout_status, payment_reference, created_at')
-          .or('transaction_type.eq.PAYOUT,type.eq.PAYOUT,amount.lt.0')
-          .order('created_at', { ascending: false })
-          .then(res => res, () => ({ data: [] })),
-        supabaseAdmin.from('profiles').select('id, first_name, last_name, email, role').then(res => res, () => ({ data: [] })),
-        supabaseAdmin.from('provider_profiles_v2').select('id, user_id, full_name, email, role').then(res => res, () => ({ data: [] })),
+      const [
+        legacyRes,
+        v2Res,
+        v3TxRes,
+        docTxRes,
+        ledgerTxRes,
+        allProfilesRes,
+        allV2ProfilesRes
+      ] = await Promise.all([
+        supabaseAdmin.from('provider_payouts').select('*').order('created_at', { ascending: false }),
+        supabaseAdmin.from('provider_payout_records').select('*').order('created_at', { ascending: false }),
+        supabaseAdmin.from('provider_wallet_transactions').select('*').or('transaction_type.eq.PAYOUT_RESERVED,transaction_type.eq.PAYOUT,balance_category.eq.PROCESSING').order('created_at', { ascending: false }),
+        supabaseAdmin.from('doctor_wallet_transactions').select('*').or('type.ilike.%withdrawal%,type.eq.CONSULTATION_PAYOUT,amount.lt.0').order('created_at', { ascending: false }),
+        supabaseAdmin.from('wallet_ledger_transactions').select('*').or('transaction_type.eq.PAYOUT,amount.lt.0').order('created_at', { ascending: false }),
+        supabaseAdmin.from('profiles').select('id, first_name, last_name, email, role'),
+        supabaseAdmin.from('provider_profiles_v2').select('id, user_id, full_name, email, role'),
       ])
+
+      const legacyPayouts = legacyRes.data || []
+      const v2Payouts = v2Res.data || []
+      const v3TxPayouts = v3TxRes.data || []
+      const docTxPayouts = docTxRes.data || []
+      const ledgerTxPayouts = ledgerTxRes.data || []
+      const allProfiles = allProfilesRes.data || []
+      const allV2Profiles = allV2ProfilesRes.data || []
 
       const profilesById = new Map((allProfiles || []).map((p: any) => [p.id, p]))
       const v2ById = new Map((allV2Profiles || []).map((p: any) => [p.id, p]))
@@ -282,6 +281,29 @@ export async function GET(request: Request) {
         }
       })
 
+      const normalizedV3Tx = (v3TxPayouts || []).map((t: any) => {
+        const v2Prof = v2ById.get(t.provider_id)
+        const targetUserId = v2Prof?.user_id || t.provider_id
+        const info = getProfileInfo(t.provider_id)
+        let status = 'PENDING'
+        if (t.transaction_type === 'PAYOUT' || t.balance_category === 'PAID') status = 'COMPLETED'
+
+        return {
+          id: t.payout_id || t.id,
+          provider_id: targetUserId,
+          provider_profile_id: t.provider_id,
+          provider_name: info.name,
+          role: info.role,
+          payout_amount: Math.abs(Number(t.amount || 0)),
+          payout_status: status,
+          failure_reason: null,
+          initiated_at: t.created_at,
+          payment_reference: null,
+          created_at: t.created_at,
+          source: 'provider_wallet_transactions',
+        }
+      })
+
       const normalizedDocTx = (docTxPayouts || []).map((t: any) => {
         const info = getProfileInfo(t.doctor_id)
         let status = String(t.payout_status || t.status || 'PENDING').toUpperCase()
@@ -327,10 +349,42 @@ export async function GET(request: Request) {
       const seenPayoutIds = new Set<string>()
       const combinedPayouts: any[] = []
 
-      for (const p of [...normalizedV2, ...normalizedLegacy, ...normalizedDocTx, ...normalizedLedger]) {
+      for (const p of [...normalizedV2, ...normalizedLegacy, ...normalizedV3Tx, ...normalizedDocTx, ...normalizedLedger]) {
         if (!seenPayoutIds.has(p.id) && p.payout_amount > 0) {
           seenPayoutIds.add(p.id)
           combinedPayouts.push(p)
+        }
+      }
+
+      // Automatically synthesize pending payouts for any provider who has a pending balance in their wallet
+      // but hasn't yet had a payout record emitted
+      for (const doc of doctors) {
+        const pendingAmt = Number(doc.pending_balance || 0)
+        if (pendingAmt > 0) {
+          const hasExistingPending = combinedPayouts.some(p =>
+            (p.provider_id === doc.id || p.provider_id === doc.doctor_id || p.provider_id === doc.user_id || p.provider_profile_id === doc.provider_profile_id || p.provider_profile_id === doc.id) &&
+            ['PENDING', 'PROCESSING', 'INITIATED', 'REQUESTED', 'APPROVED'].includes(String(p.payout_status || '').toUpperCase())
+          )
+          if (!hasExistingPending) {
+            const syntheticId = `wallet-pending-${doc.doctor_id || doc.user_id || doc.id}`
+            if (!seenPayoutIds.has(syntheticId)) {
+              seenPayoutIds.add(syntheticId)
+              combinedPayouts.unshift({
+                id: syntheticId,
+                provider_id: doc.doctor_id || doc.user_id || doc.id,
+                provider_profile_id: doc.provider_profile_id || doc.id,
+                provider_name: doc.full_name || doc.name || 'Provider',
+                role: doc.role || 'doctor',
+                payout_amount: pendingAmt,
+                payout_status: 'PENDING',
+                failure_reason: null,
+                initiated_at: new Date().toISOString(),
+                payment_reference: null,
+                created_at: new Date().toISOString(),
+                source: 'wallet_processing_balance',
+              })
+            }
+          }
         }
       }
 

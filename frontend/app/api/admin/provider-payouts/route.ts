@@ -24,6 +24,123 @@ export async function PATCH(request: Request) {
     const isFailed = ['FAILED', 'REJECTED', 'CANCELLED'].includes(rawStatus)
     const normalizedStatus = isCompleted ? 'COMPLETED' : (isFailed ? 'FAILED' : 'PROCESSING')
 
+    // ─── 0. Handle Synthetic wallet-pending- IDs or Provider User IDs ──────────────
+    if (String(payoutId).startsWith('wallet-pending-')) {
+      const targetProviderId = String(payoutId).replace('wallet-pending-', '')
+
+      // Try resolving provider_profiles_v2 first
+      const { data: v2Prof } = await supabaseAdmin
+        .from('provider_profiles_v2')
+        .select('id, user_id')
+        .or(`id.eq.${targetProviderId},user_id.eq.${targetProviderId}`)
+        .maybeSingle()
+
+      const v2Id = v2Prof?.id || targetProviderId
+      const userId = v2Prof?.user_id || targetProviderId
+
+      // Update provider_wallets (V3)
+      const { data: v3Wallet } = await supabaseAdmin
+        .from('provider_wallets')
+        .select('id, processing_balance, paid_total, eligible_balance')
+        .or(`provider_id.eq.${v2Id},provider_id.eq.${userId}`)
+        .maybeSingle()
+
+      if (v3Wallet) {
+        const amt = Number(v3Wallet.processing_balance || 0)
+        if (isCompleted) {
+          await supabaseAdmin
+            .from('provider_wallets')
+            .update({
+              processing_balance: 0,
+              paid_total: Number(v3Wallet.paid_total || 0) + amt,
+              updated_at: now,
+            })
+            .eq('id', v3Wallet.id)
+        } else if (isFailed) {
+          await supabaseAdmin
+            .from('provider_wallets')
+            .update({
+              processing_balance: 0,
+              eligible_balance: Number(v3Wallet.eligible_balance || 0) + amt,
+              updated_at: now,
+            })
+            .eq('id', v3Wallet.id)
+        }
+      }
+
+      // Update wallet_accounts (V2)
+      const { data: v2Wallet } = await supabaseAdmin
+        .from('wallet_accounts')
+        .select('id, current_balance, pending_balance, total_paid')
+        .or(`provider_id.eq.${userId},provider_id.eq.${v2Id}`)
+        .maybeSingle()
+
+      if (v2Wallet) {
+        const amt = Number(v2Wallet.pending_balance || 0)
+        if (isCompleted) {
+          await supabaseAdmin
+            .from('wallet_accounts')
+            .update({
+              pending_balance: 0,
+              total_paid: Number(v2Wallet.total_paid || 0) + amt,
+              updated_at: now,
+            })
+            .eq('id', v2Wallet.id)
+        } else if (isFailed) {
+          await supabaseAdmin
+            .from('wallet_accounts')
+            .update({
+              pending_balance: 0,
+              updated_at: now,
+            })
+            .eq('id', v2Wallet.id)
+        }
+      }
+
+      // Update doctor_wallet (Legacy)
+      const { data: docWallet } = await supabaseAdmin
+        .from('doctor_wallet')
+        .select('doctor_id, balance, total_withdrawn')
+        .or(`doctor_id.eq.${userId},doctor_id.eq.${v2Id}`)
+        .maybeSingle()
+
+      if (docWallet && isCompleted) {
+        await supabaseAdmin
+          .from('doctor_wallet')
+          .update({
+            total_withdrawn: Number(docWallet.total_withdrawn || 0) + Math.min(Number(docWallet.balance || 0), 1000),
+            updated_at: now,
+          })
+          .eq('doctor_id', docWallet.doctor_id)
+      }
+
+      // Also mark any matching pending payout records
+      await Promise.all([
+        supabaseAdmin
+          .from('provider_payout_records')
+          .update({ status: isCompleted ? 'SUCCESS' : (isFailed ? 'FAILED' : 'APPROVED'), completed_at: isCompleted ? now : null, updated_at: now })
+          .or(`provider_id.eq.${v2Id},provider_id.eq.${userId}`)
+          .in('status', ['PENDING', 'APPROVED', 'REQUESTED', 'INITIATED']),
+        supabaseAdmin
+          .from('provider_payouts')
+          .update({ payout_status: normalizedStatus, payment_reference: paymentReference, completed_at: isCompleted ? now : null, updated_at: now })
+          .or(`provider_id.eq.${v2Id},provider_id.eq.${userId}`)
+          .in('payout_status', ['PENDING', 'PROCESSING']),
+        supabaseAdmin
+          .from('doctor_wallet_transactions')
+          .update({ payout_status: normalizedStatus, status: isCompleted ? 'paid' : (isFailed ? 'failed' : 'processing'), updated_at: now })
+          .or(`doctor_id.eq.${v2Id},doctor_id.eq.${userId}`)
+          .in('status', ['pending', 'processing']),
+      ])
+
+      return NextResponse.json({
+        success: true,
+        message: `Wallet balance payout marked as ${normalizedStatus}.`,
+        status: normalizedStatus,
+        source: 'synthetic_wallet_payout',
+      })
+    }
+
     // ─── 1. provider_payout_records (V3 / Modern path) ───────────────────────────
     const { data: v3Record } = await supabaseAdmin
       .from('provider_payout_records')
@@ -171,8 +288,6 @@ export async function PATCH(request: Request) {
             balance: Math.max(0, Number(docW.balance || 0) - amt),
             updated_at: now,
           }).eq('doctor_id', docTx.doctor_id)
-        } else if (isFailed) {
-          // Nothing to restore for legacy — balance tracking is on doctor_wallet
         }
       }
 
