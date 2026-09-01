@@ -2353,9 +2353,9 @@ function AdminDashboardContent() {
                     </div>
                   ) : (
                     providerPayouts.map(payout => {
-                      const providerProfile = providers.find(p => p.provider_id === payout.provider_id) || doctors.find(d => d.doctor_id === payout.provider_id) || allStaff.find(s => s.id === payout.provider_id);
-                      const providerName = providerProfile ? (providerProfile.full_name || providerProfile.name || `${providerProfile.first_name || ''} ${providerProfile.last_name || ''}`.trim() || providerProfile.email) : 'Unknown Provider';
-                      const role = providerProfile?.role || 'provider';
+                      const providerProfile = providers.find(p => p.provider_id === payout.provider_id) || doctors.find(d => d.doctor_id === payout.provider_id || d.id === payout.provider_id) || allStaff.find(s => s.id === payout.provider_id);
+                      const providerName = payout.provider_name || (providerProfile ? (providerProfile.full_name || providerProfile.name || `${providerProfile.first_name || ''} ${providerProfile.last_name || ''}`.trim() || providerProfile.email) : 'Provider');
+                      const role = payout.role || providerProfile?.role || 'provider';
                       const status = String(payout.payout_status || 'PENDING').toUpperCase();
 
                       const statusColors: Record<string, string> = {

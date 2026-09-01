@@ -195,34 +195,58 @@ export async function GET(request: Request) {
     // 5. Total Provider Earnings & Balances across platform
     const totalProviderEarnings = doctors.reduce((sum, d) => sum + Number(d.total_earned || 0), 0)
 
-    // 6. Provider Payouts (Unified across provider_payouts & provider_payout_records)
+    // 6. Provider Payouts (Unified across provider_payout_records, provider_payouts, doctor_wallet_transactions, wallet_ledger_transactions)
     let lightPayoutsData: any[] = []
     let paginatedPayouts: any[] = []
     let payoutsCount = 0
+
     try {
-      const [{ data: legacyPayouts }, { data: v2Payouts }, { data: allProfiles }, { data: allV2Profiles }] = await Promise.all([
+      const [{ data: legacyPayouts }, { data: v2Payouts }, { data: docTxPayouts }, { data: ledgerTxPayouts }, { data: allProfiles }, { data: allV2Profiles }] = await Promise.all([
         supabaseAdmin
           .from('provider_payouts')
           .select('id, provider_id, payout_status, payout_amount, initiated_at, payment_reference, failure_reason, created_at, updated_at')
-          .order('created_at', { ascending: false }),
+          .order('created_at', { ascending: false })
+          .then(res => res, () => ({ data: [] })),
         supabaseAdmin
           .from('provider_payout_records')
           .select('id, provider_id, status, net_amount, gross_amount, initiated_at, failure_reason, created_at, updated_at')
-          .order('created_at', { ascending: false }),
-        supabaseAdmin.from('profiles').select('id, first_name, last_name, email, role'),
-        supabaseAdmin.from('provider_profiles_v2').select('id, user_id, full_name, email, role'),
+          .order('created_at', { ascending: false })
+          .then(res => res, () => ({ data: [] })),
+        supabaseAdmin
+          .from('doctor_wallet_transactions')
+          .select('id, doctor_id, type, amount, status, payout_status, description, created_at')
+          .or('type.ilike.%withdrawal%,type.eq.CONSULTATION_PAYOUT,amount.lt.0')
+          .order('created_at', { ascending: false })
+          .then(res => res, () => ({ data: [] })),
+        supabaseAdmin
+          .from('wallet_ledger_transactions')
+          .select('id, provider_id, doctor_id, transaction_type, type, amount, status, payout_status, payment_reference, created_at')
+          .or('transaction_type.eq.PAYOUT,type.eq.PAYOUT,amount.lt.0')
+          .order('created_at', { ascending: false })
+          .then(res => res, () => ({ data: [] })),
+        supabaseAdmin.from('profiles').select('id, first_name, last_name, email, role').then(res => res, () => ({ data: [] })),
+        supabaseAdmin.from('provider_profiles_v2').select('id, user_id, full_name, email, role').then(res => res, () => ({ data: [] })),
       ])
 
       const profilesById = new Map((allProfiles || []).map((p: any) => [p.id, p]))
       const v2ById = new Map((allV2Profiles || []).map((p: any) => [p.id, p]))
 
+      const getProfileInfo = (id?: string) => {
+        if (!id) return { name: 'Provider', role: 'provider' }
+        const v2 = v2ById.get(id)
+        if (v2) return { name: v2.full_name || v2.email || 'Provider', role: v2.role || 'provider' }
+        const p = profilesById.get(id)
+        if (p) return { name: `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email || 'Provider', role: p.role || 'provider' }
+        return { name: 'Provider', role: 'provider' }
+      }
+
       const normalizedLegacy = (legacyPayouts || []).map((p: any) => {
-        const prof = profilesById.get(p.provider_id) || v2ById.get(p.provider_id)
+        const info = getProfileInfo(p.provider_id)
         return {
           id: p.id,
           provider_id: p.provider_id,
-          provider_name: prof ? (prof.full_name || `${prof.first_name || ''} ${prof.last_name || ''}`.trim() || prof.email) : 'Provider',
-          role: prof?.role || 'doctor',
+          provider_name: info.name,
+          role: info.role,
           payout_amount: Number(p.payout_amount || 0),
           payout_status: String(p.payout_status || 'PENDING').toUpperCase(),
           failure_reason: p.failure_reason || null,
@@ -235,8 +259,8 @@ export async function GET(request: Request) {
 
       const normalizedV2 = (v2Payouts || []).map((p: any) => {
         const v2Prof = v2ById.get(p.provider_id)
-        const userProf = v2Prof ? profilesById.get(v2Prof.user_id) : profilesById.get(p.provider_id)
-        const name = v2Prof?.full_name || (userProf ? `${userProf.first_name || ''} ${userProf.last_name || ''}`.trim() : null) || userProf?.email || 'Provider'
+        const targetUserId = v2Prof?.user_id || p.provider_id
+        const info = getProfileInfo(p.provider_id)
         
         let status = String(p.status || 'PENDING').toUpperCase()
         if (status === 'SUCCESS') status = 'COMPLETED'
@@ -244,10 +268,10 @@ export async function GET(request: Request) {
 
         return {
           id: p.id,
-          provider_id: v2Prof?.user_id || p.provider_id,
+          provider_id: targetUserId,
           provider_profile_id: p.provider_id,
-          provider_name: name,
-          role: v2Prof?.role || userProf?.role || 'provider',
+          provider_name: info.name,
+          role: info.role,
           payout_amount: Number(p.net_amount || p.gross_amount || 0),
           payout_status: status,
           failure_reason: p.failure_reason || null,
@@ -258,12 +282,53 @@ export async function GET(request: Request) {
         }
       })
 
+      const normalizedDocTx = (docTxPayouts || []).map((t: any) => {
+        const info = getProfileInfo(t.doctor_id)
+        let status = String(t.payout_status || t.status || 'PENDING').toUpperCase()
+        if (status === 'PAID' || status === 'CREDITED') status = 'COMPLETED'
+
+        return {
+          id: t.id,
+          provider_id: t.doctor_id,
+          provider_name: info.name,
+          role: info.role || 'doctor',
+          payout_amount: Math.abs(Number(t.amount || 0)),
+          payout_status: status,
+          failure_reason: null,
+          initiated_at: t.created_at,
+          payment_reference: null,
+          created_at: t.created_at,
+          source: 'doctor_wallet_transactions',
+        }
+      })
+
+      const normalizedLedger = (ledgerTxPayouts || []).map((t: any) => {
+        const id = t.provider_id || t.doctor_id
+        const info = getProfileInfo(id)
+        let status = String(t.payout_status || t.status || 'PENDING').toUpperCase()
+        if (status === 'PAID' || status === 'SUCCESS') status = 'COMPLETED'
+
+        return {
+          id: t.id,
+          provider_id: id,
+          provider_name: info.name,
+          role: info.role,
+          payout_amount: Math.abs(Number(t.amount || 0)),
+          payout_status: status,
+          failure_reason: null,
+          initiated_at: t.created_at,
+          payment_reference: t.payment_reference || null,
+          created_at: t.created_at,
+          source: 'wallet_ledger_transactions',
+        }
+      })
+
       // Combine and deduplicate
       const seenPayoutIds = new Set<string>()
       const combinedPayouts: any[] = []
 
-      for (const p of [...normalizedV2, ...normalizedLegacy]) {
-        if (!seenPayoutIds.has(p.id)) {
+      for (const p of [...normalizedV2, ...normalizedLegacy, ...normalizedDocTx, ...normalizedLedger]) {
+        if (!seenPayoutIds.has(p.id) && p.payout_amount > 0) {
           seenPayoutIds.add(p.id)
           combinedPayouts.push(p)
         }
