@@ -24,12 +24,17 @@ export default function ProviderPayoutsPage() {
         <h1 className="mt-2 text-3xl font-black">Payout history</h1>
         {error && <p className="mt-4 rounded-lg bg-red-50 p-3 text-sm font-bold text-red-700">{error}</p>}
         <div className="mt-6 space-y-3">
-          {payouts.map((payout) => (
-            <div key={payout.id} className="rounded-lg bg-[#F9F6F0] p-4">
-              <p className="font-black">Rs {Number(payout.net_amount || 0).toLocaleString('en-IN')} | {payout.status}</p>
-              <p className="mt-1 text-sm font-semibold text-[#6B7A90]">{payout.payout_provider} | {payout.created_at ? new Date(payout.created_at).toLocaleDateString('en-IN') : '-'}</p>
-            </div>
-          ))}
+          {payouts.map((payout) => {
+            const amount = payout.payout_amount ?? payout.net_amount ?? payout.gross_amount ?? payout.amount ?? 0
+            const status = String(payout.payout_status || payout.status || 'PENDING').toUpperCase()
+            const date = payout.initiated_at || payout.created_at
+            return (
+              <div key={payout.id} className="rounded-lg bg-[#F9F6F0] p-4">
+                <p className="font-black">Rs {Number(amount).toLocaleString('en-IN')} | {status}</p>
+                <p className="mt-1 text-sm font-semibold text-[#6B7A90]">{payout.payout_provider || 'Bank / UPI'} | {date ? new Date(date).toLocaleDateString('en-IN') : '-'}</p>
+              </div>
+            )
+          })}
           {!payouts.length && <p className="rounded-lg bg-[#F9F6F0] p-4 text-sm font-semibold text-[#6B7A90]">No payouts recorded yet.</p>}
         </div>
       </section>

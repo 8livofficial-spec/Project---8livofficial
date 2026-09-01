@@ -1246,7 +1246,9 @@ function WalletModule({
           {payouts.length ? (
             <div className="mt-5 space-y-3">
               {payouts.map((p) => {
-                const status = String(p.payout_status || 'PENDING').toUpperCase()
+                const status = String(p.payout_status || p.status || 'PENDING').toUpperCase()
+                const amount = p.payout_amount ?? p.net_amount ?? p.gross_amount ?? p.amount ?? 0
+                const date = p.initiated_at || p.created_at
                 const statusColors: Record<string, string> = {
                   PENDING: 'bg-[#D89A3D]/12 text-[#B7792F]',
                   PROCESSING: 'bg-[#1A1F36]/8 text-[#1A1F36] animate-pulse',
@@ -1258,14 +1260,14 @@ function WalletModule({
                     <div>
                       <p className="font-black">Payout Withdrawal</p>
                       <p className="text-sm font-semibold text-[#6B7A90]">
-                        Requested: {formatDate(p.initiated_at)}
+                        Requested: {formatDate(date)}
                       </p>
                       {status === 'FAILED' && p.failure_reason && (
                         <p className="mt-1 text-xs text-[#B94D4D] font-medium max-w-xs">{p.failure_reason}</p>
                       )}
                     </div>
                     <div className="text-left md:text-right">
-                      <p className="font-black text-[#1A1F36]">{formatInr(p.payout_amount)}</p>
+                      <p className="font-black text-[#1A1F36]">{formatInr(amount)}</p>
                       <span className={`inline-block rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase ${statusColors[status] || statusColors.PENDING}`}>
                         {status}
                       </span>
