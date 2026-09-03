@@ -218,16 +218,6 @@ export default function Hero() {
 
 
 
-          {/* Eyebrow badge */}
-          <div
-            ref={eyebrowRef}
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#00A884]/20 border border-[#00A884]/40 shadow-lg mb-3 sm:mb-4 backdrop-blur-md opacity-0"
-          >
-            <span className="flex h-1.5 w-1.5 rounded-full bg-[#2DD4BF] animate-pulse" />
-            <span className="text-[9px] sm:text-[10px] font-semibold uppercase tracking-[0.16em] text-[#5EEAD4] font-sora">
-              Doctor-Led &amp; Trainer-Coached Metabolic Care
-            </span>
-          </div>
 
           {/* Headline with Responsive Clamp */}
           <h1 className="font-sora text-[1.5rem] sm:text-2xl md:text-3xl lg:text-[2.5rem] font-bold text-white leading-[1.16] tracking-tight mb-3 sm:mb-4 drop-shadow-[0_2px_10px_rgba(15,23,42,0.5)]">
