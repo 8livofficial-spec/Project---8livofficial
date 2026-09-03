@@ -460,13 +460,24 @@ export default function AssessmentPage() {
       {/* Top Navigation & Section Header */}
       <div className="max-w-7xl mx-auto mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 text-xs font-bold text-[#0D9488] hover:text-[#0F766E] transition-colors mb-2 font-sora cursor-pointer"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back to Home</span>
-          </Link>
+          {step > 1 ? (
+            <button
+              type="button"
+              onClick={prevStep}
+              className="inline-flex items-center gap-2 text-xs font-bold text-[#0D9488] hover:text-[#0F766E] transition-colors mb-2 font-sora cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Previous Step</span>
+            </button>
+          ) : (
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 text-xs font-bold text-[#0D9488] hover:text-[#0F766E] transition-colors mb-2 font-sora cursor-pointer"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Home</span>
+            </Link>
+          )}
           <h1 className="text-2xl sm:text-3xl font-bold font-sora text-[#0F172A] tracking-tight">
             Confidential Clinical Assessment
           </h1>

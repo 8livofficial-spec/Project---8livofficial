@@ -101,10 +101,10 @@ export function GradientCarousel({
 
   // Responsive dimensions
   const isMobile = viewportWidth < 640
-  const effectiveCardWidth = isMobile ? Math.min(270, viewportWidth - 64) : cardWidth
+  const effectiveCardWidth = isMobile ? Math.min(280, Math.max(240, viewportWidth - 48)) : cardWidth
   const effectiveCardHeight = isMobile ? 380 : cardHeight
-  const effectiveGap = isMobile ? 150 : gap
-  const effectiveRotate = isMobile ? 14 : rotateAngle
+  const effectiveGap = isMobile ? Math.min(55, Math.max(30, (viewportWidth - effectiveCardWidth) / 2.6)) : gap
+  const effectiveRotate = isMobile ? 8 : rotateAngle
 
   // Extract color for current image
   useEffect(() => {
@@ -224,7 +224,7 @@ export function GradientCarousel({
             const isActive = offset === 0
             const absOffset = Math.abs(offset)
 
-            if (absOffset > 2) return null
+            if (absOffset > (isMobile ? 1 : 2)) return null
 
             const rotateY = offset * -effectiveRotate
             const translateX = offset * effectiveGap

@@ -256,9 +256,9 @@ export default function Hero() {
           {/* ACTION BUTTONS */}
           <div
             ref={ctaRef}
-            className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 opacity-0 will-change-transform"
+            className="w-full flex flex-col sm:flex-row items-center sm:items-start justify-center sm:justify-start gap-3 sm:gap-4 opacity-0 will-change-transform"
           >
-            <Link href="/assessment" id="hero-start-assessment-cta" className="block cursor-pointer">
+            <Link href="/assessment" id="hero-start-assessment-cta" className="inline-flex justify-center cursor-pointer">
               <CornerButton accentColor="#00A884" onClick={() => { window.location.href = '/assessment' }}>
                 Book A Consultation
               </CornerButton>
