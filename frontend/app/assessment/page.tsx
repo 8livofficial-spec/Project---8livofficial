@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight, ArrowLeft, User, Scale, Activity, ShieldCheck, Pill, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { getPatientJourneyTarget } from '@/lib/patientJourney'
+import { logJourneyDebug } from '@/lib/logger'
 import { normalizePhoneNumber } from '@/lib/phone'
 import Features2 from '@/components/ui/features-2'
 import AddressAutocompleteInput from '@/components/ui/address-autocomplete-input'
@@ -168,7 +169,7 @@ export default function AssessmentPage() {
           }
           const statusData = await res.json()
           const targetPath = getPatientJourneyTarget(statusData)
-          console.info('[assessment-gate]', {
+          logJourneyDebug('[assessment-gate]', {
             patientId: session.user.id,
             assessmentFound: Boolean(statusData.assessment),
             assessmentStatus: statusData.assessmentStatus,

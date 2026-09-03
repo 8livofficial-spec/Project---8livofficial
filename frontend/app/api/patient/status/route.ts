@@ -4,6 +4,7 @@ import { loadPatientJourneyState, updatePatientJourneyState } from '@/lib/patien
 import { getMembershipValidity } from '@/lib/membershipServer'
 import { assertPatientOrAssignedProvider } from '@/lib/apiSecurity'
 import { getPatientJourneyTarget } from '@/lib/patientJourney'
+import { logJourneyDebug } from '@/lib/logger'
 
 function isDoctorFollowUpType(value?: string | null) {
   return ['DOCTOR_FOLLOW_UP', 'FOLLOW_UP_CONSULTATION'].includes(String(value || '').toUpperCase())
@@ -329,7 +330,7 @@ export async function GET(request: Request) {
       })
     }
 
-    console.info('[patient-status]', {
+    logJourneyDebug('[patient-status]', {
       patientId,
       assessmentFound: Boolean(assessment),
       journeyStateFound: Boolean(persistedJourney),

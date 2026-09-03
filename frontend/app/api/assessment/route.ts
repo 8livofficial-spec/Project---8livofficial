@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 import { updatePatientJourneyState } from '@/lib/patientJourneyServer'
 import { getAuthenticatedUser } from '@/lib/apiSecurity'
 import { normalizePhoneNumber } from '@/lib/phone'
+import { logJourneyDebug } from '@/lib/logger'
 
 type EligibilityStatus = 'ELIGIBLE' | 'REVIEW_REQUIRED' | 'NOT_ELIGIBLE'
 
@@ -228,7 +229,7 @@ export async function POST(request: Request) {
     if (!normalizedPhone.isValid) {
       return NextResponse.json({ error: 'Please enter a valid mobile number with country code.' }, { status: 400 })
     }
-    console.info('[assessment-submit]', {
+    logJourneyDebug('[assessment-submit]', {
       patientId,
       eligibilityStatus: eligibility.status,
       currentJourneyStep: getNextJourneyStep(eligibility.status),

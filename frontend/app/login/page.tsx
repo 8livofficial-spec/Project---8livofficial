@@ -7,6 +7,7 @@ import { motion } from 'framer-motion'
 import { ArrowRight, Lock, Mail, AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { getPatientJourneyTarget } from '@/lib/patientJourney'
+import { logJourneyDebug } from '@/lib/logger'
 
 export default function UnifiedLogin() {
   const router = useRouter()
@@ -85,7 +86,7 @@ export default function UnifiedLogin() {
             if (statusRes.ok) {
               const statusData = await statusRes.json()
               const target = getPatientJourneyTarget(statusData)
-              console.info('[patient-login-redirect]', {
+              logJourneyDebug('[patient-login-redirect]', {
                 patientId: session.user.id,
                 assessmentFound: Boolean(statusData.assessment),
                 assessmentStatus: statusData.assessmentStatus,
@@ -173,7 +174,7 @@ export default function UnifiedLogin() {
         if (statusRes.ok) {
           const statusData = await statusRes.json()
           const target = getPatientJourneyTarget(statusData)
-          console.info('[patient-login-redirect]', {
+          logJourneyDebug('[patient-login-redirect]', {
             patientId: loginData.user.id,
             assessmentFound: Boolean(statusData.assessment),
             assessmentStatus: statusData.assessmentStatus,
