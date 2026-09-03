@@ -2,6 +2,7 @@
 
 import { Suspense, useEffect, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { Eye, EyeOff } from 'lucide-react'
 
 export default function ProviderActivatePage() {
   return (
@@ -17,6 +18,7 @@ function ProviderActivateContent() {
   const token = searchParams.get('token') || ''
   const [provider, setProvider] = useState<{ name: string; email: string; role: string } | null>(null)
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
 
@@ -72,13 +74,23 @@ function ProviderActivateContent() {
         <form onSubmit={submit} className="mt-6 space-y-4">
           <label className="block">
             <span className="text-xs font-black uppercase tracking-[0.16em] text-[#6B7A90]">New password</span>
-            <input
-              type="password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              className="mt-2 w-full rounded-lg border border-[#E8DED4] bg-[#F9F6F0] px-4 py-3 text-sm font-semibold outline-none focus:border-[#C4622D]"
-              required
-            />
+            <div className="relative mt-2">
+              <input
+                type={showPassword ? "text" : "password"}
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="w-full rounded-lg border border-[#E8DED4] bg-[#F9F6F0] pl-4 pr-11 py-3 text-sm font-semibold outline-none focus:border-[#C4622D]"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7A90] hover:text-[#1A1F36] transition-colors focus:outline-none"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+              </button>
+            </div>
           </label>
           <button disabled={saving || !provider} className="rounded-lg bg-[#1A1F36] px-5 py-3 text-sm font-black text-white disabled:opacity-50">
             {saving ? 'Activating...' : 'Activate account'}

@@ -3,7 +3,7 @@
 import React, { Suspense, useState } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
-import { AlertCircle, ArrowRight, CheckCircle2, Lock } from 'lucide-react'
+import { AlertCircle, ArrowRight, CheckCircle2, Lock, Eye, EyeOff } from 'lucide-react'
 
 function passwordError(password: string) {
   if (password.length < 8) return 'Password must be at least 8 characters.'
@@ -19,6 +19,8 @@ function ResetPasswordContent() {
   const token = searchParams.get('token') || ''
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -51,6 +53,11 @@ function ResetPasswordContent() {
     }
   }
 
+  const fields = [
+    { label: 'New Password', value: password, set: setPassword, show: showPassword, toggle: () => setShowPassword(!showPassword) },
+    { label: 'Confirm Password', value: confirmPassword, set: setConfirmPassword, show: showConfirmPassword, toggle: () => setShowConfirmPassword(!showConfirmPassword) }
+  ]
+
   return (
     <main className="min-h-screen bg-slate-50 relative overflow-hidden flex items-center justify-center p-6 sm:p-8">
       <div className="absolute top-1/4 left-1/3 w-96 h-96 bg-[#0D9488]/10 rounded-full blur-[140px] pointer-events-none" />
@@ -59,18 +66,26 @@ function ResetPasswordContent() {
         <p className="mt-3 text-sm text-[#475569]">Use a strong password to secure your 8liv account.</p>
 
         <form onSubmit={submit} className="mt-8 space-y-5">
-          {[{ label: 'New Password', value: password, set: setPassword }, { label: 'Confirm Password', value: confirmPassword, set: setConfirmPassword }].map((field) => (
+          {fields.map((field) => (
             <div key={field.label}>
               <label className="text-sm font-bold font-sora text-[#0F172A]">{field.label}</label>
               <div className="relative mt-2">
                 <Lock className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-[#94A3B8]" />
                 <input
-                  type="password"
+                  type={field.show ? 'text' : 'password'}
                   required
                   value={field.value}
                   onChange={(e) => field.set(e.target.value)}
-                  className="w-full rounded-2xl border border-slate-200 bg-[#F8FAFC] py-4 pl-12 pr-4 text-[#0F172A] focus:border-[#0D9488] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0D9488]/30 shadow-xs transition-all"
+                  className="w-full rounded-2xl border border-slate-200 bg-[#F8FAFC] py-4 pl-12 pr-12 text-[#0F172A] focus:border-[#0D9488] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#0D9488]/30 shadow-xs transition-all"
                 />
+                <button
+                  type="button"
+                  onClick={field.toggle}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#0F172A] transition-colors focus:outline-none"
+                  aria-label={field.show ? `Hide ${field.label}` : `Show ${field.label}`}
+                >
+                  {field.show ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                </button>
               </div>
             </div>
           ))}

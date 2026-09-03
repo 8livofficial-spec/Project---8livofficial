@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { ArrowLeft, Building2, CheckCircle2, CreditCard, ShieldCheck, Wallet, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Building2, CheckCircle2, CreditCard, ShieldCheck, Wallet, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { authedFetch } from '@/lib/apiClient'
 
 export default function ProviderBankingPage() {
@@ -14,6 +14,7 @@ export default function ProviderBankingPage() {
   const [preferredPayoutMethod, setPreferredPayoutMethod] = useState<'BANK_TRANSFER' | 'UPI'>('BANK_TRANSFER')
   const [beneficiaryName, setBeneficiaryName] = useState('')
   const [accountNumber, setAccountNumber] = useState('')
+  const [showAccountNumber, setShowAccountNumber] = useState(false)
   const [confirmAccountNumber, setConfirmAccountNumber] = useState('')
   const [ifsc, setIfsc] = useState('')
   const [bankName, setBankName] = useState('')
@@ -210,14 +211,24 @@ export default function ProviderBankingPage() {
                       <label className="block text-xs font-black uppercase tracking-wider text-[#6B7A90] mb-1.5">
                         Bank Account Number <span className="text-[#C4622D]">*</span>
                       </label>
-                      <input
-                        type="password"
-                        required
-                        value={accountNumber}
-                        onChange={(e) => setAccountNumber(e.target.value)}
-                        placeholder="Enter account number"
-                        className="w-full rounded-xl border border-[#E8DED4] bg-[#F9F6F0] px-4 py-3 text-sm font-bold text-[#1A1F36] outline-none focus:border-[#1A1F36]"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showAccountNumber ? "text" : "password"}
+                          required
+                          value={accountNumber}
+                          onChange={(e) => setAccountNumber(e.target.value)}
+                          placeholder="Enter account number"
+                          className="w-full rounded-xl border border-[#E8DED4] bg-[#F9F6F0] pl-4 pr-11 py-3 text-sm font-bold text-[#1A1F36] outline-none focus:border-[#1A1F36]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowAccountNumber(!showAccountNumber)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#6B7A90] hover:text-[#1A1F36] transition-colors focus:outline-none"
+                          aria-label={showAccountNumber ? "Hide account number" : "Show account number"}
+                        >
+                          {showAccountNumber ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <label className="block text-xs font-black uppercase tracking-wider text-[#6B7A90] mb-1.5">

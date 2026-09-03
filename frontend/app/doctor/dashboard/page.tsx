@@ -9,7 +9,7 @@ import {
   Activity, Users, CheckCircle2, XCircle, Video, Calendar, Wallet,
   ArrowDownToLine, Pill, FileText, Clock, AlertCircle, LogOut,
   Stethoscope, ChevronRight, Plus, X, TrendingUp, BadgeCheck, Bell, BellRing, UserCheck, Check, PhoneOff, MessageCircle,
-  Eye, Printer, Download, Menu, Settings,
+  Eye, EyeOff, Printer, Download, Menu, Settings,
 } from 'lucide-react';
 import StaffChat from '@/components/StaffChat';
 import ProviderAvailabilityScheduler, { GeneratedSlot, AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler';
@@ -577,6 +577,7 @@ export default function DoctorDashboard() {
   const [bankMethod, setBankMethod] = useState<'BANK_TRANSFER' | 'UPI'>('BANK_TRANSFER');
   const [bankBeneficiaryName, setBankBeneficiaryName] = useState('');
   const [bankAccountNumber, setBankAccountNumber] = useState('');
+  const [showBankAccountNumber, setShowBankAccountNumber] = useState(false);
   const [bankConfirmAccountNumber, setBankConfirmAccountNumber] = useState('');
   const [bankIfsc, setBankIfsc] = useState('');
   const [bankName, setBankName] = useState('');
@@ -3266,14 +3267,24 @@ export default function DoctorDashboard() {
                       </div>
                       <div>
                         <label className={labelCls}>Account Number *</label>
-                        <input
-                          type="password"
-                          required
-                          value={bankAccountNumber}
-                          onChange={(e) => setBankAccountNumber(e.target.value)}
-                          placeholder="Enter account number"
-                          className={inputCls}
-                        />
+                        <div className="relative">
+                          <input
+                            type={showBankAccountNumber ? "text" : "password"}
+                            required
+                            value={bankAccountNumber}
+                            onChange={(e) => setBankAccountNumber(e.target.value)}
+                            placeholder="Enter account number"
+                            className={`${inputCls} pr-11`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => setShowBankAccountNumber(!showBankAccountNumber)}
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#0F172A] transition-colors focus:outline-none"
+                            aria-label={showBankAccountNumber ? "Hide account number" : "Show account number"}
+                          >
+                            {showBankAccountNumber ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                          </button>
+                        </div>
                       </div>
                       <div>
                         <label className={labelCls}>Confirm Account Number *</label>

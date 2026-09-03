@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
-import { ArrowRight, Lock, Mail, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { ArrowRight, Lock, Mail, AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { getPatientJourneyTarget } from '@/lib/patientJourney'
 
@@ -13,6 +13,7 @@ export default function UnifiedLogin() {
   const [checkingAuth, setCheckingAuth] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [authError, setAuthError] = useState('')
   const [authSuccess, setAuthSuccess] = useState(() => {
@@ -289,13 +290,25 @@ export default function UnifiedLogin() {
                   <Lock className="h-5 w-5 text-[#94A3B8]" />
                 </div>
                 <input 
-                  type="password" 
+                  type={showPassword ? "text" : "password"} 
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="w-full bg-[#F8FAFC] border border-slate-200 text-[#0F172A] rounded-2xl pl-12 pr-4 py-4 focus:outline-none focus:ring-2 focus:ring-[#0D9488]/30 focus:border-[#0D9488] focus:bg-white transition-all shadow-xs"
+                  className="w-full bg-[#F8FAFC] border border-slate-200 text-[#0F172A] rounded-2xl pl-12 pr-12 py-4 focus:outline-none focus:ring-2 focus:ring-[#0D9488]/30 focus:border-[#0D9488] focus:bg-white transition-all shadow-xs"
                   placeholder="Password"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-[#94A3B8] hover:text-[#0F172A] transition-colors focus:outline-none"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-5 w-5" />
+                  ) : (
+                    <Eye className="h-5 w-5" />
+                  )}
+                </button>
               </div>
             </div>
 

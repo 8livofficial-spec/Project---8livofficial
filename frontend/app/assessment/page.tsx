@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { motion, AnimatePresence } from 'framer-motion'
-import { ArrowRight, ArrowLeft, User, Scale, Activity, ShieldCheck, Pill, CheckCircle2, AlertCircle } from 'lucide-react'
+import { ArrowRight, ArrowLeft, User, Scale, Activity, ShieldCheck, Pill, CheckCircle2, AlertCircle, Eye, EyeOff } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { getPatientJourneyTarget } from '@/lib/patientJourney'
 import { normalizePhoneNumber } from '@/lib/phone'
@@ -83,6 +83,7 @@ export default function AssessmentPage() {
   const [stepSaving, setStepSaving] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
+  const [showPassword, setShowPassword] = useState(false)
 
   const [formData, setFormData] = useState({
     // Step 1: Contact
@@ -779,15 +780,25 @@ export default function AssessmentPage() {
                         </div>
                         <div>
                           <label className="block text-sm font-bold text-[#0F172A] mb-2 pl-2">Password</label>
-                          <input 
-                            type="password" 
-                            name="password"
-                            required
-                            value={formData.password}
-                            onChange={handleInputChange}
-                            placeholder="••••••••" 
-                            className="w-full bg-white border border-[#D46E53]/20 text-[#0F172A] rounded-2xl px-5 py-4 focus:outline-none focus:border-[#D46E53] focus:ring-4 focus:ring-[#D46E53]/20" 
-                          />
+                          <div className="relative">
+                            <input 
+                              type={showPassword ? "text" : "password"} 
+                              name="password"
+                              required
+                              value={formData.password}
+                              onChange={handleInputChange}
+                              placeholder="••••••••" 
+                              className="w-full bg-white border border-[#D46E53]/20 text-[#0F172A] rounded-2xl pl-5 pr-12 py-4 focus:outline-none focus:border-[#D46E53] focus:ring-4 focus:ring-[#D46E53]/20" 
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowPassword(!showPassword)}
+                              className="absolute right-4 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#0F172A] transition-colors focus:outline-none"
+                              aria-label={showPassword ? "Hide password" : "Show password"}
+                            >
+                              {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                            </button>
+                          </div>
                         </div>
                         
                         {submitError && <p className="text-rose-600 text-sm font-bold bg-rose-50 border border-rose-100 rounded-2xl px-5 py-4 flex items-center gap-2"><AlertCircle className="w-5 h-5"/> {submitError}</p>}
