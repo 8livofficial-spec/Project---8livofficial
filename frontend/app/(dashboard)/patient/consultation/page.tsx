@@ -1076,13 +1076,17 @@ export default function ConsultationSchedulingPage() {
             </div>
           )}
           <div className="mb-8">
-            <Link
+            <a
               href="/"
+              onClick={(e) => {
+                e.preventDefault()
+                window.location.href = '/'
+              }}
               className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold font-sora transition-colors mb-4 px-3.5 py-2 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-xs cursor-pointer"
             >
               <ArrowLeft className="w-4 h-4 text-slate-600" />
               <span>Back</span>
-            </Link>
+            </a>
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h1 className="text-3xl font-bold" style={{ color: designTokens.colors.textPrimary }}>
