@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS public.staff_consultations (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   staff_id UUID REFERENCES public.profiles(id) NOT NULL,
   staff_role TEXT NOT NULL,
+  appointment_type TEXT,
   patient_id UUID REFERENCES public.profiles(id) NOT NULL,
   booking_date TEXT NOT NULL,
   booking_time TEXT NOT NULL,
@@ -24,6 +25,24 @@ CREATE TABLE IF NOT EXISTS public.staff_consultations (
   consultation_notes TEXT,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+ALTER TABLE public.staff_consultations
+  ADD COLUMN IF NOT EXISTS appointment_type TEXT,
+  ADD COLUMN IF NOT EXISTS meeting_provider TEXT DEFAULT 'JITSI',
+  ADD COLUMN IF NOT EXISTS meeting_room TEXT,
+  ADD COLUMN IF NOT EXISTS meeting_url TEXT,
+  ADD COLUMN IF NOT EXISTS call_id TEXT,
+  ADD COLUMN IF NOT EXISTS call_type TEXT,
+  ADD COLUMN IF NOT EXISTS created_by UUID,
+  ADD COLUMN IF NOT EXISTS meeting_status TEXT,
+  ADD COLUMN IF NOT EXISTS is_completed BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS slot_id UUID,
+  ADD COLUMN IF NOT EXISTS booking_source TEXT,
+  ADD COLUMN IF NOT EXISTS payment_requirement TEXT,
+  ADD COLUMN IF NOT EXISTS scheduled_start TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS scheduled_end TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
 
 ALTER TABLE public.staff_consultations ENABLE ROW LEVEL SECURITY;
 

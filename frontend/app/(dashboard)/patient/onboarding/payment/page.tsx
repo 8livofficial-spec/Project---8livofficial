@@ -95,9 +95,27 @@ export default function OnboardingPaymentPage() {
     load()
   }, [router])
 
-  // ── Pricing ────────────────────────────────────────────────────────────────
-  const planPrice = assessment?.membership_tier === 'Gold Plan' ? 1999 : 999
-  const consultFee = 499
+  const [plans, setPlans] = useState<any[]>([])
+  const [selectedPlan, setSelectedPlan] = useState<any>(null)
+
+  useEffect(() => {
+    fetch('/api/subscriptions/pricing')
+      .then(r => r.json())
+      .then(d => {
+        if (d.plans && d.plans.length > 0) {
+          setPlans(d.plans)
+          setSelectedPlan(d.plans[0])
+        }
+      })
+      .catch(e => console.warn('Failed to load plans:', e))
+  }, [])
+
+  // ── Authoritative Database-Driven Pricing ───────────────────────────────────
+  const durationMonths = selectedPlan ? Number(selectedPlan.durationMonths) : (assessment?.membership_tier ? parseInt(String(assessment.membership_tier)) : 1)
+  const planPrice = selectedPlan ? Number(selectedPlan.finalPrice) : 1999
+  const basePrice = selectedPlan ? Number(selectedPlan.basePrice) : 1999
+  const discountAmount = selectedPlan ? Number(selectedPlan.discountAmount || 0) : 0
+  const consultFee = 499 // Initial consultation is ₹499 PAID (intentional, client-approved)
   const subtotal = planPrice + consultFee
   const gst = Math.round(subtotal * 0.18)
   const total = subtotal + gst
@@ -147,6 +165,8 @@ export default function OnboardingPaymentPage() {
           amount: amountInRupees,
           currency: 'INR',
           paymentType: 'combined',
+          planId: selectedPlan?.id,
+          durationMonths: selectedPlan?.durationMonths || 1,
         }),
       })
 
@@ -175,7 +195,7 @@ export default function OnboardingPaymentPage() {
           amount: orderData.amount,
           currency: orderData.currency || 'INR',
           name: '8Liv',
-          description: `${assessment?.membership_tier || 'Membership'} Plan Activation`,
+          description: `${selectedPlan?.name || 'Treatment Program'} Activation`,
           prefill: {
             name: patientName,
             email: patientEmail,
@@ -199,8 +219,10 @@ export default function OnboardingPaymentPage() {
               body: JSON.stringify({
                 patientId: session.user.id,
                 paymentType: 'combined',
-                membershipTier: assessment?.membership_tier,
+                planId: selectedPlan?.id,
+                durationMonths: selectedPlan?.durationMonths || 1,
                 amount: total,
+                shippingState: assessment?.shipping_state || '',
                 paymentMethod: method,
                 razorpay_order_id: response.razorpay_order_id,
                 razorpay_payment_id: response.razorpay_payment_id,
@@ -262,24 +284,54 @@ export default function OnboardingPaymentPage() {
 
           <div>
             <span className="text-[#5EEAD4] text-xs font-extrabold uppercase tracking-[0.2em] font-sora">
-              Step 2 of 2 — Payment
+              Step 2 of 2 — Payment & Activation
             </span>
             <h2 className="text-2xl font-bold font-sora text-white mt-2 leading-snug">
-              Complete your<br />enrollment
+              Complete your<br />program enrollment
             </h2>
+          </div>
+
+          {/* Duration Selector in Sidebar */}
+          <div className="space-y-2">
+            <p className="text-white/40 text-[10px] font-black uppercase tracking-wider font-sora">Select Treatment Program</p>
+            <div className="grid grid-cols-2 gap-2">
+              {plans.map((p) => {
+                const isSelected = selectedPlan?.id === p.id
+                return (
+                  <button
+                    key={p.id || p.durationMonths}
+                    type="button"
+                    onClick={() => setSelectedPlan(p)}
+                    className={`rounded-xl p-2.5 text-left transition border ${
+                      isSelected
+                        ? 'bg-[#5EEAD4]/15 border-[#5EEAD4] text-white'
+                        : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
+                    }`}
+                  >
+                    <p className="text-xs font-bold font-sora truncate">{p.name}</p>
+                    <p className="text-[10px] text-[#5EEAD4] font-semibold">
+                      {p.discountPercentage > 0 ? `${p.discountPercentage}% OFF` : `${p.durationMonths} ${p.durationMonths === 1 ? 'Cycle' : 'Cycles'}`}
+                    </p>
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {/* Order lines */}
           <div className="space-y-3">
             <p className="text-white/40 text-[10px] font-black uppercase tracking-wider border-b border-white/10 pb-2 font-sora">Order Summary</p>
             {[
-              { label: `${assessment?.membership_tier} — Month 1`, amount: planPrice },
-              { label: 'Initial Consultation Fee', amount: consultFee },
+              { label: `${selectedPlan?.name || 'Care Program'} (${selectedPlan?.durationMonths || 1} Cycles)`, amount: basePrice },
+              ...(discountAmount > 0 ? [{ label: `${selectedPlan?.discountPercentage}% Bulk Discount Applied`, amount: -discountAmount }] : []),
+              { label: 'Initial Doctor Consultation', amount: consultFee },
               { label: 'GST (18%)', amount: gst },
             ].map(line => (
               <div key={line.label} className="flex justify-between items-center">
-                <span className="text-white/70 text-xs font-medium">{line.label}</span>
-                <span className="text-white text-xs font-bold font-sora">₹{line.amount.toLocaleString('en-IN')}</span>
+                <span className={`text-xs font-medium ${line.amount < 0 ? 'text-[#5EEAD4]' : 'text-white/70'}`}>{line.label}</span>
+                <span className={`text-xs font-bold font-sora ${line.amount < 0 ? 'text-[#5EEAD4]' : 'text-white'}`}>
+                  {line.amount < 0 ? `-₹${Math.abs(line.amount).toLocaleString('en-IN')}` : `₹${line.amount.toLocaleString('en-IN')}`}
+                </span>
               </div>
             ))}
             <div className="flex justify-between items-center border-t border-white/10 pt-3">
@@ -290,14 +342,15 @@ export default function OnboardingPaymentPage() {
 
           {/* Inclusions */}
           <div className="space-y-2">
-            <p className="text-white/40 text-[10px] font-black uppercase tracking-wider font-sora">Included Today</p>
+            <p className="text-white/40 text-[10px] font-black uppercase tracking-wider font-sora">Included In Your Program</p>
             {[
-              'Doctor consultation booking access',
-              'Personalised metabolic dashboard',
-              assessment?.membership_tier === 'Gold Plan' ? 'Dietitian + fitness coaching' : null,
-              'GLP-1 prescription pathway',
-              'Encrypted health records',
-            ].filter(Boolean).map((item: any) => (
+              'Paid Initial doctor consultation booking',
+              `${durationMonths} monthly treatment cycles provisioned`,
+              'Follow-up review consultations each cycle (₹0)',
+              'Dedicated dietitian & fitness coach support',
+              'Prescription & partner pharmacy fulfillment',
+              'Encrypted medical health records',
+            ].map((item: any) => (
               <div key={item} className="flex items-start gap-2.5">
                 <CheckCircle2 size={14} className="text-[#5EEAD4] shrink-0 mt-0.5" />
                 <span className="text-white/75 text-xs font-medium">{item}</span>
@@ -330,15 +383,19 @@ export default function OnboardingPaymentPage() {
             {step === 'review' && (
               <motion.div key="review" initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}>
                 <h3 className="text-xl sm:text-2xl font-extrabold font-sora text-[#0F172A] mb-2">Ready to complete enrollment?</h3>
-                <p className="text-sm text-[#475569] mb-6">Review your order details and activate your care plan via Razorpay.</p>
+                <p className="text-sm text-[#475569] mb-6">Review your duration and activate your care program via secure Razorpay checkout.</p>
 
                 <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xl mb-6 space-y-3">
                   <div className="flex justify-between text-sm">
-                    <span className="text-[#475569]">Plan</span>
-                    <span className="font-bold text-[#0F172A] font-sora">{assessment?.membership_tier}</span>
+                    <span className="text-[#475569]">Selected Program</span>
+                    <span className="font-bold text-[#0F172A] font-sora">{durationMonths} Month Treatment Program</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-[#475569]">Doctor Consultation</span>
+                    <span className="text-[#475569]">Program Fee</span>
+                    <span className="font-bold text-[#0F172A] font-sora">₹{planPrice.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-[#475569]">Initial Consultation Fee</span>
                     <span className="font-bold text-[#0F172A] font-sora">₹{consultFee.toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between text-sm">

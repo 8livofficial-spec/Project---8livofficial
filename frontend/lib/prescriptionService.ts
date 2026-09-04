@@ -72,6 +72,26 @@ export function prescriptionNumber() {
 export async function createPrescription(consultationId: string, doctorId: string, input: PrescriptionInput) {
   validateItems(input.items)
   const consultation = await assertConsultationDoctorOwnership(consultationId, doctorId)
+
+  // Find active treatment cycle if patient is enrolled in a duration program
+  let cycleId: string | null = null
+  try {
+    const { data: activeCycle } = await supabaseAdmin
+      .from('treatment_cycles')
+      .select('id')
+      .eq('patient_id', consultation.patient_id)
+      .in('status', ['ACTIVE', 'UNDER_REVIEW', 'PENDING'])
+      .order('cycle_number', { ascending: true })
+      .limit(1)
+      .maybeSingle()
+
+    if (activeCycle?.id) {
+      cycleId = activeCycle.id
+    }
+  } catch (cycleErr) {
+    console.warn('[prescriptionService] Could not lookup active cycle:', cycleErr)
+  }
+
   const { data: prescription, error } = await supabaseAdmin
     .from('prescriptions')
     .insert({
@@ -82,6 +102,7 @@ export async function createPrescription(consultationId: string, doctorId: strin
       diagnosis: input.diagnosis,
       status: 'DRAFT',
       valid_until: input.valid_until,
+      treatment_cycle_id: cycleId,
     })
     .select('*')
     .single()
@@ -92,7 +113,7 @@ export async function createPrescription(consultationId: string, doctorId: strin
     .insert(input.items.map((item) => ({ ...item, prescription_id: prescription.id })))
   if (itemError) throw itemError
 
-  await audit({ prescriptionId: prescription.id, actorId: doctorId, actorRole: 'doctor', action: 'PRESCRIPTION_CREATED', newValues: { consultationId } })
+  await audit({ prescriptionId: prescription.id, actorId: doctorId, actorRole: 'doctor', action: 'PRESCRIPTION_CREATED', newValues: { consultationId, cycleId } })
   return prescription
 }
 
@@ -172,6 +193,18 @@ export async function signPrescription(prescriptionId: string, doctorId: string)
     .single()
   if (updateError) throw updateError
 
+  // If associated with a treatment cycle, update cycle status to PRESCRIBED
+  if (prescription.treatment_cycle_id) {
+    try {
+      await supabaseAdmin
+        .from('treatment_cycles')
+        .update({ status: 'PRESCRIBED', updated_at: now })
+        .eq('id', prescription.treatment_cycle_id)
+    } catch (cycleErr) {
+      console.warn('[prescriptionService] Could not update cycle status to PRESCRIBED:', cycleErr)
+    }
+  }
+
   const { data: profile } = await supabaseAdmin
     .from('profiles')
     .select('phone_number')
@@ -190,16 +223,22 @@ export async function signPrescription(prescriptionId: string, doctorId: string)
   await supabaseAdmin.from('pharmacy_order_status_history').insert({
     pharmacy_order_id: order.id,
     previous_status: null,
-    new_status: 'PENDING_ADMIN_REVIEW',
+    new_status: 'RECEIVED',
     changed_by: doctorId,
-    reason: 'Prescription issued',
+    reason: 'Prescription issued and order generated for partner pharmacy',
   })
+
+  // Ensure pharmacy order reflects RECEIVED status so partner pharmacy can immediately action it
+  await supabaseAdmin
+    .from('pharmacy_orders')
+    .update({ status: 'RECEIVED', updated_at: now })
+    .eq('id', order.id)
 
   await supabaseAdmin.from('patient_notifications').insert({
     patient_id: prescription.patient_id,
     type: 'prescription_issued',
     title: 'Prescription issued',
-    message: 'Your doctor has issued a signed prescription. 8liv will coordinate medicine fulfilment with Apollo Pharmacy.',
+    message: 'Your doctor has issued a signed prescription. 8liv partner pharmacy will coordinate your medication fulfillment.',
     is_read: false,
   })
 
@@ -243,8 +282,89 @@ export async function cancelPrescription(prescriptionId: string, doctorId: strin
     .in('status', ['DRAFT', 'READY_FOR_REVIEW'])
     .select('id')
   if (error) throw error
-  if (!data?.length) throw new Error('Only DRAFT or READY_FOR_REVIEW prescriptions can be cancelled.')
   await audit({ prescriptionId, actorId: doctorId, actorRole: 'doctor', action: 'PRESCRIPTION_CANCELLED', reason })
+}
+
+export async function revokePrescription(prescriptionId: string, doctorId: string, reason: string) {
+  const now = new Date().toISOString()
+  const { data: rx, error: fetchErr } = await supabaseAdmin
+    .from('prescriptions')
+    .select('id, patient_id, status, treatment_cycle_id')
+    .eq('id', prescriptionId)
+    .eq('doctor_id', doctorId)
+    .maybeSingle()
+
+  if (fetchErr) throw fetchErr
+  if (!rx) throw new Error('Prescription not found for this doctor.')
+  if (!['SIGNED', 'ISSUED', 'ACTIVE'].includes(rx.status)) {
+    throw new Error('Only signed or active prescriptions can be revoked. Use cancel for draft prescriptions.')
+  }
+
+  const { error } = await supabaseAdmin
+    .from('prescriptions')
+    .update({
+      status: 'REVOKED',
+      cancelled_at: now,
+      cancellation_reason: reason || 'Revoked by doctor',
+      updated_at: now,
+    })
+    .eq('id', prescriptionId)
+    .eq('doctor_id', doctorId)
+
+  if (error) throw error
+
+  // Cancel any associated active pharmacy orders so partner pharmacy cannot fulfill a revoked prescription
+  const { data: orders } = await supabaseAdmin
+    .from('pharmacy_orders')
+    .select('id, status')
+    .eq('prescription_id', prescriptionId)
+
+  if (orders && orders.length > 0) {
+    for (const order of orders) {
+      if (!['DELIVERED', 'CANCELLED', 'UNABLE_TO_FULFILL'].includes(order.status)) {
+        await supabaseAdmin
+          .from('pharmacy_orders')
+          .update({
+            status: 'CANCELLED',
+            updated_at: now,
+          })
+          .eq('id', order.id)
+
+        await supabaseAdmin.from('pharmacy_order_status_history').insert({
+          pharmacy_order_id: order.id,
+          previous_status: order.status,
+          new_status: 'CANCELLED',
+          changed_by: doctorId,
+          reason: `Prescription revoked: ${reason}`,
+        })
+      }
+    }
+  }
+
+  // If treatment cycle was associated, revert cycle status to ACTIVE so new prescription can be formulated
+  if (rx.treatment_cycle_id) {
+    await supabaseAdmin
+      .from('treatment_cycles')
+      .update({ status: 'ACTIVE', updated_at: now })
+      .eq('id', rx.treatment_cycle_id)
+  }
+
+  // Notify patient
+  await supabaseAdmin.from('patient_notifications').insert({
+    patient_id: rx.patient_id,
+    type: 'prescription_revoked',
+    title: 'Prescription Revoked',
+    message: `Your prescription has been revoked by your prescribing doctor: ${reason || 'Clinical adjustment required'}. Any pending pharmacy delivery has been halted.`,
+    is_read: false,
+  })
+
+  await audit({
+    prescriptionId,
+    actorId: doctorId,
+    actorRole: 'doctor',
+    action: 'PRESCRIPTION_REVOKED',
+    reason,
+  })
 }
 
 export async function audit(input: {

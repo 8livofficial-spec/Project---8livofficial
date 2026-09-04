@@ -95,7 +95,7 @@ export default function Sidebar({
         <div className="mt-3 inline-flex items-center gap-1.5 bg-[#00A884]/20 border border-[#00A884]/40 
                         text-[#5EEAD4] text-[11px] font-semibold px-3 py-1 rounded-full">
           <span className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF]" />
-          {membershipTier || 'Silver Plan'}
+          {membershipTier || 'Care Program Member'}
         </div>
       </Link>
 

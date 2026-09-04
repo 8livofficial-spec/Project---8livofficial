@@ -87,7 +87,7 @@ export default function HomePageClient() {
       {/* 11. FINAL CTA */}
       <FinalCTA />
       
-      {/* 12. PRICING SHADER CARDS (SILVER & GOLD) */}
+      {/* 12. DURATION-BASED CARE PROTOCOLS & TREATMENT PLANS */}
       <PricingShaderCards />
 
       {/* FOOTER */}

@@ -414,7 +414,30 @@ export default function PatientDashboardHome() {
     }
   }
 
-  const isGoldPlan = assessment?.membership_tier === 'Gold Plan'
+  const [cycleInfo, setCycleInfo] = useState<{ cycleNumber: number; totalCycles: number; fulfillmentStatus?: string; trackingNumber?: string } | null>(null)
+
+  useEffect(() => {
+    const fetchFulfillment = async () => {
+      try {
+        const res = await fetch('/api/patient/pharmacy-orders')
+        if (res.ok) {
+          const data = await res.json()
+          const latestOrder = (data.orders || [])[0]
+          if (latestOrder) {
+            setCycleInfo({
+              cycleNumber: latestOrder.treatment_cycles?.cycle_number || 1,
+              totalCycles: 1,
+              fulfillmentStatus: latestOrder.status,
+              trackingNumber: latestOrder.dispatch_tracking_number || latestOrder.tracking_number,
+            })
+          }
+        }
+      } catch (e) {
+        // Non-blocking
+      }
+    }
+    fetchFulfillment()
+  }, [])
 
   if (loading) {
     return (
@@ -514,6 +537,10 @@ export default function PatientDashboardHome() {
             nextRefillDate={refillDetails.date}
             daysToRefill={refillDetails.days}
             isApproved={isMedicationApproved}
+            cycleNumber={cycleInfo?.cycleNumber || 1}
+            totalCycles={cycleInfo?.totalCycles || 1}
+            fulfillmentStatus={cycleInfo?.fulfillmentStatus}
+            trackingNumber={cycleInfo?.trackingNumber}
           />
         </div>
         <div className="col-span-1 md:col-span-2 xl:col-span-1">
@@ -526,40 +553,13 @@ export default function PatientDashboardHome() {
         </div>
       </div>
 
-      {/* 6. Care Guidelines (Gold Plan Gated) */}
-      {!isGoldPlan ? (
-        <div className="bg-gradient-to-br from-[#1A1F36] to-[#2A314A] rounded-3xl p-8 border border-[#1A1F36]/6 shadow-xl relative overflow-hidden">
-          {/* Decorative Background Elements */}
-          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-64 h-64 rounded-full bg-gradient-to-br from-[#C4622D]/20 to-transparent blur-3xl"></div>
-          <div className="absolute bottom-0 left-0 -ml-16 -mb-16 w-48 h-48 rounded-full bg-gradient-to-tr from-[#5C7A6B]/20 to-transparent blur-3xl"></div>
-          
-          <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-6">
-            <div className="text-white">
-              <div className="inline-flex items-center gap-1.5 bg-[#C4622D]/20 border border-[#C4622D]/30 px-3 py-1 rounded-full mb-3">
-                <span className="text-lg">⭐</span>
-                <span className="text-[#F5F0EB] text-xs font-black uppercase tracking-wider">Premium Feature</span>
-              </div>
-              <h3 className="font-bold text-2xl font-sora mb-2">Unlock Your Full Potential</h3>
-              <p className="text-[#8896A4] text-sm leading-relaxed max-w-lg">
-                Upgrade to the <strong className="text-white">Gold Plan</strong> to access personalized nutrition guidance, custom workout plans, and 1-on-1 live video consultations with your assigned care team.
-              </p>
-            </div>
-            <Link 
-              href="/patient/billing"
-              className="shrink-0 bg-[#C4622D] hover:bg-[#A8522A] text-white px-8 py-3.5 rounded-full text-sm font-bold transition-all shadow-lg shadow-[#C4622D]/20 no-underline flex items-center gap-2"
-            >
-              Upgrade to Gold Plan
-              <ArrowRight size={16} />
-            </Link>
-          </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-          <div className="bg-white rounded-3xl p-6 border border-[#1A1F36]/6 shadow-[0_4px_20px_rgba(26,31,54,0.02)] flex flex-col justify-between">
-            <div>
-              <h3 className="text-[#1A1F36] font-bold text-lg font-sora mb-4 flex items-center gap-2">
-                <span className="text-[#5C7A6B]">🥗</span> Nutrition Guidelines
-              </h3>
+      {/* 6. Care Guidelines */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+        <div className="bg-white rounded-3xl p-6 border border-[#1A1F36]/6 shadow-[0_4px_20px_rgba(26,31,54,0.02)] flex flex-col justify-between">
+          <div>
+            <h3 className="text-[#1A1F36] font-bold text-lg font-sora mb-4 flex items-center gap-2">
+              <span className="text-[#5C7A6B]">🥗</span> Nutrition Guidelines
+            </h3>
               {careTeam?.dietitian_notes ? (
                 <p className="text-[#1A1F36] text-sm whitespace-pre-line leading-relaxed bg-[#F5F0EB]/50 p-4 rounded-2xl border border-[#1A1F36]/6">
                   {careTeam.dietitian_notes}
@@ -660,7 +660,6 @@ export default function PatientDashboardHome() {
             )}
           </div>
         </div>
-      )}
 
       {/* 7. Weight Log Modal overlay */}
       {showWeightLogModal && (

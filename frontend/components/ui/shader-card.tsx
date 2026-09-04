@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils'
 export interface ShaderCardProps {
   children?: React.ReactNode
   className?: string
-  colorTheme?: 'silver' | 'gold' | 'custom'
+  colorTheme?: 'emerald' | 'amber' | 'slate' | 'silver' | 'gold' | 'custom'
   customColors?: [string, string, string]
   speed?: number
 }
@@ -14,7 +14,7 @@ export interface ShaderCardProps {
 export function ShaderCard({
   children,
   className,
-  colorTheme = 'silver',
+  colorTheme = 'slate',
   customColors,
   speed = 0.005
 }: ShaderCardProps) {
@@ -34,11 +34,13 @@ export function ShaderCard({
     let time = 0
 
     // Theme color presets
-    let colors = ['#0F172A', '#334155', '#64748B']
-    if (colorTheme === 'gold') {
+    let colors = ['#0F172A', '#1E293B', '#334155']
+    if (colorTheme === 'emerald') {
+      colors = ['#064E3B', '#065F46', '#059669']
+    } else if (colorTheme === 'amber' || colorTheme === 'gold') {
       colors = ['#451A03', '#92400E', '#F59E0B']
-    } else if (colorTheme === 'silver') {
-      colors = ['#0F172A', '#1E293B', '#64748B']
+    } else if (colorTheme === 'slate' || colorTheme === 'silver') {
+      colors = ['#0F172A', '#1E293B', '#334155']
     }
     if (customColors) colors = customColors
 
@@ -99,7 +101,11 @@ export function ShaderCard({
 
         ctx.save()
         ctx.globalCompositeOperation = 'screen'
-        ctx.strokeStyle = colorTheme === 'gold' ? 'rgba(245, 158, 11, 0.18)' : 'rgba(148, 163, 184, 0.15)'
+        ctx.strokeStyle = (colorTheme === 'amber' || colorTheme === 'gold')
+          ? 'rgba(245, 158, 11, 0.18)'
+          : colorTheme === 'emerald'
+            ? 'rgba(16, 185, 129, 0.20)'
+            : 'rgba(148, 163, 184, 0.15)'
         ctx.lineWidth = 2.5
 
         ctx.beginPath()
@@ -139,9 +145,11 @@ export function ShaderCard({
       onMouseMove={handleMouseMove}
       className={cn(
         'relative overflow-hidden rounded-[2.5rem] border shadow-2xl transition-all duration-500 group',
-        colorTheme === 'gold'
-          ? 'border-amber-500/40 hover:border-amber-400/80 shadow-amber-950/30'
-          : 'border-slate-700/50 hover:border-blue-400/60 shadow-slate-950/40',
+        colorTheme === 'emerald'
+          ? 'border-emerald-500/30 hover:border-emerald-400/70 shadow-emerald-950/20'
+          : (colorTheme === 'amber' || colorTheme === 'gold')
+            ? 'border-amber-500/40 hover:border-amber-400/80 shadow-amber-950/30'
+            : 'border-slate-700/50 hover:border-blue-400/60 shadow-slate-950/40',
         className
       )}
     >
@@ -155,7 +163,11 @@ export function ShaderCard({
       <div
         className={cn(
           'absolute -top-24 -right-24 w-64 h-64 rounded-full blur-3xl pointer-events-none -z-10 transition-transform duration-700 group-hover:scale-125',
-          colorTheme === 'gold' ? 'bg-amber-500/20' : 'bg-blue-500/20'
+          colorTheme === 'emerald'
+            ? 'bg-emerald-500/20'
+            : (colorTheme === 'amber' || colorTheme === 'gold')
+              ? 'bg-amber-500/20'
+              : 'bg-blue-500/20'
         )}
       />
 

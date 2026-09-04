@@ -5,6 +5,7 @@ import { getAssignedProviderForRole, INITIAL_DOCTOR_CONSULTATION, DOCTOR_FOLLOW_
 import { isFutureIndiaSlot } from '@/lib/appointmentAvailability'
 import { createStreamMeeting } from '@/services/video/meeting.service'
 import { APP_CONFIG } from '@/lib/appConfig'
+import { recordCycleConsultationUsage } from '@/lib/treatmentCycleService'
 
 const CONSULTATION_FEE = 499
 
@@ -370,6 +371,8 @@ export async function bookPatientDoctorAppointment(params: {
           recorded_at: new Date().toISOString(),
         },
       })
+  } else if (params.appointmentType === DOCTOR_FOLLOW_UP) {
+    await recordCycleConsultationUsage(params.patientId, consultation.id)
   }
 
   const { error: auditError } = await supabaseAdmin

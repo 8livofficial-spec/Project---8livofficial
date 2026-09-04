@@ -9,8 +9,6 @@ const pendingStatuses = ['pending', 'created', 'processing']
 const failedStatuses = ['failed', 'cancelled', 'declined', 'error']
 
 const CONSULTATION_FEE_DEFAULT = 499
-const SILVER_PLAN_FEE_DEFAULT = 4999
-const GOLD_PLAN_FEE_DEFAULT = 9999
 const DOCTOR_PAYOUT_PER_CONSULT = 300
 
 export async function GET(request: Request) {
@@ -669,9 +667,8 @@ export async function GET(request: Request) {
         assessConsultationRevenue += CONSULTATION_FEE_DEFAULT
       }
       if (a.membership_tier) {
-        const tier = String(a.membership_tier).toLowerCase()
-        if (tier.includes('gold')) assessMembershipRevenue += GOLD_PLAN_FEE_DEFAULT
-        else if (tier.includes('silver')) assessMembershipRevenue += SILVER_PLAN_FEE_DEFAULT
+        const duration = parseInt(String(a.membership_tier)) || 1
+        assessMembershipRevenue += duration * 1999
       }
     })
 

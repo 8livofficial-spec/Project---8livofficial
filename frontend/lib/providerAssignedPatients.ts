@@ -140,7 +140,8 @@ export async function loadAssignedProviderPatients(providerId: string, role: Pro
       const assessment = assessmentsByPatientId.get(assignment.patient_id) || {}
       const membershipTier = assessment.membership_tier || assessment.membershipStatus || 'Not selected'
 
-      if (!String(membershipTier).toLowerCase().includes('gold')) return null
+      // All patients assigned to the provider care team are eligible for provider plans and guidance
+      if (assignment.status === 'INACTIVE') return null
 
       const latestProgress = progressByPatientId.get(assignment.patient_id)
       const latestPlan = plansByPatientId.get(assignment.patient_id) || latestByPatient(plans, assignment.patient_id)

@@ -22,6 +22,29 @@ function addOneCalendarMonth(value: string) {
 }
 
 export async function getMembershipValidity(patientId: string): Promise<MembershipValidity> {
+  try {
+    const { data: subscription } = await supabaseAdmin
+      .from('subscriptions')
+      .select('start_date, end_date, status')
+      .eq('patient_id', patientId)
+      .eq('status', 'ACTIVE')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (subscription) {
+      const endTimestamp = new Date(subscription.end_date).getTime()
+      const isActive = Date.now() <= (endTimestamp + 24 * 60 * 60 * 1000)
+      return {
+        active: isActive,
+        startedAt: subscription.start_date,
+        expiresAt: subscription.end_date,
+      }
+    }
+  } catch (subErr) {
+    console.warn('Subscriptions table query notice in getMembershipValidity:', subErr)
+  }
+
   const { data, error } = await supabaseAdmin
     .from('payment_transactions')
     .select('created_at')

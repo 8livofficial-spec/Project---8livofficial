@@ -252,10 +252,16 @@ function AdminDashboardContent() {
   };
 
   // ── Plan Form state ─────────────────────────────────────────────────────
+  const [planId, setPlanId] = useState('');
   const [planName, setPlanName] = useState('');
+  const [planDurationMonths, setPlanDurationMonths] = useState('1');
   const [planPrice, setPlanPrice] = useState('');
   const [planConsultFee, setPlanConsultFee] = useState('499');
   const [planFeatures, setPlanFeatures] = useState('');
+  const [planDescription, setPlanDescription] = useState('');
+  const [planDisplayOrder, setPlanDisplayOrder] = useState('1');
+  const [planValidFrom, setPlanValidFrom] = useState('');
+  const [planValidUntil, setPlanValidUntil] = useState('');
   const [planIsActive, setPlanIsActive] = useState(true);
   const [planDiscountCode, setPlanDiscountCode] = useState('');
   const [planDiscountPercent, setPlanDiscountPercent] = useState('0');
@@ -587,21 +593,74 @@ function AdminDashboardContent() {
     }
   };
 
+  const resetPlanForm = () => {
+    setPlanId('');
+    setPlanName('');
+    setPlanDurationMonths('1');
+    setPlanPrice('');
+    setPlanConsultFee('499');
+    setPlanFeatures('');
+    setPlanDescription('');
+    setPlanDisplayOrder('1');
+    setPlanValidFrom('');
+    setPlanValidUntil('');
+    setPlanIsActive(true);
+    setPlanDiscountCode('');
+    setPlanDiscountPercent('0');
+    setSelectedPlan(null);
+  };
+
+  const handleEditPlan = (p: any) => {
+    setSelectedPlan(p);
+    setPlanId(p.id || '');
+    setPlanName(p.name || '');
+    setPlanDurationMonths(String(p.duration_months || 1));
+    setPlanPrice(String(p.base_price ?? p.price_monthly ?? ''));
+    setPlanConsultFee(String(p.consultation_fee ?? 499));
+    setPlanFeatures(Array.isArray(p.features) ? p.features.join(', ') : (p.features || ''));
+    setPlanDescription(p.description || '');
+    setPlanDisplayOrder(String(p.display_order ?? 1));
+    setPlanValidFrom(p.valid_from ? p.valid_from.split('T')[0] : '');
+    setPlanValidUntil(p.valid_until ? p.valid_until.split('T')[0] : '');
+    setPlanIsActive(p.status ? p.status === 'ACTIVE' : (p.is_active ?? true));
+    setPlanDiscountPercent(String(p.discount_percentage ?? p.discount_percent ?? 0));
+  };
+
+  const handleTogglePlanStatus = async (plan: any) => {
+    const currentActive = plan.status ? plan.status === 'ACTIVE' : (plan.is_active ?? true);
+    const newStatus = currentActive ? 'INACTIVE' : 'ACTIVE';
+    try {
+      const res = await adminFetch('/api/admin/plans', {
+        method: 'PATCH',
+        body: JSON.stringify({ id: plan.id, status: newStatus })
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        alert(errData.error || 'Failed to toggle plan status');
+        return;
+      }
+      await fetchPlans();
+    } catch (err: any) {
+      alert(err.message || 'Error toggling plan status');
+    }
+  };
+
   const savePlan = async (plan: any, updates: Record<string, any>) => {
     if (!adminUser?.id) return;
     const name = updates.name || plan.name;
-    const priceMonthly = updates.priceMonthly ?? plan.price_monthly ?? 0;
+    const priceMonthly = updates.priceMonthly ?? plan.price_monthly ?? updates.basePrice ?? plan.base_price ?? 0;
     const features = updates.features ?? plan.features ?? [];
+    const durationMonths = updates.durationMonths ?? plan.duration_months ?? 1;
     const res = await adminFetch('/api/admin/plans', {
       method: 'POST',
       body: JSON.stringify({
+        id: plan.id,
         name,
-        priceMonthly,
-        consultationFee: updates.consultationFee ?? plan.consultation_fee ?? 499,
+        durationMonths,
+        basePrice: priceMonthly,
         features,
-        isActive: updates.isActive ?? plan.is_active ?? true,
-        discountCode: updates.discountCode ?? plan.discount_code,
-        discountPercent: updates.discountPercent ?? plan.discount_percent ?? 0,
+        status: (updates.isActive ?? plan.is_active ?? true) ? 'ACTIVE' : 'INACTIVE',
+        discountPercentage: updates.discountPercent ?? plan.discount_percentage ?? 0,
       }),
     });
     const data = await res.json();
@@ -654,16 +713,6 @@ function AdminDashboardContent() {
     } finally {
       setStaffDeleting(false);
     }
-  };
-
-  const resetPlanForm = () => {
-    setPlanName('');
-    setPlanPrice('');
-    setPlanConsultFee('499');
-    setPlanFeatures('');
-    setPlanIsActive(true);
-    setPlanDiscountCode('');
-    setPlanDiscountPercent('0');
   };
 
   useEffect(() => {
@@ -1202,8 +1251,8 @@ function AdminDashboardContent() {
     consultations: consultationRows.filter(c => c.booking_date === day).length,
   }));
   const membershipDistributionData = [
-    { name: 'Gold', value: goldMembers, color: '#C4622D' },
-    { name: 'Silver', value: silverMembers, color: '#1A1F36' },
+    { name: 'Multi-Cycle Programs', value: goldMembers, color: '#00A884' },
+    { name: 'Single Cycle Starter', value: silverMembers, color: '#1A1F36' },
     { name: 'Not Selected', value: Math.max(assessments.length - goldMembers - silverMembers, 0), color: '#D8E6DE' },
   ];
   const doctorWorkloadData = doctors
@@ -1407,7 +1456,7 @@ function AdminDashboardContent() {
     )
   ).length;
 
-  const membershipMembers = assessments.filter(patient => ['gold', 'silver'].some(plan => getPatientMembership(patient).toLowerCase().includes(plan)));
+  const membershipMembers = assessments.filter(patient => Boolean(patient.membership_tier || patient.plan));
   const newMembershipsThisMonth = membershipMembers.filter(patient => patient.created_at && new Date(patient.created_at).getTime() >= new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime()).length;
   const conversionRate = displayTotalPatients ? Math.round((membershipMembers.length / displayTotalPatients) * 100) : 0;
 
@@ -1432,12 +1481,8 @@ function AdminDashboardContent() {
     {
       title: 'Prescription Fulfilment',
       items: [
-        { id: 'prescription-fulfilment', label: 'New Prescriptions', icon: FileText },
-        { id: 'pharmacy-orders', label: 'Pending Apollo Orders', icon: Pill },
-        { id: 'pharmacy-orders', label: 'Active Medicine Orders', icon: Package },
-        { id: 'pharmacy-orders', label: 'Delivered Orders', icon: CheckCircle2 },
-        { id: 'pharmacy-orders', label: 'Cancelled Orders', icon: XCircle },
-        { id: 'pharmacy-orders', label: 'Fulfilment Exceptions', icon: AlertCircle },
+        { id: 'prescription-fulfilment', label: 'Prescriptions', icon: FileText },
+        { id: 'pharmacy-orders', label: 'Pharmacy Orders', icon: Package },
       ],
     },
     {
@@ -1502,7 +1547,7 @@ function AdminDashboardContent() {
     { title: 'Revenue Report', metric: `Rs ${Number(monthlyRevenue ?? 0).toLocaleString('en-IN')}`, detail: 'Collections, refunds, plan revenue, and platform earnings.', icon: Wallet, tone: 'blue' },
     { title: 'Consultation Report', metric: consultationRows.length || todaysConsultations, detail: 'Scheduled, completed, missed, cancelled, and active consultations.', icon: Calendar, tone: 'orange' },
     { title: 'Doctor Performance', metric: displayTotalDoctors, detail: 'Assigned cases, completion rate, no-shows, and payout readiness.', icon: Stethoscope, tone: 'green' },
-    { title: 'Membership Report', metric: goldMembers + silverMembers, detail: 'Gold, Silver, conversion rate, and membership payment health.', icon: BadgeCheck, tone: 'amber' },
+    { title: 'Care Programs Report', metric: goldMembers + silverMembers, detail: 'Active care programs, conversion rate, and subscription health.', icon: BadgeCheck, tone: 'amber' },
     { title: 'Patient Growth', metric: displayTotalPatients, detail: 'New patients, eligibility funnel, and active patient progression.', icon: TrendingUp, tone: 'red' },
   ];
   const notificationCards = [
@@ -1541,8 +1586,8 @@ function AdminDashboardContent() {
     { label: 'Monthly Revenue', value: `₹${Number(monthlyRevenue ?? 0).toLocaleString('en-IN')}`, icon: Wallet, tone: 'blue' },
     { label: 'Platform Earnings', value: `₹${Number(platformEarnings ?? 0).toLocaleString('en-IN')}`, icon: TrendingUp, tone: 'green' },
     { label: 'Pending Payouts', value: `₹${Number(pendingPayouts ?? 0).toLocaleString('en-IN')}`, icon: DollarSign, tone: 'amber' },
-    { label: 'Gold Members', value: goldMembers, icon: BadgeCheck, tone: 'orange' },
-    { label: 'Silver Members', value: silverMembers, icon: ShieldCheck, tone: 'blue' },
+    { label: 'Multi-Cycle Members', value: goldMembers, icon: BadgeCheck, tone: 'orange' },
+    { label: 'Starter Members', value: silverMembers, icon: ShieldCheck, tone: 'blue' },
   ];
   const toneClasses: Record<string, string> = {
     orange: 'bg-[#C4622D]/10 text-[#C4622D]',
@@ -1847,7 +1892,7 @@ function AdminDashboardContent() {
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-5 lg:min-w-[900px]">
                 <input value={managementSearch} onChange={e => handleSearchChange(e.target.value)} placeholder="Search patients..." className="sm:col-span-2 rounded-xl border border-[#1A1F36]/10 bg-white px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#C4622D]/20" />
                 <select value={eligibilityFilter} onChange={e => { setEligibilityFilter(e.target.value); setPatientsPage(1); }} className="rounded-xl border border-[#1A1F36]/10 bg-white px-3 py-3 text-sm font-bold"><option value="all">Eligibility</option><option value="true">Eligible</option><option value="false">Not Eligible</option></select>
-                <select value={membershipFilter} onChange={e => { setMembershipFilter(e.target.value); setPatientsPage(1); }} className="rounded-xl border border-[#1A1F36]/10 bg-white px-3 py-3 text-sm font-bold"><option value="all">Membership</option><option value="gold">Gold</option><option value="silver">Silver</option><option value="not selected">Not Selected</option></select>
+                <select value={membershipFilter} onChange={e => { setMembershipFilter(e.target.value); setPatientsPage(1); }} className="rounded-xl border border-[#1A1F36]/10 bg-white px-3 py-3 text-sm font-bold"><option value="all">Program Status</option><option value="active">Enrolled Program</option><option value="not selected">Not Selected</option></select>
                 <select value={paymentFilter} onChange={e => { setPaymentFilter(e.target.value); setPatientsPage(1); }} className="rounded-xl border border-[#1A1F36]/10 bg-white px-3 py-3 text-sm font-bold"><option value="all">Payment</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select>
               </div>
             </div>
@@ -2877,53 +2922,7 @@ function AdminDashboardContent() {
               </div>
             )}
           </motion.div>
-        ) : activeView === 'membership-plans' ? (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-6 md:p-8 max-w-[1500px] mx-auto space-y-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-              <div><p className="text-xs font-black uppercase tracking-[0.18em] text-[#C4622D]">Membership Business</p><h2 className="text-3xl font-black text-[#1A1F36]">Membership Plans</h2><p className="mt-2 text-sm font-semibold text-[#8896A4]">Create, edit, activate, deactivate, and manage Gold and Silver plans.</p></div>
-              <div className="flex flex-wrap gap-2"><button onClick={async () => { const plan = plans[0]; if (!plan) return alert('No plan available.'); const code = window.prompt('Discount code'); if (!code) return; const percent = window.prompt('Discount percent', '10') || '0'; try { await savePlan(plan, { discountCode: code, discountPercent: percent }); alert('Discount added.'); } catch (err: any) { alert(err.message); } }} className="rounded-xl bg-[#1A1F36] px-5 py-3 text-xs font-black uppercase tracking-wider text-white">Add Discount</button><a href="/api/admin/reports?format=csv&type=memberships" className="inline-flex items-center gap-2 rounded-xl border border-[#1A1F36]/10 bg-white px-5 py-3 text-xs font-black uppercase tracking-wider text-[#1A1F36]"><ArrowDownToLine className="h-4 w-4" /> Export Members</a></div>
-            </div>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-6">
-              {[
-                { label: 'Active Plans', value: plans.filter(plan => plan.is_active !== false).length, icon: BadgeCheck, tone: 'blue' },
-                { label: 'Gold Members', value: goldMembers, icon: ShieldCheck, tone: 'orange' },
-                { label: 'Silver Members', value: silverMembers, icon: Users, tone: 'blue' },
-                { label: 'Membership Revenue', value: `Rs ${Number(membershipRevenue ?? 0).toLocaleString('en-IN')}`, icon: Wallet, tone: 'green' },
-                { label: 'New This Month', value: newMembershipsThisMonth, icon: Calendar, tone: 'amber' },
-                { label: 'Conversion Rate', value: `${conversionRate}%`, icon: TrendingUp, tone: 'red' },
-              ].map(card => {
-                const Icon = card.icon;
-                return <div key={card.label} className="rounded-[20px] border border-[#1A1F36]/8 bg-white p-5 shadow-[0_12px_32px_rgba(26,31,54,0.07)]"><div className={`mb-4 inline-flex rounded-2xl p-3 ${toneClasses[card.tone]}`}><Icon className="h-5 w-5" /></div><p className="text-xs font-black uppercase tracking-widest text-[#8896A4]">{card.label}</p><p className="mt-2 text-2xl font-black text-[#1A1F36]">{card.value}</p></div>;
-              })}
-            </div>
-            <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-              {['Silver', 'Gold'].map(planName => {
-                const plan = plans.find(item => String(item.name || '').toLowerCase().includes(planName.toLowerCase())) || { name: `${planName} Plan`, price_monthly: planName === 'Gold' ? 4999 : 2999, is_active: true, features: planName === 'Gold' ? ['Doctor consultation', 'Medication support', 'Dietitian support', 'Nutritionist support', 'Fitness coach support'] : ['Doctor consultation', 'Medication support'] };
-                const activeMembers = planName === 'Gold' ? goldMembers : silverMembers;
-                return (
-                  <div key={planName} className="rounded-[20px] border border-[#1A1F36]/8 bg-white p-6 shadow-[0_12px_32px_rgba(26,31,54,0.07)]">
-                    <div className="flex items-start justify-between gap-4">
-                      <div><p className="text-xs font-black uppercase tracking-widest text-[#C4622D]">{planName} Plan</p><h3 className="mt-1 text-3xl font-black text-[#1A1F36]">Rs {Number(plan.price_monthly || 0).toLocaleString('en-IN')}</h3><p className="mt-1 text-sm font-bold text-[#8896A4]">Monthly duration</p></div>
-                      <span className={`rounded-full px-3 py-1 text-xs font-black ${plan.is_active !== false ? 'bg-[#5C7A6B]/12 text-[#5C7A6B]' : 'bg-[#D96A6A]/12 text-[#B94D4D]'}`}>{plan.is_active !== false ? 'Active' : 'Inactive'}</span>
-                    </div>
-                    <div className="mt-5 space-y-2">{(plan.features || []).map((feature: string) => <div key={feature} className="flex items-center gap-2 rounded-xl bg-[#F5F0EB]/70 px-4 py-3 text-sm font-bold text-[#40516A]"><CheckCircle2 className="h-4 w-4 text-[#5C7A6B]" />{feature}</div>)}</div>
-                    <div className="mt-5 grid grid-cols-2 gap-3 text-sm font-bold"><div className="rounded-2xl bg-[#1A1F36]/8 p-4">Active Members<br /><span className="text-2xl font-black">{activeMembers}</span></div><div className="rounded-2xl bg-[#D89A3D]/12 p-4">Discount<br />{plan.discount_code || 'None'}</div></div>
-                    <div className="mt-5 flex flex-wrap gap-2"><button onClick={async () => { const price = window.prompt(`New monthly price for ${plan.name}`, String(plan.price_monthly || '')); if (!price) return; try { await savePlan(plan, { priceMonthly: price }); alert('Plan price updated.'); } catch (err: any) { alert(err.message); } }} className="rounded-xl bg-[#1A1F36] px-4 py-3 text-xs font-black uppercase tracking-wider text-white">Edit Plan</button><button onClick={async () => { const features = window.prompt('Comma-separated features', (plan.features || []).join(', ')); if (features === null) return; try { await savePlan(plan, { features: features.split(',').map((item: string) => item.trim()).filter(Boolean) }); alert('Plan features updated.'); } catch (err: any) { alert(err.message); } }} className="rounded-xl border border-[#1A1F36]/10 px-4 py-3 text-xs font-black uppercase tracking-wider">Edit Features</button><button onClick={() => setMembershipFilter(planName.toLowerCase())} className="rounded-xl border border-[#1A1F36]/10 px-4 py-3 text-xs font-black uppercase tracking-wider">View Members</button><button onClick={async () => { try { await savePlan(plan, { isActive: plan.is_active === false }); alert('Plan status updated.'); } catch (err: any) { alert(err.message); } }} className="rounded-xl bg-[#D96A6A]/12 px-4 py-3 text-xs font-black uppercase tracking-wider text-[#B94D4D]">{plan.is_active !== false ? 'Deactivate' : 'Activate'}</button></div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="overflow-hidden rounded-[20px] border border-[#1A1F36]/8 bg-white shadow-[0_12px_32px_rgba(26,31,54,0.07)]">
-              <div className="grid grid-cols-[1.2fr_0.8fr_0.9fr_0.9fr_0.9fr_1.1fr_0.7fr] gap-4 bg-[#F5F0EB] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-[#8896A4]"><span>Patient Name</span><span>Plan Type</span><span>Start Date</span><span>Expiry Date</span><span>Payment Status</span><span>Assigned Care Team</span><span>Status</span></div>
-              <div className="divide-y divide-[#1A1F36]/8">
-                {membershipMembers.length === 0 ? <div className="p-10 text-center text-sm font-bold text-[#8896A4]"><p>No membership members found.</p><button onClick={() => openAdminTab('patients')} className="mt-4 rounded-xl bg-[#1A1F36] px-5 py-3 text-xs font-black uppercase tracking-wider text-white">Open Patients</button></div> : membershipMembers.map(patient => (
-                  <div key={patient.id} className="grid grid-cols-[1.2fr_0.8fr_0.9fr_0.9fr_0.9fr_1.1fr_0.7fr] gap-4 px-5 py-4 text-sm font-bold text-[#40516A]">
-                    <span className="font-black text-[#1A1F36]">{getPatientName(patient)}</span><span>{getPatientMembership(patient)}</span><span>{patient.created_at ? new Date(patient.created_at).toLocaleDateString('en-IN') : 'N/A'}</span><span>{patient.created_at ? new Date(new Date(patient.created_at).setFullYear(new Date(patient.created_at).getFullYear() + 1)).toLocaleDateString('en-IN') : 'N/A'}</span><span>{patient.consultation_fee_paid ? 'Paid' : 'Pending'}</span><span>Doctor + care team</span><span>Active</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </motion.div>
+
         ) : false ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-6 md:p-8 max-w-[1500px] mx-auto space-y-5">
             <div><p className="text-xs font-black uppercase tracking-[0.18em] text-[#C4622D]">{adminTab === 'provider-wallets' ? 'Provider Wallets' : 'Payments'}</p><h2 className="text-3xl font-black text-[#1A1F36]">{adminTab === 'provider-wallets' ? 'Provider Wallets' : 'Payment Management'}</h2></div>
@@ -2939,13 +2938,7 @@ function AdminDashboardContent() {
               </div>
             )}
           </motion.div>
-        ) : false ? (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-6 md:p-8 max-w-[1500px] mx-auto space-y-5">
-            <div><p className="text-xs font-black uppercase tracking-[0.18em] text-[#C4622D]">Memberships</p><h2 className="text-3xl font-black text-[#1A1F36]">Gold and Silver Plans</h2></div>
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-              {plans.map(plan => <div key={plan.id || plan.name} className="rounded-[20px] border border-[#1A1F36]/8 bg-white p-6 shadow-[0_12px_32px_rgba(26,31,54,0.07)]"><div className="flex items-start justify-between"><div><h3 className="text-2xl font-black text-[#1A1F36]">{plan.name}</h3><p className="mt-1 text-sm font-bold text-[#8896A4]">Pricing, features, and discounts</p></div><p className="text-3xl font-black text-[#C4622D]">₹{Number(plan.price_monthly || 0).toLocaleString('en-IN')}</p></div><div className="mt-5 flex flex-wrap gap-2">{(plan.features || []).map((feature:string) => <span key={feature} className="rounded-full bg-[#F5F0EB] px-3 py-1 text-xs font-bold text-[#40516A]">{feature}</span>)}</div><div className="mt-5 grid grid-cols-2 gap-3 text-sm font-bold"><div className="rounded-2xl bg-[#1A1F36]/8 p-4">Consultation Fee<br />₹{plan.consultation_fee || 499}</div><div className="rounded-2xl bg-[#D89A3D]/12 p-4">Discount<br />{plan.discount_code || 'None'} {plan.discount_percent ? `(${plan.discount_percent}%)` : ''}</div></div></div>)}
-            </div>
-          </motion.div>
+
         ) : false && activeView === 'connections' ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="p-8 md:p-12 max-w-5xl mx-auto">
             {selectedConnection ? (
@@ -3523,17 +3516,152 @@ function AdminDashboardContent() {
               </div>
             )}
           </motion.div>
-        ) : Boolean(false) ? (
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="p-8 md:p-12 max-w-4xl mx-auto">
+        ) : activeView === 'membership-plans' ? (
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="p-8 md:p-12 max-w-6xl mx-auto space-y-10">
+            {/* Header */}
+            <div>
+              <span className="text-xs font-black text-indigo-600 uppercase tracking-widest">Admin Configuration</span>
+              <h2 className="text-3xl font-black text-slate-900 tracking-tight mt-1 flex items-center gap-3">
+                <BadgeCheck className="w-8 h-8 text-indigo-600 bg-indigo-50 p-1.5 rounded-xl"/> 
+                Treatment Plans & Pricing Engine
+              </h2>
+              <p className="text-slate-500 font-semibold text-sm mt-1">
+                Database-driven treatment plans, arbitrary durations (1, 2, 3, 6, 10, 12+ months), authoritative pricing, discounts, and availability.
+              </p>
+            </div>
+
+            {/* Overview KPI Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
+                <p className="text-xs font-black text-slate-400 uppercase tracking-wider">Total Programs</p>
+                <p className="text-3xl font-black text-slate-800 mt-2">{plans.length}</p>
+                <p className="text-xs text-slate-400 font-medium mt-1">Configured in database</p>
+              </div>
+              <div className="bg-emerald-50/60 p-6 rounded-3xl border border-emerald-100 shadow-sm">
+                <p className="text-xs font-black text-emerald-600 uppercase tracking-wider">Active Plans</p>
+                <p className="text-3xl font-black text-emerald-700 mt-2">
+                  {plans.filter((p: any) => p.status === 'ACTIVE' || (p.is_active && !p.status)).length}
+                </p>
+                <p className="text-xs text-emerald-600/80 font-medium mt-1">Visible & purchasable by patients</p>
+              </div>
+              <div className="bg-amber-50/60 p-6 rounded-3xl border border-amber-100 shadow-sm">
+                <p className="text-xs font-black text-amber-600 uppercase tracking-wider">Inactive / Draft Plans</p>
+                <p className="text-3xl font-black text-amber-700 mt-2">
+                  {plans.filter((p: any) => p.status === 'INACTIVE' || p.status === 'ARCHIVED' || p.is_active === false).length}
+                </p>
+                <p className="text-xs text-amber-600/80 font-medium mt-1">Hidden from patient checkout</p>
+              </div>
+            </div>
+
+            {/* Configured Treatment Plans Table */}
+            <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden">
+              <div className="p-8 border-b border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                <div>
+                  <h3 className="text-xl font-black text-slate-900">Configured Treatment Programs</h3>
+                  <p className="text-xs text-slate-400 font-semibold mt-0.5">Admin-controlled database records currently served via authoritative pricing API</p>
+                </div>
+                <button
+                  onClick={() => { resetPlanForm(); setSelectedPlan(null); }}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 px-5 rounded-2xl text-xs transition-all shadow-md flex items-center gap-2"
+                >
+                  + Create New Plan
+                </button>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-100 text-[11px] font-black text-slate-400 uppercase tracking-wider">
+                      <th className="py-4 px-6">Status</th>
+                      <th className="py-4 px-6">Program Name</th>
+                      <th className="py-4 px-6">Duration</th>
+                      <th className="py-4 px-6">Base Price</th>
+                      <th className="py-4 px-6">Discount</th>
+                      <th className="py-4 px-6">Final Price</th>
+                      <th className="py-4 px-6">Order</th>
+                      <th className="py-4 px-6 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 text-sm">
+                    {plans.map((p: any) => {
+                      const isActive = p.status ? p.status === 'ACTIVE' : (p.is_active ?? true);
+                      const duration = p.duration_months || 1;
+                      const base = p.base_price ?? (p.price_monthly ? p.price_monthly * duration : 0);
+                      const discountPct = p.discount_percentage ?? p.discount_percent ?? 0;
+                      const discountAmt = p.discount_amount ?? Math.round((base * discountPct) / 100);
+                      const finalPr = p.final_price ?? (base - discountAmt);
+
+                      return (
+                        <tr key={p.id || p.name} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="py-4 px-6">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                              isActive ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
+                            }`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+                              {isActive ? 'Active' : 'Inactive'}
+                            </span>
+                          </td>
+                          <td className="py-4 px-6">
+                            <p className="font-bold text-slate-900">{p.name}</p>
+                            {p.description && <p className="text-xs text-slate-400 truncate max-w-xs">{p.description}</p>}
+                          </td>
+                          <td className="py-4 px-6 font-bold text-indigo-600">
+                            {duration} {duration === 1 ? 'Month' : 'Months'}
+                          </td>
+                          <td className="py-4 px-6 font-bold text-slate-700">
+                            ₹{Number(base).toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-4 px-6">
+                            {discountPct > 0 ? (
+                              <span className="font-bold text-emerald-600">
+                                {discountPct}% (-₹{Number(discountAmt).toLocaleString('en-IN')})
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-medium">0%</span>
+                            )}
+                          </td>
+                          <td className="py-4 px-6 font-black text-slate-900">
+                            ₹{Number(finalPr).toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-4 px-6 text-xs font-bold text-slate-400">
+                            #{p.display_order ?? 0}
+                          </td>
+                          <td className="py-4 px-6 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                onClick={() => handleEditPlan(p)}
+                                className="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold px-3 py-1.5 rounded-xl text-xs transition"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                onClick={() => handleTogglePlanStatus(p)}
+                                className={`font-bold px-3 py-1.5 rounded-xl text-xs transition ${
+                                  isActive ? 'bg-rose-50 text-rose-600 hover:bg-rose-100' : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                                }`}
+                              >
+                                {isActive ? 'Deactivate' : 'Activate'}
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Plan Configuration / Edit Form */}
             <div className="bg-white/80 backdrop-blur-xl p-10 rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
               <div className="flex justify-between items-center mb-8">
                 <div>
-                  <h2 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-                    <Apple className="w-8 h-8 text-indigo-500 bg-indigo-50 p-1.5 rounded-xl"/> 
-                    {selectedPlan ? `Configure: ${selectedPlan.name}` : 'Create Membership Plan'}
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tight flex items-center gap-3">
+                    <ShieldCheck className="w-7 h-7 text-indigo-500 bg-indigo-50 p-1.5 rounded-xl"/> 
+                    {selectedPlan ? `Edit Program: ${selectedPlan.name}` : 'Create New Treatment Program'}
                   </h2>
                   <p className="text-slate-500 font-semibold text-sm mt-1">
-                    {selectedPlan ? 'Update pricing tiers, consultation fee, promotional discount codes, and features.' : 'Initialize a new membership subscription tier.'}
+                    Configure arbitrary duration in months, base price, and discount percentage. Discount amounts and final prices are derived server-side.
                   </p>
                 </div>
                 {selectedPlan && (
@@ -3541,17 +3669,51 @@ function AdminDashboardContent() {
                     onClick={() => { setSelectedPlan(null); resetPlanForm(); }}
                     className="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2 px-4 rounded-xl text-xs transition-all"
                   >
-                    Create Instead
+                    + Create New Instead
                   </button>
                 )}
               </div>
+
+              {/* Dynamic Live Calculation Preview Banner */}
+              {(() => {
+                const parsedBase = parseFloat(planPrice) || 0;
+                const parsedPct = Math.min(100, Math.max(0, parseFloat(planDiscountPercent) || 0));
+                const parsedDur = Math.max(1, parseInt(planDurationMonths) || 1);
+                const calcDisc = Math.round((parsedBase * parsedPct) / 100);
+                const calcFinal = Math.max(0, parsedBase - calcDisc);
+                const calcMonthly = Math.round(calcFinal / parsedDur);
+
+                return (
+                  <div className="bg-gradient-to-r from-indigo-50/80 to-teal-50/80 border border-indigo-100 p-6 rounded-2xl mb-8">
+                    <p className="text-xs font-black text-indigo-900 uppercase tracking-widest mb-3">Live Server Calculation Preview</p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-left">
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Base Program Price</p>
+                        <p className="text-lg font-black text-slate-800">₹{parsedBase.toLocaleString('en-IN')}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Discount ({parsedPct}%)</p>
+                        <p className="text-lg font-black text-emerald-600">-₹{calcDisc.toLocaleString('en-IN')}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Final Payable Price</p>
+                        <p className="text-xl font-black text-indigo-600">₹{calcFinal.toLocaleString('en-IN')}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Monthly Equivalent</p>
+                        <p className="text-lg font-bold text-slate-700">₹{calcMonthly.toLocaleString('en-IN')}/mo</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               <form
                 onSubmit={async (e) => {
                   e.preventDefault();
                   if (!adminUser) return;
-                  if (!planName || !planPrice) {
-                    alert('Please fill in Plan Name and Monthly Price.');
+                  if (!planName || !planPrice || !planDurationMonths) {
+                    alert('Please fill in Plan Name, Duration (Months), and Base Price.');
                     return;
                   }
                   setPlanSubmitting(true);
@@ -3560,24 +3722,28 @@ function AdminDashboardContent() {
                     const res = await adminFetch('/api/admin/plans', {
                       method: 'POST',
                       body: JSON.stringify({
+                        id: planId || undefined,
                         name: planName,
-                        priceMonthly: parseFloat(planPrice),
-                        consultationFee: parseFloat(planConsultFee || '499'),
+                        durationMonths: parseInt(planDurationMonths),
+                        basePrice: parseFloat(planPrice),
+                        discountPercentage: parseFloat(planDiscountPercent || '0'),
+                        description: planDescription,
+                        displayOrder: parseInt(planDisplayOrder || '1'),
                         features: parsedFeatures,
-                        isActive: planIsActive,
-                        discountCode: planDiscountCode || null,
-                        discountPercent: parseInt(planDiscountPercent || '0')
+                        status: planIsActive ? 'ACTIVE' : 'INACTIVE',
+                        validFrom: planValidFrom ? new Date(planValidFrom).toISOString() : null,
+                        validUntil: planValidUntil ? new Date(planValidUntil).toISOString() : null,
                       })
                     });
 
                     if (res.ok) {
-                      alert('Membership plan saved successfully! ✅');
+                      alert('Treatment program configuration saved successfully! ✅');
                       resetPlanForm();
                       setSelectedPlan(null);
                       await fetchPlans();
                     } else {
                       const data = await res.json();
-                      alert(data.error || 'Failed to save plan.');
+                      alert(data.error || 'Failed to save treatment program.');
                     }
                   } catch (err: any) {
                     alert('Error: ' + err.message);
@@ -3587,7 +3753,7 @@ function AdminDashboardContent() {
                 }}
                 className="space-y-6"
               >
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-2">
                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Plan Name *</label>
                     <input
@@ -3595,83 +3761,115 @@ function AdminDashboardContent() {
                       required
                       value={planName}
                       onChange={(e) => setPlanName(e.target.value)}
-                      placeholder="Silver Plan / Gold Plan"
+                      placeholder="e.g. 2 Month Treatment Program"
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Monthly Subscription Price (INR) *</label>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Duration in Months *</label>
                     <input
                       type="number"
                       required
-                      value={planPrice}
-                      onChange={(e) => setPlanPrice(e.target.value)}
-                      placeholder="999"
+                      min="1"
+                      value={planDurationMonths}
+                      onChange={(e) => setPlanDurationMonths(e.target.value)}
+                      placeholder="e.g. 1, 2, 3, 6, 10, 12"
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                     />
+                    <p className="text-[10px] text-slate-400 font-semibold">Provisions exactly this many monthly treatment cycles upon subscription.</p>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Consultation Fee (INR)</label>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Base Program Price (INR) *</label>
                     <input
                       type="number"
-                      value={planConsultFee}
-                      onChange={(e) => setPlanConsultFee(e.target.value)}
-                      placeholder="499"
+                      required
+                      min="0"
+                      value={planPrice}
+                      onChange={(e) => setPlanPrice(e.target.value)}
+                      placeholder="e.g. 3998"
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                     />
-                  </div>
-                  <div className="flex items-center gap-3 pt-6 h-full">
-                    <input
-                      id="planIsActive"
-                      type="checkbox"
-                      checked={planIsActive}
-                      onChange={(e) => setPlanIsActive(e.target.checked)}
-                      className="w-5 h-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
-                    />
-                    <label htmlFor="planIsActive" className="text-sm font-bold text-slate-700 cursor-pointer">
-                      Plan is Active (Visible to members during checkout)
-                    </label>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Discount Code (Promo Code)</label>
-                    <input
-                      type="text"
-                      value={planDiscountCode}
-                      onChange={(e) => setPlanDiscountCode(e.target.value)}
-                      placeholder="SAVE20"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Discount Percent (0-100)</label>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Discount Percentage (0-100%)</label>
                     <input
                       type="number"
                       min="0"
                       max="100"
                       value={planDiscountPercent}
                       onChange={(e) => setPlanDiscountPercent(e.target.value)}
-                      placeholder="20"
+                      placeholder="e.g. 10"
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                     />
                   </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Display Order</label>
+                    <input
+                      type="number"
+                      value={planDisplayOrder}
+                      onChange={(e) => setPlanDisplayOrder(e.target.value)}
+                      placeholder="1"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                  <div className="flex items-center gap-3 pt-6 h-full">
+                    <input
+                      id="planIsActiveCheckbox"
+                      type="checkbox"
+                      checked={planIsActive}
+                      onChange={(e) => setPlanIsActive(e.target.checked)}
+                      className="w-5 h-5 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                    />
+                    <label htmlFor="planIsActiveCheckbox" className="text-sm font-bold text-slate-700 cursor-pointer">
+                      Plan is Active (Visible during checkout)
+                    </label>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Description</label>
+                  <input
+                    type="text"
+                    value={planDescription}
+                    onChange={(e) => setPlanDescription(e.target.value)}
+                    placeholder="e.g. 2 monthly treatment cycles with personal nutrition and doctor check-ins."
+                    className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                  />
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Plan Features (comma-separated)</label>
                   <textarea
-                    rows={4}
+                    rows={3}
                     value={planFeatures}
                     onChange={(e) => setPlanFeatures(e.target.value)}
-                    placeholder="GLP-1 Prescriptions, 1:1 Video Consultations, Pharmacy Delivery, priority chat support"
+                    placeholder="Doctor consultations included, Free follow-ups, Dietary guidance, Pharmacy coordination"
                     className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                   />
-                  <p className="text-[10px] text-slate-400 font-semibold">Separate features with commas (e.g. Feature A, Feature B, Feature C)</p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Valid From (Optional)</label>
+                    <input
+                      type="date"
+                      value={planValidFrom}
+                      onChange={(e) => setPlanValidFrom(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Valid Until (Optional)</label>
+                    <input
+                      type="date"
+                      value={planValidUntil}
+                      onChange={(e) => setPlanValidUntil(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
                 </div>
 
                 <div className="pt-4">
@@ -3680,7 +3878,7 @@ function AdminDashboardContent() {
                     disabled={planSubmitting}
                     className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black py-4 px-6 rounded-2xl transition-all shadow-lg hover:-translate-y-0.5 active:scale-95 text-sm flex items-center justify-center gap-2"
                   >
-                    {planSubmitting ? 'Saving Configuration...' : selectedPlan ? 'Update Membership Plan' : 'Save Plan Configuration'}
+                    {planSubmitting ? 'Saving Configuration...' : selectedPlan ? 'Update Treatment Program' : 'Save New Treatment Program'}
                   </button>
                 </div>
               </form>
@@ -3869,10 +4067,10 @@ function AdminDashboardContent() {
                 </div>
               </div>
               <div className="rounded-[20px] border border-[#1A1F36]/8 bg-white p-6 shadow-[0_12px_32px_rgba(26,31,54,0.07)]">
-                <h3 className="text-sm font-black uppercase tracking-widest text-[#1A1F36]">Membership Mix</h3>
+                <h3 className="text-sm font-black uppercase tracking-widest text-[#1A1F36]">Program Mix</h3>
                 <div className="mt-5 grid grid-cols-2 gap-3">
-                  <div className="rounded-2xl bg-[#C4622D]/10 p-4 text-[#C4622D]"><p className="text-xs font-black uppercase">Gold</p><p className="text-2xl font-black">{goldMembers}</p></div>
-                  <div className="rounded-2xl bg-[#1A1F36]/8 p-4 text-[#1A1F36]"><p className="text-xs font-black uppercase">Silver</p><p className="text-2xl font-black">{silverMembers}</p></div>
+                  <div className="rounded-2xl bg-[#00A884]/10 p-4 text-[#00A884]"><p className="text-xs font-black uppercase">Multi-Cycle</p><p className="text-2xl font-black">{goldMembers}</p></div>
+                  <div className="rounded-2xl bg-[#1A1F36]/8 p-4 text-[#1A1F36]"><p className="text-xs font-black uppercase">Starter</p><p className="text-2xl font-black">{silverMembers}</p></div>
                 </div>
               </div>
               <div className="rounded-[20px] border border-[#1A1F36]/8 bg-white p-6 shadow-[0_12px_32px_rgba(26,31,54,0.07)]">

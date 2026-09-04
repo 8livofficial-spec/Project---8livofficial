@@ -389,7 +389,7 @@ export default function AppointmentDetailsPage() {
                 href="/plans"
                 className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-[#1A1F36] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#C4622D]"
               >
-                Choose Gold or Silver Plan
+                Choose Treatment Program
               </Link>
             </div>
           )}

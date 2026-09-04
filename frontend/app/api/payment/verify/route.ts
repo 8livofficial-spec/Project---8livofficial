@@ -6,6 +6,7 @@ import { assignMembershipCareTeam } from '@/lib/smartAssignmentEngine'
 import { assertPatientOrAssignedProvider } from '@/lib/apiSecurity'
 import { APP_CONFIG } from '@/lib/appConfig'
 import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/authSecurity'
+import { activateSubscriptionForPatient, getAuthoritativeSubscriptionPricing } from '@/lib/subscriptionService'
 import crypto from 'crypto'
 
 export async function POST(request: Request) {
@@ -91,6 +92,14 @@ export async function POST(request: Request) {
       }
     }
 
+    const planId = body?.planId || (metadata as any)?.planId || undefined
+    const rawDuration = Number(body?.durationMonths || (metadata as any)?.durationMonths || (membershipTier ? parseInt(String(membershipTier)) : 1) || 1)
+    const durationMonths = rawDuration > 0 ? rawDuration : 1
+    
+    // Resolve authoritative plan from database
+    const pricing = await getAuthoritativeSubscriptionPricing(planId || durationMonths)
+    const programName = pricing.programName
+
     // 5. Atomic Update based on Payment Type
     if (paymentType === 'consultation') {
       const { error } = await supabaseAdmin
@@ -99,26 +108,33 @@ export async function POST(request: Request) {
         .eq('patient_id', patientId)
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    } else if (paymentType === 'membership') {
+    } else if (paymentType === 'membership' || paymentType === 'combined') {
       const { error } = await supabaseAdmin
         .from('health_assessments')
         .update({
-          membership_tier: membershipTier || 'Gold Plan',
+          consultation_fee_paid: paymentType === 'combined' ? true : undefined,
+          membership_tier: programName,
           shipping_state: shippingState || '',
+          onboarding_completed: true,
+          current_journey_step: 'DASHBOARD',
         })
         .eq('patient_id', patientId)
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    } else if (paymentType === 'combined') {
-      const { error } = await supabaseAdmin
-        .from('health_assessments')
-        .update({
-          consultation_fee_paid: true,
-          membership_tier: membershipTier || 'Silver Plan',
-        })
-        .eq('patient_id', patientId)
 
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      // Activate duration-based subscription and provision monthly treatment cycles
+      await activateSubscriptionForPatient({
+        patientId,
+        planId: pricing.planId,
+        durationMonths: pricing.durationMonths,
+        paymentTransactionId: razorpay_payment_id,
+        paidAmount: amount || pricing.finalPrice,
+        metadata: {
+          ...metadata,
+          planId: pricing.planId,
+          planName: pricing.programName,
+        },
+      })
     }
 
     // 6. Save or Update Transaction as SUCCESS
@@ -130,7 +146,7 @@ export async function POST(request: Request) {
       payment_provider: isMock ? 'razorpay_sim' : 'razorpay',
       transaction_id: razorpay_payment_id,
       status: 'success',
-      membership_tier: membershipTier || null,
+      membership_tier: programName,
       payment_type: paymentType,
       metadata: {
         ...metadata,
@@ -223,7 +239,7 @@ export async function POST(request: Request) {
             email: patientEmail,
             name: patientName,
             patientId,
-            planName: membershipTier || (paymentType === 'combined' ? 'Silver Plan' : 'Gold Plan'),
+            planName: programName,
             amount: amount || 0,
             paymentId: razorpay_payment_id,
           })
@@ -236,7 +252,7 @@ export async function POST(request: Request) {
     // 10. Auto Smart Care Team Assignment for Membership
     if (paymentType === 'membership' || paymentType === 'combined') {
       try {
-        await assignMembershipCareTeam(patientId, membershipTier || (paymentType === 'combined' ? 'Silver Plan' : 'Gold Plan'))
+        await assignMembershipCareTeam(patientId, programName)
       } catch (assignmentError) {
         console.error('Smart care team assignment error in verification:', assignmentError)
         await supabaseAdmin

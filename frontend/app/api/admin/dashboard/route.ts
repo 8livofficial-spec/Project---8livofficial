@@ -102,9 +102,8 @@ export async function GET(request: Request) {
     assessments.forEach((a: any) => {
       if (a.consultation_fee_paid) assessRevenue += 499
       if (a.membership_tier) {
-        const tier = String(a.membership_tier).toLowerCase()
-        if (tier.includes('gold')) assessRevenue += 9999
-        else if (tier.includes('silver')) assessRevenue += 4999
+        const duration = parseInt(String(a.membership_tier)) || 1
+        assessRevenue += duration * 1999
       }
     })
 

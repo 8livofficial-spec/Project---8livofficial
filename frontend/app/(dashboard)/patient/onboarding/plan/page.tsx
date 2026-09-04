@@ -3,102 +3,56 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
-  Check, X, ArrowRight, ShieldCheck, Stethoscope,
-  HeartPulse, Salad, Dumbbell, MessageSquare, FlaskConical,
-  UserCheck, Star, Zap
+  Check, Zap, Star, ShieldCheck, ArrowRight,
+  Dumbbell, Clock, Sparkles
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { authedFetch } from '@/lib/apiClient'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Feature data
-// ─────────────────────────────────────────────────────────────────────────────
-const featureGroups = [
-  {
-    category: 'Medical',
-    icon: Stethoscope,
-    items: [
-      { name: 'Doctor consultations',       silver: '1×/month',          gold: '2×/month (bi-weekly)' },
-      { name: 'GLP-1 prescription',         silver: true,                gold: true },
-      { name: 'Pharmacy doorstep delivery', silver: true,                gold: true },
-      { name: 'Lab report review',          silver: false,               gold: 'Quarterly blood panel' },
-    ],
-  },
-  {
-    category: 'Nutrition & Fitness',
-    icon: Salad,
-    items: [
-      { name: 'Dietitian sessions',         silver: false,               gold: 'Weekly 1:1' },
-      { name: 'Personalised meal plan',     silver: false,               gold: true },
-      { name: 'Fitness trainer check-ins',  silver: false,               gold: 'Bi-weekly' },
-      { name: 'Workout programme',          silver: false,               gold: true },
-    ],
-  },
-  {
-    category: 'Support',
-    icon: MessageSquare,
-    items: [
-      { name: 'Chat support',              silver: 'Basic (48h)',         gold: 'Priority (24h)' },
-      { name: 'Care coordinator',          silver: false,                 gold: true },
-      { name: 'Group wellness meets',      silver: false,                 gold: 'Monthly live session' },
-    ],
-  },
-]
-
-const PLANS = [
-  {
-    id: 'Silver Plan',
-    name: 'Silver',
-    icon: Zap,
-    price: '₹2,999',
-    period: '/mo',
-    tagline: 'Essential medical care',
-    color: '#0D9488',
-    accentBg: 'rgba(13,148,136,0.08)',
-    description: 'Doctor-supervised GLP-1 therapy with pharmacy delivery and personalized dietitian roadmap.',
-  },
-  {
-    id: 'Gold Plan',
-    name: 'Gold',
-    icon: Star,
-    price: '₹4,999',
-    period: '/mo',
-    tagline: 'All-inclusive VIP concierge',
-    color: '#D97706',
-    accentBg: 'rgba(217,119,6,0.08)',
-    recommended: true,
-    description: 'Full medical program plus dedicated 1-on-1 dietitian, personal fitness trainer, and 24/7 priority chat.',
-  },
-]
-
-function Cell({ val, color }: { val: boolean | string; color: string }) {
-  if (val === true)  return <Check  size={17} strokeWidth={2.5} style={{ color }} className="mx-auto" />
-  if (val === false) return <X      size={15} strokeWidth={2}   className="mx-auto text-[#CBD5E0]" />
-  return <span className="text-[11px] font-semibold leading-snug text-center" style={{ color }}>{val}</span>
-}
+const ICONS = [Zap, Clock, Dumbbell, Star, Sparkles]
+const COLORS = ['#0D9488', '#3B82F6', '#6366F1', '#C4622D', '#8B5CF6']
 
 export default function PlanSelectionPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const planParam = searchParams.get('plan')
-  const [selected, setSelected] = useState<string>(() => {
-    if (planParam?.toLowerCase() === 'silver') return 'Silver Plan'
-    return 'Gold Plan'
-  })
+  const durationParam = searchParams.get('duration')
+  const [plans, setPlans] = useState<any[]>([])
+  const [selectedPlanId, setSelectedPlanId] = useState<string>('')
+  const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    if (planParam?.toLowerCase() === 'silver') {
-      setSelected('Silver Plan')
-    } else if (planParam?.toLowerCase() === 'gold') {
-      setSelected('Gold Plan')
-    }
-  }, [planParam])
+    fetch('/api/subscriptions/pricing')
+      .then(res => res.json())
+      .then(data => {
+        const fetched = data.plans || data.tiers || []
+        setPlans(fetched)
+        if (fetched.length > 0) {
+          // If duration query param passed, match it; else pick first or last
+          if (durationParam) {
+            const matched = fetched.find((p: any) => String(p.durationMonths) === durationParam)
+            if (matched) {
+              setSelectedPlanId(matched.id)
+              setLoading(false)
+              return
+            }
+          }
+          // Default to first active plan
+          setSelectedPlanId(fetched[0].id)
+        }
+        setLoading(false)
+      })
+      .catch(err => {
+        console.warn('Error fetching plans:', err)
+        setLoading(false)
+      })
+  }, [durationParam])
 
-  const selectedPlan = PLANS.find(p => p.id === selected)!
+  const selectedPlan = plans.find(p => p.id === selectedPlanId) || plans[0]
 
   const handleContinue = async () => {
+    if (!selectedPlan) return
     setSaving(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
@@ -107,241 +61,158 @@ export default function PlanSelectionPage() {
       const response = await authedFetch('/api/plan', {
         method: 'POST',
         body: JSON.stringify({
-          membershipTier: selected
+          membershipTier: selectedPlan.name,
+          planId: selectedPlan.id,
+          durationMonths: selectedPlan.durationMonths,
         })
       })
 
       const resData = await response.json()
       if (!response.ok) {
-        throw new Error(resData.error || 'Failed to save plan selection.')
+        throw new Error(resData.error || 'Failed to save treatment program selection.')
       }
 
-      router.replace('/membership-payment')
+      router.push('/patient/onboarding/payment')
     } catch (err: any) {
-      alert('Error saving plan: ' + err.message)
+      alert("Error saving program: " + err.message)
+    } finally {
       setSaving(false)
     }
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center">
+        <div className="w-10 h-10 border-4 border-[#0D9488] border-t-transparent rounded-full animate-spin" />
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col lg:flex-row font-sans">
-
-      {/* ═══ LEFT — Dark hero panel ═══════════════════════════════════════════ */}
-      <motion.aside
-        initial={{ opacity: 0, x: -24 }}
-        animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.55 }}
-        className="lg:w-[40%] xl:w-[36%] bg-[#0B1120] relative overflow-hidden flex flex-col justify-between p-8 lg:p-12"
-      >
-        {/* Glow blobs */}
-        <div className="absolute -top-20 -right-20 w-72 h-72 bg-[#0D9488]/15 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-20 w-56 h-56 bg-[#00A884]/15 rounded-full blur-3xl pointer-events-none" />
-
-        {/* Logo */}
-        <div className="relative z-10">
-          <img src="/brand-logo-light.svg" alt="8liv"
-            className="h-9 w-auto object-contain" />
+    <div className="min-h-screen bg-slate-50 py-12 px-4 sm:px-6 lg:px-8 font-sans">
+      <div className="max-w-5xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="text-center space-y-3">
+          <span className="text-[#0D9488] text-xs font-black uppercase tracking-[0.2em] font-sora">
+            Step 1 of 2 — Select Treatment Program
+          </span>
+          <h1 className="text-3xl sm:text-4xl font-extrabold font-sora text-[#0F172A]">
+            Choose your care program duration
+          </h1>
+          <p className="text-sm text-[#475569] max-w-xl mx-auto leading-relaxed">
+            All doctor-led programs include your multi-disciplinary care team (doctor, dietitian, fitness coach), monthly clinical treatment cycles, and included follow-up consultations.
+          </p>
         </div>
 
-        {/* Hero text */}
-        <div className="relative z-10 space-y-6 mt-10 lg:mt-0">
-          <div>
-            <span className="text-[#5EEAD4] text-[10px] font-extrabold uppercase tracking-[0.25em] font-sora">
-              Step 1 of 2 — Choose your protocol
-            </span>
-            <h1 className="mt-4 text-4xl xl:text-5xl font-bold font-sora text-white leading-[1.15]">
-              Your metabolic care<br />
-              <span className="bg-gradient-to-r from-[#00A884] via-[#0D9488] to-[#5EEAD4] bg-clip-text text-transparent">starts today.</span>
-            </h1>
-            <p className="mt-4 text-white/70 text-sm leading-relaxed max-w-xs font-light">
-              Doctor-supervised GLP-1 weight management with dedicated dietitian &amp; trainer support — 100% online.
-            </p>
-          </div>
+        {/* Dynamic Duration Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {plans.map((prog, idx) => {
+            const isSelected = selectedPlanId === prog.id
+            const Icon = ICONS[idx % ICONS.length]
+            const color = COLORS[idx % COLORS.length]
+            const discountPct = Number(prog.discountPercentage || 0)
+            const discountAmt = Number(prog.discountAmount || 0)
 
-          {/* Stats row */}
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { val: '10K+',   label: 'Active members' },
-              { val: '15–20%', label: 'Avg weight loss' },
-              { val: '98%',    label: 'Satisfaction' },
-            ].map(s => (
-              <div key={s.val} className="bg-white/5 border border-white/10 rounded-2xl p-3.5 text-center">
-                <p className="text-white font-extrabold text-base font-sora">{s.val}</p>
-                <p className="text-white/50 text-[10px] font-medium mt-0.5 leading-snug">{s.label}</p>
-              </div>
-            ))}
-          </div>
+            return (
+              <motion.div
+                key={prog.id}
+                whileHover={{ y: -3 }}
+                onClick={() => setSelectedPlanId(prog.id)}
+                className={`relative rounded-3xl p-6 cursor-pointer transition-all border flex flex-col justify-between ${
+                  isSelected
+                    ? 'bg-white border-2 shadow-xl ring-2'
+                    : 'bg-white/80 border-slate-200 hover:border-slate-300 shadow-sm'
+                }`}
+                style={{
+                  borderColor: isSelected ? color : undefined,
+                  boxShadow: isSelected ? `0 12px 30px ${color}15` : undefined,
+                }}
+              >
+                {discountPct > 0 && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#C4622D] px-3 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-sm whitespace-nowrap">
+                    {discountPct}% OFF (Save ₹{discountAmt.toLocaleString('en-IN')})
+                  </div>
+                )}
 
-          {/* Trust signals */}
-          <div className="space-y-3">
-            {[
-              { icon: ShieldCheck, title: 'HIPAA Compliant',    sub: 'Encrypted & secure records' },
-              { icon: Stethoscope, title: 'Licensed Doctors',   sub: 'Board-certified physicians' },
-              { icon: HeartPulse,  title: 'Clinically Proven',  sub: 'GLP-1 metabolic protocol' },
-            ].map(({ icon: Icon, title, sub }) => (
-              <div key={title} className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-white/8 border border-white/10 flex items-center justify-center shrink-0">
-                  <Icon size={16} className="text-[#5EEAD4]" />
-                </div>
                 <div>
-                  <p className="text-white text-xs font-bold font-sora">{title}</p>
-                  <p className="text-white/50 text-[10px] font-medium">{sub}</p>
-                </div>
-              </div>
-            ))}
-          </div>
+                  <div className="flex justify-between items-start mb-4">
+                    <div
+                      className="w-10 h-10 rounded-2xl flex items-center justify-center"
+                      style={{ backgroundColor: `${color}15`, color }}
+                    >
+                      <Icon size={20} />
+                    </div>
+                    <div
+                      className={`w-5 h-5 rounded-full border flex items-center justify-center ${
+                        isSelected ? 'border-transparent' : 'border-slate-300'
+                      }`}
+                      style={{ backgroundColor: isSelected ? color : 'transparent' }}
+                    >
+                      {isSelected && <Check size={12} className="text-white stroke-[3]" />}
+                    </div>
+                  </div>
 
-          {/* Testimonial */}
-          <div className="bg-white/6 border border-white/10 rounded-2xl p-4">
-            <p className="text-white/80 text-xs italic leading-relaxed">
-              "Lost 18 kg in 5 months. My doctor and dietitian adjusted my protocol every step — I never felt alone."
-            </p>
-            <div className="flex items-center gap-2.5 mt-3">
-              <div className="w-7 h-7 rounded-full bg-[#0D9488]/30 flex items-center justify-center text-[10px] font-bold text-[#5EEAD4]">P</div>
-              <div>
-                <p className="text-white text-[11px] font-bold font-sora">Priya M. · Gold Member</p>
-                <p className="text-white/40 text-[9px]">Mumbai · GLP-1 Care</p>
-              </div>
-            </div>
-          </div>
-        </div>
+                  <p className="text-xs font-black uppercase tracking-wider text-[#64748B]">
+                    {prog.durationMonths} {prog.durationMonths === 1 ? 'Month Program' : 'Months Program'}
+                  </p>
+                  <h3 className="text-xl font-bold font-sora text-[#0F172A] mt-1">{prog.name}</h3>
+                  <p className="text-xs font-bold text-[#0D9488] mt-0.5">
+                    {prog.durationMonths} {prog.durationMonths === 1 ? 'Treatment Cycle' : 'Treatment Cycles'}
+                  </p>
 
-        <p className="text-white/30 text-[10px] relative z-10 mt-6 font-sora">© 2026 8liv Health Technologies Pvt. Ltd.</p>
-      </motion.aside>
+                  <div className="mt-4 border-t border-slate-100 pt-3">
+                    <p className="text-2xl font-black font-sora text-[#0F172A]">
+                      ₹{Number(prog.finalPrice).toLocaleString('en-IN')}
+                    </p>
+                    {discountPct > 0 ? (
+                      <p className="text-[11px] font-semibold text-emerald-600 mt-0.5 line-through text-slate-400">
+                        ₹{Number(prog.basePrice).toLocaleString('en-IN')}
+                      </p>
+                    ) : (
+                      <p className="text-[11px] font-semibold text-[#8896A4] mt-0.5">Program fee</p>
+                    )}
+                  </div>
 
-      {/* ═══ RIGHT — Plan chooser ══════════════════════════════════════════════ */}
-      <motion.main
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.45, delay: 0.12 }}
-        className="flex-1 overflow-y-auto p-6 sm:p-8 lg:p-10 xl:p-14 bg-slate-50"
-      >
-        <div className="max-w-2xl mx-auto">
-
-          <div className="mb-7">
-            <h2 className="text-2xl sm:text-3xl font-extrabold font-sora text-[#0F172A]">Choose your membership</h2>
-            <p className="text-[#475569] text-sm mt-1">Select the care protocol that matches your metabolic targets.</p>
-          </div>
-
-          {/* ── Plan toggle cards ── */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-            {PLANS.map((plan) => {
-              const isSelected = selected === plan.id
-              const Icon = plan.icon
-              return (
-                <motion.button
-                  key={plan.id}
-                  onClick={() => setSelected(plan.id)}
-                  whileTap={{ scale: 0.98 }}
-                  className="relative text-left w-full rounded-2xl p-5 border-2 transition-all focus:outline-none cursor-pointer"
-                  style={{
-                    borderColor: isSelected ? plan.color : 'rgba(15,23,42,0.1)',
-                    background: isSelected ? plan.accentBg : 'white',
-                    boxShadow: isSelected ? `0 8px 30px ${plan.color}20` : '0 2px 12px rgba(15,23,42,0.04)',
-                  }}
-                >
-                  {plan.recommended && (
-                    <span className="absolute -top-3 left-4 bg-gradient-to-r from-amber-500 to-amber-600 text-white text-[9px] font-black uppercase tracking-widest px-3 py-1 rounded-full shadow-sm font-sora">
-                      Most Popular
-                    </span>
+                  {prog.description && (
+                    <p className="mt-3 text-xs leading-relaxed text-[#475569]">{prog.description}</p>
                   )}
-
-                  {/* Top row */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: plan.accentBg }}>
-                      <Icon size={18} style={{ color: plan.color }} />
-                    </div>
-                    {/* Radio dot */}
-                    <div className="w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all mt-0.5"
-                      style={isSelected
-                        ? { borderColor: plan.color, background: plan.color }
-                        : { borderColor: '#CBD5E0', background: 'transparent' }}>
-                      {isSelected && <Check size={10} className="text-white" strokeWidth={3} />}
-                    </div>
-                  </div>
-
-                  <p className="font-bold text-lg text-[#1A1F36] font-sora">{plan.name}</p>
-                  <p className="text-xs text-[#8896A4] font-medium mb-3">{plan.tagline}</p>
-
-                  <div className="flex items-end gap-0.5">
-                    <span className="text-3xl font-extrabold font-sora" style={{ color: plan.color }}>{plan.price}</span>
-                    <span className="text-[#8896A4] text-xs mb-1 ml-0.5">{plan.period}</span>
-                  </div>
-
-                  <p className="text-[11px] text-[#8896A4] leading-relaxed mt-2 font-medium">{plan.description}</p>
-                </motion.button>
-              )
-            })}
-          </div>
-
-          {/* ── Feature comparison table ── */}
-          <div className="bg-white rounded-2xl border border-[#1A1F36]/8 shadow-sm overflow-hidden mb-8">
-
-            {/* Header */}
-            <div className="grid grid-cols-[1fr_120px_120px] bg-[#1A1F36] text-white">
-              <div className="px-5 py-4 text-xs font-black uppercase tracking-wider text-white/50">Features</div>
-              {PLANS.map(p => (
-                <div key={p.id}
-                  className="px-3 py-4 text-center text-xs font-black uppercase tracking-wider"
-                  style={{ color: p.id === selected ? p.color : 'rgba(255,255,255,0.45)' }}>
-                  {p.name}
                 </div>
-              ))}
+
+                <div className="mt-6 pt-3 border-t border-slate-100">
+                  <div
+                    className={`w-full py-2.5 rounded-xl text-center text-xs font-bold transition ${
+                      isSelected ? 'text-white' : 'bg-slate-100 text-[#0F172A]'
+                    }`}
+                    style={{ backgroundColor: isSelected ? color : undefined }}
+                  >
+                    {isSelected ? 'Selected' : 'Choose'}
+                  </div>
+                </div>
+              </motion.div>
+            )
+          })}
+        </div>
+
+        {/* Inclusions summary banner */}
+        <div className="rounded-3xl bg-white p-6 border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-5 h-5 text-[#0D9488]" />
+              <h4 className="font-bold font-sora text-sm text-[#0F172A]">All programs include clinical care standard:</h4>
             </div>
-
-            {/* Feature groups */}
-            {featureGroups.map((group, gi) => {
-              const GIcon = group.icon
-              return (
-                <div key={gi}>
-                  {/* Category row */}
-                  <div className="grid grid-cols-[1fr_120px_120px] bg-[#F5F0EB] border-y border-[#1A1F36]/6">
-                    <div className="px-5 py-2.5 flex items-center gap-2">
-                      <GIcon size={12} className="text-[#C4622D]" />
-                      <span className="text-[9px] font-black uppercase tracking-[0.18em] text-[#C4622D]">{group.category}</span>
-                    </div>
-                    <div /><div />
-                  </div>
-
-                  {/* Feature rows */}
-                  {group.items.map((feat, fi) => (
-                    <div key={fi} className="grid grid-cols-[1fr_120px_120px] border-b border-[#1A1F36]/5 last:border-0 hover:bg-[#F5F0EB]/50 transition-colors">
-                      <div className="px-5 py-3.5 text-xs font-medium text-[#1A1F36]">{feat.name}</div>
-                      <div className="px-3 py-3.5 flex items-center justify-center">
-                        <Cell val={feat.silver} color={PLANS[0].color} />
-                      </div>
-                      <div className="px-3 py-3.5 flex items-center justify-center">
-                        <Cell val={feat.gold} color={PLANS[1].color} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )
-            })}
-          </div>
-
-          {/* ── CTA ── */}
-          <div className="space-y-3">
-            <button
-              onClick={handleContinue}
-              disabled={saving}
-              className="w-full py-4 rounded-full font-bold text-sm text-white flex items-center justify-center gap-2 transition-all shadow-lg disabled:opacity-50"
-              style={{
-                background: selectedPlan.color,
-                boxShadow: `0 8px 24px ${selectedPlan.color}35`,
-              }}
-            >
-              {saving
-                ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                : <><span>Continue with {selectedPlan.name} Plan</span><ArrowRight size={16} /></>}
-            </button>
-            <p className="text-center text-[11px] text-[#8896A4] font-medium">
-              No lock-in. Cancel or upgrade anytime from Billing.
+            <p className="text-xs text-[#64748B]">
+              Initial ₹499 doctor review • Free included cycle follow-ups • Partner pharmacy tracking • Full multi-disciplinary care team
             </p>
           </div>
-
+          <button
+            onClick={handleContinue}
+            disabled={saving || !selectedPlan}
+            className="w-full sm:w-auto bg-[#0D9488] hover:bg-[#097A70] text-white font-sora font-bold rounded-2xl py-3.5 px-8 text-sm flex items-center justify-center gap-2 transition shadow-lg shadow-[#0D9488]/20 cursor-pointer disabled:opacity-50"
+          >
+            {saving ? 'Saving...' : 'Continue to Program Activation'} <ArrowRight size={16} />
+          </button>
         </div>
-      </motion.main>
+      </div>
     </div>
   )
 }

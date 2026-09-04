@@ -5,6 +5,7 @@ import { updatePatientJourneyState } from '@/lib/patientJourneyServer'
 import { assignMembershipCareTeam } from '@/lib/smartAssignmentEngine'
 import { assertPatientOrAssignedProvider } from '@/lib/apiSecurity'
 import { APP_CONFIG } from '@/lib/appConfig'
+import { activateSubscriptionForPatient } from '@/lib/subscriptionService'
 
 function generateTxnId(): string {
   return `TXN8LIV${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`
@@ -35,6 +36,10 @@ export async function POST(request: Request) {
 
     const txnId = generateTxnId()
 
+    const rawDuration = Number(body?.durationMonths || (metadata as any)?.durationMonths || (membershipTier ? parseInt(String(membershipTier)) : 1) || 1)
+    const durationMonths = [1, 3, 6, 10].includes(rawDuration) ? rawDuration : 1
+    const programName = `${durationMonths} Month Treatment Program`
+
     if (paymentType === 'consultation') {
       const { error } = await supabaseAdmin
         .from('health_assessments')
@@ -42,26 +47,27 @@ export async function POST(request: Request) {
         .eq('patient_id', patientId)
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    } else if (paymentType === 'membership') {
+    } else if (paymentType === 'membership' || paymentType === 'combined') {
       const { error } = await supabaseAdmin
         .from('health_assessments')
         .update({
-          membership_tier: membershipTier || 'Gold Plan',
+          consultation_fee_paid: paymentType === 'combined' ? true : undefined,
+          membership_tier: programName,
           shipping_state: shippingState || '',
+          onboarding_completed: true,
+          current_journey_step: 'DASHBOARD',
         })
         .eq('patient_id', patientId)
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-    } else if (paymentType === 'combined') {
-      const { error } = await supabaseAdmin
-        .from('health_assessments')
-        .update({
-          consultation_fee_paid: true,
-          membership_tier: membershipTier || 'Silver Plan',
-        })
-        .eq('patient_id', patientId)
 
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      await activateSubscriptionForPatient({
+        patientId,
+        durationMonths,
+        paymentTransactionId: txnId,
+        paidAmount: amount || 0,
+        metadata,
+      })
     }
 
     const { error: txnError } = await supabaseAdmin
@@ -74,7 +80,7 @@ export async function POST(request: Request) {
         payment_provider: 'razorpay_sim',
         transaction_id: txnId,
         status: 'success',
-        membership_tier: membershipTier || null,
+        membership_tier: programName,
         payment_type: paymentType,
         metadata: {
           ...metadata,
@@ -160,7 +166,7 @@ export async function POST(request: Request) {
             email: patientEmail,
             name: patientName,
             patientId,
-            planName: membershipTier || (paymentType === 'combined' ? 'Silver Plan' : 'Gold Plan'),
+            planName: programName,
             amount: amount || 0,
             paymentId: txnId,
           })
@@ -172,7 +178,7 @@ export async function POST(request: Request) {
 
     if (paymentType === 'membership' || paymentType === 'combined') {
       try {
-        await assignMembershipCareTeam(patientId, membershipTier || (paymentType === 'combined' ? 'Silver Plan' : 'Gold Plan'))
+        await assignMembershipCareTeam(patientId, programName)
       } catch (assignmentError) {
         console.error('Smart care team assignment error:', assignmentError)
         await supabaseAdmin

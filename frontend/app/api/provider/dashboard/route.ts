@@ -156,19 +156,23 @@ export async function GET(request: Request) {
 
       // Extract all patient IDs to enrich profiles
       const allPatientIds = Array.from(new Set([
-        ...ownConsultations.map(c => c.patient_id),
-        ...availableRequests.map(c => c.patient_id)
-      ]))
+        ...ownConsultations.map((c: any) => c.patient_id),
+        ...availableRequests.map((c: any) => c.patient_id)
+      ])).filter(Boolean) as string[]
 
       const [profilesRes, assessmentsRes] = await Promise.all([
-        supabaseAdmin.from('profiles').select('id, first_name, last_name, display_id, email, phone_number').in('id', allPatientIds),
-        supabaseAdmin.from('health_assessments').select('patient_id, first_name, last_name, phone_number, dob_month, dob_day, dob_year, age, height_cm, weight_kg, goal_weight_kg, medical_history, extra_medical_info, local_food, workout_preference, is_eligible, medication_proof_url, medication_proof').in('patient_id', allPatientIds)
+        allPatientIds.length > 0
+          ? supabaseAdmin.from('profiles').select('id, first_name, last_name, display_id, email, phone_number').in('id', allPatientIds)
+          : Promise.resolve({ data: [] as any[], error: null }),
+        allPatientIds.length > 0
+          ? supabaseAdmin.from('health_assessments').select('patient_id, first_name, last_name, phone_number, dob_month, dob_day, dob_year, age, height_cm, weight_kg, goal_weight_kg, medical_history, extra_medical_info, local_food, workout_preference, is_eligible, medication_proof_url, medication_proof').in('patient_id', allPatientIds)
+          : Promise.resolve({ data: [] as any[], error: null })
       ])
 
       const profiles = profilesRes.data || []
       const assessments = assessmentsRes.data || []
-      const profilesById = new Map(profiles.map((profile: any) => [profile.id, profile]))
-      const assessmentsByPatientId = new Map(assessments.map((assessment: any) => [assessment.patient_id, assessment]))
+      const profilesById = new Map(((profiles || []) as any[]).map((profile: any) => [profile.id, profile]))
+      const assessmentsByPatientId = new Map(((assessments || []) as any[]).map((assessment: any) => [assessment.patient_id, assessment]))
 
       const enrich = (c: any) => {
         const prof = (profilesById.get(c.patient_id) || { id: c.patient_id }) as any;
@@ -198,6 +202,9 @@ export async function GET(request: Request) {
           patient_eligibility_status: getEligibilityStatus(assess),
           patient_medical_risk_flags: getRiskFlags(assess),
           patient_medication_proof_url: assess.medication_proof_url || assess.medication_proof || null,
+          canJoin: canJoinSession(c.booking_date, c.booking_time, c.status),
+          meetingUrl: c.meeting_url || c.room_url || null,
+          roleLabel: 'Doctor',
         }
       }
 
@@ -207,7 +214,9 @@ export async function GET(request: Request) {
         .eq('doctor_id', userId)
         .in('status', ['approved', 'completed', 'attended']);
 
-      const completedCount = completedConsultsCount || ownConsultations.filter((c: any) => ['approved', 'completed', 'attended'].includes(String(c.status || '').toLowerCase()) || c.is_completed).length
+      const completedCount = typeof completedConsultsCount === 'number'
+        ? completedConsultsCount
+        : ownConsultations.filter((c: any) => ['approved', 'completed', 'attended'].includes(String(c.status || '').toLowerCase()) || c.is_completed).length
       const dynamicEarned = completedCount * 300
       const recordedEarned = Number(walletRes.data?.total_earned || 0)
       const recordedWithdrawn = Number(walletRes.data?.total_withdrawn || 0)
@@ -221,26 +230,53 @@ export async function GET(request: Request) {
         total_withdrawn: recordedWithdrawn,
         pending_payout: 0,
         completed_payout: recordedWithdrawn,
+        lifetime_earnings: totalEarned,
         updated_at: walletRes.data?.updated_at || new Date().toISOString()
       }
 
+      const enrichedOwn = ownConsultations.map(enrich)
+      const enrichedAvailable = availableRequests.map(enrich)
+
       return NextResponse.json({
-        consultations: ownConsultations.map(enrich),
-        availableRequests: availableRequests.map(enrich),
-        wallet: walletPayload
+        consultations: enrichedOwn,
+        availableRequests: enrichedAvailable,
+        wallet: walletPayload,
+        stats: enrichedOwn.reduce((acc: Record<string, number>, c: any) => {
+          const key = String(c.status || 'scheduled').toLowerCase()
+          acc[key] = (acc[key] || 0) + 1
+          return acc
+        }, {}),
+        patients: [],
+        summary: {
+          totalPatients: allPatientIds.length,
+          activeConsultations: ownConsultations.filter((c: any) => !terminalStatuses.includes(String(c.status))).length,
+          completedConsultations: completedCount,
+          pendingPrescriptions: ownConsultations.filter((c: any) => !c.prescription_type || c.prescription_type === 'none').length,
+        }
       })
     }
 
     // Default provider logic (dietitians, nutritionists, fitness coaches)
-    const [{ patients, summary }, consultationsRes, v2ProfileRes] = await Promise.all([
-      loadAssignedProviderPatients(userId, role, { page: 1, limit: 4 }),
-      supabaseAdmin
+    let consultationsRes: any = await supabaseAdmin
+      .from('staff_consultations')
+      .select('id, staff_id, staff_role, patient_id, booking_date, booking_time, status, meeting_url, meeting_provider, appointment_type, created_at')
+      .eq('staff_id', userId)
+      .order('booking_date', { ascending: true })
+      .order('booking_time', { ascending: true })
+      .limit(8)
+
+    if (consultationsRes.error) {
+      consultationsRes = await supabaseAdmin
         .from('staff_consultations')
-        .select('id, staff_id, staff_role, patient_id, booking_date, booking_time, status, meeting_url, meeting_provider, appointment_type, created_at')
+        .select('id, staff_id, staff_role, patient_id, booking_date, booking_time, status, meeting_url, meeting_provider, created_at')
         .eq('staff_id', userId)
         .order('booking_date', { ascending: true })
         .order('booking_time', { ascending: true })
-        .limit(8),
+        .limit(8)
+    }
+
+    const [{ patients, summary }, v2ProfileRes] = await Promise.all([
+      loadAssignedProviderPatients(userId, role, { page: 1, limit: 4 }),
       supabaseAdmin
         .from('provider_profiles_v2')
         .select('id')
@@ -248,7 +284,10 @@ export async function GET(request: Request) {
         .maybeSingle(),
     ])
 
-    if (consultationsRes.error) throw new Error(consultationsRes.error.message)
+    if (consultationsRes.error) {
+      console.warn('staff_consultations query notice:', consultationsRes.error.message)
+    }
+    const rawConsultations = consultationsRes.data || []
 
     const v2ProfileId = v2ProfileRes.data?.id
     let walletPayload = { balance: 0, pending_payout: 0, completed_payout: 0, lifetime_earnings: 0 }
@@ -293,15 +332,17 @@ export async function GET(request: Request) {
       }
     }
 
-    const patientIds = Array.from(new Set((consultationsRes.data || []).map((row: any) => row.patient_id).filter(Boolean)))
+    const patientIds = Array.from(new Set(rawConsultations.map((row: any) => row.patient_id).filter(Boolean))) as string[]
     const profilesRes = patientIds.length
       ? await supabaseAdmin.from('profiles').select('id, first_name, last_name, email').in('id', patientIds)
       : { data: [], error: null }
 
-    if (profilesRes.error) throw new Error(profilesRes.error.message)
+    if (profilesRes.error) {
+      console.warn('profiles query notice:', profilesRes.error.message)
+    }
 
-    const profilesById = new Map((profilesRes.data || []).map((profile: any) => [profile.id, profile]))
-    const consultations = (consultationsRes.data || []).map((consultation: any) => {
+    const profilesById = new Map(((profilesRes.data || []) as any[]).map((profile: any) => [profile.id, profile]))
+    const consultations = rawConsultations.map((consultation: any) => {
       const profile = profilesById.get(consultation.patient_id) as any
       const patientName = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || profile?.email || 'Patient'
       return {
@@ -321,12 +362,13 @@ export async function GET(request: Request) {
 
     return NextResponse.json({
       summary,
-      patients: patients.slice(0, 4),
+      patients: (patients || []).slice(0, 4),
       consultations,
       stats,
       wallet: walletPayload,
     })
   } catch (error) {
+    console.error('Error in provider dashboard route:', error)
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to load provider dashboard.' }, { status: 500 })
   }
 }

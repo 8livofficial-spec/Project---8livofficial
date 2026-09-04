@@ -218,7 +218,7 @@ function roleCopy(role: ProviderRole) {
       activeLabel: 'Active Diet Plans',
       pendingLabel: 'Pending Follow-ups',
       planTitle: 'Create Diet Plan',
-      emptyPlans: 'Diet plans will appear here after you create them for assigned Gold plan patients.',
+      emptyPlans: 'Diet plans will appear here after you create them for assigned care program patients.',
     }
   }
   if (role === 'fitness_coach') {
@@ -232,7 +232,7 @@ function roleCopy(role: ProviderRole) {
       activeLabel: 'Active Workout Plans',
       pendingLabel: 'Pending Check-ins',
       planTitle: 'Create Workout Plan',
-      emptyPlans: 'Workout plans will appear here after you create them for assigned Gold plan patients.',
+      emptyPlans: 'Workout plans will appear here after you create them for assigned care program patients.',
     }
   }
   return {
@@ -245,7 +245,7 @@ function roleCopy(role: ProviderRole) {
     activeLabel: 'Active Guidance',
     pendingLabel: 'Pending Follow-ups',
     planTitle: 'Create Nutrition Guidance',
-    emptyPlans: 'Nutrition guidance will appear here after you create it for assigned Gold plan patients.',
+    emptyPlans: 'Nutrition guidance will appear here after you create it for assigned care program patients.',
   }
 }
 
@@ -813,7 +813,7 @@ function Dashboard({ summary, patients, consultations, stats, wallet, copy, onCo
   onComplete: (consultationId: string) => void
 }) {
   const cards = [
-    { label: 'Assigned Patients', value: summary.assignedPatients, sub: 'Gold plan members' },
+    { label: 'Assigned Patients', value: summary.assignedPatients, sub: 'Active care members' },
     { label: "Today's Sessions", value: stats.today || 0, sub: 'Scheduled today' },
     { label: 'Upcoming Sessions', value: stats.upcoming || 0, sub: 'Ready to attend' },
     { label: 'Completed Sessions', value: stats.completed || 0, sub: 'Finished sessions' },
@@ -1377,7 +1377,7 @@ function Patients({
     <div className="rounded-[28px] border border-[#E8DED4] bg-white p-5 shadow-sm">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#C4622D]">Gold plan only</p>
+          <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#C4622D]">Active care programs</p>
           <h3 className="mt-1 text-xl font-black">Assigned Patient Roster</h3>
         </div>
         <div className="relative">

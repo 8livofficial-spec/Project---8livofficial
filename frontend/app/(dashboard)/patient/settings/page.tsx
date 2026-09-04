@@ -138,7 +138,7 @@ export default function PatientSettingsPage() {
             
             <div className="space-y-1">
               <p className="text-lg font-black font-sora text-[#1A1F36] capitalize">
-                {assessment?.membership_tier || 'Silver Plan'}
+                {assessment?.membership_tier ? (isNaN(Number(assessment.membership_tier)) ? assessment.membership_tier : `${assessment.membership_tier} Month Program`) : 'Active Treatment Program'}
               </p>
               <p className="text-xs text-[#8896A4]">Active medical program subscription</p>
             </div>

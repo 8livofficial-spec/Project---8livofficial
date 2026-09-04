@@ -242,8 +242,18 @@ export const EmailService = {
       html: baseTemplate('Consultation Completed', `
         <p style="font-size: 16px; line-height: 1.6;">Hello ${escapeHtml(input.name || 'there')},</p>
         <p style="font-size: 16px; line-height: 1.6;">Your consultation with ${escapeHtml(input.doctorName || 'your doctor')} is completed.</p>
-        <p style="font-size: 16px; line-height: 1.6;">Choose a Gold or Silver membership plan to continue your treatment journey.</p>
+        <p style="font-size: 16px; line-height: 1.6;">Choose a treatment program subscription to continue your treatment journey.</p>
       `),
+    })
+  },
+
+  async sendCustomEmail(input: { to: string; subject: string; title: string; contentHtml: string; patientId?: string | null }) {
+    return sendEmail({
+      to: input.to,
+      patientId: input.patientId || null,
+      template: 'CUSTOM_NOTIFICATION',
+      subject: input.subject,
+      html: baseTemplate(input.title, input.contentHtml),
     })
   },
 
@@ -252,10 +262,10 @@ export const EmailService = {
       to: input.email,
       patientId: input.patientId,
       template: 'MEMBERSHIP_ACTIVATED',
-      subject: 'Your 8liv membership is active',
-      html: baseTemplate('Membership Activated', `
+      subject: 'Your 8liv treatment program is active',
+      html: baseTemplate('Treatment Program Activated', `
         <p style="font-size: 16px; line-height: 1.6;">Hello ${escapeHtml(input.name || 'there')},</p>
-        <p style="font-size: 16px; line-height: 1.6;">Your ${escapeHtml(input.planName)} membership is now active.</p>
+        <p style="font-size: 16px; line-height: 1.6;">Your ${escapeHtml(input.planName)} is now active.</p>
         <div style="background: #F5F0EB; border-radius: 14px; padding: 18px; margin-top: 18px;">
           ${input.amount ? `<p><strong>Amount:</strong> ${formatInr(input.amount)}</p>` : ''}
           ${input.paymentId ? `<p><strong>Payment ID:</strong> ${escapeHtml(input.paymentId)}</p>` : ''}

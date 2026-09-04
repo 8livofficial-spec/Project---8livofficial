@@ -655,8 +655,8 @@ export async function PATCH(req: Request) {
             title: 'Consultation Completed',
             message: isInitialConsultation
               ? (normalizedDecision === 'approved'
-                ? 'Your endocrinologist has completed your consultation and approved your case. Choose a Gold or Silver plan to continue your treatment journey.'
-                : 'Your endocrinologist has completed your consultation. Please review the appointment notes and choose the next recommended step.')
+                ? 'Your physician has completed your consultation and approved your case. Choose a treatment program to activate your care journey.'
+                : 'Your physician has completed your consultation. Please review the appointment notes and choose the next recommended step.')
               : 'Your doctor has completed your follow-up consultation. You can review the appointment notes from your dashboard.',
             is_read: false
           });

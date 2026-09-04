@@ -177,7 +177,7 @@ export default function PatientProfilePage() {
             </div>
             <div className="bg-[#F5F0EB] py-2 px-4 rounded-full inline-block">
               <span className="text-xs font-bold text-[#C4622D] capitalize">
-                {assessment?.membership_tier || 'Silver Plan'} Member
+                {assessment?.membership_tier ? (isNaN(Number(assessment.membership_tier)) ? assessment.membership_tier : `${assessment.membership_tier} Month Program`) : 'Active Treatment Program'}
               </span>
             </div>
           </div>

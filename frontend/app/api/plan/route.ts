@@ -14,12 +14,14 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { membershipTier } = body
+    const { membershipTier, planId, durationMonths } = body
     const patientId = auth.user.id
 
-    if (!membershipTier) {
-      return NextResponse.json({ error: 'Missing membershipTier' }, { status: 400 })
+    if (!membershipTier && !planId) {
+      return NextResponse.json({ error: 'Missing membershipTier or planId' }, { status: 400 })
     }
+
+    const tierName = membershipTier || `${durationMonths || 1} Month Treatment Program`
 
     // 1. Fetch latest assessment for the patient
     const { data: existingAssess, error: fetchError } = await supabaseAdmin
@@ -38,7 +40,7 @@ export async function POST(request: Request) {
       // 2a. Update existing row
       const { error: updateError } = await supabaseAdmin
         .from('health_assessments')
-        .update({ membership_tier: membershipTier })
+        .update({ membership_tier: tierName })
         .eq('id', existingAssess.id)
       if (updateError) {
         return NextResponse.json({ error: updateError.message }, { status: 500 })
@@ -49,7 +51,7 @@ export async function POST(request: Request) {
         .from('health_assessments')
         .insert({
           patient_id: patientId,
-          membership_tier: membershipTier
+          membership_tier: tierName
         })
       if (insertError) {
         return NextResponse.json({ error: insertError.message }, { status: 500 })
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
       onboardingCompleted: false,
       currentJourneyStep: 'MEMBERSHIP_PAYMENT',
       lastCompletedStep: 'PLAN_SELECTED',
-      metadata: { membershipTier },
+      metadata: { membershipTier: tierName, planId, durationMonths },
     })
 
     return NextResponse.json({ success: true })

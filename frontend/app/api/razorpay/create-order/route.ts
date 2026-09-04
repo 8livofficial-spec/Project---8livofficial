@@ -3,6 +3,7 @@ import Razorpay from 'razorpay'
 import { getAuthenticatedPatient } from '@/lib/appointmentAvailability'
 import { APP_CONFIG } from '@/lib/appConfig'
 import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/authSecurity'
+import { getAuthoritativeSubscriptionPricing } from '@/lib/subscriptionService'
 
 function getRazorpayClient() {
   const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID
@@ -29,11 +30,29 @@ export async function POST(request: Request) {
     if (!rate.allowed) return rateLimitResponse(rate.retryAfter || 60, rate.message)
 
     const body = await request.json()
-    const amount = Number(body?.amount || 499)
+    const paymentType = body?.paymentType || 'consultation'
     const currency = String(body?.currency || 'INR').toUpperCase()
     const receipt = `rcpt_${Date.now().toString().slice(-8)}_${Math.random().toString(36).slice(2, 6)}`
-    const paymentType = body?.paymentType || 'consultation'
     const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || 'rzp_test_mock'
+
+    // Server-authoritative amount calculation: Never trust client-submitted amount
+    const planId = body?.planId ? String(body.planId).trim() : undefined
+    const rawDuration = Number(body?.durationMonths)
+    const lookupKey = planId || (rawDuration > 0 ? rawDuration : 1)
+
+    let amount = 499 // Initial consultation fee is ₹499 PAID (intentional, client-approved)
+    let selectedPricing: any = null
+
+    if (paymentType === 'membership' || paymentType === 'combined') {
+      selectedPricing = await getAuthoritativeSubscriptionPricing(lookupKey)
+      if (paymentType === 'membership') {
+        amount = selectedPricing.finalPrice
+      } else {
+        const subtotal = selectedPricing.finalPrice + 499
+        const gst = Math.round(subtotal * 0.18)
+        amount = subtotal + gst
+      }
+    }
 
     const razorpay = getRazorpayClient()
     if (!razorpay) {
@@ -58,6 +77,8 @@ export async function POST(request: Request) {
         notes: {
           patientId: patient.user.id,
           paymentType,
+          planId: selectedPricing?.planId || planId || '',
+          durationMonths: selectedPricing?.durationMonths || rawDuration || 1,
         },
       })
 

@@ -29,8 +29,8 @@ function normalizeRole(role: string): ProviderRole {
 }
 
 function normalizePlan(planType?: string | null) {
-  const value = String(planType || '').toLowerCase()
-  return value.includes('gold') ? 'Gold Plan' : 'Silver Plan'
+  const value = String(planType || '').trim()
+  return value || 'Treatment Program'
 }
 
 function includesSpecialization(candidate?: string | null, required?: string | null) {
@@ -495,9 +495,9 @@ export async function assignMembershipCareTeam(patientId: string, rawPlanType?: 
     ? { providerId: primaryDoctorId, role: 'doctor' as ProviderRole }
     : await chooseProviderForRole('doctor', planType, patientId)
 
-  const dietitian = planType === 'Gold Plan' ? await chooseProviderForRole('dietitian', planType, patientId) : null
-  const nutritionist = planType === 'Gold Plan' ? await chooseProviderForRole('nutritionist', planType, patientId) : null
-  const fitnessCoach = planType === 'Gold Plan' ? await chooseProviderForRole('fitness_coach', planType, patientId) : null
+  const dietitian = await chooseProviderForRole('dietitian', planType, patientId)
+  const nutritionist = await chooseProviderForRole('nutritionist', planType, patientId)
+  const fitnessCoach = await chooseProviderForRole('fitness_coach', planType, patientId)
 
   const widePayload = {
     patient_id: patientId,
