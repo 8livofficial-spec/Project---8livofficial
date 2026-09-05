@@ -87,17 +87,20 @@ export async function POST(request: Request) {
       userId = newUser.user.id
     }
 
-    // 3. Ensure profile has role 'pharmacy'
-    await supabaseAdmin
-      .from('profiles')
-      .upsert({
-        id: userId,
-        role: 'pharmacy',
-        full_name: contactName || invitation.pharmacy_name,
-        email: invitation.email,
-        phone_number: phone || invitation.phone,
-        updated_at: now,
-      })
+    // 3. Ensure profile record exists safely
+    try {
+      await supabaseAdmin
+        .from('profiles')
+        .upsert({
+          id: userId,
+          full_name: contactName || invitation.pharmacy_name,
+          email: invitation.email,
+          phone_number: phone || invitation.phone,
+          updated_at: now,
+        })
+    } catch (profErr) {
+      console.warn('[accept-invitation] profiles upsert non-critical:', profErr)
+    }
 
     // 4. Create Partner Pharmacy in PENDING / INACTIVE state
     const { data: pharmacy, error: pError } = await supabaseAdmin
@@ -133,12 +136,6 @@ export async function POST(request: Request) {
         status: 'ACTIVE',
         updated_at: now,
       })
-
-    // Link pharmacy_id in profile
-    await supabaseAdmin
-      .from('profiles')
-      .update({ pharmacy_id: pharmacy.id })
-      .eq('id', userId)
 
     // 6. Mark invitation as ACCEPTED atomically
     await supabaseAdmin

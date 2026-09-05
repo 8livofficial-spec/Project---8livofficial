@@ -126,21 +126,78 @@ export async function getUserRole(userId: string, email?: string | null) {
     .filter(Boolean)
   if (adminBypassEmails.length > 0 && adminBypassEmails.includes(normalizedEmail)) return 'admin'
 
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', userId)
-    .maybeSingle()
+  // 1. Check partner_pharmacy_users (authoritative source for pharmacy team members)
+  try {
+    const { data: pharmacyUser } = await supabaseAdmin
+      .from('partner_pharmacy_users')
+      .select('role')
+      .eq('user_id', userId)
+      .eq('status', 'ACTIVE')
+      .maybeSingle()
 
-  if (profile?.role) return profile.role
+    if (pharmacyUser) return 'pharmacy'
+  } catch (err) {
+    console.error('[getUserRole] Error checking partner_pharmacy_users:', err)
+  }
 
-  const { data: doctorProfile } = await supabaseAdmin
-    .from('doctor_profiles')
-    .select('id')
-    .eq('id', userId)
-    .maybeSingle()
+  // 2. Check profiles
+  try {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle()
 
-  return doctorProfile?.id ? 'doctor' : 'patient'
+    if (profile?.role) {
+      const pRole = String(profile.role).toLowerCase()
+      if (pRole === 'pharmacy' || pRole.includes('pharmacy')) return 'pharmacy'
+      return profile.role
+    }
+  } catch (err) {
+    console.error('[getUserRole] Error checking profiles:', err)
+  }
+
+  // 3. Check auth metadata
+  try {
+    const { data: authUserData } = await supabaseAdmin.auth.admin.getUserById(userId)
+    const metaRole = authUserData?.user?.user_metadata?.role?.toLowerCase()
+    if (metaRole === 'pharmacy' || metaRole === 'pharmacy_admin' || metaRole === 'pharmacy_staff') {
+      return 'pharmacy'
+    }
+    if (metaRole && ['doctor', 'dietitian', 'trainer', 'fitness_coach', 'nutritionist', 'admin'].includes(metaRole)) {
+      return metaRole
+    }
+  } catch (err) {
+    // Non-blocking
+  }
+
+  // 4. Check doctor_profiles
+  try {
+    const { data: doctorProfile } = await supabaseAdmin
+      .from('doctor_profiles')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (doctorProfile?.id) return 'doctor'
+  } catch (err) {
+    console.error('[getUserRole] Error checking doctor_profiles:', err)
+  }
+
+  // 5. Check provider_profiles_v2
+  try {
+    const { data: providerProfile } = await supabaseAdmin
+      .from('provider_profiles_v2')
+      .select('role')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (providerProfile?.role) return providerProfile.role
+  } catch (err) {
+    // Non-blocking
+  }
+
+  return 'patient'
 }
 
 export async function writeAuthAudit(params: {

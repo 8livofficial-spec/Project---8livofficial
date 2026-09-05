@@ -1,5 +1,5 @@
 import { supabaseAdmin } from './supabaseServer'
-import { checkRateLimit, getClientIp, normalizeEmail, rateLimitResponse } from './authSecurity'
+import { checkRateLimit, getClientIp, normalizeEmail, rateLimitResponse, getUserRole } from './authSecurity'
 import { getAssignedProviderForRole } from './providerConsultations'
 
 export async function getAuthenticatedUser(request: Request) {
@@ -37,37 +37,7 @@ export async function getAuthenticatedUser(request: Request) {
   if (error || !data.user) return null
 
   const user = data.user
-  const email = normalizeEmail(user.email)
-
-  // SECURITY: Admin bypass emails are driven EXCLUSIVELY by ADMIN_BYPASS_EMAILS env var (comma-separated).
-  // Default is empty — no email bypass exists unless explicitly configured in environment.
-  const adminBypassEmails = (process.env.ADMIN_BYPASS_EMAILS || '')
-    .split(',')
-    .map(e => e.trim().toLowerCase())
-    .filter(Boolean)
-  if (adminBypassEmails.length > 0 && adminBypassEmails.includes(email)) {
-    return { user, role: 'admin' }
-  }
-
-  // Check roles from profiles table
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  if (profile?.role) {
-    return { user, role: profile.role }
-  }
-
-  // Fallback check to doctor_profiles or default role
-  const { data: doctorProfile } = await supabaseAdmin
-    .from('doctor_profiles')
-    .select('id')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  const role = doctorProfile?.id ? 'doctor' : 'patient'
+  const role = await getUserRole(user.id, user.email)
   return { user, role }
 }
 

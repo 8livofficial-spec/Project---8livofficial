@@ -50,12 +50,26 @@ export default function UnifiedLogin() {
         if (session?.user) {
           // If the user arrived specifically to login as pharmacy, ensure an existing admin/patient session does not hijack it
           if (requestedRole === 'pharmacy') {
-            const { data: prof } = await supabase
-              .from('profiles')
-              .select('role')
-              .eq('id', session.user.id)
-              .maybeSingle()
-            const isPharm = prof?.role === 'pharmacy' || ['PHARMACY', 'PHARMACY_ADMIN', 'PHARMACY_STAFF'].includes(session.user.user_metadata?.role?.toUpperCase())
+            const userMetaRole = session.user.user_metadata?.role?.toUpperCase()
+            let isPharm = ['PHARMACY', 'PHARMACY_ADMIN', 'PHARMACY_STAFF'].includes(userMetaRole)
+            if (!isPharm) {
+              const { data: prof } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', session.user.id)
+                .maybeSingle()
+              if (prof?.role === 'pharmacy') isPharm = true
+            }
+            if (!isPharm) {
+              const { data: pharmUser } = await supabase
+                .from('partner_pharmacy_users')
+                .select('id')
+                .eq('user_id', session.user.id)
+                .eq('status', 'ACTIVE')
+                .maybeSingle()
+              if (pharmUser) isPharm = true
+            }
+
             if (!isPharm) {
               await supabase.auth.signOut()
               document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
@@ -64,37 +78,58 @@ export default function UnifiedLogin() {
             }
           }
 
-          let role = 'patient'
-          const match = document.cookie.match(/user_role=([^;]+)/)
-          if (match) {
-            role = match[1]
+          let role = ''
+          const userMetaRole = session.user.user_metadata?.role?.toLowerCase()
+          if (userMetaRole === 'pharmacy' || userMetaRole === 'pharmacy_admin' || userMetaRole === 'pharmacy_staff') {
+            role = 'pharmacy'
           } else {
+            const { data: pharmUser } = await supabase
+              .from('partner_pharmacy_users')
+              .select('id')
+              .eq('user_id', session.user.id)
+              .eq('status', 'ACTIVE')
+              .maybeSingle()
+            if (pharmUser) {
+              role = 'pharmacy'
+            }
+          }
+
+          if (!role) {
+            const cookieMatch = document.cookie.match(/user_role=([^;]+)/)
+            if (cookieMatch && cookieMatch[1] && cookieMatch[1] !== 'patient') {
+              role = cookieMatch[1]
+            }
+          }
+
+          if (!role) {
             if (session.user.email === '8livofficial@gmail.com') {
               role = 'admin'
             } else {
-              const { data: docProfile } = await supabase
-                .from('doctor_profiles')
-                .select('id')
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
                 .eq('id', session.user.id)
                 .maybeSingle()
 
-              if (docProfile) {
-                role = 'doctor'
+              if (profile?.role) {
+                role = profile.role
               } else {
-                const { data: profile } = await supabase
-                  .from('profiles')
-                  .select('role')
+                const { data: docProfile } = await supabase
+                  .from('doctor_profiles')
+                  .select('id')
                   .eq('id', session.user.id)
                   .maybeSingle()
-                if (profile?.role) {
-                  role = profile.role
+
+                if (docProfile) {
+                  role = 'doctor'
                 } else {
                   role = session.user.user_metadata?.role || 'patient'
                 }
               }
             }
-            document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
           }
+
+          document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
 
           if (role === 'admin') {
             if (requestedRole === 'pharmacy') {
