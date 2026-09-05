@@ -31,15 +31,53 @@ export async function assertPatient(request: Request): Promise<AuthenticatedActo
 }
 
 export async function assertConsultationDoctorOwnership(consultationId: string, doctorId: string) {
-  const { data, error } = await supabaseAdmin
+  let { data, error } = await supabaseAdmin
     .from('doctor_consultations')
     .select('id, patient_id, doctor_id, status, booking_date, booking_time, appointment_type')
     .eq('id', consultationId)
-    .eq('doctor_id', doctorId)
     .maybeSingle()
 
   if (error) throw error
-  if (!data) throw new Error('Consultation not found for this doctor.')
+
+  // Fallback to staff_consultations if needed
+  if (!data) {
+    const { data: staffData } = await supabaseAdmin
+      .from('staff_consultations')
+      .select('id, patient_id, staff_id, status, booking_date, booking_time, appointment_type')
+      .eq('id', consultationId)
+      .maybeSingle()
+
+    if (staffData) {
+      data = {
+        id: staffData.id,
+        patient_id: staffData.patient_id,
+        doctor_id: staffData.staff_id,
+        status: staffData.status,
+        booking_date: staffData.booking_date,
+        booking_time: staffData.booking_time,
+        appointment_type: staffData.appointment_type,
+      }
+    }
+  }
+
+  if (!data) throw new Error('Consultation not found.')
+
+  if (data.doctor_id && data.doctor_id !== doctorId) {
+    const { data: profile } = await supabaseAdmin.from('profiles').select('role').eq('id', doctorId).maybeSingle()
+    if (profile?.role !== 'admin') {
+      throw new Error('Consultation not found for this doctor.')
+    }
+  }
+
+  // If consultation did not have doctor assigned, bind this doctor
+  if (!data.doctor_id) {
+    await supabaseAdmin
+      .from('doctor_consultations')
+      .update({ doctor_id: doctorId })
+      .eq('id', consultationId)
+    data.doctor_id = doctorId
+  }
+
   return data
 }
 

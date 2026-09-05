@@ -68,9 +68,53 @@ export function prescriptionNumber() {
   return `8LIV-RX-${stamp}-${random}`
 }
 
-export async function createPrescription(consultationId: string, doctorId: string, input: PrescriptionInput) {
+export async function createPrescription(
+  consultationId: string,
+  doctorId: string,
+  input: PrescriptionInput,
+  options?: { patientId?: string }
+) {
   validateItems(input.items)
-  const consultation = await assertConsultationDoctorOwnership(consultationId, doctorId)
+  let consultation: any = null
+
+  if (consultationId && consultationId !== 'direct') {
+    consultation = await assertConsultationDoctorOwnership(consultationId, doctorId)
+  } else if (options?.patientId) {
+    // Find latest consultation or create a direct clinical consultation record
+    const { data: latest } = await supabaseAdmin
+      .from('doctor_consultations')
+      .select('id, patient_id, doctor_id, status')
+      .eq('patient_id', options.patientId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (latest) {
+      if (!latest.doctor_id) {
+        await supabaseAdmin.from('doctor_consultations').update({ doctor_id: doctorId }).eq('id', latest.id)
+      }
+      consultation = latest
+    } else {
+      const now = new Date()
+      const { data: createdConsultation, error: createCErr } = await supabaseAdmin
+        .from('doctor_consultations')
+        .insert({
+          doctor_id: doctorId,
+          patient_id: options.patientId,
+          booking_date: now.toISOString().split('T')[0],
+          booking_time: now.toTimeString().slice(0, 5),
+          status: 'completed',
+          is_completed: true,
+          appointment_type: 'CLINICAL_E_PRESCRIPTION',
+        })
+        .select('id, patient_id, doctor_id, status')
+        .single()
+      if (createCErr) throw createCErr
+      consultation = createdConsultation
+    }
+  } else {
+    throw new Error('Either consultationId or patientId must be provided to issue a prescription.')
+  }
 
   // Find active treatment cycle if patient is enrolled in a duration program
   let cycleId: string | null = null
