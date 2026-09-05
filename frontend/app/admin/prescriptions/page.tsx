@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { FileText, Search } from 'lucide-react'
+import { FileText, Search, ArrowLeft, ChevronRight } from 'lucide-react'
 import { authedFetch } from '@/lib/apiClient'
 
 export default function AdminPrescriptionsPage() {
@@ -31,7 +31,33 @@ export default function AdminPrescriptionsPage() {
   return (
     <main className="min-h-screen bg-[#F5F0EB] p-6 text-[#1A1F36]">
       <div className="mx-auto max-w-7xl space-y-6">
-        <Header title="Prescription Fulfilment" subtitle="New prescriptions and Apollo fulfilment readiness." />
+        {/* Navigation Breadcrumb & Back Button */}
+        <div className="flex flex-col gap-3 border-b border-[#1A1F36]/10 pb-4">
+          <div className="flex items-center justify-between">
+            <Link
+              href="/admin"
+              className="inline-flex items-center gap-2 rounded-xl border border-[#1A1F36]/15 bg-white px-3.5 py-2 text-xs font-black text-[#1A1F36] hover:bg-[#FAF7F5] shadow-sm transition-all group"
+            >
+              <ArrowLeft className="h-4 w-4 text-[#8896A4] group-hover:text-[#1A1F36] group-hover:-translate-x-0.5 transition-transform" />
+              <span>Back to Admin Dashboard</span>
+            </Link>
+
+            <div className="flex items-center gap-1.5 text-xs font-black uppercase tracking-wider text-[#8896A4]">
+              <Link href="/admin" className="hover:text-[#1A1F36] transition-colors">
+                Admin Portal
+              </Link>
+              <ChevronRight className="h-3 w-3" />
+              <span className="text-[#C4622D]">Prescriptions</span>
+            </div>
+          </div>
+
+          <div className="pt-1">
+            <h1 className="text-2xl sm:text-3xl font-black text-[#1A1F36]">Prescriptions Overview</h1>
+            <p className="mt-1 text-xs sm:text-sm font-semibold text-[#8896A4]">
+              Track issued clinical prescriptions and monitor fulfillment readiness.
+            </p>
+          </div>
+        </div>
         <div className="flex flex-col gap-3 rounded-xl bg-white p-4 shadow-sm md:flex-row">
           <label className="flex flex-1 items-center gap-2 rounded-lg border border-[#1A1F36]/10 px-3">
             <Search className="h-4 w-4 text-[#8896A4]" />

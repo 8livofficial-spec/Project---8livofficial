@@ -15,12 +15,12 @@ export async function GET(request: Request) {
     try {
       let query = supabaseAdmin
         .from('pharmacy_orders')
-        .select('*, prescriptions(*, prescription_items(*)), pharmacy_order_status_history(*)')
+        .select('*, partner_pharmacies:pharmacy_id(id, name, verification_status, status), prescriptions(*, prescription_items(*)), pharmacy_order_status_history(*)')
         .order('updated_at', { ascending: false })
         .limit(100)
-      if (status) query = query.eq('status', status)
+      if (status && status !== 'ALL') query = query.eq('status', status)
       if (search) {
-        query = query.or(`apollo_order_reference.ilike.%${search}%,tracking_number.ilike.%${search}%`)
+        query = query.or(`tracking_number.ilike.%${search}%,courier_name.ilike.%${search}%`)
       }
       const { data, error } = await query
       if (!error && data) {
@@ -37,7 +37,7 @@ export async function GET(request: Request) {
           .select('*')
           .order('created_at', { ascending: false })
           .limit(100)
-        if (status) fallbackQuery = fallbackQuery.eq('status', status)
+        if (status && status !== 'ALL') fallbackQuery = fallbackQuery.eq('status', status)
         const { data: fallbackData } = await fallbackQuery
         orders = fallbackData || []
       } catch (fallbackErr: any) {

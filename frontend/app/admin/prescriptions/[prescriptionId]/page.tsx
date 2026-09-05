@@ -47,10 +47,10 @@ export default function AdminPrescriptionDetailPage() {
                 <Meta label="Valid until" value={rx.valid_until || '-'} />
                 <Meta label="Hash" value={rx.signature_hash || '-'} />
               </Panel>
-              <Panel title="Apollo Fulfilment">
-                <Meta label="Vendor" value={order?.vendor || 'APOLLO_PHARMACY'} />
-                <Meta label="Order status" value={order?.status || 'Pending signed order'} />
-                <Meta label="Apollo reference" value={order?.apollo_order_reference || '-'} />
+              <Panel title="Partner Pharmacy Fulfilment">
+                <Meta label="Partner" value={order?.partner_pharmacies?.name || 'Licensed Partner Pharmacy'} />
+                <Meta label="Order status" value={order?.status ? order.status.replaceAll('_', ' ') : 'Pending delivery confirmation'} />
+                <Meta label="Order reference" value={order ? `8LIV-PO-${order.id.slice(0, 8).toUpperCase()}` : '-'} />
                 <Meta label="Tracking" value={order?.tracking_number || '-'} />
               </Panel>
             </section>

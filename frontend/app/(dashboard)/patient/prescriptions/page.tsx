@@ -2,8 +2,21 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { FileText, Pill } from 'lucide-react'
+import { FileText } from 'lucide-react'
 import { authedFetch } from '@/lib/apiClient'
+
+const STATUS_LABELS: Record<string, string> = {
+  PENDING_ASSIGNMENT: 'Pending',
+  RECEIVED: 'Order sent to pharmacy',
+  ACKNOWLEDGED: 'Pharmacy received',
+  STOCK_CONFIRMED: 'Stock confirmed',
+  PREPARING: 'Being prepared',
+  DISPATCHED: 'On the way',
+  DELIVERED: 'Delivered',
+  CLARIFICATION_REQUIRED: 'In review',
+  UNABLE_TO_FULFILL: 'Unable to fulfill',
+  CANCELLED: 'Cancelled',
+}
 
 export default function PatientPrescriptionsPage() {
   const [prescriptions, setPrescriptions] = useState<any[]>([])
@@ -25,7 +38,7 @@ export default function PatientPrescriptionsPage() {
       {error && <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">{error}</p>}
       <div className="grid gap-4">
         {prescriptions.length === 0 ? <Empty /> : prescriptions.map((rx) => {
-          const order = rx.pharmacy_orders?.[0]
+          const order = (rx.pharmacy_orders || []).find((o: any) => !['CANCELLED', 'UNABLE_TO_FULFILL'].includes(o.status)) || rx.pharmacy_orders?.[0]
           return (
             <Link key={rx.id} href={`/patient/prescriptions/${rx.id}`} className="dash-card block p-5">
               <p className="text-xs font-black uppercase tracking-wider text-[#C4622D]">{rx.prescription_number}</p>
@@ -34,7 +47,7 @@ export default function PatientPrescriptionsPage() {
               <div className="mt-4 grid gap-3 border-t border-[#1A1F36]/6 pt-4 text-sm sm:grid-cols-3">
                 <Meta label="Issued" value={rx.issued_at ? new Date(rx.issued_at).toLocaleDateString() : '-'} />
                 <Meta label="Valid until" value={rx.valid_until || '-'} />
-                <Meta label="Apollo order" value={order?.status || 'Pending fulfilment'} />
+                <Meta label="Fulfillment status" value={order?.status ? (STATUS_LABELS[order.status] || order.status) : 'Pending address confirmation'} />
               </div>
             </Link>
           )

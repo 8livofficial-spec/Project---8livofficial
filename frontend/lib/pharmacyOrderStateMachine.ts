@@ -3,6 +3,7 @@ import { audit } from './prescriptionService'
 import { notifyDomainEvent } from './notificationDispatcher'
 
 export type PartnerOrderStatus =
+  | 'PENDING_ASSIGNMENT'
   | 'RECEIVED'
   | 'ACKNOWLEDGED'
   | 'STOCK_CONFIRMED'
@@ -14,25 +15,17 @@ export type PartnerOrderStatus =
   | 'PARTIALLY_FULFILLED'
   | 'CANCELLED'
 
-const LEGAL_TRANSITIONS: Record<string, string[]> = {
-  // Initial incoming order statuses (including legacy PENDING_ADMIN_REVIEW)
+/**
+ * Canonical 8LIV Pharmacy Fulfillment State Machine
+ * Deterministic allowed transitions per Section 18.
+ */
+export const LEGAL_TRANSITIONS: Record<PartnerOrderStatus, PartnerOrderStatus[]> = {
+  PENDING_ASSIGNMENT: ['RECEIVED', 'CANCELLED'],
   RECEIVED: ['ACKNOWLEDGED', 'CLARIFICATION_REQUIRED', 'UNABLE_TO_FULFILL', 'CANCELLED'],
-  PENDING_ADMIN_REVIEW: ['ACKNOWLEDGED', 'UNDER_REVIEW', 'READY_TO_PLACE', 'CANCELLED'],
-  READY_TO_PLACE: ['RECEIVED', 'ACKNOWLEDGED', 'ORDER_PLACED_WITH_APOLLO', 'CANCELLED'],
-  ORDER_PLACED_WITH_APOLLO: ['CONFIRMED_BY_APOLLO', 'ACKNOWLEDGED', 'CANCELLED'],
-  CONFIRMED_BY_APOLLO: ['STOCK_CONFIRMED', 'PREPARING', 'PACKED', 'CANCELLED'],
-  UNDER_REVIEW: ['ACKNOWLEDGED', 'RECEIVED', 'CLARIFICATION_REQUIRED', 'UNABLE_TO_FULFILL', 'CANCELLED'],
-
-  // Partner Pharmacy lifecycle transitions
   ACKNOWLEDGED: ['STOCK_CONFIRMED', 'CLARIFICATION_REQUIRED', 'UNABLE_TO_FULFILL', 'CANCELLED'],
   STOCK_CONFIRMED: ['PREPARING', 'CLARIFICATION_REQUIRED', 'UNABLE_TO_FULFILL', 'CANCELLED'],
   PREPARING: ['DISPATCHED', 'CLARIFICATION_REQUIRED', 'UNABLE_TO_FULFILL', 'CANCELLED'],
-  PACKED: ['DISPATCHED', 'SHIPPED', 'CANCELLED'],
   DISPATCHED: ['DELIVERED', 'CANCELLED'],
-  SHIPPED: ['DELIVERED', 'OUT_FOR_DELIVERY', 'CANCELLED'],
-  OUT_FOR_DELIVERY: ['DELIVERED'],
-  
-  // Exception handling transitions
   CLARIFICATION_REQUIRED: ['ACKNOWLEDGED', 'STOCK_CONFIRMED', 'UNABLE_TO_FULFILL', 'CANCELLED'],
   PARTIALLY_FULFILLED: ['DISPATCHED', 'CANCELLED'],
   UNABLE_TO_FULFILL: ['CANCELLED'],
@@ -41,8 +34,8 @@ const LEGAL_TRANSITIONS: Record<string, string[]> = {
 }
 
 export function validateOrderStateTransition(currentStatus: string, targetStatus: string): boolean {
-  const normalizedCurrent = currentStatus.toUpperCase()
-  const normalizedTarget = targetStatus.toUpperCase()
+  const normalizedCurrent = currentStatus.toUpperCase() as PartnerOrderStatus
+  const normalizedTarget = targetStatus.toUpperCase() as PartnerOrderStatus
   
   if (normalizedCurrent === normalizedTarget) return true
 
@@ -53,6 +46,7 @@ export function validateOrderStateTransition(currentStatus: string, targetStatus
 /**
  * Execute a valid status transition for a partner pharmacy order.
  * Strictly guarantees that pharmacy actions NEVER touch clinical prescription fields.
+ * Protected by optimistic concurrency control (version checks).
  */
 export async function transitionOrderStatus(params: {
   orderId: string
@@ -65,9 +59,23 @@ export async function transitionOrderStatus(params: {
   trackingNumber?: string | null
   clarificationNotes?: string | null
   unableReason?: string | null
+  expectedVersion?: number | null
   request?: Request
 }) {
-  const { orderId, newStatus, actorId, actorRole, pharmacyId, reason, courierName, trackingNumber, clarificationNotes, unableReason, request } = params
+  const {
+    orderId,
+    newStatus,
+    actorId,
+    actorRole,
+    pharmacyId,
+    reason,
+    courierName,
+    trackingNumber,
+    clarificationNotes,
+    unableReason,
+    expectedVersion,
+    request,
+  } = params
 
   // 1. Fetch current order
   const { data: order, error: fetchError } = await supabaseAdmin
@@ -77,66 +85,109 @@ export async function transitionOrderStatus(params: {
     .single()
 
   if (fetchError || !order) {
-    throw new Error('Order not found.')
+    const err = new Error('Order not found.')
+    ;(err as any).status = 404
+    throw err
   }
 
-  const currentStatus = (order.status || 'RECEIVED').toUpperCase()
+  const currentStatus = (order.status || 'PENDING_ASSIGNMENT').toUpperCase() as PartnerOrderStatus
 
   // 2. Validate state machine rule
   if (!validateOrderStateTransition(currentStatus, newStatus)) {
-    throw new Error(`Invalid state transition: Cannot transition pharmacy order from ${currentStatus} to ${newStatus}.`)
+    const err = new Error(
+      `Invalid state transition: Cannot transition pharmacy order from ${currentStatus} to ${newStatus}.`
+    )
+    ;(err as any).status = 400
+    throw err
   }
 
-  // 3. Prepare update payload (pure fulfillment fields only)
+  // 3. Prepare update payload (logistics / fulfillment fields only)
   const now = new Date().toISOString()
+  const targetVersion = (expectedVersion ?? order.version ?? 1) + 1
+
   const updates: Record<string, any> = {
     status: newStatus,
     updated_at: now,
+    version: targetVersion,
   }
 
   if (pharmacyId && !order.pharmacy_id) {
     updates.pharmacy_id = pharmacyId
   }
 
+  if (newStatus === 'ACKNOWLEDGED') {
+    updates.acknowledged_at = now
+  }
+
+  if (newStatus === 'STOCK_CONFIRMED') {
+    updates.stock_confirmed_at = now
+  }
+
   if (newStatus === 'DISPATCHED') {
     if (!courierName?.trim() || !trackingNumber?.trim()) {
-      throw new Error('Courier name and tracking number are required to dispatch an order.')
+      const err = new Error('Courier name and tracking number are required to dispatch an order.')
+      ;(err as any).status = 400
+      throw err
     }
     updates.dispatch_courier_name = courierName.trim()
     updates.dispatch_tracking_number = trackingNumber.trim()
+    updates.courier_name = courierName.trim()
     updates.tracking_number = trackingNumber.trim()
     updates.dispatched_at = now
-    updates.fulfillment_status = 'SHIPPED'
   }
 
   if (newStatus === 'DELIVERED') {
     updates.delivered_at = now
-    updates.fulfillment_status = 'DELIVERED'
   }
 
   if (newStatus === 'CLARIFICATION_REQUIRED') {
     if (!clarificationNotes?.trim()) {
-      throw new Error('Clarification notes are required to request clarification.')
+      const err = new Error('Clarification notes are required to request clarification.')
+      ;(err as any).status = 400
+      throw err
     }
     updates.clarification_notes = clarificationNotes.trim()
+    updates.clarification_reason = clarificationNotes.trim()
+    updates.clarification_requested_at = now
   }
 
   if (newStatus === 'UNABLE_TO_FULFILL') {
     if (!unableReason?.trim()) {
-      throw new Error('Reason is required when marking an order as unable to fulfill.')
+      const err = new Error('Reason is required when marking an order as unable to fulfill.')
+      ;(err as any).status = 400
+      throw err
     }
     updates.unable_to_fulfill_reason = unableReason.trim()
   }
 
-  // 4. Update the order in database
-  const { data: updatedOrder, error: updateError } = await supabaseAdmin
+  if (newStatus === 'CANCELLED') {
+    updates.cancelled_at = now
+    updates.cancellation_reason = reason || 'Order cancelled'
+  }
+
+  // 4. Update the order in database with optimistic concurrency check
+  let query = supabaseAdmin
     .from('pharmacy_orders')
     .update(updates)
     .eq('id', orderId)
-    .select('*')
-    .single()
 
-  if (updateError) throw updateError
+  if (order.version !== undefined && order.version !== null) {
+    query = query.eq('version', order.version)
+  }
+
+  const { data: updatedOrder, error: updateError } = await query
+    .select('*')
+    .maybeSingle()
+
+  if (updateError) {
+    throw updateError
+  }
+
+  if (!updatedOrder) {
+    const err = new Error('Concurrent modification conflict: Order was updated by another operation. Please refresh.')
+    ;(err as any).status = 409
+    throw err
+  }
 
   // 5. Append to status history
   await supabaseAdmin.from('pharmacy_order_status_history').insert({
@@ -219,23 +270,28 @@ export async function transitionOrderStatus(params: {
  * MINIMUM NECESSARY DATA for fulfillment.
  * Strictly strips patient clinical history, lifestyle notes, nutrition diets, etc.
  */
-export function sanitizePharmacyOrderForFulfillment(order: any, prescription: any, items: any[], doctor: any) {
+export function sanitizePharmacyOrderForFulfillment(
+  order: any,
+  prescription: any,
+  items: any[],
+  doctor: any
+) {
   return {
     order_id: order.id,
-    order_reference: order.apollo_order_reference || `8LIV-PO-${order.id.slice(0, 8).toUpperCase()}`,
+    order_reference: `8LIV-PO-${order.id.slice(0, 8).toUpperCase()}`,
     status: order.status,
     created_at: order.created_at,
     updated_at: order.updated_at,
     dispatched_at: order.dispatched_at || null,
     delivered_at: order.delivered_at || null,
-    courier_name: order.dispatch_courier_name || null,
+    courier_name: order.dispatch_courier_name || order.courier_name || null,
     tracking_number: order.dispatch_tracking_number || order.tracking_number || null,
     clarification_notes: order.clarification_notes || null,
     unable_to_fulfill_reason: order.unable_to_fulfill_reason || null,
-    
+
     // Patient fulfillment identity & destination only
     patient: {
-      name: order.delivery_address_snapshot?.patient_name || 'Patient',
+      name: order.delivery_address_snapshot?.recipient_name || order.delivery_address_snapshot?.patient_name || 'Patient',
       phone: order.patient_phone_snapshot || order.delivery_address_snapshot?.phone || null,
       delivery_address: order.delivery_address_snapshot || null,
     },

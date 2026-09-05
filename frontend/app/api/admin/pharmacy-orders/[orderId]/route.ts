@@ -10,7 +10,7 @@ export async function GET(request: Request, context: RouteContext) {
     const { orderId } = await context.params
     const { data, error } = await supabaseAdmin
       .from('pharmacy_orders')
-      .select('*, prescriptions(*, prescription_items(*)), pharmacy_order_status_history(*), fulfilment_audit_logs(*)')
+      .select('*, partner_pharmacies:pharmacy_id(id, name, email, phone, verification_status, status), prescriptions(*, prescription_items(*)), pharmacy_order_status_history(*), fulfilment_audit_logs(*)')
       .eq('id', orderId)
       .maybeSingle()
     if (error) throw error
@@ -36,7 +36,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!existing) throw new Error('Medicine order not found.')
 
     const allowedPatch: Record<string, unknown> = {}
-    for (const key of ['apollo_order_reference', 'order_amount', 'currency', 'estimated_delivery_at', 'courier_name', 'tracking_number', 'internal_notes', 'unavailability_reason', 'unavailable_medicines', 'refund_status']) {
+    for (const key of ['order_amount', 'currency', 'estimated_delivery_at', 'courier_name', 'tracking_number', 'internal_notes', 'unavailability_reason', 'unavailable_medicines', 'refund_status']) {
       if (body[key] !== undefined) allowedPatch[key] = body[key]
     }
     const terminalProtectedFields = Object.keys(allowedPatch).filter((key) => !['internal_notes', 'refund_status'].includes(key))
@@ -49,7 +49,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     await supabaseAdmin.from('fulfilment_audit_logs').insert({
       pharmacy_order_id: orderId,
       actor_id: auth.user.id,
-      actor_role: 'admin',
+      actorRole: 'admin',
       action: 'ORDER_DETAILS_UPDATED',
       new_values: allowedPatch,
     })

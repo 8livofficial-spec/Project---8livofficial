@@ -14,10 +14,11 @@ export async function GET(request: Request) {
       .select('*, prescriptions(prescription_number, issued_at, valid_until, prescription_items(*))')
       .order('created_at', { ascending: false })
 
-    // Tenant / Pharmacy isolation:
-    // If not admin, only fetch orders explicitly assigned to this pharmacy OR unassigned pending orders
+    // Strict Tenant / Pharmacy isolation:
+    // A partner pharmacy can ONLY access orders explicitly assigned to its pharmacy_id.
+    // Unassigned orders (pharmacy_id IS NULL) must NEVER be exposed to partner pharmacies.
     if (!context.isAdmin) {
-      query = query.or(`pharmacy_id.eq.${context.pharmacy.id},pharmacy_id.is.null`)
+      query = query.eq('pharmacy_id', context.pharmacy.id)
     }
 
     if (status && status !== 'ALL') {
@@ -25,7 +26,7 @@ export async function GET(request: Request) {
     }
 
     if (search) {
-      query = query.or(`apollo_order_reference.ilike.%${search}%,tracking_number.ilike.%${search}%`)
+      query = query.or(`tracking_number.ilike.%${search}%,dispatch_tracking_number.ilike.%${search}%`)
     }
 
     const { data: orders, error } = await query.limit(100)

@@ -17,9 +17,13 @@ export default function UnifiedLogin() {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [authError, setAuthError] = useState('')
+  const [isPharmacyRole, setIsPharmacyRole] = useState(false)
   const [authSuccess, setAuthSuccess] = useState(() => {
     if (typeof window === 'undefined') return ''
     const urlParams = new URLSearchParams(window.location.search)
+    if (urlParams.get('role')?.toLowerCase() === 'pharmacy') {
+      // Handled in effect
+    }
     if (urlParams.get('success') === 'account_created') {
       return 'Account created successfully! Please sign in with your new credentials.'
     }
@@ -32,12 +36,34 @@ export default function UnifiedLogin() {
   useEffect(() => {
     const checkRedirect = async () => {
       try {
+        const urlParams = new URLSearchParams(window.location.search)
+        const requestedRole = urlParams.get('role')?.toLowerCase()
+        if (requestedRole === 'pharmacy') {
+          setIsPharmacyRole(true)
+        }
+
         const { data: { session }, error } = await supabase.auth.getSession()
         if (error) {
           console.error("Auth check error:", error)
         }
         
         if (session?.user) {
+          // If the user arrived specifically to login as pharmacy, ensure an existing admin/patient session does not hijack it
+          if (requestedRole === 'pharmacy') {
+            const { data: prof } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', session.user.id)
+              .maybeSingle()
+            const isPharm = prof?.role === 'pharmacy' || ['PHARMACY', 'PHARMACY_ADMIN', 'PHARMACY_STAFF'].includes(session.user.user_metadata?.role?.toUpperCase())
+            if (!isPharm) {
+              await supabase.auth.signOut()
+              document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+              setCheckingAuth(false)
+              return
+            }
+          }
+
           let role = 'patient'
           const match = document.cookie.match(/user_role=([^;]+)/)
           if (match) {
@@ -71,14 +97,19 @@ export default function UnifiedLogin() {
           }
 
           if (role === 'admin') {
+            if (requestedRole === 'pharmacy') {
+              await supabase.auth.signOut()
+              document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+              setCheckingAuth(false)
+              return
+            }
             router.push('/admin')
           } else if (role === 'doctor') {
             router.push('/doctor/dashboard')
           } else if (role === 'dietitian' || role === 'trainer' || role === 'fitness_coach' || role === 'nutritionist') {
             router.push('/provider/dashboard')
-          } else if (['PHARMACY_ADMIN', 'PHARMACY_STAFF', 'DELIVERY_PARTNER', 'PHARMACIST'].includes(String(role).toUpperCase())) {
-            setAuthError('Pharmacy portal access has been retired. Contact 8liv admin support if this account needs a new role.')
-            setCheckingAuth(false)
+          } else if (['PHARMACY', 'PHARMACY_ADMIN', 'PHARMACY_STAFF', 'DELIVERY_PARTNER', 'PHARMACIST'].includes(String(role).toUpperCase())) {
+            router.push('/pharmacy')
           } else {
             const statusRes = await fetch(`/api/patient/status?patientId=${session.user.id}`, {
               headers: { Authorization: `Bearer ${session.access_token}` },
@@ -164,9 +195,8 @@ export default function UnifiedLogin() {
         window.location.href = '/doctor/dashboard'
       } else if (role === 'dietitian' || role === 'trainer' || role === 'fitness_coach' || role === 'nutritionist') {
         window.location.href = '/provider/dashboard'
-      } else if (['PHARMACY_ADMIN', 'PHARMACY_STAFF', 'DELIVERY_PARTNER', 'PHARMACIST'].includes(String(role).toUpperCase())) {
-        document.cookie = 'user_role=; path=/; max-age=0; SameSite=Lax'
-        setAuthError('Pharmacy portal access has been retired. Contact 8liv admin support if this account needs a new role.')
+      } else if (['PHARMACY', 'PHARMACY_ADMIN', 'PHARMACY_STAFF', 'DELIVERY_PARTNER', 'PHARMACIST'].includes(String(role).toUpperCase())) {
+        window.location.href = '/pharmacy'
       } else {
         const statusRes = await fetch(`/api/patient/status?patientId=${loginData.user.id}`, {
           headers: { Authorization: `Bearer ${loginData.session.access_token}` },
@@ -256,10 +286,12 @@ export default function UnifiedLogin() {
         >
           <div className="mb-10 text-center lg:text-left">
             <h2 className="text-3xl sm:text-4xl font-extrabold font-sora text-[#0F172A] mb-3 tracking-tight">
-              Sign In
+              {isPharmacyRole ? 'Pharmacy Partner Sign In' : 'Sign In'}
             </h2>
             <p className="text-[#475569] text-sm sm:text-base">
-              Enter your credentials to access your 8liv account.
+              {isPharmacyRole
+                ? 'Enter your partner pharmacy credentials to access your fulfillment portal.'
+                : 'Enter your credentials to access your 8liv account.'}
             </p>
           </div>
 

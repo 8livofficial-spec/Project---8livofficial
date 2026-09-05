@@ -11,6 +11,10 @@ export type NotificationEventInput = {
   recipientRole?: 'patient' | 'doctor' | 'pharmacy' | 'admin'
   subject: string
   messageContent: string
+  actionUrl?: string
+  actionLabel?: string
+  secondaryActionUrl?: string
+  secondaryActionLabel?: string
   idempotencyKey?: string
 }
 
@@ -59,15 +63,42 @@ export async function emitNotificationEvent(input: NotificationEventInput) {
   let errorMessage: string | null = null
 
   try {
+    const formattedBody = escapeHtml(input.messageContent)
+      .replace(/\n/g, '<br/>')
+      .replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" style="color: #0D9488; text-decoration: underline; font-weight: bold;">$1</a>')
+
+    let actionButtonsHtml = ''
+    if (input.actionUrl) {
+      actionButtonsHtml += `
+        <div style="margin: 28px 0 16px 0;">
+          <a href="${escapeHtml(input.actionUrl)}" style="background: #1A1F36; color: #ffffff; padding: 14px 26px; border-radius: 12px; text-decoration: none; font-weight: 800; font-size: 14px; display: inline-block;">
+            ${escapeHtml(input.actionLabel || 'Access Portal →')}
+          </a>
+        </div>
+      `
+    }
+    if (input.secondaryActionUrl) {
+      actionButtonsHtml += `
+        <div style="margin: 14px 0 6px 0;">
+          <a href="${escapeHtml(input.secondaryActionUrl)}" style="color: #C4622D; text-decoration: underline; font-weight: 700; font-size: 13px;">
+            ${escapeHtml(input.secondaryActionLabel || 'Set or Reset Password →')}
+          </a>
+        </div>
+      `
+    }
+
     const emailResult: any = await EmailService.sendCustomEmail({
       to: input.recipientEmail,
       subject: input.subject,
       title: input.subject,
       contentHtml: `
-        <p style="font-size: 15px; line-height: 1.6; color: #1A1F36;">${escapeHtml(input.messageContent)}</p>
+        <div style="font-size: 15px; line-height: 1.6; color: #1A1F36;">
+          ${formattedBody}
+        </div>
+        ${actionButtonsHtml}
         <div style="margin-top: 24px; padding-top: 16px; border-top: 1px solid #E8DED4;">
           <p style="font-size: 13px; color: #6B7A90; margin: 0;">
-            Sign in to your secure 8LIV portal to view complete details, track care cycles, or manage appointments.
+            Sign in to your secure 8LIV portal to view complete details, track care cycles, or manage prescriptions.
           </p>
         </div>
       `,

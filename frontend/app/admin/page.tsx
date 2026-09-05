@@ -5,7 +5,7 @@ import { Suspense, useState, useEffect, useRef, type FormEvent } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
-import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Package, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer, Trash2, GitMerge, ClipboardList, DollarSign, Calendar, UserCheck, XCircle, TrendingUp, BadgeCheck, Menu, X, Copy, KeyRound, Sparkles, Check } from 'lucide-react';
+import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Package, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer, Trash2, GitMerge, ClipboardList, DollarSign, Calendar, UserCheck, XCircle, TrendingUp, BadgeCheck, Menu, X, Copy, KeyRound, Sparkles, Check, Building2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import SessionMonitor from '@/components/admin/SessionMonitor';
 import { authedFetch } from '@/lib/apiClient';
@@ -25,6 +25,7 @@ type AdminTab =
   | 'provider-wallets'
   | 'prescription-fulfilment'
   | 'pharmacy-orders'
+  | 'partner-pharmacies'
   | 'reports'
   | 'notifications'
   | 'audit-logs'
@@ -488,6 +489,10 @@ function AdminDashboardContent() {
     }
     if (tab === 'pharmacy-orders') {
       router.push('/admin/pharmacy-orders');
+      return;
+    }
+    if (tab === 'partner-pharmacies') {
+      router.push('/admin/pharmacy');
       return;
     }
     setAdminTab(tab);
@@ -1483,6 +1488,7 @@ function AdminDashboardContent() {
       items: [
         { id: 'prescription-fulfilment', label: 'Prescriptions', icon: FileText },
         { id: 'pharmacy-orders', label: 'Pharmacy Orders', icon: Package },
+        { id: 'partner-pharmacies', label: 'Partner Pharmacies', icon: Building2 },
       ],
     },
     {

@@ -362,7 +362,7 @@ export const publicPages: PublicPage[] = [
       },
       {
         heading: 'Medicine fulfilment',
-        body: '8liv admin teams may coordinate manual Apollo Pharmacy fulfilment after a prescription is signed. Apollo Pharmacy users do not log in to 8liv.',
+        body: '8liv admin teams coordinate medication fulfilment with licensed partner pharmacies after a prescription is signed.',
       },
     ],
     lastModified: new Date('2026-07-14'),

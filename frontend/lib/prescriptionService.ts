@@ -1,6 +1,5 @@
 import { supabaseAdmin } from './supabaseServer'
 import { assertConsultationDoctorOwnership } from './fulfilmentAuth'
-import { ManualApolloFulfilmentProvider } from './manualApolloFulfilment'
 import { canonicalPrescriptionData, renderPrescriptionDocument, sha256, storePrescriptionPdf } from './prescriptionPdfService'
 
 export type PrescriptionItemInput = {
@@ -205,45 +204,16 @@ export async function signPrescription(prescriptionId: string, doctorId: string)
     }
   }
 
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('phone_number')
-    .eq('id', prescription.patient_id)
-    .maybeSingle()
-
-  const provider = new ManualApolloFulfilmentProvider()
-  const order = await provider.createOrder({
-    prescriptionId,
-    patientId: prescription.patient_id,
-    idempotencyKey: `prescription:${prescriptionId}:v${prescription.version}`,
-    deliveryAddressSnapshot: {},
-    patientPhoneSnapshot: profile?.phone_number || null,
-  })
-
-  await supabaseAdmin.from('pharmacy_order_status_history').insert({
-    pharmacy_order_id: order.id,
-    previous_status: null,
-    new_status: 'RECEIVED',
-    changed_by: doctorId,
-    reason: 'Prescription issued and order generated for partner pharmacy',
-  })
-
-  // Ensure pharmacy order reflects RECEIVED status so partner pharmacy can immediately action it
-  await supabaseAdmin
-    .from('pharmacy_orders')
-    .update({ status: 'RECEIVED', updated_at: now })
-    .eq('id', order.id)
-
   await supabaseAdmin.from('patient_notifications').insert({
     patient_id: prescription.patient_id,
     type: 'prescription_issued',
     title: 'Prescription issued',
-    message: 'Your doctor has issued a signed prescription. 8liv partner pharmacy will coordinate your medication fulfillment.',
+    message: 'Your doctor has issued a signed prescription. Please confirm your delivery address to begin medication fulfillment.',
     is_read: false,
   })
 
-  await audit({ prescriptionId, pharmacyOrderId: order.id, actorId: doctorId, actorRole: 'doctor', action: 'PRESCRIPTION_SIGNED', newValues: { signatureHash } })
-  return { prescription: signed, order, alreadySigned: false }
+  await audit({ prescriptionId, actorId: doctorId, actorRole: 'doctor', action: 'PRESCRIPTION_SIGNED', newValues: { signatureHash } })
+  return { prescription: signed, alreadySigned: false }
 }
 
 export async function replacePrescription(prescriptionId: string, doctorId: string, input: PrescriptionInput) {
@@ -379,17 +349,21 @@ export async function audit(input: {
   request?: Request
 }) {
   const ip = input.request?.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || input.request?.headers.get('x-real-ip') || null
-  await supabaseAdmin.from('fulfilment_audit_logs').insert({
-    prescription_id: input.prescriptionId || null,
-    pharmacy_order_id: input.pharmacyOrderId || null,
-    actor_id: input.actorId,
-    actor_role: input.actorRole,
-    action: input.action,
-    previous_values: input.previousValues || null,
-    new_values: input.newValues || null,
-    reason: input.reason || null,
-    ip_address: ip,
-    user_agent: input.request?.headers.get('user-agent') || null,
-    request_id: input.request?.headers.get('x-request-id') || null,
-  })
+  try {
+    await supabaseAdmin.from('fulfilment_audit_logs').insert({
+      prescription_id: input.prescriptionId || null,
+      pharmacy_order_id: input.pharmacyOrderId || null,
+      actor_id: input.actorId,
+      actor_role: input.actorRole,
+      action: input.action,
+      previous_values: input.previousValues || null,
+      new_values: input.newValues || null,
+      reason: input.reason || null,
+      ip_address: ip,
+      user_agent: input.request?.headers.get('user-agent') || null,
+      request_id: input.request?.headers.get('x-request-id') || null,
+    })
+  } catch (err: any) {
+    console.warn('[audit] failed to write fulfilment_audit_logs entry:', err?.message)
+  }
 }

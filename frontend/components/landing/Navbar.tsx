@@ -21,7 +21,7 @@ export default function Navbar() {
     if (r === 'dietitian') return '/dietitian/dashboard'
     if (r === 'trainer' || r === 'fitness_coach' || r === 'coach') return '/trainer/dashboard'
     if (r === 'provider') return '/provider/dashboard'
-    if (r === 'pharmacy') return '/pharmacy/dashboard'
+    if (r === 'pharmacy') return '/pharmacy'
     return '/patient'
   }
 

@@ -40,8 +40,26 @@ export function hashToken(token: string) {
   return createHash('sha256').update(token).digest('hex')
 }
 
-export function getOrigin(request: Request) {
-  return process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin
+export function getOrigin(request?: Request) {
+  const configured = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL
+  if (configured) {
+    return configured.replace(/\/+$/, '')
+  }
+  if (request) {
+    const forwardedHost = request.headers.get('x-forwarded-host')
+    if (forwardedHost) {
+      const proto = request.headers.get('x-forwarded-proto') || 'https'
+      return `${proto}://${forwardedHost}`
+    }
+    const origin = request.headers.get('origin')
+    if (origin) {
+      return origin
+    }
+    try {
+      return new URL(request.url).origin
+    } catch {}
+  }
+  return 'https://8liv.in'
 }
 
 export function getClientIp(request: Request) {

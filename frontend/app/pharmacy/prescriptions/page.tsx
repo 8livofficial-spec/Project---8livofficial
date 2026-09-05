@@ -1,5 +1,5 @@
-import PharmacyRetired from '../retired'
+import { redirect } from 'next/navigation'
 
-export default function PharmacyPrescriptionsPage() {
-  return <PharmacyRetired />
+export default function PharmacyPrescriptionsRedirect() {
+  redirect('/pharmacy')
 }

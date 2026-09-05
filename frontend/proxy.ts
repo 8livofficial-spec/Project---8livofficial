@@ -18,6 +18,12 @@ function normalizeWwwAlias(host: string) {
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+
+  // Bypass API routes completely from SEO canonicalization and redirects
+  if (pathname.startsWith('/api')) {
+    return NextResponse.next();
+  }
+
   const canonical = canonicalPath(pathname)
   const hasTrackingParams = trackingParams.some((param) => request.nextUrl.searchParams.has(param))
 
@@ -42,22 +48,32 @@ export function proxy(request: NextRequest) {
 
   // Only protect /admin, /doctor, /patient and /pharmacy routes
   if (pathname.startsWith('/admin') || pathname.startsWith('/doctor') || pathname.startsWith('/patient') || pathname.startsWith('/pharmacy')) {
+    // Public exception: /pharmacy/accept-invitation is a token-secured onboarding route
+    if (pathname.startsWith('/pharmacy/accept-invitation')) {
+      return withSeoPrivacyHeaders(NextResponse.next(), pathname);
+    }
+
     // Get the role from the cookie we set during login
     const cookieHeader = request.headers.get('cookie') || '';
     const roleMatch = cookieHeader.match(/user_role=([^;]+)/);
     const userRole = roleMatch ? decodeURIComponent(roleMatch[1]) : null;
     const normalizedRole = userRole?.toUpperCase();
 
-    // If no role cookie exists, redirect to home login
+    // If no role cookie exists, redirect to login
     if (!userRole) {
-      const redirectPath = pathname.startsWith('/doctor') ? '/?role=doctor' : '/';
+      const redirectPath = pathname.startsWith('/doctor')
+        ? '/?role=doctor'
+        : pathname.startsWith('/pharmacy')
+        ? '/login?role=pharmacy'
+        : '/';
       const loginUrl = new URL(redirectPath, request.url);
       return withSeoPrivacyHeaders(NextResponse.redirect(loginUrl), pathname);
     }
 
     // Route Protection Logic
     if (pathname.startsWith('/admin') && normalizedRole !== 'ADMIN') {
-      const unauthorizedUrl = new URL('/', request.url);
+      const isPharmacy = Boolean(normalizedRole && ['PHARMACY', 'PHARMACY_STAFF', 'PHARMACY_ADMIN'].includes(normalizedRole));
+      const unauthorizedUrl = new URL(isPharmacy ? '/pharmacy' : '/', request.url);
       return withSeoPrivacyHeaders(NextResponse.redirect(unauthorizedUrl), pathname);
     }
 
@@ -72,10 +88,12 @@ export function proxy(request: NextRequest) {
     }
 
     if (pathname.startsWith('/pharmacy')) {
-      if (normalizedRole === 'ADMIN') {
-        return withSeoPrivacyHeaders(NextResponse.redirect(new URL('/admin/pharmacy-orders', request.url)), pathname);
+      const isPharmacyRole = Boolean(normalizedRole && ['PHARMACY', 'PHARMACY_STAFF', 'PHARMACY_ADMIN'].includes(normalizedRole));
+      if (isPharmacyRole || normalizedRole === 'ADMIN') {
+        return withSeoPrivacyHeaders(NextResponse.next(), pathname);
       }
-      return withSeoPrivacyHeaders(NextResponse.redirect(new URL('/', request.url)), pathname);
+      const unauthorizedUrl = new URL('/login?role=pharmacy', request.url);
+      return withSeoPrivacyHeaders(NextResponse.redirect(unauthorizedUrl), pathname);
     }
   }
 

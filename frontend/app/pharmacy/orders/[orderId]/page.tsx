@@ -197,7 +197,7 @@ export default function PharmacyOrderDetailPage() {
 
           {/* Top Level Action Bar */}
           <div className="flex flex-wrap items-center gap-2">
-            {(status === 'RECEIVED' || status === 'PENDING_ADMIN_REVIEW') && (
+            {status === 'RECEIVED' && (
               <button
                 onClick={() => handleAction('acknowledge')}
                 disabled={actionLoading}
