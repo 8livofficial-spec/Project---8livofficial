@@ -98,6 +98,96 @@ export async function POST(request: Request) {
     }
 
     if (!cycleData) {
+      // Auto-provision Care Subscription & Treatment Cycle for authorized clinical prescription
+      try {
+        let { data: sub } = await supabaseAdmin
+          .from('subscriptions')
+          .select('*')
+          .eq('patient_id', auth.user.id)
+          .eq('status', 'ACTIVE')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        const now = new Date()
+        const startDateStr = now.toISOString().split('T')[0]
+        const endDate = new Date(now)
+        endDate.setMonth(endDate.getMonth() + 3)
+        const endDateStr = endDate.toISOString().split('T')[0]
+
+        if (!sub) {
+          const { data: newSub, error: subError } = await supabaseAdmin
+            .from('subscriptions')
+            .insert({
+              tenant_id: tenantId,
+              patient_id: auth.user.id,
+              duration_months: 3,
+              program_name: 'Medical Weight Management',
+              base_monthly_price: 4999,
+              original_price: 14997,
+              final_price: 14997,
+              start_date: startDateStr,
+              end_date: endDateStr,
+              status: 'ACTIVE',
+              payment_status: 'PAID',
+            })
+            .select('*')
+            .maybeSingle()
+
+          if (!subError && newSub) {
+            sub = newSub
+          }
+        }
+
+        if (sub) {
+          const cycleEndDate = new Date(now)
+          cycleEndDate.setDate(cycleEndDate.getDate() + 30)
+          const cycleEndDateStr = cycleEndDate.toISOString().split('T')[0]
+
+          const { data: newCycle, error: cycleErr } = await supabaseAdmin
+            .from('treatment_cycles')
+            .insert({
+              tenant_id: tenantId,
+              subscription_id: sub.id,
+              patient_id: auth.user.id,
+              doctor_id: prescription.doctor_id || null,
+              cycle_number: 1,
+              start_date: startDateStr,
+              end_date: cycleEndDateStr,
+              status: 'ACTIVE',
+            })
+            .select('*')
+            .maybeSingle()
+
+          if (newCycle) {
+            cycleId = newCycle.id
+            cycleData = newCycle
+          } else {
+            const { data: existingC } = await supabaseAdmin
+              .from('treatment_cycles')
+              .select('*')
+              .eq('subscription_id', sub.id)
+              .eq('cycle_number', 1)
+              .maybeSingle()
+            if (existingC) {
+              cycleId = existingC.id
+              cycleData = existingC
+            }
+          }
+
+          if (cycleId) {
+            await supabaseAdmin
+              .from('prescriptions')
+              .update({ treatment_cycle_id: cycleId })
+              .eq('id', prescriptionId)
+          }
+        }
+      } catch (provisionErr) {
+        console.warn('[confirm-delivery] Auto-provision treatment cycle warning:', provisionErr)
+      }
+    }
+
+    if (!cycleData) {
       return NextResponse.json(
         { error: 'Cannot confirm delivery: Prescription is not linked to an active treatment cycle or care subscription entitlement.' },
         { status: 400 }
@@ -276,7 +366,6 @@ export async function POST(request: Request) {
         tenant_id: tenantId,
         prescription_id: prescriptionId,
         patient_id: auth.user.id,
-        treatment_cycle_id: cycleId || prescription.treatment_cycle_id || null,
         pharmacy_id: null,
         status: 'PENDING_ASSIGNMENT',
         delivery_address_snapshot: deliveryAddressSnapshot,

@@ -5,11 +5,12 @@ import { sanitizePharmacyOrderForFulfillment } from '@/lib/pharmacyOrderStateMac
 
 export async function GET(
   request: Request,
-  { params }: { params: { orderId: string } }
+  context: { params: Promise<{ orderId: string }> | { orderId: string } }
 ) {
   try {
-    const context = await assertPharmacyOrderAccess(request, params.orderId)
-    const { order } = context
+    const { orderId } = await Promise.resolve(context.params)
+    const accessContext = await assertPharmacyOrderAccess(request, orderId)
+    const { order } = accessContext
 
     // Fetch doctor profile details for qualification and registration info
     const prescription = (order as any).prescriptions
@@ -17,7 +18,7 @@ export async function GET(
     if (prescription?.doctor_id) {
       const { data: docProfile } = await supabaseAdmin
         .from('doctor_profiles')
-        .select('full_name, registration_number, medical_registration_number, qualification, mci_number')
+        .select('full_name, qualification, mci_number')
         .eq('id', prescription.doctor_id)
         .maybeSingle()
       doctorData = docProfile
