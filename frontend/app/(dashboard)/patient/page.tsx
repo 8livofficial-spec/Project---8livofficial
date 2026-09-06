@@ -1,9 +1,10 @@
 'use client'
 
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { Video, Scale, ArrowRight, X, FileText, Download } from 'lucide-react'
+import { Video, Scale, ArrowRight, X, FileText, Download, Pill, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
+import { authedFetch } from '@/lib/apiClient'
 import { usePatientData } from '@/hooks/usePatientData'
 import OverviewCards from '@/components/patient/OverviewCards'
 import WeightChart from '@/components/patient/WeightChart'
@@ -69,7 +70,8 @@ export default function PatientDashboardHome() {
     loading,
     reloadData,
     dietPlan,
-    fitnessPlan
+    fitnessPlan,
+    activePrescription: initialActiveRx
   } = usePatientData()
 
   const [showWeightLogModal, setShowWeightLogModal] = useState(false)
@@ -151,23 +153,43 @@ export default function PatientDashboardHome() {
     ? Math.min(100, Math.round((currentLost / totalGoal) * 100))
     : 0
 
-  // Parse active protocol details dynamically from doctor's consultation rows
-  const prescriptionText = consultation?.prescription_text || ''
-  const isMedicationApproved = !!consultation && consultation.status === 'approved'
-  
-  let medicationName = "Pending Prescription"
-  let dosage = "-"
-  
-  if (prescriptionText) {
-    const match = prescriptionText.match(/^([a-zA-Z\s\(\)-]+)\s+([0-9\.]+\s*m?g)/i)
-    if (match) {
-      medicationName = match[1].trim()
-      dosage = match[2].trim()
-    } else {
-      medicationName = prescriptionText
-      dosage = "Standard Dosage"
+  // Resolve active e-prescription (real e-prescription takes precedence over legacy consultation text)
+  const [localActiveRx, setLocalActiveRx] = useState<any | null>(null)
+  const activeRx = initialActiveRx || localActiveRx
+
+  useEffect(() => {
+    const fetchActivePrescription = async () => {
+      try {
+        const res = await authedFetch('/api/patient/prescriptions')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.activePrescription) {
+            setLocalActiveRx(data.activePrescription)
+          } else if (Array.isArray(data.prescriptions) && data.prescriptions.length > 0) {
+            const active = data.prescriptions.find((r: any) => !['DRAFT', 'REVOKED', 'CANCELLED', 'REPLACED'].includes(r.status))
+            if (active) setLocalActiveRx(active)
+          }
+        }
+      } catch (e) {
+        // Non-blocking
+      }
     }
-  }
+    fetchActivePrescription()
+  }, [])
+
+  const prescriptionText = consultation?.prescription_text || ''
+  const primaryItem = activeRx?.prescription_items?.[0] || activeRx?.canonical_data?.items?.[0]
+  const hasActiveEPrescription = Boolean(activeRx)
+
+  const medicationName = hasActiveEPrescription
+    ? (primaryItem?.medicine_name || primaryItem?.brand_name || 'Prescribed Protocol')
+    : (prescriptionText ? (prescriptionText.match(/^([a-zA-Z\s\(\)-]+)\s+([0-9\.]+\s*m?g)/i)?.[1]?.trim() || prescriptionText) : "Pending Prescription")
+
+  const dosage = hasActiveEPrescription
+    ? (primaryItem?.strength || primaryItem?.dose || 'Standard Dose')
+    : (prescriptionText ? (prescriptionText.match(/^([a-zA-Z\s\(\)-]+)\s+([0-9\.]+\s*m?g)/i)?.[2]?.trim() || "Standard Dosage") : "-")
+
+  const isMedicationApproved = hasActiveEPrescription || (!!consultation && consultation.status === 'approved')
 
   const getDosesTaken = (approvedAtString?: string) => {
     if (!approvedAtString) return 6
@@ -439,6 +461,10 @@ export default function PatientDashboardHome() {
     fetchFulfillment()
   }, [])
 
+  const attachedOrder = activeRx?.pharmacy_orders && Array.isArray(activeRx.pharmacy_orders) ? activeRx.pharmacy_orders[0] : null
+  const effectiveFulfillmentStatus = cycleInfo?.fulfillmentStatus || attachedOrder?.status || 'PENDING_ASSIGNMENT'
+  const effectiveTrackingNumber = cycleInfo?.trackingNumber || attachedOrder?.dispatch_tracking_number || attachedOrder?.tracking_number
+
   if (loading) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
@@ -491,6 +517,40 @@ export default function PatientDashboardHome() {
 
       </div>
 
+      {/* Active E-Prescription Fulfillment Callout Banner */}
+      {hasActiveEPrescription && (!effectiveFulfillmentStatus || effectiveFulfillmentStatus === 'PENDING_ASSIGNMENT') && (
+        <div className="bg-gradient-to-r from-[#0D9488]/10 via-[#0D9488]/5 to-white border-2 border-[#0D9488]/30 rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-sm">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-2xl bg-[#0D9488]/15 text-[#0D9488] flex items-center justify-center shrink-0">
+              <Pill className="w-6 h-6" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-[#0D9488] bg-[#0D9488]/10 px-2.5 py-0.5 rounded-full">
+                  Doctor Authorized E-Prescription ({activeRx.prescription_number})
+                </span>
+                <span className="flex h-2 w-2 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              </div>
+              <h4 className="text-base font-black text-[#1A1F36] mt-1 font-sora">
+                {medicationName} ({dosage})
+              </h4>
+              <p className="text-xs text-[#40516A] font-semibold mt-0.5">
+                Your physician has issued your clinical prescription. Please confirm your delivery address to begin licensed pharmacy dispatch.
+              </p>
+            </div>
+          </div>
+          <Link
+            href={`/patient/prescriptions/${activeRx.id}`}
+            className="inline-flex items-center justify-center gap-2 bg-[#0D9488] hover:bg-[#0B7A6F] text-white font-black px-6 py-3 rounded-2xl text-xs uppercase tracking-wider transition-all shadow-md shrink-0 whitespace-nowrap"
+          >
+            Review &amp; Confirm Address <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
+      )}
+
       {/* 2. Quick Action shortcuts */}
       <QuickActions onLogWeightClick={() => setShowWeightLogModal(true)} />
 
@@ -539,8 +599,8 @@ export default function PatientDashboardHome() {
             isApproved={isMedicationApproved}
             cycleNumber={cycleInfo?.cycleNumber || 1}
             totalCycles={cycleInfo?.totalCycles || 1}
-            fulfillmentStatus={cycleInfo?.fulfillmentStatus}
-            trackingNumber={cycleInfo?.trackingNumber}
+            fulfillmentStatus={effectiveFulfillmentStatus}
+            trackingNumber={effectiveTrackingNumber}
           />
         </div>
         <div className="col-span-1 md:col-span-2 xl:col-span-1">

@@ -64,7 +64,8 @@ export async function GET(request: Request) {
       staffRes,
       paymentsRes,
       persistedJourney,
-      membershipValidity
+      membershipValidity,
+      activeRxRes
     ] = await Promise.all([
       supabaseAdmin
         .from('profiles')
@@ -110,7 +111,15 @@ export async function GET(request: Request) {
         .order('created_at', { ascending: false })
         .limit(5),
       loadPatientJourneyState(patientId),
-      getMembershipValidity(patientId)
+      getMembershipValidity(patientId),
+      supabaseAdmin
+        .from('prescriptions')
+        .select('*, prescription_items(*), pharmacy_orders(*)')
+        .eq('patient_id', patientId)
+        .not('status', 'in', '("DRAFT","REVOKED","CANCELLED","REPLACED")')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
     ])
 
     if (profileRes.error) throw profileRes.error
@@ -372,7 +381,8 @@ export async function GET(request: Request) {
             expires_at: membershipValidity.expiresAt,
             status: membershipValidity.active ? 'active' : 'expired',
           }
-        : null
+        : null,
+      activePrescription: activeRxRes?.data || null
     })
   } catch (err: unknown) {
     console.error("API Error in /api/patient/status:", err)

@@ -106,6 +106,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ slots: [] })
     }
 
+    // Doctor Continuity Lock: If patient already has a locked/assigned doctor, restrict slots strictly to them
+    const assignedDoctorId = await getAssignedProviderForRole(authenticatedPatient.user.id, 'doctor')
+    if (assignedDoctorId && activeDoctorIds.has(assignedDoctorId)) {
+      activeDoctorIds = new Set([assignedDoctorId])
+    }
+
     let query = supabaseAdmin
       .from('provider_availability')
       .select('id, provider_id, available_date, start_time, status')
@@ -309,7 +315,11 @@ export async function POST(request: Request) {
       preferredDoctorId = previousDoctor?.doctor_id || null
     }
 
-    if (!isInitialConsultation) {
+    const lockedDoctorId = await getAssignedProviderForRole(patientId, 'doctor')
+    if (lockedDoctorId) {
+      preferredDoctorId = lockedDoctorId
+      strictPreferredDoctor = true
+    } else if (!isInitialConsultation) {
       preferredDoctorId = await getAssignedProviderForRole(patientId, 'doctor')
       strictPreferredDoctor = true
       if (!preferredDoctorId) {

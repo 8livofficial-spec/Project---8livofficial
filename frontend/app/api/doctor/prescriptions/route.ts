@@ -2,90 +2,104 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { assertDoctor, errorResponse } from '@/lib/fulfilmentAuth'
 import { createPrescription, signPrescription, validatePrescriptionInput } from '@/lib/prescriptionService'
+import { serverCache, jsonWithETag } from '@/lib/serverCache'
 
 export async function GET(request: Request) {
   try {
     const auth = await assertDoctor(request)
     const { searchParams } = new URL(request.url)
-    const search = searchParams.get('search')?.trim()
-    const status = searchParams.get('status')?.trim()
+    const search = searchParams.get('search')?.trim() || ''
+    const status = searchParams.get('status')?.trim() || 'ALL'
+    const limit = Math.min(Math.max(Number(searchParams.get('limit') || 50), 1), 100)
+    const page = Math.max(Number(searchParams.get('page') || 1), 1)
 
-    let query = supabaseAdmin
-      .from('prescriptions')
-      .select('*, prescription_items(*), pharmacy_orders(*)')
-      .eq('doctor_id', auth.user.id)
-      .order('created_at', { ascending: false })
+    const cacheKey = `prescriptions:${auth.user.id}:${status}:${search}:${page}:${limit}`
 
-    if (status && status !== 'ALL') {
-      query = query.eq('status', status)
-    }
+    const { value: result, etag } = await serverCache.getOrSet(
+      cacheKey,
+      async () => {
+        let query = supabaseAdmin
+          .from('prescriptions')
+          .select('*, prescription_items(*), pharmacy_orders(*)')
+          .eq('doctor_id', auth.user.id)
+          .order('created_at', { ascending: false })
 
-    if (search) {
-      query = query.ilike('prescription_number', `%${search}%`)
-    }
-
-    const { data: prescriptions, error: rxError } = await query
-    if (rxError) throw rxError
-
-    const list = prescriptions || []
-    const patientIds = Array.from(new Set(list.map((rx: any) => rx.patient_id).filter(Boolean)))
-    const consultationIds = Array.from(new Set(list.map((rx: any) => rx.consultation_id).filter(Boolean)))
-
-    let patientsMap = new Map()
-    let consultationsMap = new Map()
-
-    if (patientIds.length > 0) {
-      try {
-        const { data: profiles } = await supabaseAdmin
-          .from('profiles')
-          .select('id, first_name, last_name, full_name, email, phone_number, display_id')
-          .in('id', patientIds)
-        if (profiles) {
-          patientsMap = new Map(profiles.map((p: any) => [p.id, p]))
+        if (status && status !== 'ALL') {
+          if (status === 'ISSUED' || status === 'ACTIVE') {
+            query = query.in('status', ['ISSUED', 'ACTIVE', 'SIGNED'])
+          } else if (status === 'DRAFT') {
+            query = query.in('status', ['DRAFT', 'READY_FOR_REVIEW'])
+          } else if (status === 'REVOKED') {
+            query = query.in('status', ['REVOKED', 'CANCELLED', 'REPLACED'])
+          } else {
+            query = query.eq('status', status)
+          }
         }
-      } catch (pErr) {
-        console.warn('[doctor/prescriptions] Profiles fetch warning:', pErr)
-      }
-    }
 
-    if (consultationIds.length > 0) {
-      try {
-        const { data: consults } = await supabaseAdmin
-          .from('doctor_consultations')
-          .select('id, booking_date, booking_time, status, appointment_type')
-          .in('id', consultationIds)
-        if (consults) {
-          consultationsMap = new Map(consults.map((c: any) => [c.id, c]))
+        if (search) {
+          query = query.ilike('prescription_number', `%${search}%`)
         }
-      } catch (cErr) {
-        console.warn('[doctor/prescriptions] Consultations fetch warning:', cErr)
-      }
-    }
 
-    const enriched = list.map((rx: any) => {
-      const patient = patientsMap.get(rx.patient_id) || null
-      const consultation = consultationsMap.get(rx.consultation_id) || null
-      return {
-        ...rx,
-        patient,
-        patient_name: patient
-          ? `${patient.first_name || ''} ${patient.last_name || ''}`.trim() || patient.full_name || patient.email
-          : 'Patient',
-        consultation,
-      }
-    })
+        // Apply production-grade pagination boundary
+        const from = (page - 1) * limit
+        const to = from + limit - 1
+        query = query.range(from, to)
 
-    // If search was specified and did not match prescription number, filter by patient name in memory
-    const finalResults = search
-      ? enriched.filter(
-          (rx: any) =>
-            rx.prescription_number?.toLowerCase().includes(search.toLowerCase()) ||
-            rx.patient_name?.toLowerCase().includes(search.toLowerCase()) ||
-            rx.diagnosis?.toLowerCase().includes(search.toLowerCase())
-        )
-      : enriched
+        const { data: prescriptions, error: rxError } = await query
+        if (rxError) throw rxError
 
-    return NextResponse.json({ prescriptions: finalResults })
+        const list = prescriptions || []
+        const patientIds = Array.from(new Set(list.map((rx: any) => rx.patient_id).filter(Boolean)))
+        const consultationIds = Array.from(new Set(list.map((rx: any) => rx.consultation_id).filter(Boolean)))
+
+        const [profilesRes, consultsRes] = await Promise.all([
+          patientIds.length > 0
+            ? supabaseAdmin
+                .from('profiles')
+                .select('id, first_name, last_name, full_name, email, phone_number, display_id')
+                .in('id', patientIds)
+            : Promise.resolve({ data: [] as any[], error: null }),
+          consultationIds.length > 0
+            ? supabaseAdmin
+                .from('doctor_consultations')
+                .select('id, booking_date, booking_time, status, appointment_type')
+                .in('id', consultationIds)
+            : Promise.resolve({ data: [] as any[], error: null })
+        ])
+
+        const patientsMap = new Map((profilesRes.data || []).map((p: any) => [p.id, p]))
+        const consultationsMap = new Map((consultsRes.data || []).map((c: any) => [c.id, c]))
+
+        const enriched = list.map((rx: any) => {
+          const patient = patientsMap.get(rx.patient_id) || null
+          const consultation = consultationsMap.get(rx.consultation_id) || null
+          return {
+            ...rx,
+            patient,
+            patient_name: patient
+              ? `${patient.first_name || ''} ${patient.last_name || ''}`.trim() || patient.full_name || patient.email
+              : 'Patient',
+            consultation,
+          }
+        })
+
+        // If search was specified and did not match prescription number, filter by patient name in memory
+        const finalResults = search
+          ? enriched.filter(
+              (rx: any) =>
+                rx.prescription_number?.toLowerCase().includes(search.toLowerCase()) ||
+                rx.patient_name?.toLowerCase().includes(search.toLowerCase()) ||
+                rx.diagnosis?.toLowerCase().includes(search.toLowerCase())
+            )
+          : enriched
+
+        return { prescriptions: finalResults, page, limit }
+      },
+      5000,
+      [`prescriptions:${auth.user.id}`]
+    )
+
+    return jsonWithETag(result, etag, request, { maxAgeSec: 4 })
   } catch (err: any) {
     const failure = errorResponse(err instanceof Error ? err.message : 'Internal Server Error')
     return NextResponse.json({ error: failure.error, prescriptions: [] }, { status: failure.status })
@@ -115,9 +129,18 @@ export async function POST(request: Request) {
     let signedResult: any = null
 
     if (autoSign) {
-      signedResult = await signPrescription(prescription.id, auth.user.id)
+      const declarations = body.declarations || {
+        reviewed_details: body.reviewed_details,
+        clinical_decision: body.clinical_decision,
+        electronic_authorization: body.electronic_authorization,
+      }
+      signedResult = await signPrescription(prescription.id, auth.user.id, declarations, request)
       finalPrescription = signedResult.prescription || prescription
     }
+
+    // Invalidate caches immediately for this doctor
+    serverCache.invalidate(`prescriptions:${auth.user.id}`)
+    serverCache.invalidate(`dashboard:doctor:${auth.user.id}`)
 
     return NextResponse.json(
       {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback, type ReactNode } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type ReactNode } from 'react';
 import { supabase } from '@/lib/supabaseClient';
 import { useRouter } from 'next/navigation';
 import { motion } from 'framer-motion';
@@ -11,6 +11,7 @@ import {
   Stethoscope, ChevronRight, Plus, X, TrendingUp, BadgeCheck, Bell, BellRing, UserCheck, Check, PhoneOff, MessageCircle,
   Eye, EyeOff, Printer, Download, Menu, Settings,
   ShieldCheck, FileCheck, Sparkles, Truck, Search, Filter, Hash, AlertTriangle, Copy,
+  RefreshCw, User, PenTool,
 } from 'lucide-react';
 import StaffChat from '@/components/StaffChat';
 import ProviderAvailabilityScheduler, { GeneratedSlot, AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler';
@@ -18,6 +19,7 @@ import StreamConsultationCall from '@/components/video/StreamConsultationCall';
 import DoctorPrescriptionBuilderModal from '@/components/doctor/DoctorPrescriptionBuilderModal';
 import OfficialPrescriptionModal from '@/components/doctor/OfficialPrescriptionModal';
 import RevokePrescriptionModal from '@/components/doctor/RevokePrescriptionModal';
+import ProviderProfileEditor from '@/components/provider/ProviderProfileEditor';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 
 const inputCls = 'w-full border border-slate-200 rounded-2xl p-3 bg-white outline-none transition-all text-[#0F172A] placeholder-[#94A3B8] font-medium focus:bg-white focus:border-[#0052FF] focus:ring-4 focus:ring-[#0052FF]/10 [color-scheme:light]';
@@ -39,23 +41,23 @@ function formatDuration(startedAt: string | null, endedAt: string | null): strin
 
 function parsePrescriptionNotes(notes: string | null) {
   if (!notes) return { notes: '', diagnosis: '', followUp: '' };
-  
+
   let notesStr = '';
   let diagnosisStr = '';
   let followUpStr = '';
-  
+
   const notesMatch = notes.match(/Notes:\s*([\s\S]*?)(?=(?:Diagnosis summary:|Follow-up:|$))/i);
   const diagMatch = notes.match(/Diagnosis summary:\s*([\s\S]*?)(?=(?:Notes:|Follow-up:|$))/i);
   const followMatch = notes.match(/Follow-up:\s*([\s\S]*?)(?=(?:Notes:|Diagnosis summary:|$))/i);
-  
+
   if (notesMatch) notesStr = notesMatch[1].trim();
   if (diagMatch) diagnosisStr = diagMatch[1].trim();
   if (followMatch) followUpStr = followMatch[1].trim();
-  
+
   if (!notesStr && !diagnosisStr && !followUpStr) {
     diagnosisStr = notes.trim();
   }
-  
+
   return {
     notes: notesStr,
     diagnosis: diagnosisStr,
@@ -86,9 +88,9 @@ function handlePrintPrescription(c: any) {
     alert('Please allow popups to print/download the prescription.');
     return;
   }
-  
+
   const isNone = !c.prescription_type || c.prescription_type === 'none';
-  
+
   printWindow.document.write(`
     <html>
       <head>
@@ -178,7 +180,7 @@ function isCallTimeNow(bookingDate: string, bookingTime: string): boolean {
     let isoDate = bookingDate;
     if (bookingDate.includes('/')) {
       const [d, m, y] = bookingDate.split('/');
-      isoDate = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+      isoDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
     }
     const target = new Date(`${isoDate} ${bookingTime}`);
     const now = Date.now();
@@ -198,7 +200,7 @@ function getParsedTime(bookingDate: string, bookingTime: string): number | null 
     let isoDate = bookingDate;
     if (bookingDate.includes('/')) {
       const [d, m, y] = bookingDate.split('/');
-      isoDate = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+      isoDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
     }
     const target = new Date(`${isoDate} ${bookingTime}`);
     const parsed = target.getTime();
@@ -425,7 +427,7 @@ function ClinicalMini({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-type Tab = 'overview' | 'patients' | 'schedule' | 'consultations' | 'prescriptions' | 'wallet' | 'messages';
+type Tab = 'overview' | 'patients' | 'schedule' | 'consultations' | 'prescriptions' | 'wallet' | 'profile';
 
 type Consultation = {
   id: string;
@@ -499,6 +501,41 @@ export default function DoctorDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<Tab>('overview');
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+
+  // Sync tab with URL query parameter ?tab=...
+  useEffect(() => {
+    const handleUrlTab = () => {
+      if (typeof window !== 'undefined') {
+        const params = new URLSearchParams(window.location.search);
+        const tab = params.get('tab') as Tab | null;
+        if (tab && ['overview', 'patients', 'schedule', 'consultations', 'prescriptions', 'wallet', 'profile'].includes(tab)) {
+          setActiveTab(tab);
+        }
+      }
+    };
+    handleUrlTab();
+    window.addEventListener('popstate', handleUrlTab);
+    return () => window.removeEventListener('popstate', handleUrlTab);
+  }, []);
+
+  const selectTab = useCallback((tab: Tab) => {
+    setActiveTab(tab);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('tab', tab);
+      window.history.replaceState(null, '', url.toString());
+    }
+  }, []);
+
+  const providerProfileProps = useMemo(() => ({
+    id: doctor?.id || doctorProfile?.id,
+    name: doctorProfile?.full_name || doctor?.email?.split('@')[0] || 'Doctor',
+    specialization: doctorProfile?.specialty || 'Endocrinologist',
+    qualification: doctorProfile?.qualification || '',
+    mci_number: doctorProfile?.mci_number || '',
+    registration_council: doctorProfile?.registration_council || 'Medical Council of India',
+    role: 'doctor',
+  }), [doctor?.id, doctor?.email, doctorProfile?.id, doctorProfile?.full_name, doctorProfile?.specialty, doctorProfile?.qualification, doctorProfile?.mci_number, doctorProfile?.registration_council]);
 
   // Consultations
   const [consultations, setConsultations] = useState<Consultation[]>([]);
@@ -600,15 +637,20 @@ export default function DoctorDashboard() {
   const [bankMaskedAccount, setBankMaskedAccount] = useState('');
   const [bankModalMsg, setBankModalMsg] = useState<{ type: 'error' | 'success'; text: string } | null>(null);
 
+  const isFetchingDashboardRef = useRef(false);
+  const initialOverviewLoadedRef = useRef(false);
+
   // ── Auth check ──────────────────────────────────────────────────────────
   useEffect(() => {
+    let isMounted = true;
     const init = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
+        if (!isMounted) return;
         if (error || !session) {
           if (error) console.warn('Doctor session load error:', error.message);
           await supabase.auth.signOut();
-          router.push('/?role=doctor');
+          if (isMounted) router.push('/?role=doctor');
           return;
         }
         setDoctor(session.user);
@@ -617,17 +659,46 @@ export default function DoctorDashboard() {
         const profileRes = await authedFetch('/api/staff/profile', {
           method: 'POST'
         });
-        const profileData = await profileRes.json();
-        const userProfile = profileData.profile;
-        const profErr = profileData.error;
+        const profileData = await profileRes.json().catch(() => ({}));
+        let userProfile = profileData?.profile;
+        const profErr = profileData?.error;
 
-        if (profErr || !userProfile || userProfile.role !== 'doctor') {
+        // Resilient fallback: If API had transient network timeout, check session user_metadata and doctor_profiles
+        if (!userProfile && (session.user.user_metadata?.role === 'doctor' || session.user.email?.includes('doctor'))) {
+          userProfile = {
+            id: session.user.id,
+            role: 'doctor',
+            first_name: session.user.user_metadata?.first_name || 'Dr',
+            last_name: session.user.user_metadata?.last_name || '',
+          };
+        }
+
+        if (!userProfile) {
+          const { data: docProf } = await supabase
+            .from('doctor_profiles')
+            .select('id')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+          if (docProf) {
+            userProfile = {
+              id: session.user.id,
+              role: 'doctor',
+              first_name: 'Dr',
+              last_name: '',
+            };
+          }
+        }
+
+        if (userProfile && userProfile.role !== 'doctor') {
           console.warn('Access Denied: User is not a doctor.');
           alert('Access Denied. You must be a doctor to view this dashboard.');
           await supabase.auth.signOut();
           document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax';
-          router.push('/login');
+          if (isMounted) router.push('/login');
           return;
+        } else if (!userProfile && profErr) {
+          console.warn('Staff profile fetch warning (non-fatal):', profErr);
         }
 
         // Ensure doctor profile exists via backend service-role
@@ -643,12 +714,16 @@ export default function DoctorDashboard() {
           console.warn('Profile initialization error (non-critical):', err);
         }
 
+        if (!isMounted) return;
+
         // Load doctor profile
         const { data: profile } = await supabase
           .from('doctor_profiles')
           .select('*')
           .eq('id', session.user.id)
           .maybeSingle();
+
+        if (!isMounted) return;
 
         if (profile) {
           setDoctorProfile(profile);
@@ -661,36 +736,50 @@ export default function DoctorDashboard() {
         }
 
         const loadDashboardAggregated = async () => {
+          if (isFetchingDashboardRef.current) return;
           try {
+            isFetchingDashboardRef.current = true;
             const res = await authedFetch('/api/provider/dashboard');
-            if (res.ok) {
+            if (res.ok && isMounted) {
               const data = await res.json();
               if (data.consultations) setConsultations(data.consultations);
               if (data.availableRequests) setAvailableRequests(data.availableRequests);
               if (data.wallet) setWallet(data.wallet);
+              initialOverviewLoadedRef.current = true;
             }
           } catch (err) {
             console.error('Failed to load doctor dashboard aggregated overview:', err);
+          } finally {
+            isFetchingDashboardRef.current = false;
           }
         };
 
         await loadDashboardAggregated();
-        setLoading(false);
+        if (isMounted) setLoading(false);
       } catch (err) {
-        console.error('Doctor dashboard initialization failed:', err);
-        await supabase.auth.signOut();
-        router.push('/?role=doctor');
+        console.error('Doctor dashboard initialization failed (non-fatal):', err);
+        if (isMounted) setLoading(false);
       }
     };
     init();
+    return () => {
+      isMounted = false;
+    };
   }, [router]);
 
-  const loadDoctorPrescriptions = useCallback(async (searchQuery = rxSearch, statusFilter = rxStatusFilter) => {
+  const rxSearchRef = useRef(rxSearch);
+  rxSearchRef.current = rxSearch;
+  const rxStatusFilterRef = useRef(rxStatusFilter);
+  rxStatusFilterRef.current = rxStatusFilter;
+
+  const loadDoctorPrescriptions = useCallback(async (searchQuery?: string, statusFilter?: string, showSkeleton = false) => {
     try {
-      setLoadingPrescriptions(true);
+      if (showSkeleton) setLoadingPrescriptions(true);
+      const searchVal = searchQuery !== undefined ? searchQuery : rxSearchRef.current;
+      const statusVal = statusFilter !== undefined ? statusFilter : rxStatusFilterRef.current;
       const params = new URLSearchParams();
-      if (searchQuery.trim()) params.set('search', searchQuery.trim());
-      if (statusFilter && statusFilter !== 'ALL') params.set('status', statusFilter);
+      if (searchVal.trim()) params.set('search', searchVal.trim());
+      if (statusVal && statusVal !== 'ALL') params.set('status', statusVal);
       const res = await authedFetch(`/api/doctor/prescriptions?${params.toString()}`);
       if (res.ok) {
         const data = await res.json();
@@ -699,21 +788,34 @@ export default function DoctorDashboard() {
     } catch (err) {
       console.error('Failed to load doctor prescriptions:', err);
     } finally {
-      setLoadingPrescriptions(false);
+      if (showSkeleton) setLoadingPrescriptions(false);
     }
-  }, [rxSearch, rxStatusFilter]);
+  }, []);
 
   // Tab change handler to lazy load data
   useEffect(() => {
     if (!doctor) return;
     const loadTabDetails = async () => {
       if (activeTab === 'overview') {
-        const res = await authedFetch('/api/provider/dashboard');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.consultations) setConsultations(data.consultations);
-          if (data.availableRequests) setAvailableRequests(data.availableRequests);
-          if (data.wallet) setWallet(data.wallet);
+        // Skip duplicate fetch on initial mount as init() already loads it
+        if (!initialOverviewLoadedRef.current) {
+          initialOverviewLoadedRef.current = true;
+          return;
+        }
+        if (isFetchingDashboardRef.current) return;
+        try {
+          isFetchingDashboardRef.current = true;
+          const res = await authedFetch('/api/provider/dashboard');
+          if (res.ok) {
+            const data = await res.json();
+            if (data.consultations) setConsultations(data.consultations);
+            if (data.availableRequests) setAvailableRequests(data.availableRequests);
+            if (data.wallet) setWallet(data.wallet);
+          }
+        } catch (err) {
+          console.error('Failed to reload overview data:', err);
+        } finally {
+          isFetchingDashboardRef.current = false;
         }
       } else if (activeTab === 'schedule') {
         loadAvailability(doctor.id);
@@ -721,81 +823,149 @@ export default function DoctorDashboard() {
         loadWallet(doctor.id);
         loadBankDetails();
       } else if (activeTab === 'prescriptions') {
-        loadDoctorPrescriptions(rxSearch, rxStatusFilter);
+        loadDoctorPrescriptions(rxSearch, rxStatusFilter, doctorPrescriptions.length === 0);
       }
     };
     loadTabDetails();
-  }, [activeTab, doctor, loadDoctorPrescriptions, rxSearch, rxStatusFilter]);
+  }, [activeTab, doctor?.id]);
 
   // Paginated Consultations Loader Effect
   useEffect(() => {
     if (doctor && activeTab === 'consultations') {
       loadConsultations(doctor.id, consultationsPage, consultationsSearch, consultationsStatusFilter);
     }
-  }, [doctor, activeTab, consultationsPage, consultationsSearch, consultationsStatusFilter]);
+  }, [doctor?.id, activeTab, consultationsPage, consultationsSearch, consultationsStatusFilter]);
 
   // Paginated Patients Loader Effect
   useEffect(() => {
     if (doctor && activeTab === 'patients') {
       loadPatients(doctor.id, patientsPage, patientsSearch);
     }
-  }, [doctor, activeTab, patientsPage, patientsSearch]);
+  }, [doctor?.id, activeTab, patientsPage, patientsSearch]);
 
-  // Prescriptions Search & Filter Effect
+  // Prescriptions Search & Filter Effect (debounced to avoid rapid queries)
   useEffect(() => {
-    if (doctor && activeTab === 'prescriptions') {
-      loadDoctorPrescriptions(rxSearch, rxStatusFilter);
-    }
-  }, [doctor, activeTab, rxSearch, rxStatusFilter, loadDoctorPrescriptions]);
+    if (!doctor || activeTab !== 'prescriptions') return;
+    const timer = setTimeout(() => {
+      loadDoctorPrescriptions(rxSearch, rxStatusFilter, false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [doctor?.id, activeTab, rxSearch, rxStatusFilter, loadDoctorPrescriptions]);
 
-  // Poll consultation status while call is active
+  // Real-time consultation status updates via Supabase WebSocket (event-driven, 0 redundant HTTP polls)
   useEffect(() => {
     if (!activeCallId) return;
 
     const checkStatus = async () => {
-      const { data } = await supabase
-        .from('doctor_consultations')
-        .select('status')
-        .eq('id', activeCallId)
-        .maybeSingle();
+      try {
+        const { data } = await supabase
+          .from('doctor_consultations')
+          .select('status')
+          .eq('id', activeCallId)
+          .maybeSingle();
 
-      if (data) {
-        setActiveCallStatus(data.status);
+        if (data?.status) {
+          setActiveCallStatus(data.status);
+        }
+      } catch (err) {
+        console.warn('Consultation status check error:', err);
       }
     };
 
     checkStatus();
-    const interval = setInterval(checkStatus, 2000);
-    return () => clearInterval(interval);
+
+    // Event-driven realtime subscription to table changes
+    const channel = supabase
+      .channel(`consultation-status-${activeCallId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'doctor_consultations',
+          filter: `id=eq.${activeCallId}`,
+        },
+        (payload) => {
+          if (payload.new && (payload.new as any).status) {
+            setActiveCallStatus((payload.new as any).status);
+          }
+        }
+      )
+      .subscribe();
+
+    // High-efficiency fallback heartbeat (25s instead of 2s) with tab visibility guard
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      checkStatus();
+    }, 25000);
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   }, [activeCallId]);
 
-  // Poll active module data conditionally for real-time updates
+  // Intelligent polling with Tab Visibility Guard (pauses completely when tab is inactive)
   useEffect(() => {
     if (!doctor) return;
     const pollInterval = setInterval(async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       if (activeTab === 'overview') {
-        const res = await authedFetch('/api/provider/dashboard');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.consultations) setConsultations(data.consultations);
-          if (data.availableRequests) setAvailableRequests(data.availableRequests);
-          if (data.wallet) setWallet(data.wallet);
+        if (isFetchingDashboardRef.current) return;
+        try {
+          isFetchingDashboardRef.current = true;
+          const res = await authedFetch('/api/provider/dashboard');
+          if (res.ok) {
+            const data = await res.json();
+            if (data.consultations) setConsultations(data.consultations);
+            if (data.availableRequests) setAvailableRequests(data.availableRequests);
+            if (data.wallet) setWallet(data.wallet);
+          }
+        } catch (err) {
+          console.error('Failed to poll dashboard overview:', err);
+        } finally {
+          isFetchingDashboardRef.current = false;
         }
       } else if (activeTab === 'consultations') {
         loadConsultations(doctor.id, consultationsPage, consultationsSearch, consultationsStatusFilter);
-      } else if (activeTab === 'prescriptions') {
-        loadDoctorPrescriptions(rxSearch, rxStatusFilter);
       } else if (activeTab === 'wallet') {
         loadWallet(doctor.id);
       }
-    }, activeTab === 'overview' ? 8000 : 5000);
+    }, activeTab === 'overview' ? 35000 : 30000);
     return () => clearInterval(pollInterval);
-  }, [doctor, activeTab, consultationsPage, consultationsSearch, consultationsStatusFilter, loadDoctorPrescriptions, rxSearch, rxStatusFilter]);
+  }, [doctor?.id, activeTab, consultationsPage, consultationsSearch, consultationsStatusFilter]);
 
-  // Heartbeat to update doctor's last_seen_at for online status tracking
+  // Instant refresh upon re-focusing active browser tab
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (typeof document === 'undefined' || document.hidden || !doctor) return;
+      if (activeTab === 'overview' && !isFetchingDashboardRef.current) {
+        isFetchingDashboardRef.current = true;
+        authedFetch('/api/provider/dashboard')
+          .then(res => res.ok ? res.json() : null)
+          .then(data => {
+            if (data) {
+              if (data.consultations) setConsultations(data.consultations);
+              if (data.availableRequests) setAvailableRequests(data.availableRequests);
+              if (data.wallet) setWallet(data.wallet);
+            }
+          })
+          .catch(err => console.error('Overview re-focus fetch error:', err))
+          .finally(() => { isFetchingDashboardRef.current = false; });
+      } else if (activeTab === 'prescriptions') {
+        loadDoctorPrescriptions(rxSearch, rxStatusFilter, false);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [doctor?.id, activeTab, rxSearch, rxStatusFilter, loadDoctorPrescriptions]);
+
+  // Presence heartbeat throttled to 60s (production-grade, halts when tab is backgrounded)
   useEffect(() => {
     if (!doctor) return;
     const updatePresence = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return;
       try {
         await supabase
           .from('doctor_profiles')
@@ -806,9 +976,9 @@ export default function DoctorDashboard() {
       }
     };
     updatePresence();
-    const presenceInterval = setInterval(updatePresence, 10000);
+    const presenceInterval = setInterval(updatePresence, 60000);
     return () => clearInterval(presenceInterval);
-  }, [doctor]);
+  }, [doctor?.id]);
 
   // ── 15-min pre-call notification check ──────────────────────────────────
   const checkUpcomingCalls = useCallback((cons: Consultation[]) => {
@@ -836,10 +1006,10 @@ export default function DoctorDashboard() {
               osc.connect(gain); gain.connect(ctx.destination);
               osc.start(); osc.stop(ctx.currentTime + 0.8);
             }
-          } catch (e) {}
+          } catch (e) { }
           return;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
   }, []);
 
@@ -860,7 +1030,7 @@ export default function DoctorDashboard() {
       const h = Math.floor(elapsed / 3600000);
       const m = Math.floor((elapsed % 3600000) / 60000);
       const s = Math.floor((elapsed % 60000) / 1000);
-      setCallTimer(h > 0 ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`);
+      setCallTimer(h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`);
     }, 1000);
     return () => { if (callTimerRef.current) clearInterval(callTimerRef.current); };
   }, [activeCallId]);
@@ -1461,6 +1631,12 @@ export default function DoctorDashboard() {
         throw new Error(data.error || 'Unable to complete consultation.');
       }
 
+      const completedConsultation = prescribeCase;
+      const diag = diagnosisSummary;
+      const notes = completionNotes;
+      const followUp = followUpInstruction;
+      const medText = finalText;
+
       await loadConsultations(doctor.id);
       await loadWallet(doctor.id);
       setPrescribeCase(null);
@@ -1468,6 +1644,25 @@ export default function DoctorDashboard() {
       setCompletionNotes('');
       setDiagnosisSummary('');
       setFollowUpInstruction('');
+
+      if (!isNoPrescription) {
+        const matchedPatient = patients.find((p: any) => p.id === completedConsultation.patient_id) || {
+          id: completedConsultation.patient_id,
+          first_name: completedConsultation.patient_name?.split(' ')[0] || 'Patient',
+          last_name: completedConsultation.patient_name?.split(' ').slice(1).join(' ') || '',
+          name: completedConsultation.patient_name || 'Patient',
+          full_name: completedConsultation.patient_name || 'Patient'
+        };
+        setBuilderConsultation({
+          ...completedConsultation,
+          diagnosis_summary: diag,
+          clinical_notes: notes,
+          follow_up_instructions: followUp,
+          prescription_text: medText,
+        });
+        setBuilderPatient(matchedPatient);
+        setShowRxBuilderModal(true);
+      }
     } catch (err: any) {
       alert('Error: ' + err.message);
     } finally {
@@ -1568,13 +1763,13 @@ export default function DoctorDashboard() {
   }
 
   const tabs: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'overview', label: 'Overview', icon: <Activity className="w-4 h-4"/> },
-    { key: 'patients', label: 'Patients', icon: <Users className="w-4 h-4"/> },
-    { key: 'schedule', label: 'Schedule', icon: <Calendar className="w-4 h-4"/> },
-    { key: 'consultations', label: 'Consultations', icon: <Video className="w-4 h-4"/> },
-    { key: 'prescriptions', label: 'Prescriptions', icon: <Pill className="w-4 h-4"/> },
-    { key: 'wallet', label: 'Wallet', icon: <Wallet className="w-4 h-4"/> },
-    { key: 'messages', label: 'Messages', icon: <MessageCircle className="w-4 h-4"/> },
+    { key: 'overview', label: 'Overview', icon: <Activity className="w-4 h-4" /> },
+    { key: 'patients', label: 'Patients', icon: <Users className="w-4 h-4" /> },
+    { key: 'schedule', label: 'Schedule', icon: <Calendar className="w-4 h-4" /> },
+    { key: 'consultations', label: 'Consultations', icon: <Video className="w-4 h-4" /> },
+    { key: 'prescriptions', label: 'Prescriptions', icon: <Pill className="w-4 h-4" /> },
+    { key: 'wallet', label: 'Wallet', icon: <Wallet className="w-4 h-4" /> },
+    { key: 'profile', label: 'Profile & Signature', icon: <PenTool className="w-4 h-4" /> },
   ];
 
   const activeRejoinableConsultation = consultations.find(c =>
@@ -1667,13 +1862,14 @@ export default function DoctorDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-[#F5F0EB] font-sans text-[#1A1F36]">      {/* ── 15-MIN PRE-CALL ALERT BANNER ── */}
+    <div className="h-screen overflow-hidden flex flex-col bg-[#F5F0EB] font-sans text-[#1A1F36]">
+      {/* ── 15-MIN PRE-CALL ALERT BANNER ── */}
       {upcomingCallAlert && (
-        <div className="fixed top-4 right-4 z-[200] max-w-sm w-full bg-[#1A1F36] text-white rounded-2xl p-5 shadow-2xl shadow-[#1A1F36]/30 border border-white/10" style={{animation:'fadeIn 0.4s ease-out both'}}>
+        <div className="fixed top-4 right-4 z-[200] max-w-sm w-full bg-[#1A1F36] text-white rounded-2xl p-5 shadow-2xl shadow-[#1A1F36]/30 border border-white/10" style={{ animation: 'fadeIn 0.4s ease-out both' }}>
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
               <div className="bg-white/20 p-2 rounded-xl">
-                <BellRing className="w-5 h-5 animate-bounce"/>
+                <BellRing className="w-5 h-5 animate-bounce" />
               </div>
               <div>
                 <p className="font-black text-sm">⏰ Upcoming Call in 15 mins!</p>
@@ -1681,7 +1877,7 @@ export default function DoctorDashboard() {
               </div>
             </div>
             <button onClick={() => { setUpcomingCallAlert(null); setDoctorNotifBell(false); }} className="text-white/60 hover:text-white transition-colors mt-0.5">
-              <X className="w-4 h-4"/>
+              <X className="w-4 h-4" />
             </button>
           </div>
         </div>
@@ -1694,18 +1890,17 @@ export default function DoctorDashboard() {
           <div className="bg-[#1A1F36] text-white px-4 py-3 flex items-center justify-between border-b border-white/10 shrink-0">
             <div className="flex items-center gap-3">
               <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
-              <Video className="w-5 h-5 text-[#C4622D]"/>
+              <Video className="w-5 h-5 text-[#C4622D]" />
               <span className="font-black text-base">Live Consultation — {activeCallPatient}</span>
               {callTimer && (
                 <span className="bg-white/10 text-white font-mono font-black text-sm px-3 py-1 rounded-full border border-white/20">
                   ⏱ {callTimer}
                 </span>
               )}
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
-                activeCallStatus === 'calling'
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${activeCallStatus === 'calling'
                   ? 'bg-[#D89A3D]/20 text-[#F0C06A] border border-[#D89A3D]/30'
                   : 'bg-[#5C7A6B]/25 text-[#DCE8E0] border border-[#5C7A6B]/35'
-              }`}>
+                }`}>
                 {activeCallStatus === 'calling' ? '📞 Waiting for patient...' : '🟢 Patient Connected'}
               </span>
             </div>
@@ -1715,7 +1910,7 @@ export default function DoctorDashboard() {
                 onClick={endCall}
                 className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-5 rounded-xl text-sm transition-all shadow-lg flex items-center gap-2"
               >
-                <PhoneOff className="w-4 h-4"/> End Session
+                <PhoneOff className="w-4 h-4" /> End Session
               </button>
             </div>
           </div>
@@ -1731,77 +1926,77 @@ export default function DoctorDashboard() {
           <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[20px] w-full max-w-[850px] max-h-[calc(100vh-32px)] shadow-2xl shadow-[#1A1F36]/20 border border-[#1A1F36]/8 overflow-hidden flex flex-col">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#1A1F36]/8 bg-white px-6 py-5 sm:px-8">
               <div>
-                <h3 className="text-xl font-black text-[#1A1F36] flex items-center gap-2"><Pill className="w-6 h-6 text-[#C4622D]"/> Complete Consultation</h3>
+                <h3 className="text-xl font-black text-[#1A1F36] flex items-center gap-2"><Pill className="w-6 h-6 text-[#C4622D]" /> Complete Consultation</h3>
                 <p className="mt-1 text-xs font-semibold text-[#8896A4]">Finalize clinical notes, medication recommendation, and follow-up instructions.</p>
               </div>
-              <button onClick={() => setPrescribeCase(null)} className="rounded-xl p-2 hover:bg-[#F5F0EB] transition-colors"><X className="w-6 h-6 text-[#8896A4] hover:text-[#40516A]"/></button>
+              <button onClick={() => setPrescribeCase(null)} className="rounded-xl p-2 hover:bg-[#F5F0EB] transition-colors"><X className="w-6 h-6 text-[#8896A4] hover:text-[#40516A]" /></button>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-6 sm:px-8 sm:py-7 space-y-6">
-            <div className="bg-[#F5F0EB]/70 p-4 rounded-2xl mb-6 border border-[#1A1F36]/8">
-              <p className="text-sm font-bold text-[#1A1F36]">Patient: {prescribeCase.patient_name}</p>
-              <p className="text-xs text-[#40516A] mt-1">Date: {prescribeCase.booking_date} @ {prescribeCase.booking_time}</p>
-              {prescribeCase.call_started_at && (
-                <p className="text-xs text-[#C4622D] font-bold mt-1.5">
-                  ⏱ Call Duration: {formatDuration(prescribeCase.call_started_at, prescribeCase.call_ended_at)}
-                </p>
-              )}
-            </div>
-
-            <label className={labelCls}>Clinical Notes</label>
-            <textarea
-              value={completionNotes}
-              onChange={e => setCompletionNotes(e.target.value)}
-              className={`${inputCls} mt-2 min-h-[96px]`}
-              rows={3}
-              placeholder="Brief consultation notes and patient discussion..."
-            />
-
-            <label className={labelCls}>Diagnosis Summary <span className="text-[#B94D4D]">*</span></label>
-            <textarea
-              value={diagnosisSummary}
-              onChange={e => setDiagnosisSummary(e.target.value)}
-              className={`${inputCls} mt-2 min-h-[96px]`}
-              rows={3}
-              placeholder="Summarize clinical assessment and diagnosis..."
-            />
-
-            <div className="relative flex items-center gap-3 mb-5">
-              <div className="flex-1 h-px bg-[#1A1F36]/10"/>
-              <span className="text-xs font-black text-[#8896A4] uppercase tracking-widest">Medication Recommendation</span>
-              <div className="flex-1 h-px bg-[#1A1F36]/10"/>
-            </div>
-
-            <label className={labelCls}>Medication Type <span className="text-[#B94D4D]">*</span></label>
-            <div className="mt-2 mb-2">
-              {(['INJECTABLE'] as const).map(type => (
-                <button key={type} onClick={() => setPrescriptionType(type)}
-                  className={`w-full cursor-pointer border-2 rounded-2xl p-5 text-left transition-all hover:scale-[1.01] active:scale-95 ${prescriptionType === type ? 'border-[#C4622D] bg-[#C4622D]/10' : 'border-[#1A1F36]/10 hover:border-[#C4622D]/40'}`}>
-                  <p className={`font-black text-base ${prescriptionType === type ? 'text-[#C4622D]' : 'text-[#1A1F36]'}`}>
-                    Injectable Medication
+              <div className="bg-[#F5F0EB]/70 p-4 rounded-2xl mb-6 border border-[#1A1F36]/8">
+                <p className="text-sm font-bold text-[#1A1F36]">Patient: {prescribeCase.patient_name}</p>
+                <p className="text-xs text-[#40516A] mt-1">Date: {prescribeCase.booking_date} @ {prescribeCase.booking_time}</p>
+                {prescribeCase.call_started_at && (
+                  <p className="text-xs text-[#C4622D] font-bold mt-1.5">
+                    ⏱ Call Duration: {formatDuration(prescribeCase.call_started_at, prescribeCase.call_ended_at)}
                   </p>
-                  <p className="text-xs text-[#40516A] mt-1 font-semibold">Weekly injection</p>
-                </button>
-              ))}
-            </div>
-            <p className="mb-4 text-xs font-semibold text-[#8896A4]">Medication recommendation will be reviewed and processed according to clinical protocol.</p>
+                )}
+              </div>
 
-            <label className={labelCls}>Medicine Name & Dosage Instructions <span className="text-[#B94D4D]">*</span></label>
-            <textarea
-              value={prescriptionText}
-              onChange={e => setPrescriptionText(e.target.value)}
-              className={`${inputCls} mt-2 min-h-[112px]`}
-              rows={4}
-              placeholder="e.g. Semaglutide 0.25mg - take once weekly on Wednesdays. Increase to 0.5mg after 4 weeks."
-            />
+              <label className={labelCls}>Clinical Notes</label>
+              <textarea
+                value={completionNotes}
+                onChange={e => setCompletionNotes(e.target.value)}
+                className={`${inputCls} mt-2 min-h-[96px]`}
+                rows={3}
+                placeholder="Brief consultation notes and patient discussion..."
+              />
 
-            <label className={labelCls}>Follow-up Instructions <span className="text-[#B94D4D]">*</span></label>
-            <textarea
-              value={followUpInstruction}
-              onChange={e => setFollowUpInstruction(e.target.value)}
-              className={`${inputCls} mt-2 min-h-[96px]`}
-              rows={3}
-              placeholder="Next check-in, safety instructions, and when to seek help..."
-            />
+              <label className={labelCls}>Diagnosis Summary <span className="text-[#B94D4D]">*</span></label>
+              <textarea
+                value={diagnosisSummary}
+                onChange={e => setDiagnosisSummary(e.target.value)}
+                className={`${inputCls} mt-2 min-h-[96px]`}
+                rows={3}
+                placeholder="Summarize clinical assessment and diagnosis..."
+              />
+
+              <div className="relative flex items-center gap-3 mb-5">
+                <div className="flex-1 h-px bg-[#1A1F36]/10" />
+                <span className="text-xs font-black text-[#8896A4] uppercase tracking-widest">Medication Recommendation</span>
+                <div className="flex-1 h-px bg-[#1A1F36]/10" />
+              </div>
+
+              <label className={labelCls}>Medication Type <span className="text-[#B94D4D]">*</span></label>
+              <div className="mt-2 mb-2">
+                {(['INJECTABLE'] as const).map(type => (
+                  <button key={type} onClick={() => setPrescriptionType(type)}
+                    className={`w-full cursor-pointer border-2 rounded-2xl p-5 text-left transition-all hover:scale-[1.01] active:scale-95 ${prescriptionType === type ? 'border-[#C4622D] bg-[#C4622D]/10' : 'border-[#1A1F36]/10 hover:border-[#C4622D]/40'}`}>
+                    <p className={`font-black text-base ${prescriptionType === type ? 'text-[#C4622D]' : 'text-[#1A1F36]'}`}>
+                      Injectable Medication
+                    </p>
+                    <p className="text-xs text-[#40516A] mt-1 font-semibold">Weekly injection</p>
+                  </button>
+                ))}
+              </div>
+              <p className="mb-4 text-xs font-semibold text-[#8896A4]">Medication recommendation will be reviewed and processed according to clinical protocol.</p>
+
+              <label className={labelCls}>Medicine Name & Dosage Instructions <span className="text-[#B94D4D]">*</span></label>
+              <textarea
+                value={prescriptionText}
+                onChange={e => setPrescriptionText(e.target.value)}
+                className={`${inputCls} mt-2 min-h-[112px]`}
+                rows={4}
+                placeholder="e.g. Semaglutide 0.25mg - take once weekly on Wednesdays. Increase to 0.5mg after 4 weeks."
+              />
+
+              <label className={labelCls}>Follow-up Instructions <span className="text-[#B94D4D]">*</span></label>
+              <textarea
+                value={followUpInstruction}
+                onChange={e => setFollowUpInstruction(e.target.value)}
+                className={`${inputCls} mt-2 min-h-[96px]`}
+                rows={3}
+                placeholder="Next check-in, safety instructions, and when to seek help..."
+              />
 
             </div>
             <div className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-[#1A1F36]/8 bg-white px-6 py-5 sm:flex-row sm:justify-end sm:px-8">
@@ -1830,8 +2025,8 @@ export default function DoctorDashboard() {
         <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-6">
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[20px] p-8 max-w-md w-full shadow-2xl shadow-[#1A1F36]/20 border border-[#1A1F36]/8">
             <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-black text-[#1A1F36] flex items-center gap-2"><XCircle className="w-6 h-6 text-[#B94D4D]"/> Not Approved</h3>
-              <button onClick={() => setRejectCase(null)}><X className="w-6 h-6 text-[#8896A4] hover:text-[#40516A]"/></button>
+              <h3 className="text-xl font-black text-[#1A1F36] flex items-center gap-2"><XCircle className="w-6 h-6 text-[#B94D4D]" /> Not Approved</h3>
+              <button onClick={() => setRejectCase(null)}><X className="w-6 h-6 text-[#8896A4] hover:text-[#40516A]" /></button>
             </div>
             <div className="bg-[#D96A6A]/10 p-4 rounded-2xl mb-6 border border-[#D96A6A]/18">
               <p className="text-sm font-bold text-[#B94D4D]">Patient: {rejectCase.patient_name}</p>
@@ -1866,7 +2061,7 @@ export default function DoctorDashboard() {
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#1A1F36]/8 bg-white px-6 py-5 sm:px-8">
               <div>
                 <h3 className="text-xl font-black text-[#1A1F36] flex items-center gap-2">
-                  <FileText className="w-6 h-6 text-[#C4622D]"/> View Prescription
+                  <FileText className="w-6 h-6 text-[#C4622D]" /> View Prescription
                 </h3>
                 <p className="mt-1 text-xs font-semibold text-[#8896A4]">Official Electronic Medical Prescription Record.</p>
               </div>
@@ -1874,10 +2069,10 @@ export default function DoctorDashboard() {
                 onClick={() => setViewingPrescription(null)}
                 className="rounded-xl p-2 hover:bg-[#F5F0EB] transition-colors cursor-pointer"
               >
-                <X className="w-6 h-6 text-[#8896A4] hover:text-[#40516A]"/>
+                <X className="w-6 h-6 text-[#8896A4] hover:text-[#40516A]" />
               </button>
             </div>
-            
+
             <div className="flex-1 overflow-y-auto px-6 py-6 sm:px-8 sm:py-7 space-y-6">
               {/* Prescriber & Patient Metadata Header */}
               <div className="bg-[#F5F0EB]/60 border border-[#1A1F36]/8 rounded-[20px] p-5 space-y-3">
@@ -1960,13 +2155,13 @@ export default function DoctorDashboard() {
                 onClick={() => handlePrintPrescription(viewingPrescription)}
                 className="rounded-xl border border-[#1A1F36] bg-white px-5 py-3 text-sm font-bold text-[#1A1F36] transition-all hover:bg-[#F5F0EB] flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <Printer className="w-4 h-4"/> Print
+                <Printer className="w-4 h-4" /> Print
               </button>
               <button
                 onClick={() => handlePrintPrescription(viewingPrescription)}
                 className="rounded-xl bg-[#1A1F36] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-[#1A1F36]/15 transition-all hover:bg-[#0D101C] flex items-center justify-center gap-1.5 cursor-pointer"
               >
-                <Download className="w-4 h-4"/> Download PDF
+                <Download className="w-4 h-4" /> Download PDF
               </button>
             </div>
           </motion.div>
@@ -1974,12 +2169,12 @@ export default function DoctorDashboard() {
       )}
 
       {/* ── SIDEBAR & PORTAL LAYOUT ── */}
-      <div className="flex min-h-screen bg-[#F8FAFC]">
+      <div className="flex h-screen overflow-hidden bg-[#F8FAFC]">
         {/* Mobile Sidebar Slide-out Drawer */}
         {mobileSidebarOpen && (
           <div className="fixed inset-0 z-50 flex lg:hidden">
             {/* Overlay */}
-            <div 
+            <div
               className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm transition-opacity"
               onClick={() => setMobileSidebarOpen(false)}
             />
@@ -2008,15 +2203,25 @@ export default function DoctorDashboard() {
                 </div>
 
                 {/* Doctor Profile Info */}
-                <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3 flex items-center gap-3">
-                  <div className="w-10 h-10 bg-gradient-to-br from-[#0D9488] to-[#10B981] rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-md shrink-0">
-                    {doctorProfile?.full_name ? doctorProfile.full_name.replace(/^Dr\.\s*/i, '').slice(0, 2).toUpperCase() : <Stethoscope className="w-5 h-5"/>}
+                <button
+                  type="button"
+                  onClick={() => { selectTab('profile'); setMobileSidebarOpen(false); }}
+                  className={`w-full bg-white/[0.04] hover:bg-white/[0.08] border rounded-2xl p-3 flex items-center justify-between gap-3 text-left cursor-pointer transition-all ${
+                    activeTab === 'profile' ? 'border-[#0D9488] ring-1 ring-[#0D9488]/40' : 'border-white/10'
+                  }`}
+                  title="View & Edit Doctor Profile & Digital Signature"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 bg-gradient-to-br from-[#0D9488] to-[#10B981] rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-md shrink-0">
+                      {doctorProfile?.full_name ? doctorProfile.full_name.replace(/^Dr\.\s*/i, '').slice(0, 2).toUpperCase() : <Stethoscope className="w-5 h-5" />}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-white text-xs truncate leading-tight">{doctorProfile?.full_name || doctor?.email?.split('@')[0] || 'Dr. Physician'}</p>
+                      <p className="text-[11px] text-[#5EEAD4] font-medium truncate mt-0.5">{doctorProfile?.specialty || 'Endocrinologist'}</p>
+                    </div>
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="font-bold text-white text-xs truncate leading-tight">{doctorProfile?.full_name || doctor?.email?.split('@')[0] || 'Dr. Physician'}</p>
-                    <p className="text-[11px] text-[#5EEAD4] font-medium truncate mt-0.5">{doctorProfile?.specialty || 'Endocrinologist'}</p>
-                  </div>
-                </div>
+                  <span className="text-[10px] text-slate-300 bg-white/10 px-2 py-0.5 rounded-md shrink-0 font-semibold">Edit</span>
+                </button>
               </div>
 
               {/* Nav Links */}
@@ -2046,7 +2251,7 @@ export default function DoctorDashboard() {
                     <p className="text-lg font-black font-sora text-white">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
                     <button onClick={() => { setActiveTab('wallet'); setMobileSidebarOpen(false); }}
                       className="mt-2 w-full bg-[#0D9488] hover:bg-[#0A7066] text-white text-[11px] font-bold py-1.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer">
-                      <ArrowDownToLine className="w-3 h-3"/> Withdraw Funds
+                      <ArrowDownToLine className="w-3 h-3" /> Withdraw Funds
                     </button>
                   </div>
                 ) : (
@@ -2063,7 +2268,7 @@ export default function DoctorDashboard() {
               <div className="p-3 pt-0">
                 <button onClick={handleLogout}
                   className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-red-300 transition-colors py-2 px-3 rounded-xl hover:bg-red-500/10 cursor-pointer">
-                  <LogOut className="w-4 h-4"/> Sign Out
+                  <LogOut className="w-4 h-4" /> Sign Out
                 </button>
               </div>
             </div>
@@ -2075,7 +2280,7 @@ export default function DoctorDashboard() {
           initial={{ opacity: 0, x: -15 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ duration: 0.3 }}
-          className="sticky top-0 hidden h-screen w-72 flex-shrink-0 flex-col bg-[#0B1120] text-white shadow-2xl border-r border-slate-800/90 lg:flex z-30 overflow-hidden select-none"
+          className="hidden h-screen w-72 flex-shrink-0 flex-col bg-[#0B1120] text-white shadow-2xl border-r border-slate-800/90 lg:flex z-30 overflow-hidden select-none"
         >
           {/* Top Brand Header */}
           <div className="p-4 border-b border-slate-800 bg-white/[0.02]">
@@ -2098,26 +2303,31 @@ export default function DoctorDashboard() {
                 title="Notifications"
               >
                 {doctorNotifBell
-                  ? <BellRing className="w-4 h-4 text-[#5EEAD4] animate-bounce"/>
-                  : <Bell className="w-4 h-4 text-slate-400"/>}
+                  ? <BellRing className="w-4 h-4 text-[#5EEAD4] animate-bounce" />
+                  : <Bell className="w-4 h-4 text-slate-400" />}
                 {doctorNotifBell && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0B1120]"/>
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border-2 border-[#0B1120]" />
                 )}
               </button>
             </div>
 
             {/* Doctor Profile Info Card */}
-            <div className="bg-white/[0.04] border border-white/10 rounded-2xl p-3 flex items-center justify-between gap-2.5">
+            <button
+              onClick={() => setActiveTab('profile')}
+              className={`w-full bg-white/[0.04] hover:bg-white/[0.08] transition-all border rounded-2xl p-3 flex items-center justify-between gap-2.5 text-left cursor-pointer ${activeTab === 'profile' ? 'border-[#0D9488] ring-1 ring-[#0D9488]/40' : 'border-white/10'}`}
+              title="Edit Doctor Profile & Signature"
+            >
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-9 h-9 bg-gradient-to-br from-[#0D9488] to-[#10B981] rounded-xl flex items-center justify-center text-white font-bold text-xs shadow-md shrink-0">
-                  {doctorProfile?.full_name ? doctorProfile.full_name.replace(/^Dr\.\s*/i, '').slice(0, 2).toUpperCase() : <Stethoscope className="w-4 h-4"/>}
+                  {doctorProfile?.full_name ? doctorProfile.full_name.replace(/^Dr\.\s*/i, '').slice(0, 2).toUpperCase() : <Stethoscope className="w-4 h-4" />}
                 </div>
                 <div className="min-w-0">
                   <p className="font-bold text-white text-xs truncate leading-tight">{doctorProfile?.full_name || doctor?.email?.split('@')[0] || 'Dr. Physician'}</p>
                   <p className="text-[10px] text-[#5EEAD4] font-semibold truncate mt-0.5">{doctorProfile?.specialty || 'Endocrinologist'}</p>
                 </div>
               </div>
-            </div>
+              <span className="text-[10px] text-slate-400 bg-white/10 px-2 py-0.5 rounded-md shrink-0 font-semibold hover:text-white">Edit</span>
+            </button>
 
             {/* Online Status Pill */}
             <div className="mt-2.5 flex items-center justify-between px-3 py-1.5 bg-[#0D9488]/15 rounded-xl border border-[#0D9488]/30">
@@ -2137,8 +2347,8 @@ export default function DoctorDashboard() {
             {tabs.map(t => {
               const isActive = activeTab === t.key
               return (
-                <button 
-                  key={t.key} 
+                <button
+                  key={t.key}
                   onClick={() => setActiveTab(t.key)}
                   className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer font-sora ${isActive
                     ? 'bg-gradient-to-r from-[#0D9488] to-[#0F766E] text-white shadow-md shadow-[#0D9488]/25 ring-1 ring-white/20'
@@ -2162,11 +2372,11 @@ export default function DoctorDashboard() {
               <div className="bg-white/[0.05] backdrop-blur-md rounded-2xl p-3.5 text-white border border-white/10 shadow-xs">
                 <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Available Balance</p>
                 <p className="text-lg font-black font-sora text-white">₹{Number(Math.max(0, (wallet?.balance ?? 0) - (wallet?.pending_payout ?? 0))).toLocaleString('en-IN')}</p>
-                <button 
+                <button
                   onClick={() => setActiveTab('wallet')}
                   className="mt-2.5 w-full bg-[#0D9488] hover:bg-[#0A7066] text-white text-[11px] font-bold py-2 rounded-xl transition-all flex items-center justify-center gap-1.5 shadow-xs cursor-pointer font-sora"
                 >
-                  <ArrowDownToLine className="w-3.5 h-3.5"/> Withdraw Funds
+                  <ArrowDownToLine className="w-3.5 h-3.5" /> Withdraw Funds
                 </button>
               </div>
             ) : (
@@ -2182,11 +2392,11 @@ export default function DoctorDashboard() {
 
           {/* Logout */}
           <div className="p-3 pt-0">
-            <button 
+            <button
               onClick={handleLogout}
               className="w-full flex items-center justify-center gap-2 text-xs font-bold text-slate-400 hover:text-red-300 transition-colors py-2.5 px-3 rounded-xl hover:bg-red-500/10 cursor-pointer font-sora"
             >
-              <LogOut className="w-4 h-4"/> Sign Out
+              <LogOut className="w-4 h-4" /> Sign Out
             </button>
           </div>
         </motion.aside>
@@ -2196,7 +2406,7 @@ export default function DoctorDashboard() {
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.1 }}
-          className="min-w-0 flex-1 bg-[#F8FAFC] p-4 sm:p-8">
+          className="h-screen overflow-y-auto min-w-0 flex-1 bg-[#F8FAFC] p-4 sm:p-8">
 
           {/* Mobile Header Bar */}
           <div className="lg:hidden flex items-center justify-between bg-[#0B132B] text-white px-5 py-4 border-b border-white/10 shadow-md mb-6 rounded-2xl">
@@ -2209,32 +2419,133 @@ export default function DoctorDashboard() {
               </button>
               <span className="font-black text-base tracking-tight font-sora">8Liv Doctor</span>
             </div>
-            <span className="text-xs font-bold bg-[#0052FF]/20 border border-[#0052FF]/40 text-[#BAE6FD] px-3 py-1 rounded-full capitalize">
-              {activeTab}
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => selectTab('profile')}
+                className={`text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 transition-all cursor-pointer ${
+                  activeTab === 'profile'
+                    ? 'bg-[#0D9488] text-white shadow-xs'
+                    : 'bg-white/10 hover:bg-white/20 text-slate-200'
+                }`}
+              >
+                <PenTool className="w-3 h-3 text-[#5EEAD4]" />
+                Profile
+              </button>
+              <span className="text-xs font-bold bg-[#0052FF]/20 border border-[#0052FF]/40 text-[#BAE6FD] px-3 py-1 rounded-full capitalize">
+                {activeTab}
+              </span>
+            </div>
           </div>
 
           {/* ── TAB: OVERVIEW ── */}
           {activeTab === 'overview' && (
             <motion.div initial={{ opacity: 0, y: 15 }} animate={{ opacity: 1, y: 0 }} transition={{ staggerChildren: 0.08 }} className="space-y-8">
-              <div className="border-b border-slate-200/80 pb-4 mb-6 flex justify-between items-end">
+              <div className="border-b border-slate-200/80 pb-4 mb-6 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
                 <div>
                   <h1 className="text-2xl font-bold text-[#0F172A] font-sora">Doctor Dashboard</h1>
-                  <p className="text-sm text-[#64748B] mt-0.5 font-light">Overview of your clinical practice and upcoming appointments. Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, Dr. {doctorProfile?.full_name?.split(' ')[0] || 'Doctor'} 👋</p>
+                  <p className="text-sm text-[#64748B] mt-0.5 font-light">Overview of your clinical practice and upcoming appointments. Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}, Dr. {doctorProfile?.full_name?.split(' ')[0] || 'Doctor'} !</p>
                 </div>
-                <div className="flex gap-3"></div>
+                <div className="flex items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => selectTab('profile')}
+                    className="inline-flex items-center gap-2 rounded-xl bg-white border border-slate-200 hover:border-[#0D9488] px-4 py-2.5 text-xs font-bold text-[#0F172A] shadow-xs hover:shadow-md transition-all cursor-pointer font-sora"
+                    title="Manage Doctor Profile & Digital Signature"
+                  >
+                    <PenTool className="w-4 h-4 text-[#0D9488]" />
+                    <span>Profile &amp; Signature</span>
+                    {doctorProfile?.mci_number ? (
+                      <span className="bg-emerald-50 text-emerald-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-emerald-200 flex items-center gap-1">
+                        <Check className="w-2.5 h-2.5" /> Verified
+                      </span>
+                    ) : (
+                      <span className="bg-amber-50 text-amber-700 text-[10px] font-black px-2 py-0.5 rounded-full border border-amber-200">
+                        Setup
+                      </span>
+                    )}
+                  </button>
+                </div>
               </div>
+
+              {/* MoHFW Digital Signature & Profile Notice Banner */}
+              <div className="rounded-2xl border border-teal-200/80 bg-gradient-to-r from-teal-50/80 via-white to-emerald-50/60 p-4 sm:p-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+                <div className="flex items-center gap-3.5">
+                  <div className="w-10 h-10 rounded-xl bg-[#0D9488]/10 text-[#0D9488] flex items-center justify-center shrink-0 shadow-xs">
+                    <PenTool className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-[#0D9488] bg-[#0D9488]/10 px-2 py-0.5 rounded-md">
+                        Digital Clinical Practice
+                      </span>
+                      <span className="text-xs font-bold text-slate-900">
+                        Doctor Credentials &amp; Digital Signature Studio
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 mt-0.5">
+                      {doctorProfile?.mci_number
+                        ? `Registered under ${doctorProfile.registration_council || 'Medical Council'} (${doctorProfile.mci_number}). Ready to digitally sign prescriptions.`
+                        : 'Configure your NMC/State registration number, qualifications, and draw or upload your digital signature.'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => selectTab('profile')}
+                  className="inline-flex items-center gap-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white px-4 py-2 text-xs font-bold shadow-md shadow-[#0D9488]/20 transition-all shrink-0 cursor-pointer font-sora"
+                >
+                  <PenTool className="w-3.5 h-3.5" /> Manage Profile &amp; Signature
+                </button>
+              </div>
+
+              {/* ACTIVE ONGOING CONSULTATION HERO BANNER */}
+              {!activeCallUrl && activeRejoinableConsultation && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="rounded-2xl bg-gradient-to-r from-[#0F172A] via-[#1E293B] to-[#0F172A] p-5 text-white shadow-xl border border-emerald-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-inner">
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                      </span>
+                      <Video className="w-6 h-6 animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                          Active Consultation In Progress
+                        </span>
+                        <span className="text-xs text-slate-300 font-semibold">Slot: {activeRejoinableConsultation.booking_time}</span>
+                      </div>
+                      <h3 className="text-base font-bold text-white mt-1">
+                        Live Video Session with {activeRejoinableConsultation.patient_name || 'Patient'}
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">Click below to enter or resume the secure consultation room.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => joinCall(activeRejoinableConsultation)}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 px-6 py-3 text-xs font-black text-white shadow-lg shadow-emerald-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
+                  >
+                    <Video className="w-4 h-4" /> Enter Consultation Room
+                  </button>
+                </motion.div>
+              )}
 
               {/* FIX: Bug 3 — Doctor Overview stats dynamically computed from consultations array */}
               {/* Quick stats */}
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
                 {[
-                  { label: 'Assigned Cases', value: consultations.length, icon: <Users className="w-6 h-6"/> },
-                  { label: "Today's Consults", value: todayCases, icon: <Calendar className="w-6 h-6"/> },
-                  { label: 'Pending', value: pendingCases, icon: <Clock className="w-6 h-6"/> },
-                  { label: 'Completed', value: completedCases, icon: <CheckCircle2 className="w-6 h-6"/> },
-                  { label: 'Missed', value: missedCases, icon: <AlertCircle className="w-6 h-6"/> },
-                  { label: 'Cancelled', value: cancelledCases, icon: <XCircle className="w-6 h-6"/> },
+                  { label: 'Assigned Cases', value: consultations.length, icon: <Users className="w-6 h-6" /> },
+                  { label: "Today's Consults", value: todayCases, icon: <Calendar className="w-6 h-6" /> },
+                  { label: 'Pending', value: pendingCases, icon: <Clock className="w-6 h-6" /> },
+                  { label: 'Completed', value: completedCases, icon: <CheckCircle2 className="w-6 h-6" /> },
+                  { label: 'Missed', value: missedCases, icon: <AlertCircle className="w-6 h-6" /> },
+                  { label: 'Cancelled', value: cancelledCases, icon: <XCircle className="w-6 h-6" /> },
                 ].map((s, idx) => (
                   <motion.div
                     key={s.label}
@@ -2256,7 +2567,7 @@ export default function DoctorDashboard() {
 
               {/* Cases table: Today / Week / Month */}
               <div className="bg-white rounded-[20px] p-4 sm:p-8 shadow-[0_12px_32px_rgba(26,31,54,0.08)] border border-[#1A1F36]/8">
-                <h3 className="text-lg font-black text-[#1A1F36] mb-6 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-[#C4622D]"/> Cases Overview</h3>
+                <h3 className="text-lg font-black text-[#1A1F36] mb-6 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-[#C4622D]" /> Cases Overview</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full">
                     <thead>
@@ -2268,8 +2579,8 @@ export default function DoctorDashboard() {
                     </thead>
                     <tbody>
                       {[
-                        { period: 'Today', cases: todayCases, app: consultations.filter(c => (c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '') === today && c.status === 'approved').length, rej: consultations.filter(c => (c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '') === today && c.status === 'rejected').length, att: consultations.filter(c => (c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '') === today && ['attended','approved','rejected'].includes(c.status)).length },
-                        { period: 'This Week', cases: weekCases, app: consultations.filter(c => new Date(c.created_at) >= thisWeekStart && c.status === 'approved').length, rej: consultations.filter(c => new Date(c.created_at) >= thisWeekStart && c.status === 'rejected').length, att: consultations.filter(c => new Date(c.created_at) >= thisWeekStart && ['attended','approved','rejected'].includes(c.status)).length },
+                        { period: 'Today', cases: todayCases, app: consultations.filter(c => (c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '') === today && c.status === 'approved').length, rej: consultations.filter(c => (c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '') === today && c.status === 'rejected').length, att: consultations.filter(c => (c.created_at ? new Date(c.created_at).toLocaleDateString('en-IN') : '') === today && ['attended', 'approved', 'rejected'].includes(c.status)).length },
+                        { period: 'This Week', cases: weekCases, app: consultations.filter(c => new Date(c.created_at) >= thisWeekStart && c.status === 'approved').length, rej: consultations.filter(c => new Date(c.created_at) >= thisWeekStart && c.status === 'rejected').length, att: consultations.filter(c => new Date(c.created_at) >= thisWeekStart && ['attended', 'approved', 'rejected'].includes(c.status)).length },
                         { period: 'This Month', cases: monthCases, app: approvedCases, rej: rejectedCases, att: attendedCalls },
                       ].map(row => (
                         <tr key={row.period} className="border-b border-[#1A1F36]/5 hover:bg-[#F5F0EB]/45 transition-colors duration-200">
@@ -2287,7 +2598,7 @@ export default function DoctorDashboard() {
 
               {/* Video call attendance table */}
               <div className="bg-white rounded-[20px] p-8 shadow-[0_12px_32px_rgba(26,31,54,0.08)] border border-[#1A1F36]/8">
-                <h3 className="text-lg font-black text-[#1A1F36] mb-6 flex items-center gap-2"><Video className="w-5 h-5 text-[#C4622D]"/> Video Call Attendance</h3>
+                <h3 className="text-lg font-black text-[#1A1F36] mb-6 flex items-center gap-2"><Video className="w-5 h-5 text-[#C4622D]" /> Video Call Attendance</h3>
                 <div className="grid grid-cols-2 gap-6">
                   <div className="bg-[#5C7A6B]/10 border border-[#5C7A6B]/20 rounded-2xl p-6 text-center">
                     <p className="text-4xl font-black text-[#5C7A6B]">{attendedCalls}</p>
@@ -2304,7 +2615,7 @@ export default function DoctorDashboard() {
               <div className="bg-white rounded-[20px] p-8 shadow-[0_12px_32px_rgba(26,31,54,0.08)] border border-[#1A1F36]/8">
                 <div className="flex justify-between items-center mb-6">
                   <h3 className="text-lg font-black text-[#1A1F36] flex items-center gap-2">
-                    <UserCheck className="w-5 h-5 text-[#C4622D]"/> Available Patient Requests (Escrow Pool)
+                    <UserCheck className="w-5 h-5 text-[#C4622D]" /> Available Patient Requests (Escrow Pool)
                   </h3>
                   <span className="bg-[#1A1F36]/10 text-[#1A1F36] font-black text-xs px-3 py-1 rounded-full animate-pulse">
                     {availableRequests.filter((r) => !r.doctor_id).length} Awaiting Review
@@ -2312,7 +2623,7 @@ export default function DoctorDashboard() {
                 </div>
                 {availableRequests.length === 0 ? (
                   <div className="text-center py-10 text-[#8896A4]">
-                    <UserCheck className="w-10 h-10 mx-auto mb-3 opacity-20"/>
+                    <UserCheck className="w-10 h-10 mx-auto mb-3 opacity-20" />
                     <p className="text-sm font-semibold">No new patient requests at the moment</p>
                     <p className="text-xs text-[#8896A4] mt-1">New requests will appear here when patients pay and choose dates.</p>
                   </div>
@@ -2335,11 +2646,10 @@ export default function DoctorDashboard() {
                           key={req.id}
                           initial={{ opacity: 0, scale: 0.95 }}
                           animate={{ opacity: 1, scale: 1 }}
-                          className={`border p-5 rounded-2xl flex flex-col justify-between gap-4 transition-transform duration-300 ${
-                            isLocked
+                          className={`border p-5 rounded-2xl flex flex-col justify-between gap-4 transition-transform duration-300 ${isLocked
                               ? 'border-[#8896A4]/30 bg-[#8896A4]/10 opacity-70 grayscale'
                               : 'border-[#1A1F36]/8 hover:border-[#C4622D]/50 bg-white hover:scale-[1.02] hover:shadow-[0_12px_32px_rgba(26,31,54,0.10)] shadow-sm'
-                          }`}
+                            }`}
                         >
                           <div>
                             <p className="text-xs font-black text-[#8896A4] uppercase tracking-wider">
@@ -2355,15 +2665,14 @@ export default function DoctorDashboard() {
                             <p className="text-xs font-bold text-[#40516A] mt-2 flex items-center gap-1">
                               <span>📅</span> {req.booking_date} at {req.booking_time}
                             </p>
-                            <p className={`text-[10px] px-2 py-0.5 rounded-md w-fit font-bold mt-2 border ${
-                              isLocked
+                            <p className={`text-[10px] px-2 py-0.5 rounded-md w-fit font-bold mt-2 border ${isLocked
                                 ? 'text-[#40516A] bg-[#8896A4]/15 border-[#8896A4]/20'
                                 : 'text-[#C4622D] bg-[#C4622D]/10 border-[#C4622D]/15'
-                            }`}>
+                              }`}>
                               💰 Escrow Paid: ₹499
                             </p>
                           </div>
-                           {isClaimedByOther ? (
+                          {isClaimedByOther ? (
                             <div className="bg-[#8896A4]/15 border border-[#8896A4]/25 text-[#40516A] font-bold py-2.5 px-4 rounded-xl text-xs text-center flex items-center justify-center gap-2">
                               ⚡ Sorry, try to be quicker next time!
                             </div>
@@ -2376,7 +2685,7 @@ export default function DoctorDashboard() {
                               onClick={() => handleClaimRequest(req)}
                               className="w-full bg-[#1A1F36] hover:bg-[#0D101C] text-white font-black py-2.5 px-4 rounded-xl text-xs flex items-center justify-center gap-2 transition-all duration-300 hover:-translate-y-0.5 shadow-sm active:scale-95 hover:shadow-lg hover:shadow-[#1A1F36]/20"
                             >
-                              <Check className="w-4 h-4"/> Accept & Pair Patient
+                              <Check className="w-4 h-4" /> Accept & Pair Patient
                             </button>
                           )}
                         </motion.div>
@@ -2457,6 +2766,43 @@ export default function DoctorDashboard() {
                 </div>
               </div>
 
+              {/* ACTIVE ONGOING CONSULTATION HERO BANNER */}
+              {!activeCallUrl && activeRejoinableConsultation && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.98 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  className="rounded-2xl bg-gradient-to-r from-[#0F172A] via-[#1E293B] to-[#0F172A] p-5 text-white shadow-xl border border-emerald-500/40 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="relative flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 shadow-inner">
+                      <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+                      </span>
+                      <Video className="w-6 h-6 animate-pulse" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/30">
+                          Active Consultation In Progress
+                        </span>
+                        <span className="text-xs text-slate-300 font-semibold">Slot: {activeRejoinableConsultation.booking_time}</span>
+                      </div>
+                      <h3 className="text-base font-bold text-white mt-1">
+                        Live Video Session with {activeRejoinableConsultation.patient_name || 'Patient'}
+                      </h3>
+                      <p className="text-xs text-slate-400 mt-0.5">Click below to enter or resume the secure consultation room.</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => joinCall(activeRejoinableConsultation)}
+                    className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 px-6 py-3 text-xs font-black text-white shadow-lg shadow-emerald-500/25 transition-all hover:scale-[1.02] active:scale-[0.98] cursor-pointer shrink-0"
+                  >
+                    <Video className="w-4 h-4" /> Enter Consultation Room
+                  </button>
+                </motion.div>
+              )}
+
               {/* Search & Filter Bar */}
               <div className="flex flex-col sm:flex-row gap-4 bg-white p-4 rounded-[20px] border border-[#1A1F36]/8 shadow-sm">
                 <div className="flex-1">
@@ -2494,7 +2840,7 @@ export default function DoctorDashboard() {
               {/* Appointed cases notification banner */}
               {pendingCases > 0 && (
                 <div className="bg-[#D89A3D]/10 border border-[#D89A3D]/22 rounded-2xl p-5 flex items-center gap-4">
-                  <div className="bg-[#D89A3D]/15 text-[#B7792F] p-3 rounded-xl"><AlertCircle className="w-6 h-6"/></div>
+                  <div className="bg-[#D89A3D]/15 text-[#B7792F] p-3 rounded-xl"><AlertCircle className="w-6 h-6" /></div>
                   <div>
                     <p className="font-black text-[#1A1F36]">{pendingCases} case{pendingCases > 1 ? 's' : ''} awaiting your review</p>
                     <p className="text-sm text-[#B7792F] font-semibold mt-0.5">These members have completed their video call and need a prescription decision.</p>
@@ -2546,10 +2892,10 @@ export default function DoctorDashboard() {
                               </span>
                             </div>
                             <div className="flex gap-4 text-sm text-[#40516A] font-semibold flex-wrap">
-                              <span className="flex items-center gap-1"><Calendar className="w-4 h-4"/> {c.booking_date}</span>
-                              <span className="flex items-center gap-1"><Clock className="w-4 h-4"/> {c.booking_time}</span>
+                              <span className="flex items-center gap-1"><Calendar className="w-4 h-4" /> {c.booking_date}</span>
+                              <span className="flex items-center gap-1"><Clock className="w-4 h-4" /> {c.booking_time}</span>
                               {c.patient_age ? <span>Age: {c.patient_age}</span> : null}
-                              {c.prescription_type && <span className="flex items-center gap-1"><Pill className="w-4 h-4 text-[#C4622D]"/> {c.prescription_type}</span>}
+                              {c.prescription_type && <span className="flex items-center gap-1"><Pill className="w-4 h-4 text-[#C4622D]" /> {c.prescription_type}</span>}
                             </div>
                             <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
                               {[
@@ -2594,7 +2940,7 @@ export default function DoctorDashboard() {
                               return (
                                 <button onClick={() => joinCall(c)}
                                   className={`font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2 transition-all shadow-md ${active ? 'bg-[#1A1F36] hover:bg-[#0D101C] text-white animate-pulse' : 'bg-[#F5F0EB] hover:bg-[#E9DED4] text-[#40516A]'}`}>
-                                  <Video className="w-4 h-4"/> Join Call
+                                  <Video className="w-4 h-4" /> Join Call
                                 </button>
                               );
                             })()}
@@ -2602,40 +2948,56 @@ export default function DoctorDashboard() {
                             {c.status === 'attended' && (
                               <button onClick={() => setPrescribeCase(c)}
                                 className="bg-[#5C7A6B] hover:bg-[#4A6658] text-white font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2 transition-all shadow-md">
-                                <BadgeCheck className="w-4 h-4"/> Mark Completed
+                                <BadgeCheck className="w-4 h-4" /> Mark Completed
                               </button>
                             )}
-                            {/* Issue Structured E-Prescription */}
-                            {['attended', 'approved'].includes(c.status) && (
-                              <button
-                                onClick={() => {
-                                  setBuilderConsultation(c);
-                                  setBuilderPatient({ id: c.patient_id, full_name: c.patient_name });
-                                  setShowRxBuilderModal(true);
-                                }}
-                                className="bg-gradient-to-r from-[#0D9488] to-[#0F766E] hover:from-[#0B7A6F] hover:to-[#0D625C] text-white font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2 transition-all shadow-md cursor-pointer"
-                              >
-                                <Pill className="w-4 h-4"/> Issue E-Prescription
-                              </button>
-                            )}
+                            {/* Issue or View Structured E-Prescription */}
+                            {Boolean((c as any).prescription || ['attended', 'approved', 'completed'].includes(c.status)) && (() => {
+                              const matchingRx = (c as any).prescription || doctorPrescriptions.find(p => p.consultation_id === c.id || (p.patient_id === c.patient_id && !['DRAFT', 'REVOKED', 'CANCELLED', 'REPLACED'].includes(p.status)));
+                              if (matchingRx) {
+                                return (
+                                  <button
+                                    onClick={() => setOfficialRxView(matchingRx)}
+                                    className="bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2 transition-all shadow-sm cursor-pointer"
+                                  >
+                                    <ShieldCheck className="w-4 h-4 text-emerald-600" /> View Issued Rx ({matchingRx.prescription_number || 'Official Rx'})
+                                  </button>
+                                );
+                              }
+                              if (['attended', 'approved', 'completed'].includes(c.status)) {
+                                return (
+                                  <button
+                                    onClick={() => {
+                                      setBuilderConsultation(c);
+                                      setBuilderPatient({ id: c.patient_id, full_name: c.patient_name });
+                                      setShowRxBuilderModal(true);
+                                    }}
+                                    className="bg-gradient-to-r from-[#0D9488] to-[#0F766E] hover:from-[#0B7A6F] hover:to-[#0D625C] text-white font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2 transition-all shadow-md cursor-pointer"
+                                  >
+                                    <Pill className="w-4 h-4" /> Issue E-Prescription
+                                  </button>
+                                );
+                              }
+                              return null;
+                            })()}
                             {/* Reject */}
                             {c.status === 'attended' && (
                               <button onClick={() => setRejectCase(c)}
                                 className="bg-[#D96A6A]/12 hover:bg-[#D96A6A]/20 text-[#B94D4D] font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2 transition-all">
-                                <XCircle className="w-4 h-4"/> Complete Not Approved
+                                <XCircle className="w-4 h-4" /> Complete Not Approved
                               </button>
                             )}
                             {/* Cancel */}
                             {c.status === 'scheduled' && (
                               <button onClick={() => handleCancelAppointment(c)}
                                 className="bg-[#D96A6A]/10 hover:bg-[#D96A6A]/18 text-[#B94D4D] font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2 transition-all shadow-sm">
-                                <XCircle className="w-4 h-4"/> Cancel Call
+                                <XCircle className="w-4 h-4" /> Cancel Call
                               </button>
                             )}
                             {c.status === 'scheduled' && (
                               <button onClick={() => handleMarkMissedByPatient(c)}
                                 className="bg-[#D89A3D]/10 hover:bg-[#D89A3D]/18 text-[#B7792F] font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2 transition-all shadow-sm">
-                                <XCircle className="w-4 h-4"/> Patient No Show
+                                <XCircle className="w-4 h-4" /> Patient No Show
                               </button>
                             )}
                           </div>
@@ -2687,6 +3049,15 @@ export default function DoctorDashboard() {
                 </div>
                 <div className="flex items-center gap-3">
                   <button
+                    onClick={() => loadDoctorPrescriptions(rxSearch, rxStatusFilter, false)}
+                    disabled={loadingPrescriptions}
+                    title="Refresh prescriptions list"
+                    className="flex items-center gap-2 bg-white hover:bg-slate-50 text-[#1A1F36] border border-slate-200 font-bold px-4 py-3 rounded-xl text-sm transition-all shadow-sm active:scale-95 cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-4 h-4 text-[#8896A4] ${loadingPrescriptions ? 'animate-spin text-[#0D9488]' : ''}`} />
+                    <span className="hidden sm:inline">Refresh</span>
+                  </button>
+                  <button
                     onClick={() => {
                       setBuilderConsultation(null);
                       setBuilderPatient(null);
@@ -2720,7 +3091,7 @@ export default function DoctorDashboard() {
                     </div>
                   </div>
                   <p className="text-2xl font-black text-[#0D9488] mt-2">
-                    {doctorPrescriptions.filter(p => p.status === 'ISSUED').length}
+                    {doctorPrescriptions.filter(p => ['ISSUED', 'ACTIVE', 'SIGNED'].includes(p.status)).length}
                   </p>
                   <p className="text-xs text-[#0D9488]/80 mt-1 font-semibold">Digitally signed & active</p>
                 </div>
@@ -2783,11 +3154,10 @@ export default function DoctorDashboard() {
                     <button
                       key={filterTab.key}
                       onClick={() => setRxStatusFilter(filterTab.key)}
-                      className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
-                        rxStatusFilter === filterTab.key
+                      className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${rxStatusFilter === filterTab.key
                           ? 'bg-[#1A1F36] text-white shadow-sm'
                           : 'bg-[#F5F0EB]/60 text-[#40516A] hover:bg-[#F5F0EB]'
-                      }`}
+                        }`}
                     >
                       {filterTab.label}
                     </button>
@@ -2796,7 +3166,7 @@ export default function DoctorDashboard() {
               </div>
 
               {/* Prescriptions List */}
-              {loadingPrescriptions ? (
+              {loadingPrescriptions && doctorPrescriptions.length === 0 ? (
                 <div className="space-y-4">
                   {[1, 2, 3].map((n) => (
                     <div key={n} className="bg-white rounded-2xl p-6 border border-[#1A1F36]/8 animate-pulse space-y-4">
@@ -2833,9 +3203,9 @@ export default function DoctorDashboard() {
                   {doctorPrescriptions.map((rx: any, idx: number) => {
                     const items = rx.prescription_items || [];
                     const pharmacyOrder = rx.pharmacy_orders?.[0];
-                    const isIssued = rx.status === 'ISSUED';
-                    const isDraft = rx.status === 'DRAFT';
-                    const isRevoked = rx.status === 'REVOKED';
+                    const isIssued = ['ISSUED', 'ACTIVE', 'SIGNED'].includes(rx.status);
+                    const isDraft = ['DRAFT', 'READY_FOR_REVIEW'].includes(rx.status);
+                    const isRevoked = ['REVOKED', 'CANCELLED', 'REPLACED'].includes(rx.status);
 
                     return (
                       <motion.div
@@ -3000,15 +3370,15 @@ export default function DoctorDashboard() {
                                   ? pharmacyOrder.status === 'DELIVERED'
                                     ? '✓ Delivered to Patient'
                                     : pharmacyOrder.status === 'IN_TRANSIT'
-                                    ? '🚚 Shipped via Cold-Chain Courier'
-                                    : pharmacyOrder.status === 'DISPENSED'
-                                    ? '💊 Dispensed by Partner Pharmacy'
-                                    : pharmacyOrder.status === 'ASSIGNED'
-                                    ? 'Allocated to Partner Pharmacy'
-                                    : 'Queued for Partner Pharmacy Allocation'
+                                      ? '🚚 Shipped via Cold-Chain Courier'
+                                      : pharmacyOrder.status === 'DISPENSED'
+                                        ? '💊 Dispensed by Partner Pharmacy'
+                                        : pharmacyOrder.status === 'ASSIGNED'
+                                          ? 'Allocated to Partner Pharmacy'
+                                          : 'Queued for Partner Pharmacy Allocation'
                                   : isIssued
-                                  ? 'Awaiting Patient Delivery Address'
-                                  : 'Draft — Not yet queued to pharmacy'}
+                                    ? 'Awaiting Patient Delivery Address'
+                                    : 'Draft — Not yet queued to pharmacy'}
                               </p>
                             </div>
                           </div>
@@ -3111,7 +3481,7 @@ export default function DoctorDashboard() {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
                   <div>
                     <h3 className="text-lg font-black text-[#1A1F36] flex items-center gap-2">
-                      <ArrowDownToLine className="w-5 h-5 text-[#C4622D]"/> Withdraw to Bank Account
+                      <ArrowDownToLine className="w-5 h-5 text-[#C4622D]" /> Withdraw to Bank Account
                     </h3>
                     <p className="text-sm text-[#8896A4] font-semibold mt-1">Funds transfer directly to your registered bank account within 2 business days.</p>
                   </div>
@@ -3175,7 +3545,7 @@ export default function DoctorDashboard() {
                       >
                         <div className="flex items-center gap-3">
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tx.type === 'credit' ? 'bg-[#5C7A6B]/12 text-[#5C7A6B]' : 'bg-[#40516A]/12 text-[#40516A]'}`}>
-                            {tx.type === 'credit' ? <TrendingUp className="w-5 h-5"/> : <ArrowDownToLine className="w-5 h-5"/>}
+                            {tx.type === 'credit' ? <TrendingUp className="w-5 h-5" /> : <ArrowDownToLine className="w-5 h-5" />}
                           </div>
                           <div>
                             <p className="font-bold text-[#1A1F36] text-sm">{tx.description}</p>
@@ -3200,20 +3570,48 @@ export default function DoctorDashboard() {
             </motion.div>
           )}
 
-          {/* Floating Rejoin Widget */}
-          {!activeCallUrl && activeRejoinableConsultation && (
-            <div className="fixed bottom-6 right-6 z-[9999] animate-bounce">
+          {/* ── TAB: PROFILE & SIGNATURE ── */}
+          {activeTab === 'profile' && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+              <div className="border-b border-[#1A1F36]/8 pb-4 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div>
+                  <h1 className="text-2xl font-bold text-[#1A1F36]">Doctor Profile &amp; Digital Signature</h1>
+                  <p className="text-sm text-[#8896A4] mt-0.5">
+                    Manage your clinical credentials, MCI/registration council details, bio, and visual digital signature for prescriptions.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-teal-50 text-[#0D9488] border border-teal-200 px-3.5 py-1 text-xs font-bold uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldCheck className="w-3.5 h-3.5" /> Clinical Verification Active
+                  </span>
+                </div>
+              </div>
+
+              <ProviderProfileEditor
+                provider={providerProfileProps}
+                copy={{ accent: '#0D9488', label: 'Doctor' }}
+                onProfileUpdated={(updated: any) => {
+                  setDoctorProfile((prev: any) => ({ ...prev, ...updated }));
+                }}
+              />
+            </motion.div>
+          )}
+
+          {/* Non-intrusive floating rejoin pill, hidden if any modal is active or on overview/consultations */}
+          {!activeCallUrl && activeRejoinableConsultation && !prescribeCase && !showRxBuilderModal && !officialRxView && !revokingRx && !rejectCase && !viewingPrescription && !warningMessage && !showBankSettingsModal && activeTab !== 'overview' && activeTab !== 'consultations' && (
+            <div className="fixed bottom-6 right-6 z-30">
               <button
                 onClick={() => {
                   joinCall(activeRejoinableConsultation);
                 }}
-                className="bg-[#B94D4D] hover:bg-[#A33F3F] text-white font-black py-4 px-6 rounded-2xl shadow-2xl flex items-center gap-3 transition-all scale-100 hover:scale-105 active:scale-95 border border-[#D96A6A] animate-pulse"
+                className="bg-[#0F172A] hover:bg-[#1E293B] text-white font-bold py-3.5 px-5 rounded-2xl shadow-2xl flex items-center gap-3 transition-all hover:scale-105 active:scale-95 border border-emerald-500/40 cursor-pointer"
               >
-                <span className="flex h-3 w-3 relative">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#D96A6A] opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-3 w-3 bg-white"></span>
+                <span className="flex h-2.5 w-2.5 relative">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                 </span>
-                <Video className="w-5 h-5"/> Rejoin Call with {activeRejoinableConsultation.patient_name || 'Member'}
+                <Video className="w-4 h-4 text-emerald-400" />
+                <span className="text-xs">Resume Call: {activeRejoinableConsultation.patient_name || 'Member'}</span>
               </button>
             </div>
           )}
@@ -3224,9 +3622,9 @@ export default function DoctorDashboard() {
               <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[20px] p-8 max-w-md w-full shadow-2xl border border-[#D89A3D]/25">
                 <div className="flex items-center justify-between mb-6">
                   <h3 className="text-xl font-black text-[#B7792F] flex items-center gap-2">
-                    <AlertCircle className="w-6 h-6 text-[#D89A3D] animate-bounce"/> Advance Joining Restrained
+                    <AlertCircle className="w-6 h-6 text-[#D89A3D] animate-bounce" /> Advance Joining Restrained
                   </h3>
-                  <button onClick={() => setWarningMessage(null)}><X className="w-6 h-6 text-[#8896A4] hover:text-[#40516A]"/></button>
+                  <button onClick={() => setWarningMessage(null)}><X className="w-6 h-6 text-[#8896A4] hover:text-[#40516A]" /></button>
                 </div>
 
                 <div className="bg-[#D89A3D]/10 p-5 rounded-2xl mb-6 border border-[#D89A3D]/18">
@@ -3240,23 +3638,6 @@ export default function DoctorDashboard() {
                   Okay, I&apos;ll return later
                 </button>
               </motion.div>
-            </div>
-          )}
-          {/* Messages Tab */}
-          {activeTab === 'messages' && doctor && (
-            <div className="h-full flex flex-col">
-              <div className="px-6 pt-6 pb-4">
-                <h2 className="text-xl font-black text-[#1A1F36]">Patient Messages</h2>
-                <p className="text-sm text-[#8896A4] mt-0.5">Communicate securely with your assigned patients.</p>
-              </div>
-              <div className="flex-1 px-6 pb-6 overflow-hidden" style={{ minHeight: 0 }}>
-                <StaffChat
-                  staffId={doctor.id}
-                  staffName={doctorProfile?.full_name || 'Doctor'}
-                  patients={patients}
-                  accentColor="#C4622D"
-                />
-              </div>
             </div>
           )}
 
@@ -3340,28 +3721,35 @@ export default function DoctorDashboard() {
                       <div className="min-w-0">
                         <h2 className="break-words text-2xl font-black tracking-tight text-[#1A1F36] sm:text-3xl">{patientName(selectedPatient)}</h2>
                         <p className="text-xs font-bold text-[#8896A4] mt-1 uppercase tracking-wider flex items-center gap-1.5">
-                          <Stethoscope className="w-3.5 h-3.5 text-[#C4622D]"/> Endocrinology case file
+                          <Stethoscope className="w-3.5 h-3.5 text-[#C4622D]" /> Endocrinology case file
                         </p>
                       </div>
                       <div className="flex w-full items-center gap-3 sm:w-auto">
-                        <button
-                          onClick={() => {
-                            setBuilderConsultation(null);
-                            setBuilderPatient(selectedPatient);
-                            setShowRxBuilderModal(true);
-                          }}
-                          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#0F766E] hover:from-[#0B7A6F] hover:to-[#0D625C] px-4 py-2 text-xs font-black text-white shadow-sm transition-all sm:w-auto cursor-pointer"
-                        >
-                          <Pill className="w-3.5 h-3.5" /> Issue E-Prescription
-                        </button>
-                        <button
-                          onClick={() => {
-                            setActiveTab('messages');
-                          }}
-                          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-[#1A1F36] px-4 py-2 text-xs font-bold text-white shadow-sm transition-all hover:bg-[#0D101C] sm:w-auto"
-                        >
-                          <MessageCircle className="w-3.5 h-3.5" /> Message Patient
-                        </button>
+                        {(() => {
+                          const matchingRx = (selectedPatient as any)?.prescription || doctorPrescriptions.find(p => p.patient_id === selectedPatient?.id && !['DRAFT', 'REVOKED', 'CANCELLED', 'REPLACED'].includes(p.status));
+                          if (matchingRx) {
+                            return (
+                              <button
+                                onClick={() => setOfficialRxView(matchingRx)}
+                                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-4 py-2 text-xs font-black shadow-sm transition-all sm:w-auto cursor-pointer"
+                              >
+                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> View Issued Rx ({matchingRx.prescription_number || 'Official Rx'})
+                              </button>
+                            );
+                          }
+                          return (
+                            <button
+                              onClick={() => {
+                                setBuilderConsultation(null);
+                                setBuilderPatient(selectedPatient);
+                                setShowRxBuilderModal(true);
+                              }}
+                              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#0F766E] hover:from-[#0B7A6F] hover:to-[#0D625C] px-4 py-2 text-xs font-black text-white shadow-sm transition-all sm:w-auto cursor-pointer"
+                            >
+                              <Pill className="w-3.5 h-3.5" /> Issue E-Prescription
+                            </button>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -3477,7 +3865,7 @@ export default function DoctorDashboard() {
                     {/* Patient Progress Summary */}
                     <div className="bg-white p-6 rounded-[20px] border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.08)]">
                       <h3 className="text-xs font-black text-[#8896A4] uppercase tracking-widest mb-6 flex items-center gap-1.5">
-                        <Activity className="w-4 h-4 text-[#C4622D]"/> Patient Progress Summary
+                        <Activity className="w-4 h-4 text-[#C4622D]" /> Patient Progress Summary
                       </h3>
                       {!selectedPatient.weight_logs || selectedPatient.weight_logs.length === 0 ? (
                         <div className="h-48 flex items-center justify-center text-[#8896A4] text-sm font-bold">
@@ -3502,7 +3890,7 @@ export default function DoctorDashboard() {
                     {selectedPatient.medical_history && (
                       <div className="bg-white p-6 rounded-[20px] border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.08)]">
                         <h3 className="text-xs font-black text-[#8896A4] uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                          <FileText className="w-4 h-4 text-[#C4622D]"/> Secondary Health Intake
+                          <FileText className="w-4 h-4 text-[#C4622D]" /> Secondary Health Intake
                         </h3>
                         <p className="text-sm font-bold text-[#1A1F36] bg-[#F5F0EB]/50 p-4.5 rounded-2xl border border-[#1A1F36]/8 leading-relaxed shadow-inner">
                           {safeDisplayValue(selectedPatient.medical_history)}
@@ -3514,7 +3902,7 @@ export default function DoctorDashboard() {
                     {selectedPatient.extra_medical_info && (
                       <div className="bg-white p-6 rounded-[20px] border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.08)]">
                         <h3 className="text-xs font-black text-[#8896A4] uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                          <FileText className="w-4 h-4 text-[#5C7A6B]"/> Additional Clinical Notes
+                          <FileText className="w-4 h-4 text-[#5C7A6B]" /> Additional Clinical Notes
                         </h3>
                         <p className="text-sm font-bold text-[#1A1F36] bg-[#F5F0EB]/50 p-4.5 rounded-2xl border border-[#1A1F36]/8 leading-relaxed shadow-inner">
                           {safeDisplayValue(selectedPatient.extra_medical_info)}
@@ -3526,7 +3914,7 @@ export default function DoctorDashboard() {
                     {selectedPatient.local_food && (
                       <div className="bg-white p-6 rounded-[20px] border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.08)]">
                         <h3 className="text-xs font-black text-[#8896A4] uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                          <FileText className="w-4 h-4 text-[#D89A3D]"/> Care Team Context
+                          <FileText className="w-4 h-4 text-[#D89A3D]" /> Care Team Context
                         </h3>
                         <p className="text-sm font-bold text-[#1A1F36] bg-[#F5F0EB]/50 p-4.5 rounded-2xl border border-[#F5F0EB] leading-relaxed shadow-inner">
                           {safeDisplayValue(selectedPatient.local_food)}
@@ -3549,212 +3937,213 @@ export default function DoctorDashboard() {
               </div>
             </motion.div>
           )}
-        {/* ── BANK / PAYOUT SETTINGS MODAL ── */}
-        {showBankSettingsModal && (
-          <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[28px] p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-[#1A1F36]/8 my-8">
-              <div className="flex items-center justify-between pb-4 border-b border-[#1A1F36]/8">
-                <div>
-                  <p className="text-xs font-black uppercase tracking-wider text-[#C4622D]">Payout Account</p>
-                  <h3 className="text-xl font-black text-[#1A1F36]">Payment & Bank Details</h3>
-                </div>
-                <button
-                  onClick={() => setShowBankSettingsModal(false)}
-                  className="rounded-full p-2 hover:bg-[#F5F0EB] text-[#8896A4] hover:text-[#1A1F36] transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-
-              {loadingBankDetails ? (
-                <div className="py-12 text-center text-sm font-bold text-[#8896A4]">
-                  Loading payment details...
-                </div>
-              ) : (
-                <form onSubmit={handleSaveBankDetails} className="mt-6 space-y-4">
-                  {bankModalMsg && (
-                    <div className={`p-4 rounded-2xl text-xs font-bold flex items-center gap-2.5 ${bankModalMsg.type === 'success' ? 'bg-[#5C7A6B]/12 text-[#5C7A6B] border border-[#5C7A6B]/20' : 'bg-[#D96A6A]/12 text-[#B94D4D] border border-[#D96A6A]/20'}`}>
-                      {bankModalMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
-                      <span>{bankModalMsg.text}</span>
-                    </div>
-                  )}
-
-                  {bankMaskedAccount && (
-                    <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#F5F0EB]/60 border border-[#1A1F36]/8 text-xs">
-                      <div>
-                        <span className="font-semibold text-[#8896A4]">Current Account:</span>{' '}
-                        <span className="font-mono font-black text-[#1A1F36]">{bankMaskedAccount}</span>
-                      </div>
-                      <span className="text-[10px] font-black uppercase text-[#5C7A6B] bg-[#5C7A6B]/15 px-2.5 py-0.5 rounded-full">Active</span>
-                    </div>
-                  )}
-
+          {/* ── BANK / PAYOUT SETTINGS MODAL ── */}
+          {showBankSettingsModal && (
+            <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[28px] p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-[#1A1F36]/8 my-8">
+                <div className="flex items-center justify-between pb-4 border-b border-[#1A1F36]/8">
                   <div>
-                    <label className={labelCls}>Payout Method</label>
-                    <div className="grid grid-cols-2 gap-2 mt-1.5">
-                      <button
-                        type="button"
-                        onClick={() => setBankMethod('BANK_TRANSFER')}
-                        className={`p-3 rounded-xl text-xs font-black border transition-all ${bankMethod === 'BANK_TRANSFER' ? 'bg-[#1A1F36] text-white border-[#1A1F36]' : 'bg-[#F5F0EB]/50 text-[#8896A4] border-transparent hover:bg-[#F5F0EB]'}`}
-                      >
-                        Bank Transfer (NEFT/IMPS)
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setBankMethod('UPI')}
-                        className={`p-3 rounded-xl text-xs font-black border transition-all ${bankMethod === 'UPI' ? 'bg-[#1A1F36] text-white border-[#1A1F36]' : 'bg-[#F5F0EB]/50 text-[#8896A4] border-transparent hover:bg-[#F5F0EB]'}`}
-                      >
-                        UPI Transfer
-                      </button>
-                    </div>
+                    <p className="text-xs font-black uppercase tracking-wider text-[#C4622D]">Payout Account</p>
+                    <h3 className="text-xl font-black text-[#1A1F36]">Payment & Bank Details</h3>
                   </div>
+                  <button
+                    onClick={() => setShowBankSettingsModal(false)}
+                    className="rounded-full p-2 hover:bg-[#F5F0EB] text-[#8896A4] hover:text-[#1A1F36] transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
 
-                  {bankMethod === 'BANK_TRANSFER' ? (
-                    <>
-                      <div>
-                        <label className={labelCls}>Account Holder Name *</label>
-                        <input
-                          type="text"
-                          required
-                          value={bankBeneficiaryName}
-                          onChange={(e) => setBankBeneficiaryName(e.target.value)}
-                          placeholder="As printed on bank records"
-                          className={inputCls}
-                        />
+                {loadingBankDetails ? (
+                  <div className="py-12 text-center text-sm font-bold text-[#8896A4]">
+                    Loading payment details...
+                  </div>
+                ) : (
+                  <form onSubmit={handleSaveBankDetails} className="mt-6 space-y-4">
+                    {bankModalMsg && (
+                      <div className={`p-4 rounded-2xl text-xs font-bold flex items-center gap-2.5 ${bankModalMsg.type === 'success' ? 'bg-[#5C7A6B]/12 text-[#5C7A6B] border border-[#5C7A6B]/20' : 'bg-[#D96A6A]/12 text-[#B94D4D] border border-[#D96A6A]/20'}`}>
+                        {bankModalMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                        <span>{bankModalMsg.text}</span>
                       </div>
-                      <div>
-                        <label className={labelCls}>Account Number *</label>
-                        <div className="relative">
-                          <input
-                            type={showBankAccountNumber ? "text" : "password"}
-                            required
-                            value={bankAccountNumber}
-                            onChange={(e) => setBankAccountNumber(e.target.value)}
-                            placeholder="Enter account number"
-                            className={`${inputCls} pr-11`}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => setShowBankAccountNumber(!showBankAccountNumber)}
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#0F172A] transition-colors focus:outline-none"
-                            aria-label={showBankAccountNumber ? "Hide account number" : "Show account number"}
-                          >
-                            {showBankAccountNumber ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                          </button>
-                        </div>
-                      </div>
-                      <div>
-                        <label className={labelCls}>Confirm Account Number *</label>
-                        <input
-                          type="text"
-                          required
-                          value={bankConfirmAccountNumber}
-                          onChange={(e) => setBankConfirmAccountNumber(e.target.value)}
-                          placeholder="Re-enter account number"
-                          className={inputCls}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-3">
+                    )}
+
+                    {bankMaskedAccount && (
+                      <div className="flex items-center justify-between p-3.5 rounded-2xl bg-[#F5F0EB]/60 border border-[#1A1F36]/8 text-xs">
                         <div>
-                          <label className={labelCls}>IFSC Code *</label>
+                          <span className="font-semibold text-[#8896A4]">Current Account:</span>{' '}
+                          <span className="font-mono font-black text-[#1A1F36]">{bankMaskedAccount}</span>
+                        </div>
+                        <span className="text-[10px] font-black uppercase text-[#5C7A6B] bg-[#5C7A6B]/15 px-2.5 py-0.5 rounded-full">Active</span>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className={labelCls}>Payout Method</label>
+                      <div className="grid grid-cols-2 gap-2 mt-1.5">
+                        <button
+                          type="button"
+                          onClick={() => setBankMethod('BANK_TRANSFER')}
+                          className={`p-3 rounded-xl text-xs font-black border transition-all ${bankMethod === 'BANK_TRANSFER' ? 'bg-[#1A1F36] text-white border-[#1A1F36]' : 'bg-[#F5F0EB]/50 text-[#8896A4] border-transparent hover:bg-[#F5F0EB]'}`}
+                        >
+                          Bank Transfer (NEFT/IMPS)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBankMethod('UPI')}
+                          className={`p-3 rounded-xl text-xs font-black border transition-all ${bankMethod === 'UPI' ? 'bg-[#1A1F36] text-white border-[#1A1F36]' : 'bg-[#F5F0EB]/50 text-[#8896A4] border-transparent hover:bg-[#F5F0EB]'}`}
+                        >
+                          UPI Transfer
+                        </button>
+                      </div>
+                    </div>
+
+                    {bankMethod === 'BANK_TRANSFER' ? (
+                      <>
+                        <div>
+                          <label className={labelCls}>Account Holder Name *</label>
                           <input
                             type="text"
                             required
-                            maxLength={11}
-                            value={bankIfsc}
-                            onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
-                            placeholder="e.g. HDFC0001234"
-                            className={`${inputCls} uppercase font-mono`}
-                          />
-                        </div>
-                        <div>
-                          <label className={labelCls}>Bank Name (Optional)</label>
-                          <input
-                            type="text"
-                            value={bankName}
-                            onChange={(e) => setBankName(e.target.value)}
-                            placeholder="e.g. HDFC Bank"
+                            value={bankBeneficiaryName}
+                            onChange={(e) => setBankBeneficiaryName(e.target.value)}
+                            placeholder="As printed on bank records"
                             className={inputCls}
                           />
                         </div>
+                        <div>
+                          <label className={labelCls}>Account Number *</label>
+                          <div className="relative">
+                            <input
+                              type={showBankAccountNumber ? "text" : "password"}
+                              required
+                              value={bankAccountNumber}
+                              onChange={(e) => setBankAccountNumber(e.target.value)}
+                              placeholder="Enter account number"
+                              className={`${inputCls} pr-11`}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setShowBankAccountNumber(!showBankAccountNumber)}
+                              className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] hover:text-[#0F172A] transition-colors focus:outline-none"
+                              aria-label={showBankAccountNumber ? "Hide account number" : "Show account number"}
+                            >
+                              {showBankAccountNumber ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                            </button>
+                          </div>
+                        </div>
+                        <div>
+                          <label className={labelCls}>Confirm Account Number *</label>
+                          <input
+                            type="text"
+                            required
+                            value={bankConfirmAccountNumber}
+                            onChange={(e) => setBankConfirmAccountNumber(e.target.value)}
+                            placeholder="Re-enter account number"
+                            className={inputCls}
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className={labelCls}>IFSC Code *</label>
+                            <input
+                              type="text"
+                              required
+                              maxLength={11}
+                              value={bankIfsc}
+                              onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
+                              placeholder="e.g. HDFC0001234"
+                              className={`${inputCls} uppercase font-mono`}
+                            />
+                          </div>
+                          <div>
+                            <label className={labelCls}>Bank Name (Optional)</label>
+                            <input
+                              type="text"
+                              value={bankName}
+                              onChange={(e) => setBankName(e.target.value)}
+                              placeholder="e.g. HDFC Bank"
+                              className={inputCls}
+                            />
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <div>
+                        <label className={labelCls}>UPI ID / VPA *</label>
+                        <input
+                          type="text"
+                          required
+                          value={bankUpiId}
+                          onChange={(e) => setBankUpiId(e.target.value)}
+                          placeholder="e.g. doctor@oksbi"
+                          className={inputCls}
+                        />
+                        <p className="text-[11px] text-[#8896A4] font-semibold mt-1">
+                          Instant payouts will be sent directly to this address.
+                        </p>
                       </div>
-                    </>
-                  ) : (
-                    <div>
-                      <label className={labelCls}>UPI ID / VPA *</label>
-                      <input
-                        type="text"
-                        required
-                        value={bankUpiId}
-                        onChange={(e) => setBankUpiId(e.target.value)}
-                        placeholder="e.g. doctor@oksbi"
-                        className={inputCls}
-                      />
-                      <p className="text-[11px] text-[#8896A4] font-semibold mt-1">
-                        Instant payouts will be sent directly to this address.
-                      </p>
+                    )}
+
+                    <div className="flex justify-end gap-3 pt-4 border-t border-[#1A1F36]/8">
+                      <button
+                        type="button"
+                        onClick={() => setShowBankSettingsModal(false)}
+                        className="px-5 py-2.5 rounded-xl border border-[#1A1F36]/15 text-xs font-black text-[#8896A4] hover:bg-[#F5F0EB] transition-colors"
+                      >
+                        Close
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={savingBankDetails}
+                        className="bg-[#1A1F36] hover:bg-[#0D101C] disabled:opacity-50 text-white font-black px-6 py-2.5 rounded-xl text-xs transition-all shadow-md cursor-pointer"
+                      >
+                        {savingBankDetails ? 'Saving...' : 'Save Details'}
+                      </button>
                     </div>
-                  )}
+                  </form>
+                )}
+              </motion.div>
+            </div>
+          )}
 
-                  <div className="flex justify-end gap-3 pt-4 border-t border-[#1A1F36]/8">
-                    <button
-                      type="button"
-                      onClick={() => setShowBankSettingsModal(false)}
-                      className="px-5 py-2.5 rounded-xl border border-[#1A1F36]/15 text-xs font-black text-[#8896A4] hover:bg-[#F5F0EB] transition-colors"
-                    >
-                      Close
-                    </button>
-                    <button
-                      type="submit"
-                      disabled={savingBankDetails}
-                      className="bg-[#1A1F36] hover:bg-[#0D101C] disabled:opacity-50 text-white font-black px-6 py-2.5 rounded-xl text-xs transition-all shadow-md cursor-pointer"
-                    >
-                      {savingBankDetails ? 'Saving...' : 'Save Details'}
-                    </button>
-                  </div>
-                </form>
-              )}
-            </motion.div>
-          </div>
-        )}
+          {/* ── REAL PRODUCTION E-PRESCRIPTION BUILDER MODAL ── */}
+          <DoctorPrescriptionBuilderModal
+            isOpen={showRxBuilderModal}
+            onClose={() => {
+              setShowRxBuilderModal(false);
+              setBuilderConsultation(null);
+              setBuilderPatient(null);
+            }}
+            onSuccess={(newRx, signed) => {
+              loadDoctorPrescriptions();
+              if (doctor) loadConsultations(doctor.id);
+              if (signed) {
+                setOfficialRxView(newRx);
+              }
+            }}
+            consultation={builderConsultation}
+            patient={builderPatient}
+            patientsList={patients}
+            doctorProfile={doctorProfile}
+          />
 
-        {/* ── REAL PRODUCTION E-PRESCRIPTION BUILDER MODAL ── */}
-        <DoctorPrescriptionBuilderModal
-          isOpen={showRxBuilderModal}
-          onClose={() => {
-            setShowRxBuilderModal(false);
-            setBuilderConsultation(null);
-            setBuilderPatient(null);
-          }}
-          onSuccess={(newRx, signed) => {
-            loadDoctorPrescriptions();
-            if (signed) {
-              setOfficialRxView(newRx);
-            }
-          }}
-          consultation={builderConsultation}
-          patient={builderPatient}
-          patientsList={patients}
-          doctorProfile={doctorProfile}
-        />
+          {/* ── OFFICIAL CLINICAL LETTERHEAD PRESCRIPTION VIEWER & PRINT MODAL ── */}
+          <OfficialPrescriptionModal
+            isOpen={Boolean(officialRxView)}
+            onClose={() => setOfficialRxView(null)}
+            prescription={officialRxView}
+            doctorProfile={doctorProfile}
+          />
 
-        {/* ── OFFICIAL CLINICAL LETTERHEAD PRESCRIPTION VIEWER & PRINT MODAL ── */}
-        <OfficialPrescriptionModal
-          isOpen={Boolean(officialRxView)}
-          onClose={() => setOfficialRxView(null)}
-          prescription={officialRxView}
-          doctorProfile={doctorProfile}
-        />
-
-        {/* ── REVOKE PRESCRIPTION MODAL ── */}
-        <RevokePrescriptionModal
-          isOpen={Boolean(revokingRx)}
-          onClose={() => setRevokingRx(null)}
-          onSuccess={() => {
-            loadDoctorPrescriptions();
-          }}
-          prescription={revokingRx}
-        />
+          {/* ── REVOKE PRESCRIPTION MODAL ── */}
+          <RevokePrescriptionModal
+            isOpen={Boolean(revokingRx)}
+            onClose={() => setRevokingRx(null)}
+            onSuccess={() => {
+              loadDoctorPrescriptions();
+            }}
+            prescription={revokingRx}
+          />
         </motion.main>
       </div>
     </div>

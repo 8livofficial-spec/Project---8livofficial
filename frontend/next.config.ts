@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
   // other config options...
   allowedDevOrigins: ["little-emote-livestock.ngrok-free.dev", "172.21.100.123"],
   images: {
-    qualities: [72, 75, 78],
+    qualities: [72, 75, 78, 85, 90],
   },
   turbopack: {
     root: path.resolve(process.cwd()),

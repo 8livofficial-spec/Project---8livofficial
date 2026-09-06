@@ -17,6 +17,7 @@ import {
   FileText,
   ArrowRight,
   LogOut,
+  TrendingUp,
 } from 'lucide-react'
 import { authedFetch } from '@/lib/apiClient'
 import { supabase } from '@/lib/supabaseClient'
@@ -532,6 +533,12 @@ export default function PharmacyPortalPage() {
                   <ShieldCheck className="h-4 w-4 text-emerald-600" />
                   {pharmacy.verification_status} • {pharmacy.status}
                 </div>
+                <Link
+                  href="/pharmacy/demand"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-[#C4622D]/30 bg-[#C4622D]/10 px-3.5 py-2 text-xs font-black text-[#C4622D] hover:bg-[#C4622D] hover:text-white transition-all shadow-sm"
+                >
+                  <TrendingUp className="h-3.5 w-3.5" /> Upcoming Demand
+                </Link>
                 <button
                   onClick={handleSignOut}
                   className="inline-flex items-center gap-1.5 rounded-xl border border-[#1A1F36]/10 px-3 py-2 text-xs font-black text-[#8896A4] hover:bg-[#F5F0EB] hover:text-[#1A1F36] transition-colors ml-1"

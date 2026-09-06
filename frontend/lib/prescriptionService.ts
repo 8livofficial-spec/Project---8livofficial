@@ -1,6 +1,6 @@
 import { supabaseAdmin } from './supabaseServer'
 import { assertConsultationDoctorOwnership } from './fulfilmentAuth'
-import { canonicalPrescriptionData, renderPrescriptionDocument, sha256, storePrescriptionPdf } from './prescriptionPdfService'
+import { canonicalPrescriptionData, generatePrescriptionPdf, sha256, storePrescriptionPdf } from './prescriptionPdfService'
 
 export type PrescriptionItemInput = {
   medicine_name: string
@@ -188,7 +188,30 @@ export async function updateDraftPrescription(prescriptionId: string, doctorId: 
   await audit({ prescriptionId, actorId: doctorId, actorRole: 'doctor', action: 'PRESCRIPTION_UPDATED' })
 }
 
-export async function signPrescription(prescriptionId: string, doctorId: string) {
+export type DoctorDeclarations = {
+  reviewed_details: boolean
+  clinical_decision: boolean
+  electronic_authorization: boolean
+}
+
+export async function signPrescription(
+  prescriptionId: string,
+  doctorId: string,
+  declarations?: DoctorDeclarations,
+  request?: Request
+) {
+  // Validate mandatory doctor declarations
+  if (
+    !declarations ||
+    declarations.reviewed_details !== true ||
+    declarations.clinical_decision !== true ||
+    declarations.electronic_authorization !== true
+  ) {
+    throw new Error(
+      'Doctor authorization failed: You must explicitly confirm all three statutory declarations before issuing.'
+    )
+  }
+
   const { data: prescription, error } = await supabaseAdmin
     .from('prescriptions')
     .select('*, prescription_items(*)')
@@ -212,39 +235,176 @@ export async function signPrescription(prescriptionId: string, doctorId: string)
     throw new Error('Consultation is not valid for prescribing.')
   }
 
-  const canonical = canonicalPrescriptionData(prescription, items)
-  const canonicalJson = JSON.stringify(canonical)
-  const signatureHash = sha256(canonicalJson)
-  const document = renderPrescriptionDocument({ ...canonical, signature_hash: signatureHash, issued_at: new Date().toISOString() })
-  const pdfPath = await storePrescriptionPdf(prescriptionId, document)
-  const now = new Date().toISOString()
+  // Retrieve Doctor Metadata from provider_profiles or doctor_profiles
+  let doctorMeta: any = {}
+  try {
+    const { data: prov } = await supabaseAdmin
+      .from('provider_profiles')
+      .select('full_name, qualification, registration_number, specialization')
+      .eq('provider_id', doctorId)
+      .maybeSingle()
+    if (prov) {
+      doctorMeta = prov
+    } else {
+      const { data: docProf } = await supabaseAdmin
+        .from('doctor_profiles')
+        .select('full_name, specialty')
+        .eq('id', doctorId)
+        .maybeSingle()
+      if (docProf) doctorMeta = docProf
+    }
+  } catch (dErr) {
+    console.warn('[prescriptionService] Could not fetch doctor metadata:', dErr)
+  }
 
+  // Retrieve Patient Metadata from profiles
+  let patientMeta: any = {}
+  try {
+    const { data: pat } = await supabaseAdmin
+      .from('profiles')
+      .select('first_name, last_name, gender, dob')
+      .eq('id', prescription.patient_id)
+      .maybeSingle()
+    if (pat) {
+      const fullName = [pat.first_name, pat.last_name].filter(Boolean).join(' ')
+      let age: string | number = '-'
+      if (pat.dob) {
+        const birthDate = new Date(pat.dob)
+        const diffYears = Math.floor((Date.now() - birthDate.getTime()) / (365.25 * 24 * 3600 * 1000))
+        if (!isNaN(diffYears) && diffYears > 0) age = diffYears
+      }
+      patientMeta = {
+        full_name: fullName,
+        gender: pat.gender,
+        age,
+      }
+    }
+  } catch (pErr) {
+    console.warn('[prescriptionService] Could not fetch patient metadata:', pErr)
+  }
+
+  const now = new Date()
+  const nowIso = now.toISOString()
+  
+  // Calculate expected fulfillment date (2 days ahead for standard metabolic shipment)
+  const expDate = new Date(now)
+  expDate.setDate(expDate.getDate() + 2)
+  const expectedFulfillmentDate = expDate.toISOString().split('T')[0]
+
+  const canonical = canonicalPrescriptionData(prescription, items, {
+    doctor: {
+      full_name: doctorMeta.full_name || 'Dr. 8LIV Physician',
+      qualification: doctorMeta.qualification || 'MBBS, MD',
+      registration_number: doctorMeta.registration_number || 'MCI-8LIV-DOC',
+      registration_council: doctorMeta.registration_council || 'State Medical Council',
+    },
+    patient: {
+      full_name: patientMeta.full_name || 'Patient',
+      gender: patientMeta.gender || 'Not Specified',
+      age: patientMeta.age || '-',
+    },
+  })
+
+  const canonicalJson = JSON.stringify(canonical)
+  const canonicalHash = sha256(canonicalJson)
+
+  // Generate Professional Vector PDF using pdf-lib
+  const { pdfBuffer, pdfHash } = await generatePrescriptionPdf(canonical, canonicalHash)
+  const { path: pdfPath } = await storePrescriptionPdf(prescriptionId, pdfBuffer, canonical.version)
+
+  const immutableCanonicalData = {
+    ...canonical,
+    canonical_content_hash: canonicalHash,
+    pdf_hash: pdfHash,
+    signed_pdf_path: pdfPath,
+    declarations_accepted: {
+      reviewed_details: true,
+      clinical_decision: true,
+      electronic_authorization: true,
+      accepted_at: nowIso,
+    },
+  }
+
+  // Update DB record
+  const updatePayload: Record<string, any> = {
+    status: 'ISSUED',
+    issued_at: nowIso,
+    authorized_at: nowIso,
+    authorized_by: doctorId,
+    signed_pdf_path: pdfPath,
+    signature_hash: canonicalHash,
+    canonical_content_hash: canonicalHash,
+    pdf_hash: pdfHash,
+    expected_fulfillment_date: expectedFulfillmentDate,
+    canonical_data: immutableCanonicalData,
+    updated_at: nowIso,
+  }
+
+  let signedResult: any = null
   const { data: signed, error: updateError } = await supabaseAdmin
     .from('prescriptions')
-    .update({
-      status: 'ISSUED',
-      issued_at: now,
-      signed_pdf_path: pdfPath,
-      signature_hash: signatureHash,
-      canonical_data: canonical,
-      updated_at: now,
-    })
+    .update(updatePayload)
     .eq('id', prescriptionId)
     .eq('doctor_id', doctorId)
     .in('status', ['DRAFT', 'READY_FOR_REVIEW'])
     .select('*')
     .single()
-  if (updateError) throw updateError
+
+  if (updateError) {
+    // If some columns like expected_fulfillment_date are pending migration, fallback to core columns
+    console.warn('[prescriptionService] Update failed, falling back to core columns:', updateError.message)
+    const fallbackPayload = {
+      status: 'ISSUED',
+      issued_at: nowIso,
+      signed_pdf_path: pdfPath,
+      signature_hash: canonicalHash,
+      canonical_data: immutableCanonicalData,
+      updated_at: nowIso,
+    }
+    const { data: fallbackSigned, error: fbErr } = await supabaseAdmin
+      .from('prescriptions')
+      .update(fallbackPayload)
+      .eq('id', prescriptionId)
+      .eq('doctor_id', doctorId)
+      .select('*')
+      .single()
+    if (fbErr) throw fbErr
+    signedResult = fallbackSigned
+  } else {
+    signedResult = signed
+  }
 
   // If associated with a treatment cycle, update cycle status to PRESCRIBED
   if (prescription.treatment_cycle_id) {
     try {
       await supabaseAdmin
         .from('treatment_cycles')
-        .update({ status: 'PRESCRIBED', updated_at: now })
+        .update({ status: 'PRESCRIBED', updated_at: nowIso })
         .eq('id', prescription.treatment_cycle_id)
     } catch (cycleErr) {
       console.warn('[prescriptionService] Could not update cycle status to PRESCRIBED:', cycleErr)
+    }
+  }
+
+  // Also sync the consultation record so it stays permanently completed and prescribed
+  if (prescription.consultation_id) {
+    try {
+      const itemsSummary = items
+        .map((i: any) => `${i.medicine_name} ${i.strength || ''} - ${i.dose || ''} ${i.frequency || ''}`)
+        .join(', ')
+      await supabaseAdmin
+        .from('doctor_consultations')
+        .update({
+          is_completed: true,
+          status: 'completed',
+          completed_at: nowIso,
+          prescription_text: itemsSummary,
+          prescription_type: items[0]?.dosage_form || 'INJECTABLE',
+          updated_at: nowIso,
+        })
+        .eq('id', prescription.consultation_id)
+    } catch (cErr) {
+      console.warn('[prescriptionService] Could not update consultation record:', cErr)
     }
   }
 
@@ -256,8 +416,21 @@ export async function signPrescription(prescriptionId: string, doctorId: string)
     is_read: false,
   })
 
-  await audit({ prescriptionId, actorId: doctorId, actorRole: 'doctor', action: 'PRESCRIPTION_SIGNED', newValues: { signatureHash } })
-  return { prescription: signed, alreadySigned: false }
+  await audit({
+    prescriptionId,
+    actorId: doctorId,
+    actorRole: 'doctor',
+    action: 'PRESCRIPTION_SIGNED',
+    newValues: {
+      canonicalContentHash: canonicalHash,
+      pdfHash,
+      pdfPath,
+      version: canonical.version,
+    },
+    request,
+  })
+
+  return { prescription: signedResult, alreadySigned: false }
 }
 
 export async function replacePrescription(prescriptionId: string, doctorId: string, input: PrescriptionInput) {

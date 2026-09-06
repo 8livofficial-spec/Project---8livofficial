@@ -62,6 +62,63 @@ export async function POST(request: Request) {
       })
     }
 
+    // 3b. Mandatory Patient Consent Verification
+    const consent = body.consent || {
+      reviewed_prescription: body.reviewed_prescription ?? body.consent_reviewed,
+      consent_transmission: body.consent_transmission ?? body.consent_fulfillment,
+      confirm_delivery_info: body.confirm_delivery_info ?? body.consent_address,
+    }
+
+    if (
+      consent.reviewed_prescription !== true ||
+      consent.consent_transmission !== true ||
+      consent.confirm_delivery_info !== true
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'Patient consent is mandatory: You must acknowledge reviewing the prescription, consent to electronic transmission to the partner pharmacy, and confirm your delivery details.',
+        },
+        { status: 400 }
+      )
+    }
+
+    // Record statutory consent
+    const nowIso = new Date().toISOString()
+    const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || '::1'
+    const userAgent = request.headers.get('user-agent') || 'Browser'
+    const prescriptionHash = prescription.canonical_content_hash || prescription.signature_hash || 'hash'
+
+    try {
+      await supabaseAdmin.from('patient_prescription_consents').insert({
+        tenant_id: '8liv',
+        patient_id: auth.user.id,
+        prescription_id: prescriptionId,
+        prescription_version: prescription.version || 1,
+        prescription_hash: prescriptionHash,
+        consent_type: 'ELECTRONIC_TRANSMISSION_AND_FULFILLMENT',
+        consented_at: nowIso,
+        ip_address: clientIp,
+        user_agent: userAgent,
+      })
+    } catch (cErr) {
+      console.warn('[confirm-delivery] patient_prescription_consents insert fallback note:', cErr)
+    }
+
+    await audit({
+      actorId: auth.user.id,
+      actorRole: 'patient',
+      action: 'PATIENT_CONSENT_CAPTURED',
+      newValues: {
+        prescription_id: prescriptionId,
+        prescription_version: prescription.version || 1,
+        prescription_hash: prescriptionHash,
+        consent_type: 'ELECTRONIC_TRANSMISSION_AND_FULFILLMENT',
+        consented_at: nowIso,
+      },
+      request,
+    })
+
     // 4. Resolve delivery address
     let resolvedAddress: any = null
 
@@ -143,6 +200,7 @@ export async function POST(request: Request) {
         tenant_id: '8liv',
         prescription_id: prescriptionId,
         patient_id: auth.user.id,
+        treatment_cycle_id: prescription.treatment_cycle_id || null,
         pharmacy_id: null,
         status: 'PENDING_ASSIGNMENT',
         delivery_address_snapshot: deliveryAddressSnapshot,

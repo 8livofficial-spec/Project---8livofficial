@@ -15,8 +15,14 @@ import {
   User,
   Clock,
   ChevronDown,
+  CheckCircle2,
+  Columns,
+  Eye,
+  FileEdit,
+  Maximize2,
 } from 'lucide-react'
 import { authedFetch } from '@/lib/apiClient'
+import PrescriptionOfficialSheet from './PrescriptionOfficialSheet'
 
 export type PrescriptionItemData = {
   medicine_name: string
@@ -232,6 +238,56 @@ export default function DoctorPrescriptionBuilderModal({
   )
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string>('')
+  const [declReviewed, setDeclReviewed] = useState(false)
+  const [declClinicalDecision, setDeclClinicalDecision] = useState(false)
+  const [declElectronicAuth, setDeclElectronicAuth] = useState(false)
+  const [doctorSigUrl, setDoctorSigUrl] = useState<string | null>(null)
+  const [sigUploading, setSigUploading] = useState(false)
+  const [viewMode, setViewMode] = useState<'split' | 'form' | 'preview'>('split')
+
+  // Detect screen size for initial default view
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+      setViewMode('form')
+    }
+  }, [])
+
+  // Fetch signature on modal open
+  useEffect(() => {
+    if (isOpen) {
+      setDeclReviewed(false)
+      setDeclClinicalDecision(false)
+      setDeclElectronicAuth(false)
+      authedFetch('/api/doctor/signature')
+        .then((r) => r.json())
+        .then((data) => {
+          if (data.hasSignature && data.previewUrl) {
+            setDoctorSigUrl(data.previewUrl)
+          }
+        })
+        .catch((e) => console.warn('Signature fetch note:', e))
+    }
+  }, [isOpen])
+
+  const handleSignatureUpload = async (file: File) => {
+    setSigUploading(true)
+    setError('')
+    try {
+      const fd = new FormData()
+      fd.append('signature', file)
+      const res = await authedFetch('/api/doctor/signature', {
+        method: 'POST',
+        body: fd,
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to upload signature.')
+      setDoctorSigUrl(data.previewUrl)
+    } catch (err: any) {
+      setError(err.message || 'Signature upload error.')
+    } finally {
+      setSigUploading(false)
+    }
+  }
 
   // Sync incoming consultation or patient
   useEffect(() => {
@@ -329,6 +385,15 @@ export default function DoctorPrescriptionBuilderModal({
       }
     }
 
+    if (signNow) {
+      if (!declReviewed || !declClinicalDecision || !declElectronicAuth) {
+        setError(
+          'Doctor statutory confirmation required: You must check and confirm all three statutory medical declarations below to authorize and issue this e-prescription.'
+        )
+        return
+      }
+    }
+
     setIsSubmitting(true)
     try {
       // Append advice notes into items special_instructions if present
@@ -346,6 +411,13 @@ export default function DoctorPrescriptionBuilderModal({
         valid_until: validUntil,
         items: formattedItems,
         autoSign: signNow,
+        declarations: signNow
+          ? {
+              reviewed_details: declReviewed,
+              clinical_decision: declClinicalDecision,
+              electronic_authorization: declElectronicAuth,
+            }
+          : undefined,
       }
 
       const res = await authedFetch('/api/doctor/prescriptions', {
@@ -376,47 +448,14 @@ export default function DoctorPrescriptionBuilderModal({
     patientsList.find((p) => p.id === selectedPatientId)?.first_name ||
     'Selected Patient'
 
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 sm:p-6 overflow-y-auto">
-      <div className="relative w-full max-w-5xl rounded-3xl bg-white shadow-2xl border border-[#1A1F36]/10 flex flex-col max-h-[92vh] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200">
-        
-        {/* Modal Header */}
-        <div className="sticky top-0 z-20 flex items-center justify-between border-b border-[#1A1F36]/10 bg-white px-6 py-4 sm:px-8">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#1A1F36] text-white shadow-md">
-              <Pill className="h-6 w-6 text-[#C4622D]" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-[#C4622D]">
-                  Telemedicine E-Prescription Suite
-                </span>
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700 border border-emerald-200">
-                  NMC 2020 Compliant
-                </span>
-              </div>
-              <h2 className="text-xl font-black text-[#1A1F36]">
-                Issue Structured Electronic Prescription (℞)
-              </h2>
-            </div>
-          </div>
-
-          <button
-            onClick={onClose}
-            className="rounded-xl p-2 text-[#8896A4] hover:bg-[#F5F0EB] hover:text-[#1A1F36] transition-colors"
-          >
-            <X className="h-6 w-6" />
-          </button>
+  const renderFormContent = () => (
+    <div className="space-y-6">
+      {error && (
+        <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-bold text-red-700 flex items-start gap-2.5">
+          <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+          <span>{error}</span>
         </div>
-
-        {/* Scrollable Form Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-6 sm:px-8 sm:py-8 space-y-6">
-          {error && (
-            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-xs font-bold text-red-700 flex items-start gap-2.5">
-              <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-              <span>{error}</span>
-            </div>
-          )}
+      )}
 
           {/* Patient and Doctor Clinical Context Card */}
           <div className="rounded-2xl border border-[#1A1F36]/10 bg-[#FAF7F5] p-5">
@@ -766,16 +805,327 @@ export default function DoctorPrescriptionBuilderModal({
               />
             </div>
           </div>
+
+          {/* Section 5: Doctor Identity, Visual Signature & Statutory Review Declaration */}
+          <div className="rounded-3xl border-2 border-[#0D9488]/30 bg-[#FAF7F5] p-6 space-y-5 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-[#1A1F36]/10 pb-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-[#0D9488]">Doctor Identity</span>
+                  <span className="rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5">Statutory Declaration</span>
+                </div>
+                <h3 className="text-base font-black text-[#1A1F36] mt-0.5">
+                  Review &amp; Authorize Prescription
+                </h3>
+              </div>
+              <div className="text-left sm:text-right">
+                <p className="text-xs font-black text-[#1A1F36]">{doctorProfile?.full_name || 'Dr. Medical Practitioner'}</p>
+                <p className="text-[11px] font-bold text-[#8896A4]">
+                  Reg: {doctorProfile?.mci_number || doctorProfile?.registration_number || 'MCI/SMC-VERIFIED'}
+                </p>
+              </div>
+            </div>
+
+            {/* Visual Signature Area */}
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-2">
+              <p className="text-[10px] font-black uppercase tracking-wider text-[#8896A4]">
+                Doctor Visual Signature (Appears on Official PDF)
+              </p>
+              <div className="flex flex-wrap items-center gap-4 pt-1">
+                {doctorSigUrl ? (
+                  <div className="flex items-center gap-3">
+                    <div className="border border-slate-200 rounded-xl p-2 bg-[#FAF7F5] max-w-[140px] max-h-[60px] flex items-center justify-center">
+                      <img src={doctorSigUrl} alt="Visual Signature" className="max-h-12 object-contain" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                        <CheckCircle2 className="h-3.5 w-3.5" /> Signature on File
+                      </span>
+                      <label className="text-[11px] font-bold text-[#0D9488] hover:underline cursor-pointer block mt-0.5">
+                        Replace Signature
+                        <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => e.target.files?.[0] && handleSignatureUpload(e.target.files[0])} />
+                      </label>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="border border-dashed border-slate-300 rounded-xl p-3 text-center bg-[#FAF7F5] flex items-center gap-3">
+                    <span className="text-xs text-[#8896A4] font-medium">No visual signature uploaded yet.</span>
+                    <label className="text-xs font-black text-white bg-[#1A1F36] px-3 py-1.5 rounded-lg cursor-pointer hover:bg-[#2A314E] transition-colors">
+                      {sigUploading ? 'Uploading...' : 'Upload Signature'}
+                      <input type="file" accept="image/png,image/jpeg" className="hidden" onChange={(e) => e.target.files?.[0] && handleSignatureUpload(e.target.files[0])} />
+                    </label>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Doctor Statutory Declarations (Mandatory 3 Checkboxes) */}
+            <div className="space-y-3 pt-1">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-[#0D9488]" />
+                <h4 className="text-xs font-black uppercase tracking-wider text-[#1A1F36]">
+                  Statutory Medical Declaration
+                </h4>
+              </div>
+              <p className="text-xs text-[#8896A4]">
+                Under the Telemedicine Practice Guidelines of India, all three confirmations must be verified:
+              </p>
+
+              <div className="space-y-2.5 pt-1">
+                <label className="flex items-start gap-3 text-xs font-bold text-[#1A1F36] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={declReviewed}
+                    onChange={(e) => setDeclReviewed(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#0D9488] focus:ring-[#0D9488]"
+                  />
+                  <span>I have reviewed the prescription details.</span>
+                </label>
+
+                <label className="flex items-start gap-3 text-xs font-bold text-[#1A1F36] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={declClinicalDecision}
+                    onChange={(e) => setDeclClinicalDecision(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#0D9488] focus:ring-[#0D9488]"
+                  />
+                  <span>I confirm that this prescription represents my clinical decision for this patient.</span>
+                </label>
+
+                <label className="flex items-start gap-3 text-xs font-bold text-[#1A1F36] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={declElectronicAuth}
+                    onChange={(e) => setDeclElectronicAuth(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-slate-300 text-[#0D9488] focus:ring-[#0D9488]"
+                  />
+                  <span>I authorize this prescription to be issued electronically under my authenticated medical identity.</span>
+                </label>
+              </div>
+            </div>
+          </div>
+      </div>
+  )
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-2 sm:p-4 lg:p-6 overflow-y-auto">
+      <div
+        className={`relative w-full rounded-3xl bg-white shadow-2xl border border-[#1A1F36]/10 flex flex-col h-[94vh] max-h-[94vh] overflow-hidden my-auto animate-in fade-in zoom-in-95 duration-200 transition-all ${
+          viewMode === 'form' ? 'max-w-5xl' : 'max-w-[98vw] 2xl:max-w-[1680px]'
+        }`}
+      >
+        {/* Modal Header */}
+        <div className="sticky top-0 z-20 flex flex-wrap items-center justify-between gap-3 border-b border-[#1A1F36]/10 bg-white px-5 py-3.5 sm:px-8 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-2xl bg-[#1A1F36] text-white shadow-md shrink-0">
+              <Pill className="h-5 w-5 sm:h-6 sm:w-6 text-[#C4622D]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#C4622D]">
+                  Telemedicine E-Prescription Suite
+                </span>
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-black text-emerald-700 border border-emerald-200 hidden sm:inline-block">
+                  NMC 2020 Compliant
+                </span>
+              </div>
+              <h2 className="text-base sm:text-xl font-black text-[#1A1F36] leading-tight">
+                Issue Structured Electronic Prescription (℞)
+              </h2>
+            </div>
+          </div>
+
+          {/* View Mode Toggle Controls */}
+          <div className="flex items-center gap-2 sm:gap-3">
+            <div className="flex items-center rounded-2xl bg-[#FAF7F5] p-1 border border-slate-200/80 shadow-xs">
+              <button
+                type="button"
+                onClick={() => setViewMode('split')}
+                className={`hidden lg:inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition-all ${
+                  viewMode === 'split'
+                    ? 'bg-white text-[#1A1F36] shadow-sm'
+                    : 'text-[#8896A4] hover:text-[#1A1F36]'
+                }`}
+                title="View form and live prescription letterhead side by side"
+              >
+                <Columns className="h-3.5 w-3.5 text-[#C4622D]" />
+                <span>Split View</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('form')}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition-all ${
+                  viewMode === 'form'
+                    ? 'bg-white text-[#1A1F36] shadow-sm'
+                    : 'text-[#8896A4] hover:text-[#1A1F36]'
+                }`}
+                title="Focus on editing the prescription form"
+              >
+                <FileEdit className="h-3.5 w-3.5 text-[#0D9488]" />
+                <span>Edit Form</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setViewMode('preview')}
+                className={`inline-flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-black transition-all ${
+                  viewMode === 'preview'
+                    ? 'bg-white text-[#1A1F36] shadow-sm'
+                    : 'text-[#8896A4] hover:text-[#1A1F36]'
+                }`}
+                title="Full sheet preview of the official prescription"
+              >
+                <Eye className="h-3.5 w-3.5 text-blue-600" />
+                <span>Live Sheet</span>
+                <span className="ml-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800">
+                  Live
+                </span>
+              </button>
+            </div>
+
+            <button
+              onClick={onClose}
+              className="rounded-xl p-2 text-[#8896A4] hover:bg-[#F5F0EB] hover:text-[#1A1F36] transition-colors"
+            >
+              <X className="h-5 w-5 sm:h-6 sm:w-6" />
+            </button>
+          </div>
         </div>
 
+        {/* Modal Center Content based on viewMode */}
+        {viewMode === 'split' && (
+          <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 overflow-hidden min-h-0">
+            {/* Left Col: Form (5/6 cols) */}
+            <div className="lg:col-span-6 xl:col-span-6 2xl:col-span-5 overflow-y-auto px-5 py-6 sm:px-7 sm:py-7 border-r border-[#1A1F36]/10">
+              {renderFormContent()}
+            </div>
+
+            {/* Right Col: Live Official Sheet Preview (6/7 cols) */}
+            <div className="hidden lg:flex lg:col-span-6 xl:col-span-6 2xl:col-span-7 flex-col bg-slate-200/70 overflow-hidden min-h-0">
+              <div className="flex items-center justify-between px-6 py-2.5 border-b border-slate-300 bg-white/90 backdrop-blur-xs shrink-0">
+                <div className="flex items-center gap-2">
+                  <span className="relative flex h-2.5 w-2.5">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  </span>
+                  <span className="text-xs font-black uppercase tracking-wider text-slate-900">
+                    Real-Time Official Letterhead Preview
+                  </span>
+                  <span className="text-[11px] text-slate-500 font-medium">
+                    (Telemedicine Format)
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('preview')}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  <Maximize2 className="h-3.5 w-3.5 text-[#0D9488]" />
+                  <span>Full Sheet</span>
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 flex justify-center items-start">
+                <div className="w-full max-w-[800px] bg-white rounded-sm shadow-2xl transition-all duration-150 border border-slate-300">
+                  <PrescriptionOfficialSheet
+                    patientName={resolvedPatientName}
+                    prescriptionNumber={consultation ? `8LTV-RX-${consultation.id.slice(0, 8).toUpperCase()}` : '8LTV-RX-DRAFT'}
+                    dateIssued={new Date().toISOString()}
+                    validUntil={validUntil}
+                    diagnosis={diagnosis}
+                    items={items}
+                    adviceNotes={adviceNotes}
+                    doctorName={doctorProfile?.full_name || 'Dr. S'}
+                    specialty={doctorProfile?.specialty || 'Physician'}
+                    registrationNumber={doctorProfile?.mci_number || doctorProfile?.registration_number || 'MCI-RMP-78942'}
+                    signatureUrl={doctorSigUrl}
+                    isDraftPreview={true}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {viewMode === 'form' && (
+          <div className="flex-1 overflow-y-auto px-6 py-6 sm:px-8 sm:py-8 min-h-0">
+            {renderFormContent()}
+          </div>
+        )}
+
+        {viewMode === 'preview' && (
+          <div className="flex-1 flex flex-col bg-slate-200/70 overflow-hidden min-h-0">
+            <div className="flex items-center justify-between px-6 py-2.5 border-b border-slate-300 bg-white shrink-0">
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <span className="text-xs font-black uppercase tracking-wider text-slate-900">
+                  Official Letterhead Fullscreen Preview
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setViewMode('split')}
+                  className="hidden lg:inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  <Columns className="h-3.5 w-3.5 text-[#C4622D]" />
+                  <span>Back to Split View</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewMode('form')}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1 text-xs font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  <FileEdit className="h-3.5 w-3.5 text-[#0D9488]" />
+                  <span>Edit Form</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center items-start">
+              <div className="w-full max-w-[800px] bg-white rounded-sm shadow-2xl border border-slate-300">
+                <PrescriptionOfficialSheet
+                  patientName={resolvedPatientName}
+                  prescriptionNumber={consultation ? `8LTV-RX-${consultation.id.slice(0, 8).toUpperCase()}` : '8LTV-RX-DRAFT'}
+                  dateIssued={new Date().toISOString()}
+                  validUntil={validUntil}
+                  diagnosis={diagnosis}
+                  items={items}
+                  adviceNotes={adviceNotes}
+                  doctorName={doctorProfile?.full_name || 'Dr. S'}
+                  specialty={doctorProfile?.specialty || 'Physician'}
+                  registrationNumber={doctorProfile?.mci_number || doctorProfile?.registration_number || 'MCI-RMP-78942'}
+                  signatureUrl={doctorSigUrl}
+                  isDraftPreview={true}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Modal Action Footer */}
-        <div className="sticky bottom-0 z-20 flex flex-col sm:flex-row items-center justify-between border-t border-[#1A1F36]/10 bg-white px-6 py-4 sm:px-8 gap-3">
+        <div className="sticky bottom-0 z-20 flex flex-col sm:flex-row items-center justify-between border-t border-[#1A1F36]/10 bg-white px-6 py-4 sm:px-8 gap-3 shrink-0">
           <div className="flex items-center gap-2 text-xs text-[#8896A4] font-semibold">
             <ShieldCheck className="h-4 w-4 text-emerald-600 shrink-0" />
             <span>Cryptographically sealed under Indian Telemedicine Practice Guidelines, 2020.</span>
           </div>
 
           <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+            {viewMode === 'form' && (
+              <button
+                type="button"
+                onClick={() => setViewMode('preview')}
+                className="lg:hidden inline-flex items-center gap-1 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-xs font-black text-blue-700 hover:bg-blue-100 transition-all"
+              >
+                <Eye className="h-4 w-4" />
+                <span>Preview Sheet</span>
+              </button>
+            )}
+
             <button
               type="button"
               disabled={isSubmitting}
@@ -788,16 +1138,16 @@ export default function DoctorPrescriptionBuilderModal({
 
             <button
               type="button"
-              disabled={isSubmitting}
+              disabled={isSubmitting || !declReviewed || !declClinicalDecision || !declElectronicAuth}
               onClick={() => handleSubmit(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0D9488] hover:bg-[#097A70] px-6 py-3 text-xs font-black text-white shadow-lg shadow-[#0D9488]/20 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0D9488] hover:bg-[#097A70] px-6 py-3 text-xs font-black text-white shadow-lg shadow-[#0D9488]/20 transition-all hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
             >
               {isSubmitting ? (
                 <div className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
               ) : (
                 <>
                   <FileCheck className="h-4 w-4" />
-                  <span>Digitally Sign &amp; Issue E-Prescription</span>
+                  <span>AUTHORIZE &amp; ISSUE PRESCRIPTION</span>
                 </>
               )}
             </button>

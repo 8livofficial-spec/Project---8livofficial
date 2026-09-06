@@ -164,7 +164,7 @@ export async function loadPatientDoctorAvailability(params: {
   const eligibilityError = validateBookingEligibility(context, params.appointmentType)
   if (eligibilityError) return { error: eligibilityError, status: 403 as const, dates: [], slots: [] }
 
-  const providerIds = params.appointmentType === DOCTOR_FOLLOW_UP
+  const providerIds = (params.appointmentType === DOCTOR_FOLLOW_UP || context.primaryDoctorId)
     ? [context.primaryDoctorId!]
     : Array.from(await loadActiveDoctors())
 
@@ -231,8 +231,8 @@ export async function bookPatientDoctorAppointment(params: {
     return { error: 'Selected consultation slot is no longer available.', status: 409 as const }
   }
 
-  if (params.appointmentType === DOCTOR_FOLLOW_UP && slot.provider_id !== context.primaryDoctorId) {
-    return { error: 'Follow-up appointments must be booked with your active primary doctor.', status: 403 as const }
+  if (context.primaryDoctorId && slot.provider_id !== context.primaryDoctorId) {
+    return { error: 'Appointments must be booked with your assigned doctor for continuity of care.', status: 403 as const }
   }
 
   if (params.appointmentType === INITIAL_DOCTOR_CONSULTATION) {
@@ -393,6 +393,41 @@ export async function bookPatientDoctorAppointment(params: {
     })
   if (auditError) {
     console.error('Failed to write patient booking audit log:', auditError)
+  }
+
+  // Lock doctor-patient continuity immediately upon booking
+  try {
+    const { data: existingCTA } = await supabaseAdmin
+      .from('care_team_assignments')
+      .select('id, doctor_id')
+      .eq('patient_id', params.patientId)
+      .maybeSingle()
+
+    if (existingCTA) {
+      if (!existingCTA.doctor_id) {
+        await supabaseAdmin
+          .from('care_team_assignments')
+          .update({
+            doctor_id: reservedSlot.provider_id,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('patient_id', params.patientId)
+      }
+    } else {
+      await supabaseAdmin
+        .from('care_team_assignments')
+        .insert({
+          patient_id: params.patientId,
+          doctor_id: reservedSlot.provider_id,
+          provider_id: reservedSlot.provider_id,
+          provider_role: 'doctor',
+          relationship_type: 'PRIMARY_DOCTOR',
+          status: 'ACTIVE',
+          updated_at: new Date().toISOString(),
+        })
+    }
+  } catch (ctaErr) {
+    console.warn('Non-blocking care team lock during booking:', ctaErr)
   }
 
   return {

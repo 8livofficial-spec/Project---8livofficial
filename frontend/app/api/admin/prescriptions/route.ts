@@ -18,7 +18,13 @@ export async function GET(request: Request) {
         .select('*, prescription_items(*), pharmacy_orders(*)')
         .order('created_at', { ascending: false })
         .limit(100)
-      if (status) query = query.eq('status', status)
+      if (status) {
+        if (status === 'ISSUED' || status === 'ACTIVE') {
+          query = query.in('status', ['ISSUED', 'ACTIVE', 'SIGNED'])
+        } else {
+          query = query.eq('status', status)
+        }
+      }
       if (search) query = query.ilike('prescription_number', `%${search}%`)
       const { data, error } = await query
       if (error) throw error
@@ -32,7 +38,13 @@ export async function GET(request: Request) {
           .select('*')
           .order('created_at', { ascending: false })
           .limit(100)
-        if (status) fallbackQuery = fallbackQuery.eq('status', status)
+        if (status) {
+          if (status === 'ISSUED' || status === 'ACTIVE') {
+            fallbackQuery = fallbackQuery.in('status', ['ISSUED', 'ACTIVE', 'SIGNED'])
+          } else {
+            fallbackQuery = fallbackQuery.eq('status', status)
+          }
+        }
         if (search) fallbackQuery = fallbackQuery.ilike('prescription_number', `%${search}%`)
         const { data: fallbackData } = await fallbackQuery
         prescriptions = fallbackData || []

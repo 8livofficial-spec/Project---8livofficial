@@ -36,6 +36,10 @@ export default function PatientPrescriptionDetailPage() {
     phone: '',
     save_address: true,
   })
+  const [consentReviewed, setConsentReviewed] = useState(false)
+  const [consentTransmission, setConsentTransmission] = useState(false)
+  const [consentAddress, setConsentAddress] = useState(false)
+
   const [confirmLoading, setConfirmLoading] = useState(false)
   const [error, setError] = useState('')
   const [successMsg, setSuccessMsg] = useState('')
@@ -77,7 +81,18 @@ export default function PatientPrescriptionDetailPage() {
     setError('')
     setSuccessMsg('')
     try {
-      const payload: any = { prescription_id: rx.id }
+      if (!consentReviewed || !consentTransmission || !consentAddress) {
+        throw new Error('Please complete all 3 consent acknowledgements before submitting for fulfillment.')
+      }
+
+      const payload: any = {
+        prescription_id: rx.id,
+        consent: {
+          reviewed_prescription: consentReviewed,
+          consent_transmission: consentTransmission,
+          confirm_delivery_info: consentAddress,
+        },
+      }
       if (isAddingNew) {
         payload.address = newAddress
         payload.save_address = newAddress.save_address
@@ -93,7 +108,7 @@ export default function PatientPrescriptionDetailPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to confirm delivery.')
 
-      setSuccessMsg('Delivery address confirmed! Your medication order has been submitted.')
+      setSuccessMsg('Delivery address confirmed! Your medication order has been submitted for partner pharmacy assignment.')
       await loadData()
     } catch (err: any) {
       setError(err.message || 'Failed to confirm delivery.')
@@ -108,7 +123,7 @@ export default function PatientPrescriptionDetailPage() {
   const orders = rx.pharmacy_orders || []
   const activeOrder = orders.find((o: any) => !['CANCELLED', 'UNABLE_TO_FULFILL'].includes(o.status)) || orders[0]
   const hasFulfillableItems = (rx.prescription_items || []).some((i: any) => Number(i.quantity) > 0)
-  const canConfirm = ['ISSUED', 'SIGNED'].includes(rx.status) && !activeOrder && hasFulfillableItems
+  const canConfirm = ['ISSUED', 'SIGNED', 'ACTIVE'].includes(rx.status) && !activeOrder && hasFulfillableItems
 
   return (
     <div className="space-y-6 text-[#1A1F36]">
@@ -199,13 +214,58 @@ export default function PatientPrescriptionDetailPage() {
             </div>
           )}
 
+          {/* Statutory Patient Consent Section */}
+          <div className="my-5 rounded-2xl border border-[#1A1F36]/15 bg-white p-5 shadow-sm space-y-3">
+            <div className="flex items-center gap-2 text-[#1A1F36]">
+              <CheckCircle2 className="h-4 w-4 text-[#C4622D]" />
+              <h4 className="text-xs font-black uppercase tracking-wider">
+                Prescription Transmission & Fulfillment Consent
+              </h4>
+            </div>
+            <p className="text-xs text-[#8896A4] font-medium leading-relaxed">
+              Under statutory telemedicine & electronic pharmacy fulfillment guidelines, please review and confirm the following acknowledgements to authorize electronic delivery.
+            </p>
+
+            <div className="space-y-2.5 pt-2">
+              <label className="flex items-start gap-3 text-xs font-semibold text-[#1A1F36] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consentReviewed}
+                  onChange={(e) => setConsentReviewed(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-[#1A1F36]/20 text-[#C4622D] focus:ring-[#C4622D]"
+                />
+                <span>I acknowledge that I have reviewed the prescription information provided to me.</span>
+              </label>
+
+              <label className="flex items-start gap-3 text-xs font-semibold text-[#1A1F36] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consentTransmission}
+                  onChange={(e) => setConsentTransmission(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-[#1A1F36]/20 text-[#C4622D] focus:ring-[#C4622D]"
+                />
+                <span>I consent to the electronic transmission of this prescription to the selected licensed partner pharmacy for fulfillment.</span>
+              </label>
+
+              <label className="flex items-start gap-3 text-xs font-semibold text-[#1A1F36] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={consentAddress}
+                  onChange={(e) => setConsentAddress(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-[#1A1F36]/20 text-[#C4622D] focus:ring-[#C4622D]"
+                />
+                <span>I confirm that the delivery information provided by me is accurate and complete.</span>
+              </label>
+            </div>
+          </div>
+
           <button
             onClick={handleConfirmDelivery}
-            disabled={confirmLoading}
-            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#C4622D] px-6 py-3.5 text-sm font-black text-white shadow-sm transition-transform hover:scale-[1.02] disabled:opacity-50"
+            disabled={confirmLoading || !consentReviewed || !consentTransmission || !consentAddress}
+            className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#C4622D] px-6 py-3.5 text-sm font-black text-white shadow-sm transition-transform hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <CheckCircle2 className="h-4 w-4" />
-            {confirmLoading ? 'Submitting Order...' : 'Confirm Address & Dispatch Order'}
+            {confirmLoading ? 'Submitting Order...' : 'Confirm Address, Consent & Dispatch Order'}
           </button>
         </div>
       ) : activeOrder ? (

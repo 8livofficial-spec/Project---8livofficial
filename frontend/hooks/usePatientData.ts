@@ -219,6 +219,7 @@ export interface PatientDataContextValue {
   reloadData: (options?: { force?: boolean }) => Promise<void>
   dietPlan: DietPlan | null
   fitnessPlan: FitnessPlan | null
+  activePrescription: any | null
 }
 
 const PatientDataContext = createContext<PatientDataContextValue | null>(null)
@@ -265,6 +266,7 @@ function usePatientDataInternal() {
   })
   const [dietPlan, setDietPlan] = useState<DietPlan | null>(null)
   const [fitnessPlan, setFitnessPlan] = useState<FitnessPlan | null>(null)
+  const [activePrescription, setActivePrescription] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [flowStep, setFlowStep] = useState<FlowStep>('loading')
@@ -277,6 +279,7 @@ function usePatientDataInternal() {
         setFlowStep('ready') // will be handled by auth redirect elsewhere
         setDietPlan(null)
         setFitnessPlan(null)
+        setActivePrescription(null)
         return
       }
 
@@ -328,6 +331,9 @@ function usePatientDataInternal() {
         setNotifications(dashboardData.notifications || [])
         setDietPlan(dashboardData.dietPlan || null)
         setFitnessPlan(dashboardData.fitnessPlan || null)
+        if (dashboardData.activePrescription) {
+          setActivePrescription(dashboardData.activePrescription)
+        }
 
         // Set Flow Step
         const assessRow = dashboardData.assessment
@@ -414,6 +420,10 @@ function usePatientDataInternal() {
           bookingId: statusData.bookingId || null,
           paymentId: statusData.paymentId || null
         })
+
+        if (statusData.activePrescription) {
+          setActivePrescription(statusData.activePrescription)
+        }
 
         // Set Flow Step
         const assessRow = statusData.assessment
@@ -576,6 +586,7 @@ function usePatientDataInternal() {
     flowStep,
     reloadData,
     dietPlan,
-    fitnessPlan
+    fitnessPlan,
+    activePrescription
   }
 }

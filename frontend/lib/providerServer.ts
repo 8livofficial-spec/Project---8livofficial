@@ -3,6 +3,12 @@ import { getAuthenticatedUser } from './apiSecurity'
 
 export type ProviderRole = 'doctor' | 'dietitian' | 'fitness_coach' | 'nutritionist' | 'trainer'
 
+const providerCache = new Map<string, { data: any; expiresAt: number }>()
+
+export function invalidateProviderServerCache(userId: string) {
+  providerCache.delete(userId)
+}
+
 export async function getCurrentProvider(request: Request) {
   const auth = await getAuthenticatedUser(request)
   if (!auth) {
@@ -18,6 +24,12 @@ export async function getCurrentProvider(request: Request) {
     ;(err as any).status = 403
     ;(err as any).reason = 'role not allowed'
     throw err
+  }
+
+  const now = Date.now()
+  const cached = providerCache.get(auth.user.id)
+  if (cached && cached.expiresAt > now) {
+    return cached.data
   }
 
   const [profileRes, v2ProviderRes, providerRes] = await Promise.all([
@@ -93,12 +105,15 @@ export async function getCurrentProvider(request: Request) {
     }
   }
 
-  return {
+  const result = {
     user: auth.user,
     profile: profile || null,
     providerProfile,
     role: (role === 'trainer' ? 'fitness_coach' : role) as ProviderRole,
   }
+
+  providerCache.set(auth.user.id, { data: result, expiresAt: now + 60000 })
+  return result
 }
 
 export async function getAuthenticatedProvider(request: Request) {

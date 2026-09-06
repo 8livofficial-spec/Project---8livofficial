@@ -69,7 +69,8 @@ export async function GET(request: Request) {
       consultationsRes,
       notificationsRes,
       dietPlanRes,
-      fitnessPlanRes
+      fitnessPlanRes,
+      activePrescriptionRes
     ] = await Promise.all([
       supabaseAdmin
         .from('profiles')
@@ -146,6 +147,14 @@ export async function GET(request: Request) {
         .from('fitness_plans')
         .select('*')
         .eq('patient_id', patientId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('prescriptions')
+        .select('*, prescription_items(*), pharmacy_orders(*)')
+        .eq('patient_id', patientId)
+        .not('status', 'in', '("DRAFT","REVOKED","CANCELLED","REPLACED")')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
@@ -345,7 +354,8 @@ export async function GET(request: Request) {
       consultations,
       notifications,
       dietPlan,
-      fitnessPlan
+      fitnessPlan,
+      activePrescription: activePrescriptionRes?.data || null
     })
   } catch (err: unknown) {
     console.error("API Error in /api/patient/dashboard:", err)

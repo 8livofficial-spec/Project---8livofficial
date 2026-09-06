@@ -95,11 +95,46 @@ export async function getAssignedProviderForRole(patientId: string, role: string
     .eq('patient_id', patientId)
     .maybeSingle()
 
-  if (!assignment) return null
-  if (normalized === 'dietitian') return assignment.dietitian_id || null
-  if (normalized === 'nutritionist') return assignment.nutritionist_id || null
-  if (normalized === 'fitness_coach') return assignment.fitness_coach_id || assignment.trainer_id || null
-  if (normalized === 'doctor') return assignment.doctor_id || null
+  if (assignment) {
+    if (normalized === 'dietitian' && assignment.dietitian_id) return assignment.dietitian_id
+    if (normalized === 'nutritionist' && assignment.nutritionist_id) return assignment.nutritionist_id
+    if (normalized === 'fitness_coach' && (assignment.fitness_coach_id || assignment.trainer_id)) return assignment.fitness_coach_id || assignment.trainer_id
+    if (normalized === 'doctor' && assignment.doctor_id) return assignment.doctor_id
+  }
+
+  // Doctor Continuity Lock:
+  // If no doctor is recorded in care_team_assignments, locate the first doctor who attended
+  // or was assigned to this patient from doctor_consultations and lock them in.
+  if (normalized === 'doctor') {
+    try {
+      const { data: consultation } = await supabaseAdmin
+        .from('doctor_consultations')
+        .select('doctor_id')
+        .eq('patient_id', patientId)
+        .not('doctor_id', 'is', null)
+        .not('status', 'in', '("cancelled","cancelled_by_doctor","cancelled_by_patient")')
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+      if (consultation?.doctor_id) {
+        // Auto-heal care_team_assignments so doctor-patient relationship is permanent and fast
+        await supabaseAdmin
+          .from('care_team_assignments')
+          .upsert({
+            patient_id: patientId,
+            doctor_id: consultation.doctor_id,
+            status: 'ACTIVE',
+            updated_at: new Date().toISOString(),
+          }, { onConflict: 'patient_id' })
+
+        return consultation.doctor_id
+      }
+    } catch (fallbackErr) {
+      console.warn('Fallback doctor continuity lookup error:', fallbackErr)
+    }
+  }
+
   return null
 }
 

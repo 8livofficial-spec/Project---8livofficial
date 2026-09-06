@@ -104,7 +104,7 @@ export async function loadAssignedProviderPatients(providerId: string, role: Pro
   const patientIds = selectedAssignments.map((assignment) => assignment.patient_id)
   const [profilesRes, assessmentsRes, progressRes] = await Promise.all([
     supabaseAdmin.from('profiles').select('id, first_name, last_name, email, phone_number').in('id', patientIds),
-    supabaseAdmin.from('health_assessments').select('patient_id, first_name, last_name, phone_number, weight_kg, goal_weight_kg, bmi, membership_tier, membershipStatus, local_food, food_preferences, medical_history, extra_medical_info, fitness_preference, exercise_limitations, doctor_notes, diagnosis_summary').in('patient_id', patientIds),
+    supabaseAdmin.from('health_assessments').select('patient_id, first_name, last_name, phone_number, height_cm, weight_kg, goal_weight_kg, membership_tier, membership_status, local_food, workout_preference, medical_history, extra_medical_info').in('patient_id', patientIds),
     supabaseAdmin.from('progress_logs').select('user_id, weight_kg, created_at').in('user_id', patientIds).order('created_at', { ascending: false }),
   ])
 
@@ -138,7 +138,7 @@ export async function loadAssignedProviderPatients(providerId: string, role: Pro
     .map((assignment) => {
       const profile = profilesById.get(assignment.patient_id)
       const assessment = assessmentsByPatientId.get(assignment.patient_id) || {}
-      const membershipTier = assessment.membership_tier || assessment.membershipStatus || 'Not selected'
+      const membershipTier = assessment.membership_tier || assessment.membership_status || 'Not selected'
 
       // All patients assigned to the provider care team are eligible for provider plans and guidance
       if (assignment.status === 'INACTIVE') return null
@@ -157,16 +157,16 @@ export async function loadAssignedProviderPatients(providerId: string, role: Pro
         phone: assessment.phone_number || profile?.phone_number || 'Not provided',
         currentWeight,
         goalWeight,
-        bmi: numberOrNull(assessment.bmi),
+        bmi: assessment.height_cm && assessment.weight_kg ? Number((Number(assessment.weight_kg) / Math.pow(Number(assessment.height_cm) / 100, 2)).toFixed(1)) : null,
         membershipTier,
         planStatus: latestPlan?.status || 'not_started',
         lastCheckIn: latestProgress?.created_at || null,
         nextAction: latestPlan ? 'Follow up' : planConfig?.emptyAction || 'Review patient',
-        foodPreferences: assessment.local_food || assessment.food_preferences || null,
+        foodPreferences: assessment.local_food || assessment.medical_history?.food_preferences || null,
         medicalRestrictions: assessment.medical_history || assessment.extra_medical_info || null,
-        fitnessPreference: assessment.fitness_preference || null,
-        limitations: assessment.exercise_limitations || assessment.extra_medical_info || null,
-        doctorNotes: assessment.doctor_notes || assessment.diagnosis_summary || null,
+        fitnessPreference: assessment.workout_preference || assessment.medical_history?.fitness_preference || null,
+        limitations: assessment.extra_medical_info || assessment.medical_history?.exercise_limitations || null,
+        doctorNotes: assessment.medical_history?.doctor_notes || assessment.medical_history?.diagnosis_summary || null,
       }
     })
     .filter(Boolean)

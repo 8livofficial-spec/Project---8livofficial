@@ -91,6 +91,12 @@ export default function StreamConsultationCall({ appointmentId, onLeave }: Props
     async function joinCall() {
       try {
         await activeCall.join({ create: true })
+        try {
+          await activeCall.camera.enable()
+          await activeCall.microphone.enable()
+        } catch (mediaErr) {
+          console.warn('Could not auto-enable camera/mic on join:', mediaErr)
+        }
         joined = true
       } catch (err) {
         if (active) setError(err instanceof Error ? err.message : 'Unable to join the video session.')
@@ -118,10 +124,10 @@ export default function StreamConsultationCall({ appointmentId, onLeave }: Props
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center text-white">
+      <div className="flex h-full items-center justify-center text-white bg-[#0A0D18]">
         <div className="text-center">
-          <RefreshCw className="mx-auto mb-3 h-6 w-6 animate-spin text-[#C4622D]" />
-          <p className="text-sm font-semibold">Preparing secure Stream video session...</p>
+          <RefreshCw className="mx-auto mb-3 h-6 w-6 animate-spin text-[#2DD4BF]" />
+          <p className="text-sm font-semibold text-slate-300">Preparing secure 8LIV Stream video session...</p>
         </div>
       </div>
     )
@@ -129,10 +135,10 @@ export default function StreamConsultationCall({ appointmentId, onLeave }: Props
 
   if (error || !client || !call) {
     return (
-      <div className="flex h-full items-center justify-center p-6 text-white">
-        <div className="max-w-md rounded-2xl border border-red-400/20 bg-red-500/10 p-6 text-center">
+      <div className="flex h-full items-center justify-center p-6 text-white bg-[#0A0D18]">
+        <div className="max-w-md rounded-2xl border border-red-400/20 bg-red-500/10 p-6 text-center shadow-xl">
           <AlertCircle className="mx-auto mb-3 h-8 w-8 text-red-300" />
-          <h3 className="mb-2 font-bold">Unable to join consultation</h3>
+          <h3 className="mb-2 font-bold text-base">Unable to join consultation</h3>
           <p className="text-sm text-white/80">{error || 'Video session is unavailable.'}</p>
         </div>
       </div>
@@ -142,11 +148,11 @@ export default function StreamConsultationCall({ appointmentId, onLeave }: Props
   return (
     <StreamVideo client={client}>
       <StreamCall call={call}>
-        <div className="str-video__call-layout flex h-full flex-col bg-[#111422]">
-          <div className="min-h-0 flex-1">
+        <div className="str-video__call-layout flex h-full w-full flex-col bg-[#0A0D18] text-white">
+          <div className="min-h-0 flex-1 relative w-full h-full">
             <SpeakerLayout />
           </div>
-          <div className="border-t border-white/10 bg-black/40 p-3">
+          <div className="shrink-0 border-t border-white/10 bg-[#0B0F1D]/80 backdrop-blur-md p-3 flex items-center justify-center">
             <CallControls onLeave={onLeave} />
           </div>
         </div>

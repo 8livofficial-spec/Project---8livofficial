@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { getAuthenticatedProvider } from '@/lib/providerServer'
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { serverCache, jsonWithETag } from '@/lib/serverCache'
 
 const activeStatuses = ['AVAILABLE', 'BOOKED']
 type Source = 'MANUAL' | 'GENERATED'
@@ -51,61 +52,72 @@ export async function GET(request: Request) {
     const today = new Date().toISOString().split('T')[0]
     const defaultTo = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-    let query = supabaseAdmin
-      .from('provider_availability')
-      .select('id, provider_id, provider_role, available_date, start_time, end_time, is_available, source, status, created_at, updated_at')
-      .eq('provider_id', provider.user.id)
-      .eq('provider_role', provider.role)
-      .order('available_date', { ascending: true })
-      .order('start_time', { ascending: true })
+    const cacheKey = `avail:${provider.user.id}:${from || ''}:${to || ''}`
 
-    if (from && isDate(from)) {
-      query = query.gte('available_date', from)
-    }
-    if (to && isDate(to)) {
-      query = query.lte('available_date', to)
-    }
+    const { value: result, etag } = await serverCache.getOrSet(
+      cacheKey,
+      async () => {
+        let query = supabaseAdmin
+          .from('provider_availability')
+          .select('id, provider_id, provider_role, available_date, start_time, end_time, is_available, source, status, created_at, updated_at')
+          .eq('provider_id', provider.user.id)
+          .eq('provider_role', provider.role)
+          .order('available_date', { ascending: true })
+          .order('start_time', { ascending: true })
 
-    const { data: availabilityData, error: availErr } = await query
+        if (from && isDate(from)) {
+          query = query.gte('available_date', from)
+        }
+        if (to && isDate(to)) {
+          query = query.lte('available_date', to)
+        }
 
-    if (availErr) {
-      console.warn('Availability fetch warning:', availErr.message)
-      return NextResponse.json({ availability: [], consultations: [] })
-    }
+        const { data: availabilityData, error: availErr } = await query
 
-    let consultations: any[] = []
-    try {
-      const { data: consultData } = await supabaseAdmin
-        .from('staff_consultations')
-        .select('id, patient_id, staff_role, booking_date, booking_time, status, meeting_url, meeting_provider, appointment_type')
-        .eq('staff_id', provider.user.id)
-        .gte('booking_date', from && isDate(from) ? from : today)
-        .lte('booking_date', to && isDate(to) ? to : defaultTo)
-        .order('booking_date')
-        .order('booking_time')
-        .limit(200)
+        if (availErr) {
+          console.warn('Availability fetch warning:', availErr.message)
+          return { availability: [], consultations: [] }
+        }
 
-      if (consultData && consultData.length > 0) {
-        const patientIds = Array.from(new Set(consultData.map((row: any) => row.patient_id).filter(Boolean))) as string[]
-        const { data: profiles } = patientIds.length
-          ? await supabaseAdmin.from('profiles').select('id, first_name, last_name, email').in('id', patientIds)
-          : { data: [] }
-        const profilesById = new Map((profiles || []).map((p: any) => [p.id, p]))
+        let consultations: any[] = []
+        try {
+          const { data: consultData } = await supabaseAdmin
+            .from('staff_consultations')
+            .select('id, patient_id, staff_role, booking_date, booking_time, status, meeting_url, meeting_provider, appointment_type')
+            .eq('staff_id', provider.user.id)
+            .gte('booking_date', from && isDate(from) ? from : today)
+            .lte('booking_date', to && isDate(to) ? to : defaultTo)
+            .order('booking_date')
+            .order('booking_time')
+            .limit(200)
 
-        consultations = consultData.map((consultation: any) => {
-          const profile = profilesById.get(String(consultation.patient_id || ''))
-          return {
-            ...consultation,
-            patientName: `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || profile?.email || 'Patient',
-            meetingUrl: consultation.meeting_url
+          if (consultData && consultData.length > 0) {
+            const patientIds = Array.from(new Set(consultData.map((row: any) => row.patient_id).filter(Boolean))) as string[]
+            const { data: profiles } = patientIds.length
+              ? await supabaseAdmin.from('profiles').select('id, first_name, last_name, email').in('id', patientIds)
+              : { data: [] }
+            const profilesById = new Map((profiles || []).map((p: any) => [p.id, p]))
+
+            consultations = consultData.map((consultation: any) => {
+              const profile = profilesById.get(String(consultation.patient_id || ''))
+              return {
+                ...consultation,
+                patientName: `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || profile?.email || 'Patient',
+                meetingUrl: consultation.meeting_url
+              }
+            })
           }
-        })
-      }
-    } catch (consultErr) {
-      console.warn('Consultations enrichment error (non-fatal):', consultErr)
-    }
+        } catch (consultErr) {
+          console.warn('Consultations enrichment error (non-fatal):', consultErr)
+        }
 
-    return NextResponse.json({ availability: availabilityData || [], consultations })
+        return { availability: availabilityData || [], consultations }
+      },
+      8000,
+      [`avail:${provider.user.id}`]
+    )
+
+    return jsonWithETag(result, etag, request, { maxAgeSec: 6 })
   } catch (err: any) {
     console.error('Provider availability GET fatal error:', err)
     return NextResponse.json({ availability: [], consultations: [], error: err.message }, { status: 200 })
@@ -267,6 +279,8 @@ export async function POST(request: Request) {
     if (createdCount === 0 && overlapCount > 0) {
       return NextResponse.json({ error: 'Slot overlaps with existing availability.' }, { status: 409 })
     }
+
+    serverCache.invalidate(`avail:${provider.user.id}`)
 
     return NextResponse.json({
       message: 'Manual slot created successfully.',
@@ -477,6 +491,8 @@ export async function POST(request: Request) {
     }
 
     const totalSaved = inserts.length + reactivations.length
+    serverCache.invalidate(`avail:${provider.user.id}`)
+
     return NextResponse.json({
       inserted: totalSaved,
       message: `Generated ${totalSaved} availability slots.`
@@ -501,6 +517,8 @@ export async function DELETE(request: Request) {
     .maybeSingle()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data?.id) return NextResponse.json({ error: 'Only an available slot can be cancelled.' }, { status: 409 })
+
+  serverCache.invalidate(`avail:${provider.user.id}`)
   return NextResponse.json({ success: true })
 }
 
@@ -530,5 +548,6 @@ export async function PUT(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!data?.id) return NextResponse.json({ error: 'Slot not found or unauthorized.' }, { status: 404 })
 
+  serverCache.invalidate(`avail:${provider.user.id}`)
   return NextResponse.json({ success: true })
 }

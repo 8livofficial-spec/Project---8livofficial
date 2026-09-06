@@ -328,26 +328,48 @@ export async function POST(req: Request) {
     // scheduled requests are handled by admin auto-assignment, not exposed here.
     const availableRequests: ConsultationRow[] = [];
 
-    // Get patient IDs to fetch profiles and health assessments
+    // Get patient IDs to fetch profiles, health assessments, and prescriptions
     const allPatientIds = Array.from(new Set([
       ...(ownConsultations || []).map(c => c.patient_id),
     ]));
 
-    // Fetch profiles and assessments using admin client (bypassing RLS)
-    const [profilesRes, assessmentsRes] = await Promise.all([
+    // Fetch profiles, assessments, and prescriptions using admin client (bypassing RLS)
+    const [profilesRes, assessmentsRes, prescriptionsRes] = await Promise.all([
       supabaseAdmin.from('profiles').select('id, first_name, last_name, display_id, email, phone_number').in('id', allPatientIds),
-      supabaseAdmin.from('health_assessments').select('patient_id, first_name, last_name, phone_number, dob_month, dob_day, dob_year, age, height_cm, weight_kg, goal_weight_kg, medical_history, extra_medical_info, local_food, workout_preference, is_eligible, medication_proof_url, medication_proof').in('patient_id', allPatientIds)
+      supabaseAdmin.from('health_assessments').select('patient_id, first_name, last_name, phone_number, dob_month, dob_day, dob_year, age, height_cm, weight_kg, goal_weight_kg, medical_history, extra_medical_info, local_food, workout_preference, is_eligible').in('patient_id', allPatientIds),
+      allPatientIds.length > 0
+        ? supabaseAdmin
+            .from('prescriptions')
+            .select('id, prescription_number, status, consultation_id, patient_id, doctor_id, diagnosis, valid_until, issued_at, created_at, signed_pdf_path, canonical_data, prescription_items(*), pharmacy_orders(*)')
+            .in('patient_id', allPatientIds)
+            .not('status', 'in', '("DRAFT","REVOKED","CANCELLED","REPLACED")')
+            .order('created_at', { ascending: false })
+        : Promise.resolve({ data: [] as any[], error: null }),
     ]);
 
     const profiles = (profilesRes.data || []) as PatientProfileRow[];
     const assessments = (assessmentsRes.data || []) as HealthAssessmentRow[];
+    const prescriptions = (prescriptionsRes.data || []) as any[];
+
     const profilesById = new Map(profiles.map((profile) => [profile.id, profile]));
     const assessmentsByPatientId = new Map(assessments.map((assessment) => [assessment.patient_id, assessment]));
+
+    const rxByConsultationId = new Map<string, any>();
+    const rxByPatientId = new Map<string, any>();
+    for (const rx of prescriptions) {
+      if (rx.consultation_id && !rxByConsultationId.has(rx.consultation_id)) {
+        rxByConsultationId.set(rx.consultation_id, rx);
+      }
+      if (rx.patient_id && !rxByPatientId.has(rx.patient_id)) {
+        rxByPatientId.set(rx.patient_id, rx);
+      }
+    }
 
     // Helper function to enrich consultation
     const enrich = (c: ConsultationRow) => {
       const prof: PatientProfileRow = profilesById.get(c.patient_id) || { id: c.patient_id };
       const assess: HealthAssessmentRow = assessmentsByPatientId.get(c.patient_id) || { patient_id: c.patient_id };
+      const matchingRx = rxByConsultationId.get(c.id) || rxByPatientId.get(c.patient_id) || null;
       const firstName = assess.first_name || prof.first_name || prof.display_id || 'Patient';
       const lastName = assess.last_name || prof.last_name || '';
       const fullName = `${firstName} ${lastName}`.trim();
@@ -355,6 +377,9 @@ export async function POST(req: Request) {
 
       return {
         ...c,
+        prescription: matchingRx,
+        prescription_number: matchingRx?.prescription_number || null,
+        has_active_prescription: Boolean(matchingRx),
         patient_name: fullName,
         patient_phone: normalizedPhone.display || 'No Phone',
         patient_phone_e164: normalizedPhone.e164,
@@ -376,7 +401,7 @@ export async function POST(req: Request) {
         patient_workout_pref: assess.workout_preference || null,
         patient_eligibility_status: getEligibilityStatus(assess),
         patient_medical_risk_flags: getRiskFlags(assess),
-        patient_medication_proof_url: assess.medication_proof_url || assess.medication_proof || null,
+        patient_medication_proof_url: (assess?.medical_history as any)?.medication_proof_url || (assess?.medical_history as any)?.medication_proof || (assess as any)?.medication_proof_url || (assess as any)?.medication_proof || null,
       };
     };
 

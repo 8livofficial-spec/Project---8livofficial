@@ -40,22 +40,48 @@ export function parseBookableRole(value: string | null): BookableRole | null {
   return supportedRoles.has(normalized as BookableRole) ? normalized as BookableRole : null
 }
 
+const patientTokenCache = new Map<string, { user: any; profile: any; expiresAt: number }>()
+
 export async function getAuthenticatedPatient(request: Request) {
   const authorization = request.headers.get('authorization') || ''
   const token = authorization.startsWith('Bearer ') ? authorization.slice(7).trim() : ''
   if (!token) return { error: 'Unauthorized', status: 401 as const }
 
-  const { data, error } = await supabaseAdmin.auth.getUser(token)
-  if (error || !data.user) return { error: 'Invalid session', status: 401 as const }
+  const now = Date.now()
+  const cached = patientTokenCache.get(token)
+  if (cached && cached.expiresAt > now) {
+    return { user: cached.user, profile: cached.profile }
+  }
 
-  const { data: profile, error: profileError } = await supabaseAdmin
-    .from('profiles')
-    .select('id, role')
-    .eq('id', data.user.id)
-    .maybeSingle()
-  if (profileError) return { error: profileError.message, status: 500 as const }
-  if (profile?.role !== 'patient') return { error: 'Patient access only', status: 403 as const }
-  return { user: data.user }
+  try {
+    const { data, error } = await supabaseAdmin.auth.getUser(token)
+    if (error || !data.user) {
+      if (cached) return { user: cached.user, profile: cached.profile }
+      return { error: 'Invalid session', status: 401 as const }
+    }
+
+    const { data: profile, error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .select('id, role')
+      .eq('id', data.user.id)
+      .maybeSingle()
+
+    if (profileError || !profile || (profile.role && profile.role !== 'patient')) {
+      return { error: 'Forbidden', status: 403 as const }
+    }
+
+    patientTokenCache.set(token, {
+      user: data.user,
+      profile,
+      expiresAt: now + 60 * 1000,
+    })
+
+    return { user: data.user, profile }
+  } catch (err: any) {
+    console.warn('Supabase auth network error in getAuthenticatedPatient:', err?.message || err)
+    if (cached) return { user: cached.user, profile: cached.profile }
+    return { error: 'Authentication service temporarily unreachable', status: 503 as const }
+  }
 }
 
 export function getIndiaSlotTimestamp(date: string, time: string) {

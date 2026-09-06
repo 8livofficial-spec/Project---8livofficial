@@ -108,6 +108,37 @@ export default function AppointmentDetailsPage() {
   const [savedRating, setSavedRating] = useState<ConsultationRating | null>(null)
   const [ratingValue, setRatingValue] = useState(0)
   const [ratingReview, setRatingReview] = useState('')
+  const [downloadingReceipt, setDownloadingReceipt] = useState(false)
+
+  const handleDownloadReceipt = async () => {
+    try {
+      setDownloadingReceipt(true)
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('Please log in again.')
+
+      const res = await fetch(`/api/patient/appointments/${bookingId}/receipt`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || 'Failed to download receipt.')
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `8LIV-Receipt-${bookingId.slice(0, 8)}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      a.remove()
+    } catch (err: any) {
+      alert('Could not download receipt: ' + err.message)
+    } finally {
+      setDownloadingReceipt(false)
+    }
+  }
   const [ratingLoading, setRatingLoading] = useState(false)
   const [ratingSaving, setRatingSaving] = useState(false)
   const [ratingError, setRatingError] = useState('')
@@ -312,10 +343,11 @@ export default function AppointmentDetailsPage() {
           )}
           <button
             type="button"
-            onClick={() => window.print()}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1A1F36] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#C4622D]"
+            onClick={handleDownloadReceipt}
+            disabled={downloadingReceipt}
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1A1F36] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#C4622D] transition-all shadow-sm cursor-pointer disabled:opacity-50"
           >
-            <Download className="w-4 h-4" /> Download/View Receipt
+            <Download className="w-4 h-4" /> {downloadingReceipt ? 'Generating Receipt...' : 'Download Official Receipt (PDF)'}
           </button>
         </div>
       </div>

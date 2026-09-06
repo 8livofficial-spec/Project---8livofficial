@@ -415,6 +415,52 @@ export async function finalizeConsultationAssignment(params: {
       selectedTime: params.selectedTime,
     },
   })
+
+  // Lock doctor-patient continuity immediately in care_team_assignments
+  try {
+    const { data: existingAssignment } = await supabaseAdmin
+      .from('care_team_assignments')
+      .select('id, doctor_id')
+      .eq('patient_id', params.patientId)
+      .maybeSingle()
+
+    if (existingAssignment) {
+      if (!existingAssignment.doctor_id) {
+        await supabaseAdmin
+          .from('care_team_assignments')
+          .update({
+            doctor_id: params.provider.providerId,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('patient_id', params.patientId)
+      }
+    } else {
+      await supabaseAdmin
+        .from('care_team_assignments')
+        .insert({
+          patient_id: params.patientId,
+          doctor_id: params.provider.providerId,
+          provider_id: params.provider.providerId,
+          provider_role: 'doctor',
+          relationship_type: 'PRIMARY_DOCTOR',
+          status: 'ACTIVE',
+          updated_at: new Date().toISOString(),
+        })
+    }
+
+    await supabaseAdmin
+      .from('provider_assignments')
+      .upsert({
+        patient_id: params.patientId,
+        provider_id: params.provider.providerId,
+        provider_role: 'doctor',
+        plan_type: 'Consultation Program',
+        is_primary: true,
+        status: 'ACTIVE',
+      }, { onConflict: 'patient_id,provider_role,status' })
+  } catch (ctaErr) {
+    console.warn('Non-blocking care team lock in finalizeConsultationAssignment:', ctaErr)
+  }
 }
 
 async function chooseProviderForRole(role: ProviderRole, planType: string, patientId: string) {

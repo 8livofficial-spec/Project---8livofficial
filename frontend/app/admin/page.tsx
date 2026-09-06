@@ -524,35 +524,38 @@ function AdminDashboardContent() {
   };
 
   const viewPaymentReceipt = (payment: any) => {
-    alert([
-      '8liv Payment Receipt',
-      `Payment ID: ${payment.id || 'N/A'}`,
-      `Razorpay ID: ${payment.transaction_id || payment.metadata?.razorpay_payment_id || 'N/A'}`,
-      `Type: ${payment.payment_type || 'payment'}`,
-      `Amount: Rs ${Number(payment.amount || 0).toLocaleString('en-IN')}`,
-      `Status: ${payment.status || 'pending'}`,
-      `Date: ${payment.created_at ? new Date(payment.created_at).toLocaleString('en-IN') : 'N/A'}`,
-    ].join('\n'));
+    const paymentId = payment.id || payment.transaction_id
+    if (!paymentId) {
+      alert('Payment ID not available for this record.')
+      return
+    }
+    window.open(`/api/payments/${paymentId}/receipt`, '_blank')
   };
 
-  const downloadPaymentReceipt = (payment: any) => {
-    const receipt = {
-      brand: '8liv',
-      paymentId: payment.id,
-      razorpayPaymentId: payment.transaction_id || payment.metadata?.razorpay_payment_id,
-      type: payment.payment_type,
-      amount: Number(payment.amount || 0),
-      method: payment.payment_method || payment.metadata?.method || 'Razorpay',
-      status: payment.status,
-      date: payment.created_at,
-    };
-    const blob = new Blob([JSON.stringify(receipt, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `8liv-receipt-${payment.id || payment.transaction_id || 'payment'}.json`;
-    link.click();
-    URL.revokeObjectURL(url);
+  const downloadPaymentReceipt = async (payment: any) => {
+    const paymentId = payment.id || payment.transaction_id
+    if (!paymentId) {
+      alert('Payment ID not available for this record.')
+      return
+    }
+    try {
+      const res = await adminFetch(`/api/payments/${paymentId}/receipt`)
+      if (!res.ok) {
+        throw new Error('Failed to generate official PDF receipt.')
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `8LIV-Tax-Invoice-Receipt-${paymentId}.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('Error downloading official receipt PDF:', err)
+      window.open(`/api/payments/${paymentId}/receipt`, '_blank')
+    }
   };
 
   const refundPayment = async (payment: any) => {

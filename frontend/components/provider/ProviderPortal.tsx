@@ -7,6 +7,7 @@ import { Activity, Apple, CalendarDays, Dumbbell, FileText, LayoutDashboard, Log
 import { supabase } from '@/lib/supabaseClient'
 import StaffChat from '@/components/StaffChat'
 import ProviderAvailabilityScheduler, { AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler'
+import ProviderProfileEditor from './ProviderProfileEditor'
 import { authedFetch } from '@/lib/apiClient'
 
 type ProviderRole = 'doctor' | 'dietitian' | 'fitness_coach' | 'nutritionist'
@@ -160,7 +161,6 @@ const nav = [
   { href: '/provider/schedule', label: 'Schedule', icon: CalendarDays },
   { href: '/provider/consultations', label: 'Consultations', icon: Video },
   { href: '/provider/plans', label: 'Plans', icon: FileText },
-  { href: '/provider/messages', label: 'Messages', icon: MessageCircle },
   { href: '/provider/wallet', label: 'Wallet', icon: Wallet },
   { href: '/provider/profile', label: 'Profile', icon: Settings },
 ]
@@ -626,9 +626,9 @@ export default function ProviderPortal({ section }: { section: 'dashboard' | 'pa
   }
 
   return (
-    <main className="min-h-screen bg-[#F8FAFC] text-[#0F172A]">
-      <div className="flex min-h-screen">
-        <aside className="hidden w-72 shrink-0 border-r border-white/10 bg-[#0B132B] text-white lg:sticky lg:top-0 lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
+    <main className="h-screen overflow-hidden bg-[#F8FAFC] text-[#0F172A]">
+      <div className="flex h-screen overflow-hidden">
+        <aside className="hidden w-72 shrink-0 border-r border-white/10 bg-[#0B132B] text-white lg:flex lg:h-screen lg:flex-col lg:overflow-hidden">
           <div className="shrink-0 p-5 pb-3">
             <div className="rounded-2xl bg-white/5 border border-white/10 p-5">
               <div className="flex items-center gap-2">
@@ -664,15 +664,15 @@ export default function ProviderPortal({ section }: { section: 'dashboard' | 'pa
 
           <div className="shrink-0 border-t border-white/10 bg-[#0B132B] p-4">
             <div className="rounded-2xl bg-white/5 border border-white/10 p-4 text-white shadow-xl">
-              <div className="flex items-center gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-md" style={{ background: `linear-gradient(135deg, #00A884, #2DD4BF)` }}>
+              <Link href="/provider/profile" className="flex items-center gap-3 p-1.5 -m-1.5 rounded-xl hover:bg-white/10 transition-colors cursor-pointer group">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl text-white shadow-md group-hover:scale-105 transition-transform" style={{ background: `linear-gradient(135deg, #00A884, #2DD4BF)` }}>
                   <RoleIcon className="h-5 w-5" />
                 </div>
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold text-white">{provider?.name}</p>
-                  <p className="text-xs font-semibold text-slate-400">{copy.label}</p>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-bold text-white group-hover:text-[#5EEAD4] transition-colors">{provider?.name}</p>
+                  <p className="text-xs font-semibold text-slate-400">{copy.label} • Edit Profile</p>
                 </div>
-              </div>
+              </Link>
               <button onClick={signOut} className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 hover:bg-red-500/20 px-4 py-2.5 text-xs font-bold text-white transition-all cursor-pointer">
                 <LogOut className="h-4 w-4" /> Logout
               </button>
@@ -680,7 +680,7 @@ export default function ProviderPortal({ section }: { section: 'dashboard' | 'pa
           </div>
         </aside>
 
-        <section className="flex-1 overflow-hidden">
+        <section className="h-screen flex-1 overflow-y-auto min-w-0">
           <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/90 px-5 py-4 backdrop-blur md:px-8">
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-4">
               <div>
@@ -688,6 +688,17 @@ export default function ProviderPortal({ section }: { section: 'dashboard' | 'pa
                 <h2 className="mt-1 text-2xl font-black tracking-tight text-[#0F172A] font-sora md:text-3xl">{sectionLabel(section)}</h2>
               </div>
               <div className="hidden items-center gap-3 md:flex">
+                <Link
+                  href="/provider/profile"
+                  className={`rounded-full border px-3.5 py-1.5 text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
+                    section === 'profile'
+                      ? 'border-[#00A884] bg-[#00A884] text-white'
+                      : 'border-slate-200 bg-white text-slate-700 hover:border-[#00A884] hover:text-[#00A884]'
+                  }`}
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>Profile &amp; Credentials</span>
+                </Link>
                 <span className="rounded-full bg-emerald-50 px-4 py-1.5 text-xs font-bold text-[#00A884] border border-[#00A884]/20 uppercase tracking-wider">{provider?.status || 'active'}</span>
               </div>
             </div>
@@ -1695,25 +1706,11 @@ function FitnessForm({ hasFile }: { hasFile: boolean }) {
 }
 
 function Profile({ provider, copy }: { provider: Provider | null, copy: any }) {
-  const Icon = copy.icon
   return (
-    <div className="rounded-[28px] border border-[#E8DED4] bg-white p-6 shadow-sm">
-      <div className="flex flex-col gap-5 md:flex-row md:items-center">
-        <div className="flex h-20 w-20 items-center justify-center rounded-[24px] text-white" style={{ background: `linear-gradient(135deg, ${copy.accent}, #1A1F36)` }}>
-          <Icon className="h-8 w-8" />
-        </div>
-        <div>
-          <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#C4622D]">{copy.label}</p>
-          <h3 className="mt-1 text-3xl font-black">{provider?.name}</h3>
-          <p className="mt-1 text-sm font-semibold text-[#6B7A90]">{provider?.email}</p>
-        </div>
-      </div>
-      <div className="mt-8 grid gap-4 md:grid-cols-3">
-        <Info label="Specialization" value={provider?.specialization || 'Not configured'} />
-        <Info label="Qualification" value={provider?.qualification || 'Not configured'} />
-        <Info label="Status" value={provider?.status || 'active'} />
-      </div>
-    </div>
+    <ProviderProfileEditor
+      provider={provider}
+      copy={copy}
+    />
   )
 }
 

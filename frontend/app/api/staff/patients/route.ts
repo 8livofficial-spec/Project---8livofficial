@@ -117,6 +117,42 @@ export async function POST(req: Request) {
       matchingPatientIds = Array.from(ids);
     }
 
+    // For doctors: auto-sync any patients who had consultations with this doctor into care_team_assignments
+    if (role === 'doctor') {
+      try {
+        const { data: doctorConsults } = await supabaseAdmin
+          .from('doctor_consultations')
+          .select('patient_id')
+          .eq('doctor_id', targetStaffId);
+
+        if (doctorConsults && doctorConsults.length > 0) {
+          const consultPatientIds = Array.from(new Set(doctorConsults.map((c: any) => c.patient_id).filter(Boolean)));
+          const { data: existingCta } = await supabaseAdmin
+            .from('care_team_assignments')
+            .select('patient_id, doctor_id')
+            .in('patient_id', consultPatientIds);
+          const existingMap = new Map((existingCta || []).map((c: any) => [c.patient_id, c.doctor_id]));
+
+          const toUpsert = consultPatientIds
+            .filter((pid: any) => existingMap.get(pid) !== targetStaffId)
+            .map((pid: any) => ({
+              patient_id: pid,
+              doctor_id: targetStaffId,
+              status: 'ACTIVE',
+              updated_at: new Date().toISOString(),
+            }));
+
+          if (toUpsert.length > 0) {
+            await supabaseAdmin
+              .from('care_team_assignments')
+              .upsert(toUpsert, { onConflict: 'patient_id' });
+          }
+        }
+      } catch (syncErr) {
+        console.warn('Non-blocking care team sync for doctor consultations:', syncErr);
+      }
+    }
+
     // 1. Fetch care team assignments for this staff member
     let assignmentsQuery = supabaseAdmin.from('care_team_assignments').select('*', { count: 'exact' });
     if (role === 'fitness_coach') {
@@ -151,35 +187,44 @@ export async function POST(req: Request) {
 
     const patientIds = assignments.map(a => a.patient_id);
 
-    // 2. Fetch profiles for these patients using admin client (bypassing RLS)
-    const { data: profiles, error: profErr } = await supabaseAdmin
-      .from('profiles')
-      .select('id, first_name, last_name, email, phone_number')
-      .in('id', patientIds);
-    if (profErr) throw profErr;
+    // Concurrently fetch profiles, assessments, logs, consultations, and prescriptions (5 parallel queries)
+    const [profilesRes, assessmentsRes, logsRes, consultsRes, rxRes] = await Promise.all([
+      supabaseAdmin
+        .from('profiles')
+        .select('id, first_name, last_name, email, phone_number')
+        .in('id', patientIds),
+      supabaseAdmin
+        .from('health_assessments')
+        .select('patient_id, first_name, last_name, phone_number, membership_tier, membership_status, is_eligible, medical_history, extra_medical_info, height_cm, weight_kg, goal_weight_kg')
+        .in('patient_id', patientIds),
+      supabaseAdmin
+        .from('progress_logs')
+        .select('user_id, weight_kg, created_at')
+        .in('user_id', patientIds)
+        .order('created_at', { ascending: false }),
+      supabaseAdmin
+        .from('doctor_consultations')
+        .select('id, patient_id, doctor_id, booking_date, booking_time, status, prescription_text, prescription_type, prescription_notes, created_at, updated_at')
+        .in('patient_id', patientIds)
+        .order('created_at', { ascending: false }),
+      supabaseAdmin
+        .from('prescriptions')
+        .select('id, patient_id, prescription_number, status, issued_at, created_at, diagnosis, valid_until, prescription_items(medicine_name, strength, dose, frequency, dosage_form)')
+        .in('patient_id', patientIds)
+        .in('status', ['ISSUED', 'ACTIVE', 'SIGNED', 'COMPLETED', 'REPLACED'])
+        .order('created_at', { ascending: false })
+    ]);
 
-    // 3. Fetch health assessments using admin client
-    const { data: assessments, error: assessErr } = await supabaseAdmin
-      .from('health_assessments')
-      .select('patient_id, first_name, last_name, phone_number, membership_tier, membershipStatus, consultation_fee_paid, eligibility_status, eligibility_reason, is_eligible, medical_history, medication_proof_url, medication_proof, bmi, height_cm, weight_kg, diagnosis_summary, follow_up_instruction, follow_up_notes')
-      .in('patient_id', patientIds);
-    if (assessErr) throw assessErr;
+    if (profilesRes.error) throw profilesRes.error;
+    if (assessmentsRes.error) throw assessmentsRes.error;
+    if (logsRes.error) throw logsRes.error;
+    if (consultsRes.error) throw consultsRes.error;
 
-    // 4. Fetch progress logs using admin client
-    const { data: logs, error: logsErr } = await supabaseAdmin
-      .from('progress_logs')
-      .select('user_id, weight_kg, created_at')
-      .in('user_id', patientIds)
-      .order('created_at', { ascending: false });
-    if (logsErr) throw logsErr;
-
-    // 5. Fetch consultations for these patients using admin client
-    const { data: consults, error: consultsErr } = await supabaseAdmin
-      .from('doctor_consultations')
-      .select('id, patient_id, doctor_id, booking_date, booking_time, status, prescription_text, prescription_type, prescription_notes, created_at, updated_at')
-      .in('patient_id', patientIds)
-      .order('created_at', { ascending: false });
-    if (consultsErr) throw consultsErr;
+    const profiles = profilesRes.data || [];
+    const assessments = assessmentsRes.data || [];
+    const logs = logsRes.data || [];
+    const consults = consultsRes.data || [];
+    const patientRxs = rxRes.data || [];
 
     const profilesById = new Map((profiles || []).map((profile: any) => [profile.id, profile]));
     const assessmentsByPatientId = new Map((assessments || []).map((assessment: any) => [assessment.patient_id, assessment]));
@@ -194,6 +239,27 @@ export async function POST(req: Request) {
       const existing = consultationsByPatientId.get(consultation.patient_id) || [];
       existing.push(consultation);
       consultationsByPatientId.set(consultation.patient_id, existing);
+    }
+
+    const rxsByPatientId = new Map<string, any[]>();
+    for (const rx of patientRxs) {
+      const existing = rxsByPatientId.get(rx.patient_id) || [];
+      const primary = (rx.prescription_items || [])[0];
+      const itemsSummary = (rx.prescription_items || [])
+        .map((i: any) => `${i.medicine_name} (${i.strength}) - ${i.dose} ${i.frequency}`)
+        .join(', ');
+      existing.push({
+        id: rx.id,
+        booking_date: rx.issued_at ? new Date(rx.issued_at).toLocaleDateString('en-IN') : new Date(rx.created_at).toLocaleDateString('en-IN'),
+        booking_time: rx.prescription_number,
+        prescription_type: primary?.dosage_form || 'E-Prescription',
+        prescription_text: itemsSummary || rx.diagnosis || 'Active E-Prescription',
+        prescription_notes: rx.diagnosis,
+        is_real_rx: true,
+        prescription_number: rx.prescription_number,
+        status: rx.status,
+      });
+      rxsByPatientId.set(rx.patient_id, existing);
     }
 
     // Assemble the data
@@ -220,7 +286,9 @@ export async function POST(req: Request) {
       const latestConsultation = getLatestConsultation(pConsults);
       const nextAppointment = getNextAppointment(pConsults);
       const completedConsultations = pConsults.filter(c => ['approved', 'rejected', 'completed'].includes(String(c.status || '').toLowerCase()));
-      const prescriptionHistory = pConsults.filter(c => c.prescription_text || c.prescription_type || c.prescription_notes);
+      const realRxs = rxsByPatientId.get(assign.patient_id) || [];
+      const legacyHistory = pConsults.filter(c => c.prescription_text || c.prescription_type || c.prescription_notes);
+      const prescriptionHistory = [...realRxs, ...legacyHistory];
 
       let statusLabel = 'Active';
       let statusColor = 'bg-green-50 text-green-700';
@@ -253,7 +321,7 @@ export async function POST(req: Request) {
         statusColor = 'bg-amber-50 text-amber-700';
       }
 
-      const membershipTier = assess.membership_tier || assess.membershipStatus || 'Not selected';
+      const membershipTier = assess.membership_tier || assess.membership_status || 'Not selected';
 
       return {
         id: assign.id,
@@ -268,7 +336,7 @@ export async function POST(req: Request) {
         medical_risk_flags: getRiskFlags(assess),
         current_medications: assess.current_medications || assess.medications || getAssessmentField(assess, 'medication_history') || null,
         medication_history: assess.medication_history || getAssessmentField(assess, 'medication_history') || null,
-        medication_proof_url: assess.medication_proof_url || assess.medication_proof || null,
+        medication_proof_url: getAssessmentField(assess, 'medication_proof_url') || getAssessmentField(assess, 'medication_proof') || assess.medication_proof_url || assess.medication_proof || null,
         bmi: assess.bmi ? parseFloat(assess.bmi) : (assess.height_cm && assess.weight_kg ? Number((Number(assess.weight_kg) / Math.pow(Number(assess.height_cm) / 100, 2)).toFixed(1)) : null),
         diagnosis_summary: assess.diagnosis_summary || completedConsultations[0]?.prescription_notes || null,
         follow_up_notes: assess.follow_up_instruction || assess.follow_up_notes || completedConsultations[0]?.prescription_notes || null,

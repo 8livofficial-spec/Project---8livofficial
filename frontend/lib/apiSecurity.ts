@@ -33,13 +33,41 @@ export async function getAuthenticatedUser(request: Request) {
 
   if (!token) return null
 
-  const { data, error } = await supabaseAdmin.auth.getUser(token)
-  if (error || !data.user) return null
+  const now = Date.now()
+  const cached = authTokenCache.get(token)
+  if (cached && cached.expiresAt > now) {
+    return { user: cached.user, role: cached.role }
+  }
 
-  const user = data.user
-  const role = await getUserRole(user.id, user.email)
-  return { user, role }
+  try {
+    const { data, error } = await supabaseAdmin.auth.getUser(token)
+    if (!error && data?.user) {
+      const user = data.user
+      const role = await getUserRole(user.id, user.email)
+      authTokenCache.set(token, {
+        user,
+        role,
+        expiresAt: now + 60 * 1000,
+      })
+      return { user, role }
+    }
+  } catch (err: any) {
+    console.warn('Supabase auth network error in getAuthenticatedUser:', err?.message || err)
+    if (cached) {
+      return { user: cached.user, role: cached.role }
+    }
+  }
+
+  return null
 }
+
+type CachedAuth = {
+  user: any
+  role: string | null
+  expiresAt: number
+}
+
+const authTokenCache = new Map<string, CachedAuth>()
 
 export async function assertAdmin(request: Request) {
   const auth = await getAuthenticatedUser(request)
