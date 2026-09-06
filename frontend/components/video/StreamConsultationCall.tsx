@@ -2,14 +2,22 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import {
-  CallControls,
   SpeakerLayout,
   StreamCall,
   StreamVideo,
   StreamVideoClient,
+  useCallStateHooks,
 } from '@stream-io/video-react-sdk'
 import '@stream-io/video-react-sdk/dist/css/styles.css'
-import { AlertCircle, RefreshCw } from 'lucide-react'
+import {
+  AlertCircle,
+  RefreshCw,
+  Mic,
+  MicOff,
+  Video,
+  VideoOff,
+  PhoneOff,
+} from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
 type VideoTokenResponse = {
@@ -25,6 +33,93 @@ type VideoTokenResponse = {
 type Props = {
   appointmentId: string
   onLeave: () => void
+}
+
+function CustomCallControls({ onLeave }: { onLeave: () => void }) {
+  const { useMicrophoneState, useCameraState } = useCallStateHooks()
+  const { microphone, isMute: isMicMuted } = useMicrophoneState()
+  const { camera, isMute: isCamMuted } = useCameraState()
+
+  const toggleMic = async () => {
+    try {
+      await microphone.toggle()
+    } catch (e) {
+      console.warn('Could not toggle mic:', e)
+    }
+  }
+
+  const toggleCam = async () => {
+    try {
+      await camera.toggle()
+    } catch (e) {
+      console.warn('Could not toggle camera:', e)
+    }
+  }
+
+  return (
+    <div className="flex items-center gap-3 sm:gap-4 px-4 py-2.5 rounded-2xl bg-[#14192B]/95 border border-white/15 shadow-2xl backdrop-blur-md">
+      {/* Microphone Toggle Button */}
+      <button
+        type="button"
+        onClick={toggleMic}
+        title={isMicMuted ? 'Unmute microphone' : 'Mute microphone'}
+        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm ${
+          isMicMuted
+            ? 'bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30'
+            : 'bg-white/10 border border-white/15 text-white hover:bg-white/20'
+        }`}
+      >
+        {isMicMuted ? (
+          <>
+            <MicOff className="w-4 h-4 text-red-400" />
+            <span>Unmute</span>
+          </>
+        ) : (
+          <>
+            <Mic className="w-4 h-4 text-emerald-400" />
+            <span>Mute</span>
+          </>
+        )}
+      </button>
+
+      {/* Camera Toggle Button */}
+      <button
+        type="button"
+        onClick={toggleCam}
+        title={isCamMuted ? 'Turn on camera' : 'Turn off camera'}
+        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm ${
+          isCamMuted
+            ? 'bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30'
+            : 'bg-white/10 border border-white/15 text-white hover:bg-white/20'
+        }`}
+      >
+        {isCamMuted ? (
+          <>
+            <VideoOff className="w-4 h-4 text-red-400" />
+            <span>Start Video</span>
+          </>
+        ) : (
+          <>
+            <Video className="w-4 h-4 text-emerald-400" />
+            <span>Stop Video</span>
+          </>
+        )}
+      </button>
+
+      <div className="w-px h-6 bg-white/10 mx-1 hidden sm:block" />
+
+      {/* End Call Button */}
+      <button
+        type="button"
+        onClick={onLeave}
+        title="Leave consultation call"
+        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/30 transition-all active:scale-95 cursor-pointer"
+      >
+        <PhoneOff className="w-4 h-4" />
+        <span>End Call</span>
+      </button>
+    </div>
+  )
 }
 
 export default function StreamConsultationCall({ appointmentId, onLeave }: Props) {
@@ -148,12 +243,12 @@ export default function StreamConsultationCall({ appointmentId, onLeave }: Props
   return (
     <StreamVideo client={client}>
       <StreamCall call={call}>
-        <div className="str-video__call-layout flex h-full w-full flex-col bg-[#0A0D18] text-white">
+        <div className="str-video str-video__theme-dark str-video__call-layout flex h-full w-full flex-col bg-[#0A0D18] text-white">
           <div className="min-h-0 flex-1 relative w-full h-full">
             <SpeakerLayout />
           </div>
-          <div className="shrink-0 border-t border-white/10 bg-[#0B0F1D]/80 backdrop-blur-md p-3 flex items-center justify-center">
-            <CallControls onLeave={onLeave} />
+          <div className="shrink-0 border-t border-white/10 bg-[#0B0F1D]/90 backdrop-blur-md p-3.5 flex items-center justify-center">
+            <CustomCallControls onLeave={onLeave} />
           </div>
         </div>
       </StreamCall>

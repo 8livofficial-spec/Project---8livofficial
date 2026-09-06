@@ -1475,12 +1475,23 @@ export default function DoctorDashboard() {
 
       const endingCons = consultations.find(c => c.id === activeCallId);
       if (endingCons) {
-        setPrescribeCase({
+        const attendedCons = {
           ...endingCons,
           status: 'attended',
           call_started_at: endingCons.call_started_at || new Date().toISOString(),
           call_ended_at: new Date().toISOString()
-        });
+        };
+        const matchedPatient = patients.find((p: any) => p.id === endingCons.patient_id) || {
+          id: endingCons.patient_id,
+          first_name: endingCons.patient_name?.split(' ')[0] || 'Patient',
+          last_name: endingCons.patient_name?.split(' ').slice(1).join(' ') || '',
+          name: endingCons.patient_name || 'Patient',
+          full_name: endingCons.patient_name || 'Patient'
+        };
+        // Directly launch the production E-Prescription Suite preloaded for this consultation & patient
+        setBuilderConsultation(attendedCons);
+        setBuilderPatient(matchedPatient);
+        setShowRxBuilderModal(true);
       }
     }
     setActiveCallUrl('');
@@ -1932,7 +1943,7 @@ export default function DoctorDashboard() {
               <button onClick={() => setPrescribeCase(null)} className="rounded-xl p-2 hover:bg-[#F5F0EB] transition-colors"><X className="w-6 h-6 text-[#8896A4] hover:text-[#40516A]" /></button>
             </div>
             <div className="flex-1 overflow-y-auto px-6 py-6 sm:px-8 sm:py-7 space-y-6">
-              <div className="bg-[#F5F0EB]/70 p-4 rounded-2xl mb-6 border border-[#1A1F36]/8">
+              <div className="bg-[#F5F0EB]/70 p-4 rounded-2xl mb-2 border border-[#1A1F36]/8">
                 <p className="text-sm font-bold text-[#1A1F36]">Patient: {prescribeCase.patient_name}</p>
                 <p className="text-xs text-[#40516A] mt-1">Date: {prescribeCase.booking_date} @ {prescribeCase.booking_time}</p>
                 {prescribeCase.call_started_at && (
@@ -1940,6 +1951,45 @@ export default function DoctorDashboard() {
                     ⏱ Call Duration: {formatDuration(prescribeCase.call_started_at, prescribeCase.call_ended_at)}
                   </p>
                 )}
+              </div>
+
+              {/* Official E-Prescription Suite Action Card */}
+              <div className="rounded-2xl border-2 border-[#0D9488]/30 bg-gradient-to-br from-[#0D9488]/10 via-white to-[#0D9488]/5 p-5 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-[#0D9488]">
+                    <ShieldCheck className="w-5 h-5" />
+                    <span className="text-xs font-black uppercase tracking-wider">Official E-Prescription Suite</span>
+                  </div>
+                  <span className="text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-[#0D9488]/15 text-[#0D9488]">
+                    Telemedicine Guidelines (2020)
+                  </span>
+                </div>
+                <p className="text-xs text-[#40516A] font-semibold leading-relaxed">
+                  Issue an official, cryptographically signed electronic prescription with pharmaceutical GLP-1 presets (Semaglutide, Tirzepatide), custom dosage schedules, and direct pharmacy fulfillment.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const matchedPatient = patients.find((p: any) => p.id === prescribeCase.patient_id) || {
+                      id: prescribeCase.patient_id,
+                      name: prescribeCase.patient_name || 'Patient',
+                      full_name: prescribeCase.patient_name || 'Patient'
+                    };
+                    setBuilderConsultation({
+                      ...prescribeCase,
+                      diagnosis_summary: diagnosisSummary,
+                      clinical_notes: completionNotes,
+                      follow_up_instructions: followUpInstruction,
+                      prescription_text: prescriptionText || null,
+                    });
+                    setBuilderPatient(matchedPatient);
+                    setPrescribeCase(null);
+                    setShowRxBuilderModal(true);
+                  }}
+                  className="w-full flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#0F766E] hover:from-[#0B7A6F] hover:to-[#0D625C] px-5 py-3.5 text-sm font-black text-white shadow-md hover:shadow-lg transition-all active:scale-98 cursor-pointer"
+                >
+                  <Pill className="w-4 h-4" /> Open Official E-Prescription Builder →
+                </button>
               </div>
 
               <label className={labelCls}>Clinical Notes</label>
@@ -1960,36 +2010,7 @@ export default function DoctorDashboard() {
                 placeholder="Summarize clinical assessment and diagnosis..."
               />
 
-              <div className="relative flex items-center gap-3 mb-5">
-                <div className="flex-1 h-px bg-[#1A1F36]/10" />
-                <span className="text-xs font-black text-[#8896A4] uppercase tracking-widest">Medication Recommendation</span>
-                <div className="flex-1 h-px bg-[#1A1F36]/10" />
-              </div>
-
-              <label className={labelCls}>Medication Type <span className="text-[#B94D4D]">*</span></label>
-              <div className="mt-2 mb-2">
-                {(['INJECTABLE'] as const).map(type => (
-                  <button key={type} onClick={() => setPrescriptionType(type)}
-                    className={`w-full cursor-pointer border-2 rounded-2xl p-5 text-left transition-all hover:scale-[1.01] active:scale-95 ${prescriptionType === type ? 'border-[#C4622D] bg-[#C4622D]/10' : 'border-[#1A1F36]/10 hover:border-[#C4622D]/40'}`}>
-                    <p className={`font-black text-base ${prescriptionType === type ? 'text-[#C4622D]' : 'text-[#1A1F36]'}`}>
-                      Injectable Medication
-                    </p>
-                    <p className="text-xs text-[#40516A] mt-1 font-semibold">Weekly injection</p>
-                  </button>
-                ))}
-              </div>
-              <p className="mb-4 text-xs font-semibold text-[#8896A4]">Medication recommendation will be reviewed and processed according to clinical protocol.</p>
-
-              <label className={labelCls}>Medicine Name & Dosage Instructions <span className="text-[#B94D4D]">*</span></label>
-              <textarea
-                value={prescriptionText}
-                onChange={e => setPrescriptionText(e.target.value)}
-                className={`${inputCls} mt-2 min-h-[112px]`}
-                rows={4}
-                placeholder="e.g. Semaglutide 0.25mg - take once weekly on Wednesdays. Increase to 0.5mg after 4 weeks."
-              />
-
-              <label className={labelCls}>Follow-up Instructions <span className="text-[#B94D4D]">*</span></label>
+              <label className={labelCls}>Follow-up Instructions</label>
               <textarea
                 value={followUpInstruction}
                 onChange={e => setFollowUpInstruction(e.target.value)}
@@ -2000,20 +2021,37 @@ export default function DoctorDashboard() {
 
             </div>
             <div className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-[#1A1F36]/8 bg-white px-6 py-5 sm:flex-row sm:justify-end sm:px-8">
-              <button onClick={() => setPrescribeCase(null)} className="rounded-xl border border-[#1A1F36] bg-white px-5 py-3 text-sm font-bold text-[#1A1F36] transition-all hover:bg-[#F5F0EB]">Cancel</button>
+              <button onClick={() => setPrescribeCase(null)} className="rounded-xl border border-[#1A1F36]/20 bg-white px-5 py-3 text-sm font-bold text-[#40516A] transition-all hover:bg-[#F5F0EB]">Cancel</button>
               <button
                 onClick={() => handlePrescribe(true)}
-                disabled={prescribing || !diagnosisSummary.trim() || !followUpInstruction.trim()}
+                disabled={prescribing || !diagnosisSummary.trim()}
                 className="rounded-xl border border-[#1A1F36] bg-white px-5 py-3 text-sm font-bold text-[#1A1F36] transition-all hover:bg-[#F5F0EB] disabled:opacity-50"
+                title="Complete consultation with clinical notes only (no medication)"
               >
-                {prescribing ? 'Completing...' : 'Complete Consultation'}
+                {prescribing ? 'Completing...' : 'Complete (Notes Only, No Rx)'}
               </button>
               <button
-                onClick={() => handlePrescribe(false)}
-                disabled={prescribing || !diagnosisSummary.trim() || !prescriptionText.trim() || !followUpInstruction.trim()}
-                className="rounded-xl bg-[#1A1F36] px-5 py-3 text-sm font-bold text-white shadow-lg shadow-[#1A1F36]/15 transition-all hover:bg-[#0D101C] disabled:opacity-60"
+                type="button"
+                onClick={() => {
+                  const matchedPatient = patients.find((p: any) => p.id === prescribeCase.patient_id) || {
+                    id: prescribeCase.patient_id,
+                    name: prescribeCase.patient_name || 'Patient',
+                    full_name: prescribeCase.patient_name || 'Patient'
+                  };
+                  setBuilderConsultation({
+                    ...prescribeCase,
+                    diagnosis_summary: diagnosisSummary,
+                    clinical_notes: completionNotes,
+                    follow_up_instructions: followUpInstruction,
+                    prescription_text: prescriptionText || null,
+                  });
+                  setBuilderPatient(matchedPatient);
+                  setPrescribeCase(null);
+                  setShowRxBuilderModal(true);
+                }}
+                className="rounded-xl bg-gradient-to-r from-[#0D9488] to-[#0F766E] hover:from-[#0B7A6F] hover:to-[#0D625C] px-5 py-3 text-sm font-black text-white shadow-lg shadow-[#0D9488]/20 transition-all active:scale-95 cursor-pointer flex items-center justify-center gap-2"
               >
-                {prescribing ? 'Completing...' : 'Approve & Prescribe'}
+                <Pill className="w-4 h-4" /> Issue Official E-Prescription
               </button>
             </div>
           </motion.div>
@@ -2881,9 +2919,18 @@ export default function DoctorDashboard() {
                           <div className="flex-1">
                             <div className="flex items-center gap-3 flex-wrap mb-2">
                               <p
-                                onClick={() => setPrescribeCase(c)}
+                                onClick={() => {
+                                  const matchingRx = (c as any).prescription || doctorPrescriptions.find(p => p.consultation_id === c.id || (p.patient_id === c.patient_id && !['DRAFT', 'REVOKED', 'CANCELLED', 'REPLACED'].includes(p.status)));
+                                  if (matchingRx) {
+                                    setOfficialRxView(matchingRx);
+                                  } else {
+                                    setBuilderConsultation(c);
+                                    setBuilderPatient({ id: c.patient_id, full_name: c.patient_name });
+                                    setShowRxBuilderModal(true);
+                                  }
+                                }}
                                 className="font-black text-[#1A1F36] text-lg cursor-pointer hover:text-[#C4622D] transition-colors flex items-center gap-1.5"
-                                title="Click to view/write prescription"
+                                title="Click to view or issue official prescription"
                               >
                                 {c.patient_name || 'Member'}
                               </p>
