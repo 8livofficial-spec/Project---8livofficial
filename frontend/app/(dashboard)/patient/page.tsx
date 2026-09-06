@@ -429,7 +429,15 @@ export default function PatientDashboardHome() {
     }
   }
 
-  const [cycleInfo, setCycleInfo] = useState<{ cycleNumber: number; totalCycles: number; fulfillmentStatus?: string; trackingNumber?: string } | null>(null)
+  const [cycleInfo, setCycleInfo] = useState<{
+    cycleNumber: number
+    totalCycles: number
+    fulfillmentStatus?: string
+    trackingNumber?: string
+    courierName?: string
+    orderId?: string
+    prescriptionId?: string
+  } | null>(null)
 
   useEffect(() => {
     const fetchFulfillment = async () => {
@@ -443,7 +451,10 @@ export default function PatientDashboardHome() {
               cycleNumber: latestOrder.treatment_cycles?.cycle_number || 1,
               totalCycles: 1,
               fulfillmentStatus: latestOrder.status,
-              trackingNumber: latestOrder.dispatch_tracking_number || latestOrder.tracking_number,
+              trackingNumber: latestOrder.tracking_number,
+              courierName: latestOrder.courier_name,
+              orderId: latestOrder.id,
+              prescriptionId: latestOrder.prescription_id || latestOrder.prescriptions?.id,
             })
           }
         }
@@ -456,7 +467,10 @@ export default function PatientDashboardHome() {
 
   const attachedOrder = activeRx?.pharmacy_orders && Array.isArray(activeRx.pharmacy_orders) ? activeRx.pharmacy_orders[0] : null
   const effectiveFulfillmentStatus = cycleInfo?.fulfillmentStatus || attachedOrder?.status || 'PENDING_ASSIGNMENT'
-  const effectiveTrackingNumber = cycleInfo?.trackingNumber || attachedOrder?.dispatch_tracking_number || attachedOrder?.tracking_number
+  const effectiveTrackingNumber = cycleInfo?.trackingNumber || attachedOrder?.tracking_number
+  const effectiveCourierName = cycleInfo?.courierName || attachedOrder?.courier_name
+  const effectiveOrderId = cycleInfo?.orderId || attachedOrder?.id
+  const effectivePrescriptionId = cycleInfo?.prescriptionId || activeRx?.id
 
   if (loading) {
     return (
@@ -597,7 +611,10 @@ export default function PatientDashboardHome() {
             cycleNumber={cycleInfo?.cycleNumber || 1}
             totalCycles={cycleInfo?.totalCycles || 1}
             fulfillmentStatus={effectiveFulfillmentStatus}
+            courierName={effectiveCourierName}
             trackingNumber={effectiveTrackingNumber}
+            orderId={effectiveOrderId}
+            prescriptionId={effectivePrescriptionId}
           />
         </div>
         <div className="col-span-1 md:col-span-2 xl:col-span-1">

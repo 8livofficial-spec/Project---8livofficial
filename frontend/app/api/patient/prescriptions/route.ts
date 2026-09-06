@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     let rawPrescriptions: any[] = []
     const { data, error } = await supabaseAdmin
       .from('prescriptions')
-      .select('*, prescription_items(*), pharmacy_orders(id, status, vendor, estimated_delivery_at, courier_name, tracking_number, delivery_address_snapshot, created_at)')
+      .select('*, prescription_items(*), pharmacy_orders(id, status, vendor, estimated_delivery_at, courier_name, tracking_number, shipped_at, delivered_at, delivery_address_snapshot, created_at)')
       .eq('patient_id', auth.user.id)
       .neq('status', 'DRAFT')
       .order('created_at', { ascending: false })

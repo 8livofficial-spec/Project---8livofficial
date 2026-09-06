@@ -358,14 +358,42 @@ export default function PatientPrescriptionDetailPage() {
         </div>
       ) : activeOrder ? (
         <div className="space-y-4">
-          {/* Post-confirmation banner */}
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-5 shadow-xs">
-            <div className="flex items-center gap-2 text-emerald-900 font-bold">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              <h3 className="text-base font-black">Your treatment package is being prepared.</h3>
+          {/* Post-confirmation banner reflecting real delivery status */}
+          <div
+            className={`rounded-2xl border p-5 shadow-xs ${
+              activeOrder.status === 'DELIVERED'
+                ? 'border-emerald-200 bg-emerald-50/90 text-emerald-950'
+                : activeOrder.status === 'DISPATCHED'
+                ? 'border-cyan-200 bg-cyan-50/90 text-cyan-950'
+                : 'border-emerald-200 bg-emerald-50/80 text-emerald-950'
+            }`}
+          >
+            <div className="flex items-center gap-2 font-bold">
+              {activeOrder.status === 'DELIVERED' ? (
+                <>
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                  <h3 className="text-base font-black">Treatment Package Delivered Successfully</h3>
+                </>
+              ) : activeOrder.status === 'DISPATCHED' ? (
+                <>
+                  <Truck className="h-5 w-5 text-cyan-700" />
+                  <h3 className="text-base font-black">Your treatment package is on its way!</h3>
+                </>
+              ) : (
+                <>
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                  <h3 className="text-base font-black">Your treatment package is being prepared.</h3>
+                </>
+              )}
             </div>
-            <p className="mt-1 text-xs text-emerald-800 font-semibold">
-              Fulfillment is in progress. Your confirmed delivery address has been securely snapshotted for partner pharmacy fulfillment.
+            <p className="mt-1 text-xs font-semibold opacity-90">
+              {activeOrder.status === 'DELIVERED'
+                ? 'Your prescribed medication cycle was confirmed delivered to your address.'
+                : activeOrder.status === 'DISPATCHED'
+                ? activeOrder.courier_name?.includes('In-House')
+                  ? 'Dispatched via pharmacy in-house delivery rider. You can coordinate delivery with the rider contact details below.'
+                  : `Dispatched with courier (${activeOrder.courier_name}). You can track real-time delivery progress below.`
+                : 'Fulfillment is in progress. Your confirmed delivery address has been securely snapshotted for partner pharmacy fulfillment.'}
             </p>
           </div>
 
@@ -374,7 +402,7 @@ export default function PatientPrescriptionDetailPage() {
             status={activeOrder.status}
             courierName={activeOrder.courier_name}
             trackingNumber={activeOrder.tracking_number}
-            dispatchedAt={activeOrder.dispatched_at}
+            dispatchedAt={activeOrder.shipped_at || activeOrder.dispatched_at}
             deliveredAt={activeOrder.delivered_at}
           />
 

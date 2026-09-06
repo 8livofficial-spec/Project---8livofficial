@@ -251,26 +251,78 @@ export default function FulfillmentTimelineTracker({
 
       {/* Dispatch Logistics Banner if Dispatched or Delivered */}
       {(isDispatched || trackingNumber || courierName) && (
-        <div className="rounded-xl border border-cyan-200 bg-cyan-50/70 p-4 text-xs">
-          <div className="flex items-center gap-2 text-cyan-900 font-bold mb-2">
-            <Truck className="h-4 w-4 text-cyan-700" />
-            <span>Courier Dispatch & Tracking Details</span>
+        <div
+          className={`rounded-xl border p-4 text-xs ${
+            courierName?.includes('In-House')
+              ? 'border-emerald-200 bg-emerald-50/80 text-emerald-950'
+              : 'border-cyan-200 bg-cyan-50/70 text-cyan-950'
+          }`}
+        >
+          <div className="flex items-center gap-2 font-bold mb-2.5">
+            {courierName?.includes('In-House') ? (
+              <>
+                <span className="text-base">🛵</span>
+                <span className="text-emerald-900 font-black">Pharmacy In-House Fleet Dispatch</span>
+                <span className="rounded-full bg-emerald-200/60 px-2 py-0.5 text-[10px] font-bold text-emerald-900">
+                  Local Delivery Staff
+                </span>
+              </>
+            ) : (
+              <>
+                <Truck className="h-4 w-4 text-cyan-700" />
+                <span className="text-cyan-900 font-black">Third-Party Courier Tracking Details</span>
+              </>
+            )}
           </div>
-          <div className="grid gap-3 sm:grid-cols-3 text-cyan-950 font-semibold">
+          <div className="grid gap-3 sm:grid-cols-3 font-semibold">
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-cyan-700 font-bold">Courier Partner</p>
-              <p className="text-sm font-black mt-0.5">{courierName || 'Partner Express Courier'}</p>
-            </div>
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-cyan-700 font-bold">AWB / Tracking Number</p>
-              <p className="text-sm font-black font-mono mt-0.5 text-[#C4622D]">
-                {trackingNumber || 'Tracking Pending'}
+              <p
+                className={`text-[10px] uppercase tracking-wider font-bold ${
+                  courierName?.includes('In-House') ? 'text-emerald-800' : 'text-cyan-700'
+                }`}
+              >
+                {courierName?.includes('In-House') ? 'Delivery Executive / Fleet' : 'Courier Partner'}
+              </p>
+              <p className="text-sm font-black mt-0.5">
+                {courierName?.replace(/^In-House Delivery \((.*)\)$/, '$1') || courierName || '8LIV Pharmacy Fleet'}
               </p>
             </div>
             <div>
-              <p className="text-[10px] uppercase tracking-wider text-cyan-700 font-bold">Dispatch Timestamp</p>
+              <p
+                className={`text-[10px] uppercase tracking-wider font-bold ${
+                  courierName?.includes('In-House') ? 'text-emerald-800' : 'text-cyan-700'
+                }`}
+              >
+                {courierName?.includes('In-House') ? 'Rider Contact Phone' : 'AWB / Tracking Number'}
+              </p>
+              {courierName?.includes('In-House') && trackingNumber?.includes('+') ? (
+                <a
+                  href={`tel:${trackingNumber.replace(/[^0-9+]/g, '')}`}
+                  className="text-sm font-black text-emerald-800 hover:underline inline-flex items-center gap-1 mt-0.5 font-mono"
+                >
+                  📞 {trackingNumber.replace(/^Rider Contact:\s*/, '')}
+                </a>
+              ) : (
+                <p className="text-sm font-black font-mono mt-0.5 text-[#C4622D]">
+                  {trackingNumber?.replace(/^Rider Contact:\s*/, '') || 'Assigned to delivery route'}
+                </p>
+              )}
+            </div>
+            <div>
+              <p
+                className={`text-[10px] uppercase tracking-wider font-bold ${
+                  courierName?.includes('In-House') ? 'text-emerald-800' : 'text-cyan-700'
+                }`}
+              >
+                Dispatch Status & Time
+              </p>
               <p className="text-xs font-bold mt-0.5">
-                {dispatchedAt ? new Date(dispatchedAt).toLocaleString() : 'Recently Dispatched'}
+                {dispatchedAt
+                  ? new Date(dispatchedAt).toLocaleString('en-IN', {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    })
+                  : 'Dispatched & In Transit'}
               </p>
             </div>
           </div>

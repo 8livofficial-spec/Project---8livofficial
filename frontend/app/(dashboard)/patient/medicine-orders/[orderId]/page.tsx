@@ -100,7 +100,7 @@ export default function PatientMedicineOrderDetailPage() {
         status={order.status}
         courierName={order.courier_name}
         trackingNumber={order.tracking_number}
-        dispatchedAt={order.dispatched_at}
+        dispatchedAt={order.shipped_at || order.dispatched_at}
         deliveredAt={order.delivered_at}
       />
 

@@ -97,7 +97,7 @@ export async function assertPrescriptionOwnership(prescriptionId: string, doctor
 export async function assertPatientPrescriptionOwnership(prescriptionId: string, patientId: string) {
   const { data, error } = await supabaseAdmin
     .from('prescriptions')
-    .select('*, prescription_items(*), pharmacy_orders(*, pharmacy_order_status_history(*)), treatment_cycles(id, cycle_number, status, start_date, end_date)')
+    .select('*, prescription_items(*), pharmacy_orders(*), treatment_cycles(id, cycle_number, status, start_date, end_date)')
     .eq('id', prescriptionId)
     .eq('patient_id', patientId)
     .maybeSingle()
@@ -105,10 +105,10 @@ export async function assertPatientPrescriptionOwnership(prescriptionId: string,
   if (!error && data) return data
 
   if (error) {
-    // Fallback if pharmacy_orders or treatment_cycles join fails
+    // Fallback if treatment_cycles join fails
     const { data: fallback, error: fallbackError } = await supabaseAdmin
       .from('prescriptions')
-      .select('*, prescription_items(*)')
+      .select('*, prescription_items(*), pharmacy_orders(*)')
       .eq('id', prescriptionId)
       .eq('patient_id', patientId)
       .maybeSingle()

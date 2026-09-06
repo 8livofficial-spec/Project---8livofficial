@@ -16,7 +16,10 @@ interface MedicationCardProps {
   cycleNumber?: number
   totalCycles?: number
   fulfillmentStatus?: string
+  courierName?: string
   trackingNumber?: string
+  orderId?: string
+  prescriptionId?: string
 }
 
 export default function MedicationCard({
@@ -30,7 +33,10 @@ export default function MedicationCard({
   cycleNumber = 1,
   totalCycles = 1,
   fulfillmentStatus,
+  courierName,
   trackingNumber,
+  orderId,
+  prescriptionId,
 }: MedicationCardProps) {
   const [showReviewModal, setShowReviewModal] = useState(false)
   const [reviewNotes, setReviewNotes] = useState('')
@@ -62,6 +68,34 @@ export default function MedicationCard({
   }
 
   const progressPercent = Math.min(100, Math.round((dosesTaken / totalDoses) * 100)) || 0
+
+  const isInHouse = courierName?.includes('In-House')
+  const isDispatched = fulfillmentStatus === 'DISPATCHED'
+  const isDelivered = fulfillmentStatus === 'DELIVERED'
+
+  const trackerHref = orderId
+    ? `/patient/medicine-orders/${orderId}`
+    : prescriptionId
+    ? `/patient/prescriptions/${prescriptionId}`
+    : '/patient/medicine-orders'
+
+  const getStatusDisplay = () => {
+    if (isDelivered) return { label: 'Delivered', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
+    if (isDispatched) {
+      return isInHouse
+        ? { label: '🛵 In-House Out for Delivery', color: 'text-emerald-800 bg-emerald-100/80 border-emerald-200' }
+        : { label: '🚚 Dispatched with Courier', color: 'text-cyan-800 bg-cyan-50 border-cyan-200' }
+    }
+    if (fulfillmentStatus === 'PREPARING' || fulfillmentStatus === 'STOCK_CONFIRMED') {
+      return { label: 'Preparing Package', color: 'text-purple-800 bg-purple-50 border-purple-200' }
+    }
+    if (fulfillmentStatus === 'RECEIVED' || fulfillmentStatus === 'ACKNOWLEDGED') {
+      return { label: 'Pharmacy Assigned', color: 'text-amber-800 bg-amber-50 border-amber-200' }
+    }
+    return { label: fulfillmentStatus?.replace(/_/g, ' ') || 'Processing', color: 'text-[#1A1F36] bg-[#F5F0EB]' }
+  }
+
+  const statusDisplay = getStatusDisplay()
 
   return (
     <div className="dash-card p-5 flex flex-col justify-between h-full bg-white rounded-2xl border border-[#1A1F36]/8 shadow-sm">
@@ -111,24 +145,40 @@ export default function MedicationCard({
             </div>
 
             {/* Delivery / Pharmacy Fulfillment Status */}
-            <div className="flex items-start gap-2.5 p-3.5 bg-[#F5F0EB]/60 rounded-2xl border border-[#1A1F36]/6">
-              <Package className="w-5 h-5 text-[#8896A4] shrink-0 mt-0.5" />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between">
-                  <p className="text-[#1A1F36] text-xs font-bold">
-                    Pharmacy Fulfillment: {fulfillmentStatus || 'Processing'}
-                  </p>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 bg-[#F5F0EB]/60 rounded-2xl border border-[#1A1F36]/6">
+              <div className="flex items-start gap-2.5 min-w-0">
+                <Package className="w-5 h-5 text-[#8896A4] shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-[11px] font-black ${statusDisplay.color}`}>
+                      {statusDisplay.label}
+                    </span>
+                  </div>
+                  {trackingNumber ? (
+                    <p className="text-[11px] font-bold mt-1 text-[#1A1F36]">
+                      {isInHouse ? (
+                        <span className="text-emerald-900">
+                          {trackingNumber.includes('+') ? `Rider Phone: ${trackingNumber.replace(/^Rider Contact:\s*/, '')}` : trackingNumber}
+                        </span>
+                      ) : (
+                        <span className="text-[#C4622D]">AWB Tracking: {trackingNumber}</span>
+                      )}
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-[#8896A4] font-semibold mt-1">
+                      Cycle Review: {nextRefillDate || 'Scheduled with Care Team'}
+                    </p>
+                  )}
                 </div>
-                {trackingNumber ? (
-                  <p className="text-[11px] text-[#C4622D] font-bold mt-0.5">
-                    AWB Tracking: {trackingNumber}
-                  </p>
-                ) : (
-                  <p className="text-[10px] text-[#8896A4] font-semibold mt-0.5">
-                    Next cycle review: {nextRefillDate || 'Scheduled'}
-                  </p>
-                )}
               </div>
+
+              <Link
+                href={trackerHref}
+                className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#1A1F36] px-3.5 py-2 text-xs font-black text-white hover:bg-[#2A314E] transition-transform active:scale-[0.98] shrink-0 shadow-xs"
+              >
+                <span>Track Delivery</span>
+                <Truck className="w-3.5 h-3.5" />
+              </Link>
             </div>
           </>
         ) : (
