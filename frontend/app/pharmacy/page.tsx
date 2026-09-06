@@ -690,7 +690,7 @@ export default function PharmacyPortalPage() {
                         <td className="p-4">{getStatusBadge(order.status)}</td>
                         <td className="p-4 text-xs font-medium text-[#8896A4]">
                           <p>
-                            Ordered: {new Date(order.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
+                            Assigned: {new Date(order.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
                           </p>
                           {order.dispatch_tracking_number && (
                             <p className="font-bold text-[#1A1F36]">
@@ -703,7 +703,7 @@ export default function PharmacyPortalPage() {
                             href={`/pharmacy/orders/${order.id}`}
                             className="inline-flex items-center gap-1.5 rounded-xl bg-[#1A1F36] px-3.5 py-2 text-xs font-black text-white shadow-sm transition-transform hover:scale-[1.02] active:scale-[0.98]"
                           >
-                            Process Order
+                            Fulfill Package
                           </Link>
                         </td>
                       </tr>

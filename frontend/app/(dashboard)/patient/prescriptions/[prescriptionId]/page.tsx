@@ -6,17 +6,19 @@ import { Download, Pill, MapPin, Truck, CheckCircle2, Clock, AlertCircle } from 
 import { authedFetch } from '@/lib/apiClient'
 import { INDIAN_STATES } from '@/lib/constants/indianStates'
 
+import FulfillmentTimelineTracker from '@/components/patient/FulfillmentTimelineTracker'
+
 const STATUS_LABELS: Record<string, string> = {
-  PENDING_ASSIGNMENT: 'Pending',
-  RECEIVED: 'Order sent to pharmacy',
-  ACKNOWLEDGED: 'Pharmacy received your order',
-  STOCK_CONFIRMED: 'Pharmacy confirmed your order',
-  PREPARING: 'Your medicine is being prepared',
-  DISPATCHED: 'Your medicine is on the way',
+  PENDING_ASSIGNMENT: 'Fulfillment in Progress',
+  RECEIVED: 'Assigned to Partner Pharmacy',
+  ACKNOWLEDGED: 'Pharmacy Acknowledged',
+  STOCK_CONFIRMED: 'Treatment Stock Confirmed',
+  PREPARING: 'Preparing Treatment Package',
+  DISPATCHED: 'Dispatched with Courier',
   DELIVERED: 'Delivered',
-  CLARIFICATION_REQUIRED: "Pharmacy has a question — we'll be in touch",
-  UNABLE_TO_FULFILL: 'Pharmacy was unable to fulfill this order',
-  CANCELLED: 'Order cancelled',
+  CLARIFICATION_REQUIRED: 'Clinical Review in Progress',
+  UNABLE_TO_FULFILL: 'Fulfillment Rescheduling',
+  CANCELLED: 'Fulfillment Cancelled',
 }
 
 export default function PatientPrescriptionDetailPage() {
@@ -25,6 +27,7 @@ export default function PatientPrescriptionDetailPage() {
   const [savedAddresses, setSavedAddresses] = useState<any[]>([])
   const [selectedAddressId, setSelectedAddressId] = useState<string>('')
   const [isAddingNew, setIsAddingNew] = useState(false)
+  const [isChangingAddress, setIsChangingAddress] = useState(false)
   const [newAddress, setNewAddress] = useState({
     recipient_name: '',
     line1: '',
@@ -82,7 +85,7 @@ export default function PatientPrescriptionDetailPage() {
     setSuccessMsg('')
     try {
       if (!consentReviewed || !consentTransmission || !consentAddress) {
-        throw new Error('Please complete all 3 consent acknowledgements before submitting for fulfillment.')
+        throw new Error('Please complete all 3 acknowledgements before confirming delivery.')
       }
 
       const payload: any = {
@@ -108,7 +111,7 @@ export default function PatientPrescriptionDetailPage() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to confirm delivery.')
 
-      setSuccessMsg('Delivery address confirmed! Your medication order has been submitted for partner pharmacy assignment.')
+      setSuccessMsg('Delivery address confirmed! Your treatment package is now being prepared for fulfillment.')
       await loadData()
     } catch (err: any) {
       setError(err.message || 'Failed to confirm delivery.')
@@ -125,6 +128,9 @@ export default function PatientPrescriptionDetailPage() {
   const hasFulfillableItems = (rx.prescription_items || []).some((i: any) => Number(i.quantity) > 0)
   const canConfirm = ['ISSUED', 'SIGNED', 'ACTIVE'].includes(rx.status) && !activeOrder && hasFulfillableItems
 
+  const cycleNumber = rx.treatment_cycles?.cycle_number || null
+  const selectedAddrObj = savedAddresses.find((a: any) => a.id === selectedAddressId) || savedAddresses[0]
+
   return (
     <div className="space-y-6 text-[#1A1F36]">
       {error && <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">{error}</p>}
@@ -134,9 +140,18 @@ export default function PatientPrescriptionDetailPage() {
       <div className="dash-card p-6">
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
-            <p className="text-xs font-black uppercase tracking-wider text-[#C4622D]">{rx.prescription_number}</p>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black uppercase tracking-wider text-[#C4622D]">{rx.prescription_number}</span>
+              {cycleNumber && (
+                <span className="rounded-full bg-[#C4622D]/10 px-2.5 py-0.5 text-[10px] font-black text-[#C4622D]">
+                  Treatment Cycle {cycleNumber}
+                </span>
+              )}
+            </div>
             <h2 className="mt-1 text-2xl font-black">Official e-Prescription</h2>
-            <p className="text-xs font-semibold text-[#8896A4]">Issued {new Date(rx.issued_at || rx.created_at).toLocaleDateString()}</p>
+            <p className="text-xs font-semibold text-[#8896A4]">
+              Authorized {new Date(rx.issued_at || rx.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+            </p>
           </div>
           <button onClick={download} className="inline-flex items-center gap-2 rounded-xl bg-[#1A1F36] px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition-transform hover:scale-[1.02]">
             <Download className="h-4 w-4" /> Download signed PDF
@@ -144,14 +159,24 @@ export default function PatientPrescriptionDetailPage() {
         </div>
       </div>
 
-      {/* Medication List */}
+      {/* Prescribed Medications */}
       <div className="dash-card p-6">
-        <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-[#8896A4]">Prescribed Medications</h3>
+        <h3 className="mb-4 text-sm font-black uppercase tracking-widest text-[#8896A4]">Authorized Clinical Treatment</h3>
         <div className="grid gap-3">
           {(rx.prescription_items || []).map((item: any) => (
             <div key={item.id} className="rounded-xl border border-[#1A1F36]/8 bg-white p-4">
-              <p className="font-black"><Pill className="mr-2 inline h-4 w-4 text-[#C4622D]" />{item.medicine_name} <span className="text-xs text-[#8896A4]">({item.strength})</span></p>
-              <p className="mt-1 text-sm font-semibold text-[#40516A]">{item.dose} • {item.route} • {item.frequency} for {item.duration_value} {item.duration_unit.toLowerCase()}</p>
+              <div className="flex items-center justify-between">
+                <p className="font-black text-sm text-[#1A1F36]">
+                  <Pill className="mr-2 inline h-4 w-4 text-[#C4622D]" />
+                  {item.medicine_name} <span className="text-xs text-[#8896A4]">({item.strength})</span>
+                </p>
+                <span className="text-xs font-black bg-[#FAF7F5] px-2.5 py-1 rounded text-[#1A1F36]">
+                  Qty: {item.quantity}
+                </span>
+              </div>
+              <p className="mt-1 text-sm font-semibold text-[#40516A]">
+                {item.dose} • {item.route} • {item.frequency} for {item.duration_value} {item.duration_unit?.toLowerCase()}
+              </p>
               {(item.food_instruction || item.special_instruction) && (
                 <p className="mt-1 text-xs font-semibold text-[#8896A4]">{item.food_instruction} {item.special_instruction}</p>
               )}
@@ -160,24 +185,89 @@ export default function PatientPrescriptionDetailPage() {
         </div>
       </div>
 
-      {/* Delivery Confirmation or Fulfillment Status */}
+      {/* Delivery Confirmation Box */}
       {canConfirm ? (
-        <div className="dash-card p-6 border-2 border-[#C4622D]/20">
-          <div className="flex items-center gap-2 text-[#C4622D] mb-3">
+        <div className="dash-card p-6 border-2 border-[#C4622D]/30">
+          <div className="flex items-center gap-2 text-[#C4622D] mb-2">
             <MapPin className="h-5 w-5" />
-            <h3 className="text-base font-black">Confirm Delivery Address</h3>
+            <h3 className="text-base font-black">Prescription Issued</h3>
           </div>
           <p className="text-sm font-semibold text-[#40516A] mb-4">
-            Your doctor has issued your prescription. Please confirm your delivery address to dispatch medication from our licensed pharmacy partner.
+            {cycleNumber
+              ? `Your doctor has issued your prescription for Treatment Cycle ${cycleNumber}. Please confirm your delivery destination below:`
+              : 'Your doctor has issued your prescription. Please confirm your delivery destination below:'}
           </p>
 
-          {savedAddresses.length > 0 && !isAddingNew && (
+          {/* Saved Address Preview */}
+          {savedAddresses.length > 0 && !isAddingNew && !isChangingAddress && selectedAddrObj && (
+            <div className="rounded-2xl border border-[#1A1F36]/15 bg-[#FAF7F5] p-5 space-y-3 mb-4">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-black uppercase tracking-widest text-[#8896A4]">Delivery Address</span>
+                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
+                  Destination on File
+                </span>
+              </div>
+              <div>
+                <p className="text-sm font-black text-[#1A1F36]">{selectedAddrObj.recipient_name}</p>
+                <p className="text-xs font-semibold text-[#40516A] mt-0.5">
+                  {selectedAddrObj.line1}, {selectedAddrObj.line2 ? selectedAddrObj.line2 + ', ' : ''}{selectedAddrObj.city}, {selectedAddrObj.state} - {selectedAddrObj.pincode}
+                </p>
+                <p className="text-xs font-semibold text-[#8896A4] mt-0.5">Phone: {selectedAddrObj.phone}</p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-[#1A1F36]/8">
+                <button
+                  type="button"
+                  className="rounded-xl bg-[#1A1F36] px-4 py-2 text-xs font-black text-white shadow-xs"
+                >
+                  ✓ Use this address
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setIsChangingAddress(true)}
+                  className="rounded-xl border border-[#1A1F36]/15 bg-white px-4 py-2 text-xs font-bold text-[#1A1F36] hover:bg-[#F5F0EB]"
+                >
+                  Change address
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setIsAddingNew(true); setIsChangingAddress(false) }}
+                  className="rounded-xl border border-[#1A1F36]/15 bg-white px-4 py-2 text-xs font-bold text-[#C4622D] hover:bg-[#FAF7F5]"
+                >
+                  + Add new address
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Address Selection List if changing */}
+          {savedAddresses.length > 0 && isChangingAddress && !isAddingNew && (
             <div className="space-y-3 mb-4">
-              <label className="text-xs font-black uppercase tracking-wider text-[#8896A4]">Select Delivery Address</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-black uppercase tracking-wider text-[#8896A4]">Select Delivery Address</label>
+                <button
+                  type="button"
+                  onClick={() => setIsChangingAddress(false)}
+                  className="text-xs font-bold text-[#C4622D] underline"
+                >
+                  Done Selecting
+                </button>
+              </div>
               <div className="grid gap-2">
                 {savedAddresses.map((addr) => (
-                  <label key={addr.id} className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${selectedAddressId === addr.id ? 'border-[#C4622D] bg-[#C4622D]/5' : 'border-[#1A1F36]/10'}`}>
-                    <input type="radio" name="address" checked={selectedAddressId === addr.id} onChange={() => setSelectedAddressId(addr.id)} className="mt-1" />
+                  <label
+                    key={addr.id}
+                    className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      selectedAddressId === addr.id ? 'border-[#C4622D] bg-[#C4622D]/5' : 'border-[#1A1F36]/10 bg-white'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="address"
+                      checked={selectedAddressId === addr.id}
+                      onChange={() => { setSelectedAddressId(addr.id); setIsChangingAddress(false) }}
+                      className="mt-1 text-[#C4622D]"
+                    />
                     <div>
                       <p className="text-sm font-black">{addr.recipient_name} {addr.is_default && <span className="text-[10px] bg-[#1A1F36] text-white px-2 py-0.5 rounded-full ml-2">DEFAULT</span>}</p>
                       <p className="text-xs text-[#40516A] font-semibold">{addr.line1}, {addr.line2 ? addr.line2 + ', ' : ''}{addr.city}, {addr.state} - {addr.pincode}</p>
@@ -186,16 +276,17 @@ export default function PatientPrescriptionDetailPage() {
                   </label>
                 ))}
               </div>
-              <button type="button" onClick={() => setIsAddingNew(true)} className="text-xs font-black text-[#C4622D] underline">
-                + Use a different address
+              <button type="button" onClick={() => { setIsAddingNew(true); setIsChangingAddress(false) }} className="text-xs font-black text-[#C4622D] underline">
+                + Add a new delivery address
               </button>
             </div>
           )}
 
+          {/* New Address Form */}
           {(isAddingNew || savedAddresses.length === 0) && (
             <div className="space-y-3 mb-4 rounded-xl border border-[#1A1F36]/10 p-4 bg-[#FAF7F5]">
               <div className="flex justify-between items-center">
-                <p className="text-xs font-black uppercase tracking-wider text-[#8896A4]">New Delivery Address</p>
+                <p className="text-xs font-black uppercase tracking-wider text-[#8896A4]">Add Delivery Address</p>
                 {savedAddresses.length > 0 && (
                   <button type="button" onClick={() => setIsAddingNew(false)} className="text-xs font-bold text-[#40516A]">Use saved address</button>
                 )}
@@ -214,17 +305,14 @@ export default function PatientPrescriptionDetailPage() {
             </div>
           )}
 
-          {/* Statutory Patient Consent Section */}
-          <div className="my-5 rounded-2xl border border-[#1A1F36]/15 bg-white p-5 shadow-sm space-y-3">
+          {/* Patient Acknowledgements & Consent */}
+          <div className="my-5 rounded-2xl border border-[#1A1F36]/15 bg-white p-5 shadow-xs space-y-3">
             <div className="flex items-center gap-2 text-[#1A1F36]">
               <CheckCircle2 className="h-4 w-4 text-[#C4622D]" />
               <h4 className="text-xs font-black uppercase tracking-wider">
-                Prescription Transmission & Fulfillment Consent
+                Patient Acknowledgement & Delivery Consent
               </h4>
             </div>
-            <p className="text-xs text-[#8896A4] font-medium leading-relaxed">
-              Under statutory telemedicine & electronic pharmacy fulfillment guidelines, please review and confirm the following acknowledgements to authorize electronic delivery.
-            </p>
 
             <div className="space-y-2.5 pt-2">
               <label className="flex items-start gap-3 text-xs font-semibold text-[#1A1F36] cursor-pointer">
@@ -234,7 +322,7 @@ export default function PatientPrescriptionDetailPage() {
                   onChange={(e) => setConsentReviewed(e.target.checked)}
                   className="mt-0.5 h-4 w-4 rounded border-[#1A1F36]/20 text-[#C4622D] focus:ring-[#C4622D]"
                 />
-                <span>I acknowledge that I have reviewed the prescription information provided to me.</span>
+                <span>I have reviewed my prescription.</span>
               </label>
 
               <label className="flex items-start gap-3 text-xs font-semibold text-[#1A1F36] cursor-pointer">
@@ -244,7 +332,7 @@ export default function PatientPrescriptionDetailPage() {
                   onChange={(e) => setConsentTransmission(e.target.checked)}
                   className="mt-0.5 h-4 w-4 rounded border-[#1A1F36]/20 text-[#C4622D] focus:ring-[#C4622D]"
                 />
-                <span>I consent to the electronic transmission of this prescription to the selected licensed partner pharmacy for fulfillment.</span>
+                <span>I consent to electronic transmission of my prescription to the 8LIV partner pharmacy for fulfillment.</span>
               </label>
 
               <label className="flex items-start gap-3 text-xs font-semibold text-[#1A1F36] cursor-pointer">
@@ -254,7 +342,7 @@ export default function PatientPrescriptionDetailPage() {
                   onChange={(e) => setConsentAddress(e.target.checked)}
                   className="mt-0.5 h-4 w-4 rounded border-[#1A1F36]/20 text-[#C4622D] focus:ring-[#C4622D]"
                 />
-                <span>I confirm that the delivery information provided by me is accurate and complete.</span>
+                <span>I confirm that my delivery information is accurate.</span>
               </label>
             </div>
           </div>
@@ -265,48 +353,44 @@ export default function PatientPrescriptionDetailPage() {
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-xl bg-[#C4622D] px-6 py-3.5 text-sm font-black text-white shadow-sm transition-transform hover:scale-[1.02] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <CheckCircle2 className="h-4 w-4" />
-            {confirmLoading ? 'Submitting Order...' : 'Confirm Address, Consent & Dispatch Order'}
+            {confirmLoading ? 'Confirming Delivery Address...' : 'Confirm Delivery Address'}
           </button>
         </div>
       ) : activeOrder ? (
-        <div className="dash-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-black uppercase tracking-widest text-[#8896A4]">Medication Fulfillment</h3>
-            <span className="rounded-full bg-[#1A1F36]/5 px-3 py-1 text-xs font-black text-[#C4622D]">
-              {STATUS_LABELS[activeOrder.status] || activeOrder.status}
-            </span>
+        <div className="space-y-4">
+          {/* Post-confirmation banner */}
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50/80 p-5 shadow-xs">
+            <div className="flex items-center gap-2 text-emerald-900 font-bold">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+              <h3 className="text-base font-black">Your treatment package is being prepared.</h3>
+            </div>
+            <p className="mt-1 text-xs text-emerald-800 font-semibold">
+              Fulfillment is in progress. Your confirmed delivery address has been securely snapshotted for partner pharmacy fulfillment.
+            </p>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-[#8896A4]">Delivery Status</p>
-              <p className="mt-1 text-sm font-bold text-[#1A1F36]">{STATUS_LABELS[activeOrder.status] || activeOrder.status}</p>
+          {/* 6-Stage Timeline Tracker Component */}
+          <FulfillmentTimelineTracker
+            status={activeOrder.status}
+            courierName={activeOrder.courier_name}
+            trackingNumber={activeOrder.tracking_number}
+            dispatchedAt={activeOrder.dispatched_at}
+            deliveredAt={activeOrder.delivered_at}
+          />
+
+          {/* Delivery Snapshot Summary */}
+          {activeOrder.delivery_address_snapshot && (
+            <div className="dash-card p-6">
+              <p className="text-[10px] font-black uppercase tracking-wider text-[#8896A4]">Confirmed Delivery Destination</p>
+              <p className="mt-1 text-sm font-bold text-[#1A1F36]">{activeOrder.delivery_address_snapshot.recipient_name}</p>
+              <p className="mt-0.5 text-xs font-semibold text-[#40516A]">
+                {activeOrder.delivery_address_snapshot.line1}, {activeOrder.delivery_address_snapshot.line2 ? activeOrder.delivery_address_snapshot.line2 + ', ' : ''}{activeOrder.delivery_address_snapshot.city}, {activeOrder.delivery_address_snapshot.state} - {activeOrder.delivery_address_snapshot.pincode}
+              </p>
+              <p className="mt-0.5 text-xs font-semibold text-[#8896A4]">
+                Contact: {activeOrder.delivery_address_snapshot.phone}
+              </p>
             </div>
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-wider text-[#8896A4]">Fulfillment Partner</p>
-              <p className="mt-1 text-sm font-bold text-[#1A1F36]">8LIV Licensed Partner Pharmacy</p>
-            </div>
-            {activeOrder.delivery_address_snapshot && (
-              <div className="sm:col-span-2">
-                <p className="text-[10px] font-black uppercase tracking-wider text-[#8896A4]">Delivery Address</p>
-                <p className="mt-1 text-sm font-semibold text-[#40516A]">
-                  {activeOrder.delivery_address_snapshot.recipient_name} • {activeOrder.delivery_address_snapshot.line1}, {activeOrder.delivery_address_snapshot.city}, {activeOrder.delivery_address_snapshot.state} - {activeOrder.delivery_address_snapshot.pincode}
-                </p>
-              </div>
-            )}
-            {activeOrder.courier_name && (
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-wider text-[#8896A4]">Courier</p>
-                <p className="mt-1 text-sm font-bold">{activeOrder.courier_name}</p>
-              </div>
-            )}
-            {activeOrder.tracking_number && (
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-wider text-[#8896A4]">Tracking Number</p>
-                <p className="mt-1 text-sm font-bold">{activeOrder.tracking_number}</p>
-              </div>
-            )}
-          </div>
+          )}
         </div>
       ) : null}
     </div>

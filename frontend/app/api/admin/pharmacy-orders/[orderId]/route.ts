@@ -10,11 +10,11 @@ export async function GET(request: Request, context: RouteContext) {
     const { orderId } = await context.params
     const { data, error } = await supabaseAdmin
       .from('pharmacy_orders')
-      .select('*, partner_pharmacies:pharmacy_id(id, name, email, phone, verification_status, status), prescriptions(*, prescription_items(*)), pharmacy_order_status_history(*), fulfilment_audit_logs(*)')
+      .select('*, partner_pharmacies:pharmacy_id(id, name, email, phone, verification_status, status), prescriptions(*, prescription_items(*), treatment_cycles(id, cycle_number, status, start_date, end_date)), pharmacy_order_status_history(*), fulfilment_audit_logs(*)')
       .eq('id', orderId)
       .maybeSingle()
     if (error) throw error
-    if (!data) throw new Error('Medicine order not found.')
+    if (!data) throw new Error('Fulfillment order not found.')
     return NextResponse.json({ order: data })
   } catch (err) {
     const failure = errorResponse(err instanceof Error ? err.message : 'Internal Server Error')

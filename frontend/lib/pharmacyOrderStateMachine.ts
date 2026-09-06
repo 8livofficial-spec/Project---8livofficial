@@ -276,6 +276,16 @@ export function sanitizePharmacyOrderForFulfillment(
   items: any[],
   doctor: any
 ) {
+  // Extract real treatment cycle from order or prescription relationship without fabricating defaults
+  const cycleObj = order.treatment_cycles || prescription?.treatment_cycles || null
+  const treatmentCycle = cycleObj ? {
+    id: cycleObj.id,
+    cycle_number: cycleObj.cycle_number,
+    status: cycleObj.status,
+    start_date: cycleObj.start_date,
+    end_date: cycleObj.end_date,
+  } : null
+
   return {
     order_id: order.id,
     order_reference: `8LIV-PO-${order.id.slice(0, 8).toUpperCase()}`,
@@ -289,6 +299,9 @@ export function sanitizePharmacyOrderForFulfillment(
     clarification_notes: order.clarification_notes || null,
     unable_to_fulfill_reason: order.unable_to_fulfill_reason || null,
 
+    // Treatment Cycle (real database relationship, never fabricated)
+    treatment_cycle: treatmentCycle,
+
     // Patient fulfillment identity & destination only
     patient: {
       name: order.delivery_address_snapshot?.recipient_name || order.delivery_address_snapshot?.patient_name || 'Patient',
@@ -299,7 +312,8 @@ export function sanitizePharmacyOrderForFulfillment(
     // Prescribing doctor identity
     doctor: {
       name: doctor?.full_name || 'Authorized 8LIV Doctor',
-      registration_number: doctor?.medical_registration_number || doctor?.registration_number || 'REG-VERIFIED',
+      qualification: doctor?.qualification || null,
+      registration_number: doctor?.medical_registration_number || doctor?.registration_number || doctor?.mci_number || null,
     },
 
     // Prescription record
@@ -307,6 +321,7 @@ export function sanitizePharmacyOrderForFulfillment(
       id: prescription?.id,
       prescription_number: prescription?.prescription_number,
       issued_at: prescription?.issued_at,
+      created_at: prescription?.created_at,
       valid_until: prescription?.valid_until,
       diagnosis: prescription?.diagnosis,
     },

@@ -99,7 +99,7 @@ export default function PharmacyUpcomingDemandPage() {
                   Verified Fulfillment Partner
                 </span>
               </div>
-              <h1 className="text-xl font-black text-[#1A1F36]">Upcoming Medication Demand</h1>
+              <h1 className="text-xl font-black text-[#1A1F36]">FORECAST / EXPECTED FULFILLMENT</h1>
             </div>
           </div>
 
@@ -127,11 +127,10 @@ export default function PharmacyUpcomingDemandPage() {
           <Info className="h-5 w-5 text-sky-600 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <p className="font-bold text-sky-900">
-              Procurement Signal & Fulfillment Demand Forecast
+              FORECAST / EXPECTED FULFILLMENT
             </p>
             <p className="leading-relaxed text-sky-800">
-              Upcoming demand represents projected medication volume derived strictly from valid, authorized clinical prescriptions issued by 8LIV physicians.
-              8LIV does not manage warehouse stock or pharmacy inventory. Partner pharmacies utilize this signal to independently arrange procurement ahead of dispatch.
+              This is projected fulfillment demand based on authorized clinical prescriptions and active treatment cycles. It is not an inventory management system.
             </p>
           </div>
         </div>

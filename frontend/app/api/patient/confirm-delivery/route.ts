@@ -3,11 +3,13 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 import { assertPatient, errorResponse } from '@/lib/fulfilmentAuth'
 import { audit } from '@/lib/prescriptionService'
 import { notifyDomainEvent } from '@/lib/notificationDispatcher'
+import { resolveTenant } from '@/lib/apiSecurity'
 import { validateDeliveryAddress } from '../delivery-address/route'
 
 export async function POST(request: Request) {
   try {
     const auth = await assertPatient(request)
+    const tenantId = resolveTenant(request, auth.user)
     const body = await request.json().catch(() => ({}))
 
     const prescriptionId = body.prescription_id || body.prescriptionId
@@ -28,9 +30,83 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Prescription not found.' }, { status: 404 })
     }
 
+    // Tenant check
+    if (prescription.tenant_id && prescription.tenant_id !== tenantId) {
+      return NextResponse.json({ error: 'Prescription tenant mismatch.' }, { status: 403 })
+    }
+
+    // 9, 10, 11: Status checks: Must be ISSUED/SIGNED, not REVOKED or CANCELLED
+    if (['REVOKED', 'CANCELLED'].includes(prescription.status)) {
+      return NextResponse.json(
+        { error: `Cannot confirm delivery for prescription with status ${prescription.status}.` },
+        { status: 400 }
+      )
+    }
+
     if (!['ISSUED', 'SIGNED'].includes(prescription.status)) {
       return NextResponse.json(
-        { error: `Cannot confirm delivery for prescription with status ${prescription.status}. Prescription must be ISSUED.` },
+        { error: `Cannot confirm delivery for prescription with status ${prescription.status}. Prescription must be officially authorized/issued by your doctor.` },
+        { status: 400 }
+      )
+    }
+
+    // 12: Expiry check
+    if (prescription.valid_until) {
+      const expiryDate = new Date(prescription.valid_until)
+      const now = new Date()
+      // If valid_until has passed (end of day)
+      expiryDate.setHours(23, 59, 59, 999)
+      if (expiryDate < now) {
+        return NextResponse.json(
+          { error: 'Cannot confirm delivery: This prescription has expired.' },
+          { status: 400 }
+        )
+      }
+    }
+
+    // 5, 6, 7, 8: Treatment Cycle & Entitlement validation
+    let cycleId = prescription.treatment_cycle_id
+    let cycleData: any = null
+
+    if (cycleId) {
+      const { data: cData, error: cErr } = await supabaseAdmin
+        .from('treatment_cycles')
+        .select('*')
+        .eq('id', cycleId)
+        .eq('patient_id', auth.user.id)
+        .maybeSingle()
+      if (cErr) throw cErr
+      cycleData = cData
+    } else {
+      // Find active treatment cycle for this patient and bind it
+      const { data: activeCycle } = await supabaseAdmin
+        .from('treatment_cycles')
+        .select('*')
+        .eq('patient_id', auth.user.id)
+        .in('status', ['ACTIVE', 'UNDER_REVIEW', 'PRESCRIBED', 'FULFILLMENT', 'PENDING'])
+        .order('cycle_number', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+      if (activeCycle) {
+        cycleId = activeCycle.id
+        cycleData = activeCycle
+        await supabaseAdmin
+          .from('prescriptions')
+          .update({ treatment_cycle_id: cycleId })
+          .eq('id', prescriptionId)
+      }
+    }
+
+    if (!cycleData) {
+      return NextResponse.json(
+        { error: 'Cannot confirm delivery: Prescription is not linked to an active treatment cycle or care subscription entitlement.' },
+        { status: 400 }
+      )
+    }
+
+    if (cycleData.status === 'CANCELLED') {
+      return NextResponse.json(
+        { error: 'Cannot confirm delivery: The associated treatment cycle has been cancelled.' },
         { status: 400 }
       )
     }
@@ -62,7 +138,7 @@ export async function POST(request: Request) {
       })
     }
 
-    // 3b. Mandatory Patient Consent Verification
+    // 13. Patient Acknowledgement & Consent Verification
     const consent = body.consent || {
       reviewed_prescription: body.reviewed_prescription ?? body.consent_reviewed,
       consent_transmission: body.consent_transmission ?? body.consent_fulfillment,
@@ -83,7 +159,7 @@ export async function POST(request: Request) {
       )
     }
 
-    // Record statutory consent
+    // Record auditable patient consent event
     const nowIso = new Date().toISOString()
     const clientIp = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || request.headers.get('x-real-ip') || '::1'
     const userAgent = request.headers.get('user-agent') || 'Browser'
@@ -91,7 +167,7 @@ export async function POST(request: Request) {
 
     try {
       await supabaseAdmin.from('patient_prescription_consents').insert({
-        tenant_id: '8liv',
+        tenant_id: tenantId,
         patient_id: auth.user.id,
         prescription_id: prescriptionId,
         prescription_version: prescription.version || 1,
@@ -149,7 +225,7 @@ export async function POST(request: Request) {
         const { data: savedAddr } = await supabaseAdmin
           .from('patient_delivery_addresses')
           .insert({
-            tenant_id: '8liv',
+            tenant_id: tenantId,
             patient_id: auth.user.id,
             ...validated,
           })
@@ -197,10 +273,10 @@ export async function POST(request: Request) {
     const { data: order, error: createError } = await supabaseAdmin
       .from('pharmacy_orders')
       .insert({
-        tenant_id: '8liv',
+        tenant_id: tenantId,
         prescription_id: prescriptionId,
         patient_id: auth.user.id,
-        treatment_cycle_id: prescription.treatment_cycle_id || null,
+        treatment_cycle_id: cycleId || prescription.treatment_cycle_id || null,
         pharmacy_id: null,
         status: 'PENDING_ASSIGNMENT',
         delivery_address_snapshot: deliveryAddressSnapshot,

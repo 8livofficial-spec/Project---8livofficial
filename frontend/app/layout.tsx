@@ -1,18 +1,15 @@
 import type { Metadata } from "next";
-import { Inter, Sora } from "next/font/google";
 import Script from "next/script";
 import { absoluteUrl, shouldNoIndexEnvironment, siteConfig } from "@/lib/seo/site";
 import "./globals.css";
 
-const inter = Inter({
+const inter = {
   variable: "--font-inter",
-  subsets: ["latin"],
-});
+};
 
-const sora = Sora({
+const sora = {
   variable: "--font-sora",
-  subsets: ["latin"],
-});
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteConfig.url),
@@ -107,6 +104,14 @@ export default function RootLayout({
       lang="en"
       className={`${inter.variable} ${sora.variable} h-full antialiased`}
     >
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body className={`min-h-full flex flex-col font-sans bg-white text-[#0F172A]`}>
         {children}
       </body>

@@ -126,6 +126,7 @@ export default function AdminPharmacyOrderDetailPage() {
   const addr = order.delivery_address_snapshot
   const assignedPharmacy = order.partner_pharmacies
   const availableNext = allowedAdminTransitions[order.status] || []
+  const cycleNumber = order.treatment_cycles?.cycle_number || rx?.treatment_cycles?.cycle_number || null
 
   return (
     <main className="min-h-screen bg-[#F5F0EB] p-6 text-[#1A1F36]">
@@ -137,9 +138,16 @@ export default function AdminPharmacyOrderDetailPage() {
         {/* Header */}
         <div className="rounded-xl bg-white p-6 shadow-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <p className="text-xs font-black uppercase tracking-widest text-[#C4622D]">
-              {rx?.prescription_number || `8LIV-PO-${order.id.slice(0, 8).toUpperCase()}`}
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-black uppercase tracking-widest text-[#C4622D]">
+                {rx?.prescription_number || `8LIV-PO-${order.id.slice(0, 8).toUpperCase()}`}
+              </p>
+              {cycleNumber && (
+                <span className="rounded-full bg-[#C4622D]/10 border border-[#C4622D]/20 px-2.5 py-0.5 text-xs font-black text-[#C4622D]">
+                  Treatment Cycle {cycleNumber}
+                </span>
+              )}
+            </div>
             <h1 className="mt-1 text-3xl font-black">{order.status.replaceAll('_', ' ')}</h1>
             <p className="mt-1 text-xs font-bold text-[#8896A4]">
               Created {new Date(order.created_at).toLocaleString()} • Version: {order.version}

@@ -44,7 +44,7 @@ export default function Sidebar({
     { icon: Calendar, label: 'Appointments', href: '/patient/appointments' },
     { icon: TrendingDown, label: 'My Progress', href: '/patient/progress' },
     { icon: Pill, label: 'Prescriptions', href: '/patient/prescriptions' },
-    { icon: Package, label: 'Medicine Orders', href: '/patient/medicine-orders' },
+    { icon: Package, label: 'Treatment Deliveries', href: '/patient/medicine-orders' },
     { icon: Video, label: 'Consultations', href: '/patient/consultation' },
     { icon: CreditCard, label: 'Billing', href: '/patient/billing' },
     { icon: Settings, label: 'Settings', href: '/patient/settings' },

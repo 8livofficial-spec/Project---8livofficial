@@ -230,7 +230,7 @@ function DashboardLayoutContent({
     { icon: LayoutDashboard, label: 'Overview', href: '/patient' },
     { icon: Calendar, label: 'Appointments', href: '/patient/appointments' },
     { icon: TrendingDown, label: 'Progress', href: '/patient/progress' },
-    { icon: Package, label: 'Orders', href: '/patient/medicine-orders' }
+    { icon: Package, label: 'Deliveries', href: '/patient/medicine-orders' }
   ]
 
   if (loading) {

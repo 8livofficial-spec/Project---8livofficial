@@ -31,6 +31,13 @@ type OrderDetail = {
   tracking_number?: string | null
   clarification_notes?: string | null
   unable_to_fulfill_reason?: string | null
+  treatment_cycle?: {
+    id: string
+    cycle_number: number
+    status?: string
+    start_date?: string
+    end_date?: string
+  } | null
   patient: {
     name: string
     phone?: string | null
@@ -38,12 +45,14 @@ type OrderDetail = {
   }
   doctor: {
     name: string
-    registration_number: string
+    qualification?: string | null
+    registration_number?: string | null
   }
   prescription: {
     id: string
     prescription_number: string
     issued_at?: string
+    created_at?: string
     valid_until?: string
     diagnosis?: string
   }
@@ -164,6 +173,7 @@ export default function PharmacyOrderDetailPage() {
   }
 
   const status = (order.status || '').toUpperCase()
+  const cycleNumber = order.treatment_cycle?.cycle_number || null
 
   return (
     <main className="min-h-screen bg-[#F5F0EB] p-4 text-[#1A1F36] sm:p-6 lg:p-8">
@@ -183,9 +193,14 @@ export default function PharmacyOrderDetailPage() {
                 <span className="rounded-full bg-[#1A1F36]/5 px-2.5 py-0.5 text-xs font-black text-[#1A1F36]">
                   {status}
                 </span>
+                {cycleNumber && (
+                  <span className="rounded-full bg-[#C4622D]/10 border border-[#C4622D]/20 px-2.5 py-0.5 text-xs font-black text-[#C4622D]">
+                    Treatment Cycle {cycleNumber}
+                  </span>
+                )}
               </div>
               <p className="text-xs font-semibold text-[#8896A4]">
-                Rx: {order.prescription?.prescription_number} • Ordered on{' '}
+                Rx: {order.prescription?.prescription_number} • Assigned on{' '}
                 {new Date(order.created_at).toLocaleDateString('en-IN', {
                   month: 'short',
                   day: 'numeric',
@@ -237,7 +252,7 @@ export default function PharmacyOrderDetailPage() {
                 className="inline-flex items-center gap-2 rounded-xl bg-cyan-600 px-4 py-2.5 text-xs font-black text-white shadow-sm transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
               >
                 <Truck className="h-4 w-4" />
-                Dispatch Order
+                Dispatch Treatment Package
               </button>
             )}
 
@@ -293,11 +308,8 @@ export default function PharmacyOrderDetailPage() {
           <ShieldAlert className="h-5 w-5 shrink-0 text-[#C4622D]" />
           <div className="text-xs">
             <p className="font-bold text-[#1A1F36]">Clinical Immutability Notice</p>
-            <p className="text-[#8896A4]">
-              Medication, dosage, and instructions are authorized by the prescribing medical doctor
-              and are strictly immutable. Partner pharmacies must never modify medication details. If
-              any item is unavailable or requires clinical clarification, escalate back via the
-              Clarification / Unable to Fulfill actions.
+            <p className="text-[#8896A4] mt-0.5">
+              This fulfillment order is based on an authorized clinical prescription. Pharmacy users must not modify medication, dose, duration, quantity, or prescription instructions.
             </p>
           </div>
         </div>
@@ -348,9 +360,34 @@ export default function PharmacyOrderDetailPage() {
               <div>
                 <p className="text-xs font-bold text-[#8896A4]">Authorized Prescriber</p>
                 <p className="font-bold text-[#1A1F36]">{order.doctor?.name}</p>
-                <p className="text-xs text-[#8896A4]">
-                  Reg. No: {order.doctor?.registration_number}
-                </p>
+                {order.doctor?.qualification ? (
+                  <p className="text-xs text-[#8896A4] font-medium">
+                    Qualification: {order.doctor.qualification}
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-700 italic">
+                    ⚠️ Doctor qualification record not available
+                  </p>
+                )}
+                {order.doctor?.registration_number ? (
+                  <p className="text-xs text-[#8896A4]">
+                    Reg. No: {order.doctor.registration_number}
+                  </p>
+                ) : (
+                  <p className="text-xs text-amber-700 italic">
+                    ⚠️ Registration number record not available
+                  </p>
+                )}
+                {(order.prescription?.issued_at || order.prescription?.created_at) && (
+                  <p className="text-xs text-[#8896A4] mt-1">
+                    Prescription Date:{' '}
+                    {new Date(order.prescription.issued_at || order.prescription.created_at!).toLocaleDateString('en-IN', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </p>
+                )}
               </div>
 
               {(order.courier_name || order.tracking_number) && (
@@ -449,7 +486,7 @@ export default function PharmacyOrderDetailPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-[#1A1F36]/10 pb-3">
-              <h3 className="text-base font-black text-[#1A1F36]">Dispatch Medication Order</h3>
+              <h3 className="text-base font-black text-[#1A1F36]">Dispatch Treatment Package</h3>
               <button
                 onClick={() => setShowDispatchModal(false)}
                 className="text-xs font-black text-[#8896A4] hover:text-[#1A1F36]"
