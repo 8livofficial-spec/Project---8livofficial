@@ -21,8 +21,18 @@ export async function GET(request: Request) {
         let query = supabaseAdmin
           .from('prescriptions')
           .select('*, prescription_items(*), pharmacy_orders(*)')
-          .eq('doctor_id', auth.user.id)
           .order('created_at', { ascending: false })
+
+        if (auth.role !== 'admin') {
+          query = query.eq('doctor_id', auth.user.id)
+        } else if (searchParams.get('doctor_id') || searchParams.get('doctorId')) {
+          query = query.eq('doctor_id', searchParams.get('doctor_id') || searchParams.get('doctorId'))
+        }
+
+        const patientIdParam = searchParams.get('patientId') || searchParams.get('patient_id')
+        if (patientIdParam) {
+          query = query.eq('patient_id', patientIdParam)
+        }
 
         if (status && status !== 'ALL') {
           if (status === 'ISSUED' || status === 'ACTIVE') {
@@ -67,8 +77,8 @@ export async function GET(request: Request) {
             : Promise.resolve({ data: [] as any[], error: null })
         ])
 
-        const patientsMap = new Map((profilesRes.data || []).map((p: any) => [p.id, p]))
-        const consultationsMap = new Map((consultsRes.data || []).map((c: any) => [c.id, c]))
+        const patientsMap = new Map((profilesRes?.data || []).map((p: any) => [p.id, p]))
+        const consultationsMap = new Map((consultsRes?.data || []).map((c: any) => [c.id, c]))
 
         const enriched = list.map((rx: any) => {
           const patient = patientsMap.get(rx.patient_id) || null

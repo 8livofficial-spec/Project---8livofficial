@@ -20,7 +20,7 @@ export async function assertAdmin(request: Request): Promise<AuthenticatedActor>
 
 export async function assertDoctor(request: Request): Promise<AuthenticatedActor> {
   const auth = await assertAuthenticatedUser(request)
-  if (auth.role !== 'doctor') throw new Error('Forbidden')
+  if (!['doctor', 'provider', 'admin'].includes(auth.role)) throw new Error('Forbidden')
   return auth
 }
 

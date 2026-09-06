@@ -16,6 +16,25 @@ export interface PatientProfileSidebarProps {
   onViewRx?: () => void;
 }
 
+function formatDisplayValue(val: any, fallback = ''): string {
+  if (val === null || val === undefined || val === '') return fallback;
+  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean') return String(val);
+  if (Array.isArray(val)) return val.map((item) => formatDisplayValue(item)).filter(Boolean).join(', ') || fallback;
+  if (typeof val === 'object') {
+    if (val.type) return `Medication: ${val.type}${val.dosage ? ` (${val.dosage})` : ''}`;
+    if (val.name) return String(val.name);
+    if (val.line1) return `${val.line1}, ${val.city || ''} ${val.state || ''}`.trim();
+    const entries = Object.entries(val)
+      .map(([k, v]) => {
+        const str = formatDisplayValue(v);
+        return str ? `${k}: ${str}` : null;
+      })
+      .filter(Boolean);
+    return entries.length > 0 ? entries.join(' • ') : fallback;
+  }
+  return fallback;
+}
+
 export default function PatientProfileSidebar({
   isOpen,
   onClose,
@@ -36,7 +55,7 @@ export default function PatientProfileSidebar({
   };
 
   const fullName = patient.name || `${patient.first_name || ''} ${patient.last_name || ''}`.trim() || patient.full_name || patient.display_id || patient.email || 'Patient';
-  const initials = fullName.split(' ').filter(Boolean).map((n: string) => n[0]).slice(0, 2).join('').toUpperCase() || 'PT';
+  const initials = typeof fullName === 'string' ? fullName.split(' ').filter(Boolean).map((n: string) => n[0]).slice(0, 2).join('').toUpperCase() || 'PT' : 'PT';
   const age = patient.age || (patient.medical_history && typeof patient.medical_history === 'object' ? patient.medical_history.age : null);
   const gender = patient.gender || (patient.medical_history && typeof patient.medical_history === 'object' ? patient.medical_history.gender : null);
   const heightCm = patient.height_cm ? Number(patient.height_cm) : null;
@@ -61,6 +80,26 @@ export default function PatientProfileSidebar({
 
   const contraindications = (patient.medical_history && typeof patient.medical_history === 'object' && patient.medical_history.contraindications) || {};
   const vitals = (patient.medical_history && typeof patient.medical_history === 'object' && patient.medical_history.vitals) || {};
+
+  const getMedicationDisplay = () => {
+    if (typeof patient.current_medications === 'string' && patient.current_medications.trim()) {
+      return patient.current_medications.trim();
+    }
+    if (patient.current_medications && typeof patient.current_medications === 'object') {
+      if (patient.current_medications.type) {
+        return `Current / Prior Medication: ${patient.current_medications.type}${patient.current_medications.dosage ? ` (${patient.current_medications.dosage})` : ''}`;
+      }
+      return formatDisplayValue(patient.current_medications);
+    }
+    if (patient.medical_history?.medication_history) {
+      const mh = patient.medical_history.medication_history;
+      if (typeof mh === 'string' && mh.trim()) return mh.trim();
+      if (typeof mh === 'object' && mh.type) {
+        return `GLP-1 / Medication History: ${mh.type}${mh.dosage ? ` (${mh.dosage})` : ''}`;
+      }
+    }
+    return 'No active prescription medication reported.';
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-sm transition-opacity">
@@ -149,7 +188,7 @@ export default function PatientProfileSidebar({
                 {patient.address && (
                   <div className="mt-1.5 flex items-center gap-2 text-xs text-[#64748B]">
                     <MapPin className="w-3.5 h-3.5 text-[#8896A4] shrink-0" />
-                    <span className="truncate">{patient.address}</span>
+                    <span className="truncate">{formatDisplayValue(patient.address)}</span>
                   </div>
                 )}
               </div>
@@ -191,13 +230,13 @@ export default function PatientProfileSidebar({
                 {vitals.bp && (
                   <div>
                     <span className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] block">Blood Pressure</span>
-                    <span className="font-bold text-[#1A1F36]">{vitals.bp}</span>
+                    <span className="font-bold text-[#1A1F36]">{formatDisplayValue(vitals.bp)}</span>
                   </div>
                 )}
                 {vitals.hr && (
                   <div>
                     <span className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] block">Heart Rate</span>
-                    <span className="font-bold text-[#1A1F36]">{vitals.hr}</span>
+                    <span className="font-bold text-[#1A1F36]">{formatDisplayValue(vitals.hr)}</span>
                   </div>
                 )}
               </div>
@@ -210,12 +249,12 @@ export default function PatientProfileSidebar({
               <FileText className="w-3.5 h-3.5 text-[#C4622D]" /> Medical Assessment Summary
             </h5>
             <p className="text-xs font-medium text-[#40516A] leading-relaxed">
-              {patient.assessment_summary || patient.extra_medical_info || 'No assessment summary recorded.'}
+              {formatDisplayValue(patient.assessment_summary || patient.extra_medical_info, 'No assessment summary recorded.')}
             </p>
             {patient.eligibility_reason && (
               <div className="mt-2 rounded-xl bg-amber-50 border border-amber-200/60 p-3 text-xs">
                 <p className="font-bold text-amber-900 uppercase text-[10px] tracking-wider">Clinical Eligibility Rationale</p>
-                <p className="font-medium text-amber-800 mt-0.5">{patient.eligibility_reason}</p>
+                <p className="font-medium text-amber-800 mt-0.5">{formatDisplayValue(patient.eligibility_reason)}</p>
               </div>
             )}
           </div>
@@ -255,7 +294,7 @@ export default function PatientProfileSidebar({
             {patient.medical_risk_flags && (
               <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs">
                 <span className="font-bold text-rose-900 text-[10px] uppercase tracking-wider block">Flagged Conditions</span>
-                <p className="font-medium text-rose-800 mt-1">{patient.medical_risk_flags}</p>
+                <p className="font-medium text-rose-800 mt-1">{formatDisplayValue(patient.medical_risk_flags)}</p>
               </div>
             )}
           </div>
@@ -266,7 +305,7 @@ export default function PatientProfileSidebar({
               <Pill className="w-3.5 h-3.5 text-[#C4622D]" /> Medication & Treatment History
             </h5>
             <p className="text-xs font-medium text-[#40516A]">
-              {patient.current_medications || (patient.medical_history?.medication_history?.type ? `GLP-1 History: ${patient.medical_history.medication_history.type}` : 'No active prescription medication reported.')}
+              {getMedicationDisplay()}
             </p>
 
             {patient.medication_proof_url && (
@@ -290,12 +329,12 @@ export default function PatientProfileSidebar({
               <div className="space-y-1.5 text-xs text-[#40516A]">
                 {patient.local_food && (
                   <div>
-                    <span className="font-bold text-[#1A1F36]">Diet / Cuisine:</span> {patient.local_food}
+                    <span className="font-bold text-[#1A1F36]">Diet / Cuisine:</span> {formatDisplayValue(patient.local_food)}
                   </div>
                 )}
                 {patient.workout_preference && (
                   <div>
-                    <span className="font-bold text-[#1A1F36]">Activity / Workout:</span> {patient.workout_preference}
+                    <span className="font-bold text-[#1A1F36]">Activity / Workout:</span> {formatDisplayValue(patient.workout_preference)}
                   </div>
                 )}
               </div>
