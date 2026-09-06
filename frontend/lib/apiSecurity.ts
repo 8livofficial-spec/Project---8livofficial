@@ -165,3 +165,69 @@ export async function assertPatientOrAssignedProvider(request: Request, patientI
 
   throw new Error('Forbidden')
 }
+
+export function resolveTenant(request: Request, user?: any): string {
+  const headerTenant = request.headers.get('x-tenant-id')?.trim()
+  if (headerTenant) return headerTenant
+  const metaTenant = user?.app_metadata?.tenant_id || user?.user_metadata?.tenant_id
+  if (metaTenant && typeof metaTenant === 'string') return metaTenant.trim()
+  return '8liv'
+}
+
+export async function assertDietitian(request: Request, dietitianId?: string | null) {
+  const auth = await getAuthenticatedUser(request)
+  if (!auth) {
+    throw new Error('Unauthorized')
+  }
+
+  // Admin bypass
+  if (auth.role === 'admin') {
+    return auth
+  }
+
+  if (auth.role !== 'dietitian' && auth.role !== 'nutritionist') {
+    throw new Error('Forbidden')
+  }
+
+  if (dietitianId && auth.user.id !== dietitianId) {
+    throw new Error('Forbidden')
+  }
+
+  return auth
+}
+
+export async function assertDietitianPatientAccess(request: Request, patientId: string) {
+  const auth = await assertDietitian(request)
+  if (auth.role === 'admin') {
+    return auth
+  }
+
+  const [assignedDietitian, assignedNutritionist] = await Promise.all([
+    getAssignedProviderForRole(patientId, 'dietitian'),
+    getAssignedProviderForRole(patientId, 'nutritionist'),
+  ])
+
+  if (auth.user.id === assignedDietitian || auth.user.id === assignedNutritionist) {
+    return auth
+  }
+
+  // Also verify if there is an accepted doctor referral for this dietitian & patient
+  try {
+    const { data: referral } = await supabaseAdmin
+      .from('dietitian_referrals')
+      .select('id')
+      .eq('patient_id', patientId)
+      .eq('dietitian_id', auth.user.id)
+      .eq('status', 'ACCEPTED')
+      .maybeSingle()
+
+    if (referral) {
+      return auth
+    }
+  } catch (err) {
+    console.warn('Error checking dietitian referral access:', err)
+  }
+
+  throw new Error('Forbidden')
+}
+

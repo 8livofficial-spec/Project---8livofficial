@@ -12,6 +12,8 @@ import UpcomingAppointments from '@/components/patient/UpcomingAppointments'
 import MedicationCard from '@/components/patient/MedicationCard'
 import ProgressRing from '@/components/patient/ProgressRing'
 import QuickActions from '@/components/patient/QuickActions'
+import PatientNutritionWidget from '@/components/patient/PatientNutritionWidget'
+
 const getGreeting = () =>{
     const hour = new Date().getHours();
     if(hour>=5 && hour <12) return "Good morning";
@@ -586,8 +588,12 @@ export default function PatientDashboardHome() {
         </div>
       </div>
 
+      {/* Clinical Nutrition Plan & Food Tracker */}
+      <PatientNutritionWidget />
+
       {/* 5. Column Rows 2: Meds + Messages + Ring */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+
         <div className="col-span-1 md:col-span-2 xl:col-span-2">
           <MedicationCard
             medicationName={medicationName}

@@ -8,7 +8,9 @@ import { supabase } from '@/lib/supabaseClient'
 import StaffChat from '@/components/StaffChat'
 import ProviderAvailabilityScheduler, { AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler'
 import ProviderProfileEditor from './ProviderProfileEditor'
+import DietitianPortal from '@/components/dietitian/DietitianPortal'
 import { authedFetch } from '@/lib/apiClient'
+
 
 type ProviderRole = 'doctor' | 'dietitian' | 'fitness_coach' | 'nutritionist'
 
@@ -299,12 +301,14 @@ function clearProviderCache(match?: string) {
   }
 }
 
-export default function ProviderPortal({ section }: { section: 'dashboard' | 'patients' | 'schedule' | 'consultations' | 'plans' | 'messages' | 'wallet' | 'profile' }) {
+function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' | 'schedule' | 'consultations' | 'plans' | 'messages' | 'wallet' | 'profile' }) {
   const router = useRouter()
   const pathname = usePathname()
   const { provider, providerLoading, error, setError, authedFetch, signOut } = useProviderData()
 
   const [patients, setPatients] = useState<Patient[]>([])
+
+
   const [summary, setSummary] = useState<Summary>(emptySummary)
   const [plans, setPlans] = useState<Plan[]>([])
   const [consultations, setConsultations] = useState<ProviderConsultation[]>([])
@@ -1731,3 +1735,12 @@ function EmptyState() {
     </div>
   )
 }
+
+export default function ProviderPortal({ section }: { section: 'dashboard' | 'patients' | 'schedule' | 'consultations' | 'plans' | 'messages' | 'wallet' | 'profile' }) {
+  const { provider } = useProviderData()
+  if (provider && (provider.role === 'dietitian' || provider.role === 'nutritionist')) {
+    return <DietitianPortal defaultSection={section as any} />
+  }
+  return <GenericProviderPortal section={section} />
+}
+
