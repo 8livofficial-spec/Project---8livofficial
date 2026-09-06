@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { Download, Pill, MapPin, Truck, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
 import { authedFetch } from '@/lib/apiClient'
-import { INDIAN_STATES } from '@/app/api/patient/delivery-address/route'
+import { INDIAN_STATES } from '@/lib/constants/indianStates'
 
 const STATUS_LABELS: Record<string, string> = {
   PENDING_ASSIGNMENT: 'Pending',
