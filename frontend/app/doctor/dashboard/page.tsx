@@ -20,6 +20,7 @@ import DoctorPrescriptionBuilderModal from '@/components/doctor/DoctorPrescripti
 import OfficialPrescriptionModal from '@/components/doctor/OfficialPrescriptionModal';
 import RevokePrescriptionModal from '@/components/doctor/RevokePrescriptionModal';
 import ProviderProfileEditor from '@/components/provider/ProviderProfileEditor';
+import PatientProfileSidebar from '@/components/doctor/PatientProfileSidebar';
 import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
 
 const inputCls = 'w-full border border-slate-200 rounded-2xl p-3 bg-white outline-none transition-all text-[#0F172A] placeholder-[#94A3B8] font-medium focus:bg-white focus:border-[#0052FF] focus:ring-4 focus:ring-[#0052FF]/10 [color-scheme:light]';
@@ -342,7 +343,12 @@ function MedicalRiskFlagList({ value, empty = 'No high-risk flags recorded.' }: 
 }
 
 function patientName(patient: any): string {
-  return `${patient?.first_name || ''} ${patient?.last_name || ''}`.trim() || patient?.email || 'Patient';
+  const byName = `${patient?.first_name || ''} ${patient?.last_name || ''}`.trim();
+  if (byName) return byName;
+  if (patient?.name && patient.name !== 'Patient' && !patient.name.includes('@')) return patient.name;
+  if (patient?.full_name) return patient.full_name;
+  if (patient?.display_id) return patient.display_id;
+  return patient?.email || 'Patient';
 }
 
 function formatClinicalDate(date?: string | null, time?: string | null): string {
@@ -363,7 +369,7 @@ function patientBmi(patient: any): string {
   if (patient?.weight_kg && patient?.height_cm) {
     return (Number(patient.weight_kg) / Math.pow(Number(patient.height_cm) / 100, 2)).toFixed(1);
   }
-  return 'N/A';
+  return '—';
 }
 
 function statusTone(status?: string | null): string {
@@ -542,6 +548,7 @@ export default function DoctorDashboard() {
   const [availableRequests, setAvailableRequests] = useState<Consultation[]>([]);
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [showPatientProfileSidebar, setShowPatientProfileSidebar] = useState(false);
 
   // Pagination & Search States
   const [consultationsPage, setConsultationsPage] = useState(1);
@@ -3766,12 +3773,43 @@ export default function DoctorDashboard() {
                     {/* Header info */}
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0">
-                        <h2 className="break-words text-2xl font-black tracking-tight text-[#1A1F36] sm:text-3xl">{patientName(selectedPatient)}</h2>
-                        <p className="text-xs font-bold text-[#8896A4] mt-1 uppercase tracking-wider flex items-center gap-1.5">
-                          <Stethoscope className="w-3.5 h-3.5 text-[#C4622D]" /> Endocrinology case file
-                        </p>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <h2 
+                            onClick={() => setShowPatientProfileSidebar(true)}
+                            className="break-words text-2xl font-black tracking-tight text-[#1A1F36] sm:text-3xl hover:text-[#C4622D] cursor-pointer transition-colors"
+                            title="Click to view full patient profile sidebar"
+                          >
+                            {patientName(selectedPatient)}
+                          </h2>
+                          {selectedPatient?.display_id && selectedPatient.display_id !== patientName(selectedPatient) && (
+                            <span className="rounded-lg bg-[#1A1F36]/5 text-[#40516A] text-xs font-bold px-2.5 py-0.5 border border-[#1A1F36]/10">
+                              ID: {selectedPatient.display_id}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2.5 mt-1.5 text-xs text-[#8896A4] flex-wrap">
+                          <span className="font-bold uppercase tracking-wider flex items-center gap-1.5 text-[#C4622D]">
+                            <Stethoscope className="w-3.5 h-3.5" /> Endocrinology case file
+                          </span>
+                          {selectedPatient?.email && (
+                            <span className="font-medium text-[#40516A] truncate max-w-xs sm:max-w-md">
+                              • {selectedPatient.email}
+                            </span>
+                          )}
+                          {selectedPatient?.phone && selectedPatient.phone !== 'No Phone' && (
+                            <span className="font-medium text-[#40516A]">
+                              • {selectedPatient.phone}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex w-full items-center gap-3 sm:w-auto">
+                      <div className="flex w-full items-center gap-2.5 sm:w-auto flex-wrap sm:flex-nowrap">
+                        <button
+                          onClick={() => setShowPatientProfileSidebar(true)}
+                          className="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl border border-[#1A1F36]/15 bg-white hover:bg-[#F5F0EB] text-[#1A1F36] px-4 py-2 text-xs font-black shadow-xs transition-all cursor-pointer"
+                        >
+                          <User className="w-3.5 h-3.5 text-[#C4622D]" /> Patient Profile
+                        </button>
                         {(() => {
                           const matchingRx = (selectedPatient as any)?.prescription || doctorPrescriptions.find(p => p.patient_id === selectedPatient?.id && !['DRAFT', 'REVOKED', 'CANCELLED', 'REPLACED'].includes(p.status));
                           if (matchingRx) {
@@ -3829,10 +3867,7 @@ export default function DoctorDashboard() {
                       <div className="bg-white p-5 rounded-2xl border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.06)] hover:shadow-[0_18px_40px_rgba(26,31,54,0.10)] transition-shadow duration-300 text-center">
                         <p className="text-[10px] font-black text-[#8896A4] uppercase tracking-widest">BMI</p>
                         <p className="text-xl font-black text-[#5C7A6B] mt-1">
-                          {selectedPatient.weight_kg && selectedPatient.height_cm
-                            ? (selectedPatient.weight_kg / Math.pow(selectedPatient.height_cm / 100, 2)).toFixed(1)
-                            : '—'
-                          }
+                          {patientBmi(selectedPatient)}
                         </p>
                       </div>
                     </div>
@@ -3919,8 +3954,8 @@ export default function DoctorDashboard() {
                           No weight logs recorded by this user yet.
                         </div>
                       ) : (
-                        <div className="h-60 w-full">
-                          <ResponsiveContainer width="100%" height="100%">
+                        <div className="h-60 w-full min-w-0" style={{ minHeight: 240 }}>
+                          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
                             <LineChart data={selectedPatient.weight_logs}>
                               <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
                               <XAxis dataKey="date" stroke="#94A3B8" fontSize={10} tickLine={false} />
@@ -3984,6 +4019,26 @@ export default function DoctorDashboard() {
               </div>
             </motion.div>
           )}
+
+          {/* ── PATIENT CLINICAL PROFILE SIDEBAR DRAWER ── */}
+          {selectedPatient && (
+            <PatientProfileSidebar
+              isOpen={showPatientProfileSidebar}
+              onClose={() => setShowPatientProfileSidebar(false)}
+              patient={selectedPatient}
+              hasIssuedRx={Boolean((selectedPatient as any)?.prescription || doctorPrescriptions.find(p => p.patient_id === selectedPatient?.id && !['DRAFT', 'REVOKED', 'CANCELLED', 'REPLACED'].includes(p.status)))}
+              onViewRx={() => {
+                const matchingRx = (selectedPatient as any)?.prescription || doctorPrescriptions.find(p => p.patient_id === selectedPatient?.id && !['DRAFT', 'REVOKED', 'CANCELLED', 'REPLACED'].includes(p.status));
+                if (matchingRx) setOfficialRxView(matchingRx);
+              }}
+              onIssueRx={() => {
+                setBuilderConsultation(null);
+                setBuilderPatient(selectedPatient);
+                setShowRxBuilderModal(true);
+              }}
+            />
+          )}
+
           {/* ── BANK / PAYOUT SETTINGS MODAL ── */}
           {showBankSettingsModal && (
             <div className="fixed inset-0 z-[100] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6 overflow-y-auto">

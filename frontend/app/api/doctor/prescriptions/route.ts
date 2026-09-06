@@ -152,6 +152,7 @@ export async function POST(request: Request) {
       { status: 201 }
     )
   } catch (err: any) {
+    console.error('POST /api/doctor/prescriptions error:', err)
     const failure = errorResponse(err instanceof Error ? err.message : 'Internal Server Error')
     return NextResponse.json({ error: failure.error }, { status: failure.status })
   }

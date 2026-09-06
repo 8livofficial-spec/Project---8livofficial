@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { 
   LayoutDashboard, Calendar, TrendingDown, Package,
-  Pill, Video, CreditCard, Settings, LogOut 
+  Pill, Video, CreditCard, Settings, LogOut, User 
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -40,6 +40,7 @@ export default function Sidebar({
 
   const navLinks: NavLink[] = [
     { icon: LayoutDashboard, label: 'Overview', href: '/patient' },
+    { icon: User, label: 'Profile', href: '/patient/profile' },
     { icon: Calendar, label: 'Appointments', href: '/patient/appointments' },
     { icon: TrendingDown, label: 'My Progress', href: '/patient/progress' },
     { icon: Pill, label: 'Prescriptions', href: '/patient/prescriptions' },

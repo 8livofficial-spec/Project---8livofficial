@@ -191,11 +191,11 @@ export async function POST(req: Request) {
     const [profilesRes, assessmentsRes, logsRes, consultsRes, rxRes] = await Promise.all([
       supabaseAdmin
         .from('profiles')
-        .select('id, first_name, last_name, email, phone_number')
+        .select('id, first_name, last_name, full_name, email, phone_number, display_id, role, created_at')
         .in('id', patientIds),
       supabaseAdmin
         .from('health_assessments')
-        .select('patient_id, first_name, last_name, phone_number, membership_tier, membership_status, is_eligible, medical_history, extra_medical_info, height_cm, weight_kg, goal_weight_kg')
+        .select('*')
         .in('patient_id', patientIds),
       supabaseAdmin
         .from('progress_logs')
@@ -323,21 +323,73 @@ export async function POST(req: Request) {
 
       const membershipTier = assess.membership_tier || assess.membership_status || 'Not selected';
 
+      const firstName = prof.first_name || assess.first_name || '';
+      const lastName = prof.last_name || assess.last_name || '';
+      const fullName = `${firstName} ${lastName}`.trim() || prof.full_name || prof.display_id || prof.email || 'Patient';
+      const email = prof.email || '';
+      const phone = prof.phone_number || assess.phone_number || 'No Phone';
+      const heightCm = assess.height_cm ? Number(assess.height_cm) : null;
+      const weightKg = assess.weight_kg ? Number(assess.weight_kg) : (pLogs[0]?.weight_kg ? Number(pLogs[0].weight_kg) : null);
+      const goalWeightKg = assess.goal_weight_kg ? Number(assess.goal_weight_kg) : null;
+      const age = assess.age ? Number(assess.age) : null;
+      const gender = assess.gender || (typeof assess.medical_history === 'object' ? assess.medical_history?.gender : null) || null;
+      const calculatedBmi = heightCm && weightKg
+        ? Number((weightKg / Math.pow(heightCm / 100, 2)).toFixed(1))
+        : (assess.bmi ? Number(parseFloat(assess.bmi).toFixed(1)) : null);
+
+      // Synthesize clean clinical assessment summary if not explicitly provided
+      let assessmentSummary = assess.assessment_summary || assess.extra_medical_info || null;
+      if (!assessmentSummary && assess.medical_history) {
+        const mh = assess.medical_history;
+        const details: string[] = [];
+        if (age && gender) details.push(`Patient: ${age}-year-old ${gender}`);
+        if (heightCm && weightKg) details.push(`Height: ${heightCm} cm, Current Weight: ${weightKg} kg (BMI: ${calculatedBmi || '—'})`);
+        if (goalWeightKg && weightKg) {
+          const delta = weightKg - goalWeightKg;
+          details.push(`Goal Weight: ${goalWeightKg} kg (${delta > 0 ? `Target reduction: -${delta} kg` : `Target delta: ${delta} kg`})`);
+        }
+        if (mh.vitals?.bp) details.push(`Blood Pressure: ${mh.vitals.bp}, HR: ${mh.vitals.hr || 'Normal'}`);
+        if (mh.eligibility_reason && mh.eligibility_reason !== 'None of the above') {
+          details.push(`Clinical Note: ${mh.eligibility_reason}`);
+        }
+        if (mh.medication_history?.type) details.push(`Medication history: ${mh.medication_history.type}`);
+        if (details.length > 0) {
+          assessmentSummary = details.join(' • ');
+        }
+      }
+
       return {
         id: assign.id,
         patient_id: assign.patient_id,
-        name: prof.first_name || prof.last_name ? `${prof.first_name || ''} ${prof.last_name || ''}`.trim() : prof.email || 'Patient',
-        email: prof.email || '',
-        phone: prof.phone_number || 'No Phone',
+        name: fullName,
+        first_name: firstName,
+        last_name: lastName,
+        full_name: fullName,
+        email,
+        phone,
+        phone_number: phone,
+        display_id: prof.display_id || null,
+        age,
+        gender,
+        address: assess.address || null,
         membershipTier,
+        membership_tier: membershipTier,
         onboardingCompleted: Boolean(assess.membership_tier),
+        height_cm: heightCm,
+        weight_kg: weightKg,
+        goal_weight_kg: goalWeightKg,
+        bmi: calculatedBmi,
+        assessment_summary: assessmentSummary,
+        medical_history: assess.medical_history || null,
+        extra_medical_info: assess.extra_medical_info || null,
         eligibility_status: assess.eligibility_status || getAssessmentField(assess, 'eligibility_status') || (typeof assess.is_eligible === 'boolean' ? (assess.is_eligible ? 'ELIGIBLE' : 'NOT_ELIGIBLE') : null),
         eligibility_reason: assess.eligibility_reason || getAssessmentField(assess, 'eligibility_reason') || getAssessmentField(assess, 'eligibility_message') || null,
         medical_risk_flags: getRiskFlags(assess),
         current_medications: assess.current_medications || assess.medications || getAssessmentField(assess, 'medication_history') || null,
         medication_history: assess.medication_history || getAssessmentField(assess, 'medication_history') || null,
         medication_proof_url: getAssessmentField(assess, 'medication_proof_url') || getAssessmentField(assess, 'medication_proof') || assess.medication_proof_url || assess.medication_proof || null,
-        bmi: assess.bmi ? parseFloat(assess.bmi) : (assess.height_cm && assess.weight_kg ? Number((Number(assess.weight_kg) / Math.pow(Number(assess.height_cm) / 100, 2)).toFixed(1)) : null),
+        local_food: assess.local_food || null,
+        workout_preference: assess.workout_preference || null,
         diagnosis_summary: assess.diagnosis_summary || completedConsultations[0]?.prescription_notes || null,
         follow_up_notes: assess.follow_up_instruction || assess.follow_up_notes || completedConsultations[0]?.prescription_notes || null,
         latest_consultation_status: latestConsultation?.status || null,
