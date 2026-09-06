@@ -36,8 +36,53 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: error.message, orders: [] }, { status: 500 })
     }
 
+    // Dynamically resolve real patient names & locations for orders where missing or generic
+    const patientIds = Array.from(new Set((orders || []).map((o: any) => o.patient_id).filter(Boolean)))
+    let profileMap: Record<string, any> = {}
+    if (patientIds.length > 0) {
+      const { data: profs } = await supabaseAdmin
+        .from('profiles')
+        .select('id, first_name, last_name, display_id, phone_number')
+        .in('id', patientIds)
+      if (profs) {
+        profs.forEach((p: any) => {
+          profileMap[p.id] = p
+        })
+      }
+    }
+
+    const enrichedOrders = (orders || []).map((o: any) => {
+      const prof = profileMap[o.patient_id]
+      const realFullName = prof
+        ? [prof.first_name, prof.last_name].filter(Boolean).join(' ') || prof.display_id
+        : null
+
+      const currentPatientName =
+        o.delivery_address_snapshot?.patient_name || o.delivery_address_snapshot?.recipient_name
+
+      const isGenericOrDummy =
+        !currentPatientName ||
+        currentPatientName === 'Patient' ||
+        currentPatientName === 'Verified Patient' ||
+        currentPatientName === 'Ananya Deshmukh'
+
+      const effectivePatientName = isGenericOrDummy
+        ? (realFullName || currentPatientName || 'Patient')
+        : currentPatientName
+
+      return {
+        ...o,
+        delivery_address_snapshot: {
+          ...(o.delivery_address_snapshot || {}),
+          patient_name: effectivePatientName,
+          recipient_name: effectivePatientName,
+          phone: o.patient_phone_snapshot || o.delivery_address_snapshot?.phone || prof?.phone_number || null,
+        },
+      }
+    })
+
     return NextResponse.json({
-      orders: orders || [],
+      orders: enrichedOrders,
       pharmacy: {
         id: context.pharmacy.id,
         name: context.pharmacy.name,

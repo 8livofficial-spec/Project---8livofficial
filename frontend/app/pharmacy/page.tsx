@@ -30,6 +30,7 @@ type PharmacyOrder = {
   dispatched_at?: string | null
   delivered_at?: string | null
   dispatch_courier_name?: string | null
+  courier_name?: string | null
   dispatch_tracking_number?: string | null
   tracking_number?: string | null
   clarification_notes?: string | null
@@ -692,10 +693,21 @@ export default function PharmacyPortalPage() {
                           <p>
                             Assigned: {new Date(order.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
                           </p>
-                          {order.dispatch_tracking_number && (
-                            <p className="font-bold text-[#1A1F36]">
-                              AWB: {order.dispatch_tracking_number}
-                            </p>
+                          {(order.dispatch_tracking_number || order.tracking_number) && (
+                            <div className="mt-1">
+                              {(order.dispatch_courier_name?.includes('In-House') || order.courier_name?.includes('In-House')) ? (
+                                <p className="inline-flex items-center gap-1 font-bold text-emerald-800 bg-emerald-50 rounded px-1.5 py-0.5 border border-emerald-200 text-[11px]">
+                                  <span>🛵 In-House</span>
+                                  <span className="font-semibold text-emerald-950 truncate max-w-[120px]">
+                                    {order.dispatch_tracking_number || order.tracking_number}
+                                  </span>
+                                </p>
+                              ) : (
+                                <p className="font-bold text-[#1A1F36] text-[11px]">
+                                  AWB: {order.dispatch_tracking_number || order.tracking_number}
+                                </p>
+                              )}
+                            </div>
                           )}
                         </td>
                         <td className="p-4 pr-6 text-right">

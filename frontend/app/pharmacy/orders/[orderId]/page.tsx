@@ -87,6 +87,11 @@ export default function PharmacyOrderDetailPage() {
 
   // Modals / forms
   const [showDispatchModal, setShowDispatchModal] = useState(false)
+  const [deliveryMode, setDeliveryMode] = useState<'IN_HOUSE' | 'COURIER'>('IN_HOUSE')
+  const [riderName, setRiderName] = useState('')
+  const [riderPhone, setRiderPhone] = useState('')
+  const [deliverySlot, setDeliverySlot] = useState('Within 2-4 Hours')
+  const [runRef, setRunRef] = useState('')
   const [courierName, setCourierName] = useState('')
   const [trackingNumber, setTrackingNumber] = useState('')
 
@@ -391,16 +396,36 @@ export default function PharmacyOrderDetailPage() {
               </div>
 
               {(order.courier_name || order.tracking_number) && (
-                <div className="rounded-xl border border-cyan-200 bg-cyan-50/60 p-3 text-xs">
-                  <p className="font-bold text-cyan-900">Courier Tracking</p>
-                  <p className="text-cyan-800">
-                    Carrier: <span className="font-black">{order.courier_name}</span>
+                <div
+                  className={`rounded-xl border p-3.5 text-xs ${
+                    order.courier_name?.includes('In-House')
+                      ? 'border-emerald-200 bg-emerald-50/70 text-emerald-950'
+                      : 'border-cyan-200 bg-cyan-50/60 text-cyan-950'
+                  }`}
+                >
+                  <div className="flex items-center gap-1.5 font-bold mb-1.5">
+                    {order.courier_name?.includes('In-House') ? (
+                      <>
+                        <span className="text-sm">🛵</span>
+                        <span className="font-black text-emerald-900">Pharmacy In-House Delivery</span>
+                      </>
+                    ) : (
+                      <>
+                        <Truck className="h-4 w-4 text-cyan-700" />
+                        <span className="font-black text-cyan-900">Third-Party Courier Tracking</span>
+                      </>
+                    )}
+                  </div>
+                  <p className="font-medium text-xs">
+                    {order.courier_name?.includes('In-House') ? 'Assigned Executive / Staff:' : 'Carrier:'}{' '}
+                    <span className="font-black">{order.courier_name}</span>
                   </p>
-                  <p className="text-cyan-800">
-                    Tracking / AWB: <span className="font-black">{order.tracking_number}</span>
+                  <p className="font-medium text-xs mt-0.5">
+                    {order.courier_name?.includes('In-House') ? 'Contact / Reference:' : 'Tracking / AWB:'}{' '}
+                    <span className="font-black">{order.tracking_number}</span>
                   </p>
                   {order.dispatched_at && (
-                    <p className="mt-1 text-[11px] text-cyan-700">
+                    <p className="mt-1 text-[11px] text-[#40516A]">
                       Dispatched:{' '}
                       {new Date(order.dispatched_at).toLocaleString('en-IN', {
                         dateStyle: 'medium',
@@ -484,9 +509,14 @@ export default function PharmacyOrderDetailPage() {
       {/* Dispatch Modal */}
       {showDispatchModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl space-y-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-[#1A1F36]/10 pb-3">
-              <h3 className="text-base font-black text-[#1A1F36]">Dispatch Treatment Package</h3>
+              <div>
+                <h3 className="text-base font-black text-[#1A1F36]">Dispatch Treatment Package</h3>
+                <p className="text-xs text-[#8896A4] mt-0.5">
+                  Select fulfillment method: direct pharmacy in-house delivery or third-party courier.
+                </p>
+              </div>
               <button
                 onClick={() => setShowDispatchModal(false)}
                 className="text-xs font-black text-[#8896A4] hover:text-[#1A1F36]"
@@ -494,33 +524,122 @@ export default function PharmacyOrderDetailPage() {
                 ✕
               </button>
             </div>
-            <p className="text-xs text-[#8896A4]">
-              Enter courier details and tracking AWB so the patient can track their shipment in real
-              time.
-            </p>
-            <div className="space-y-3">
-              <div>
-                <label className="text-xs font-bold text-[#1A1F36]">Courier / Carrier Name</label>
-                <input
-                  type="text"
-                  value={courierName}
-                  onChange={(e) => setCourierName(e.target.value)}
-                  placeholder="e.g. BlueDart, Delhivery, DTDC"
-                  className="mt-1 w-full rounded-xl border border-[#1A1F36]/10 p-3 text-sm font-medium outline-none focus:border-[#1A1F36]"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-bold text-[#1A1F36]">Tracking / AWB Number</label>
-                <input
-                  type="text"
-                  value={trackingNumber}
-                  onChange={(e) => setTrackingNumber(e.target.value)}
-                  placeholder="e.g. BLD987654321IN"
-                  className="mt-1 w-full rounded-xl border border-[#1A1F36]/10 p-3 text-sm font-medium outline-none focus:border-[#1A1F36]"
-                />
-              </div>
+
+            {/* Mode Switcher */}
+            <div className="grid grid-cols-2 gap-2 rounded-xl bg-[#F5F0EB]/80 p-1.5 border border-[#1A1F36]/5">
+              <button
+                type="button"
+                onClick={() => setDeliveryMode('IN_HOUSE')}
+                className={`flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-black transition-all ${
+                  deliveryMode === 'IN_HOUSE'
+                    ? 'bg-white text-[#1A1F36] shadow-sm'
+                    : 'text-[#8896A4] hover:text-[#1A1F36]'
+                }`}
+              >
+                <span>🛵</span>
+                <span>Pharmacy In-House Fleet</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDeliveryMode('COURIER')}
+                className={`flex items-center justify-center gap-2 rounded-lg py-2 text-xs font-black transition-all ${
+                  deliveryMode === 'COURIER'
+                    ? 'bg-white text-[#1A1F36] shadow-sm'
+                    : 'text-[#8896A4] hover:text-[#1A1F36]'
+                }`}
+              >
+                <Truck className="h-3.5 w-3.5" />
+                <span>Third-Party Courier</span>
+              </button>
             </div>
-            <div className="flex items-center justify-end gap-2 pt-3">
+
+            {deliveryMode === 'IN_HOUSE' ? (
+              <div className="space-y-3 pt-1">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-3 text-xs text-emerald-900 leading-relaxed">
+                  <p className="font-bold flex items-center gap-1.5">
+                    <span>🛵</span> In-House Delivery Service:
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-emerald-800">
+                    Direct local delivery by your pharmacy staff / rider. The patient will be able to see the assigned rider contact details to coordinate delivery smoothly.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-[#1A1F36]">Rider / Executive Name</label>
+                    <input
+                      type="text"
+                      value={riderName}
+                      onChange={(e) => setRiderName(e.target.value)}
+                      placeholder="e.g. Ramesh (Pharmacy Rider)"
+                      className="mt-1 w-full rounded-xl border border-[#1A1F36]/10 p-2.5 text-sm font-medium outline-none focus:border-[#1A1F36]"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-[#1A1F36]">Rider Contact Phone</label>
+                    <input
+                      type="text"
+                      value={riderPhone}
+                      onChange={(e) => setRiderPhone(e.target.value)}
+                      placeholder="e.g. +91 98765 43210"
+                      className="mt-1 w-full rounded-xl border border-[#1A1F36]/10 p-2.5 text-sm font-medium outline-none focus:border-[#1A1F36]"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs font-bold text-[#1A1F36]">Delivery Window</label>
+                    <select
+                      value={deliverySlot}
+                      onChange={(e) => setDeliverySlot(e.target.value)}
+                      className="mt-1 w-full rounded-xl border border-[#1A1F36]/10 p-2.5 text-sm font-medium outline-none bg-white focus:border-[#1A1F36]"
+                    >
+                      <option value="Within 2-4 Hours">Immediate (Within 2-4 Hours)</option>
+                      <option value="Today Evening (by 8 PM)">Today Evening (by 8 PM)</option>
+                      <option value="Tomorrow Morning (10 AM - 1 PM)">Tomorrow Morning (10 AM - 1 PM)</option>
+                      <option value="Local Route Schedule">Local Route Schedule</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-[#1A1F36]">Trip / Run Reference (Optional)</label>
+                    <input
+                      type="text"
+                      value={runRef}
+                      onChange={(e) => setRunRef(e.target.value)}
+                      placeholder="e.g. RUN-LOCAL-01"
+                      className="mt-1 w-full rounded-xl border border-[#1A1F36]/10 p-2.5 text-sm font-medium outline-none focus:border-[#1A1F36]"
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3 pt-1">
+                <div>
+                  <label className="text-xs font-bold text-[#1A1F36]">Courier / Carrier Name</label>
+                  <input
+                    type="text"
+                    value={courierName}
+                    onChange={(e) => setCourierName(e.target.value)}
+                    placeholder="e.g. BlueDart, Delhivery, DTDC, Speed Post"
+                    className="mt-1 w-full rounded-xl border border-[#1A1F36]/10 p-2.5 text-sm font-medium outline-none focus:border-[#1A1F36]"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-[#1A1F36]">Tracking / AWB Number</label>
+                  <input
+                    type="text"
+                    value={trackingNumber}
+                    onChange={(e) => setTrackingNumber(e.target.value)}
+                    placeholder="e.g. BLD987654321IN"
+                    className="mt-1 w-full rounded-xl border border-[#1A1F36]/10 p-2.5 text-sm font-medium outline-none focus:border-[#1A1F36]"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-[#1A1F36]/10">
               <button
                 onClick={() => setShowDispatchModal(false)}
                 className="rounded-xl px-4 py-2.5 text-xs font-black text-[#40516A] hover:bg-[#F5F0EB]"
@@ -530,15 +649,23 @@ export default function PharmacyOrderDetailPage() {
               <button
                 onClick={() =>
                   handleAction('dispatch', {
+                    delivery_type: deliveryMode,
+                    rider_name: riderName,
+                    rider_phone: riderPhone,
+                    delivery_slot: deliverySlot,
+                    run_reference: runRef,
                     courier_name: courierName,
                     tracking_number: trackingNumber,
                   })
                 }
-                disabled={actionLoading || !courierName.trim() || !trackingNumber.trim()}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-[#1A1F36] px-5 py-2.5 text-xs font-black text-white disabled:opacity-50"
+                disabled={
+                  actionLoading ||
+                  (deliveryMode === 'COURIER' && (!courierName.trim() || !trackingNumber.trim()))
+                }
+                className="inline-flex items-center gap-1.5 rounded-xl bg-[#1A1F36] px-5 py-2.5 text-xs font-black text-white disabled:opacity-50 transition-transform active:scale-[0.98]"
               >
                 {actionLoading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
-                Confirm Dispatch
+                {deliveryMode === 'IN_HOUSE' ? 'Dispatch via In-House Rider' : 'Confirm Courier Dispatch'}
               </button>
             </div>
           </div>
