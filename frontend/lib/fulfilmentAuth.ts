@@ -125,13 +125,25 @@ export async function assertPatientPrescriptionOwnership(prescriptionId: string,
 export async function assertPatientOrderOwnership(orderId: string, patientId: string) {
   const { data, error } = await supabaseAdmin
     .from('pharmacy_orders')
-    .select('*, prescriptions(*, prescription_items(*)), treatment_cycles(id, cycle_number, status, start_date, end_date), pharmacy_order_status_history(*)')
+    .select('*, prescriptions(*, prescription_items(*)), pharmacy_order_status_history(*)')
     .eq('id', orderId)
     .eq('patient_id', patientId)
     .maybeSingle()
 
   if (error) throw error
   if (!data) throw new Error('Fulfillment order not found.')
+
+  if (data.prescriptions?.treatment_cycle_id) {
+    const { data: cycle } = await supabaseAdmin
+      .from('treatment_cycles')
+      .select('id, cycle_number, status, start_date, end_date')
+      .eq('id', data.prescriptions.treatment_cycle_id)
+      .maybeSingle()
+    if (cycle) {
+      data.treatment_cycles = cycle
+    }
+  }
+
   return data
 }
 

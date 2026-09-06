@@ -484,11 +484,17 @@ function usePatientDataInternal() {
         if (assessRow) {
           if (pathname === '/patient/progress') {
             const [logsRes, consultsRes] = await Promise.all([
-              supabase
-                .from('progress_logs')
-                .select('*')
-                .eq('user_id', session.user.id)
-                .order('created_at', { ascending: true }),
+              fetch('/api/patient/progress-logs', {
+                headers: { Authorization: `Bearer ${session.access_token}` },
+              })
+                .then(async (r) => {
+                  if (r.ok) {
+                    const d = await r.json()
+                    return { data: d.logs || [] }
+                  }
+                  return { data: [] }
+                })
+                .catch(() => ({ data: [] })),
               supabase
                 .from('doctor_consultations')
                 .select('id, patient_id, doctor_id, booking_date, booking_time, status, prescription_text, room_url, created_at, updated_at')

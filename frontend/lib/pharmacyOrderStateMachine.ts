@@ -129,11 +129,9 @@ export async function transitionOrderStatus(params: {
       ;(err as any).status = 400
       throw err
     }
-    updates.dispatch_courier_name = courierName.trim()
-    updates.dispatch_tracking_number = trackingNumber.trim()
     updates.courier_name = courierName.trim()
     updates.tracking_number = trackingNumber.trim()
-    updates.dispatched_at = now
+    updates.shipped_at = now
   }
 
   if (newStatus === 'DELIVERED') {

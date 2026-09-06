@@ -366,25 +366,16 @@ export default function PatientDashboardHome() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
 
-      const { error } = await supabase
-        .from('progress_logs')
-        .insert({
-          user_id: session.user.id,
-          weight_kg: parseFloat(newWeight)
-        })
+      const res = await authedFetch('/api/patient/progress-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ weight_kg: parseFloat(newWeight) }),
+      })
 
-      if (error) throw error
-
-      // Also record this action in the patient's notification feed
-      await supabase
-        .from('patient_notifications')
-        .insert({
-          patient_id: session.user.id,
-          type: 'progress',
-          title: 'Weight Logged',
-          message: `Logged daily weight of ${parseFloat(newWeight)} kg.`,
-          is_read: false
-        })
+      if (!res.ok) {
+        const errData = await res.json()
+        throw new Error(errData.error || 'Failed to record weight log')
+      }
 
       alert("Weight logged successfully! ⚖️")
       setNewWeight('')
@@ -443,7 +434,7 @@ export default function PatientDashboardHome() {
   useEffect(() => {
     const fetchFulfillment = async () => {
       try {
-        const res = await fetch('/api/patient/pharmacy-orders')
+        const res = await authedFetch('/api/patient/pharmacy-orders')
         if (res.ok) {
           const data = await res.json()
           const latestOrder = (data.orders || [])[0]

@@ -145,8 +145,8 @@ export default function ProgressPage() {
             {totalChange > 0 ? `-${totalChange.toFixed(1)} kg lost` : 'Starting weight logged'}
           </span>
         </div>
-        <div className="h-64 w-full relative">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-64 w-full relative min-w-0">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
             <AreaChart data={displayWeightData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="largeWeightGrad" x1="0" y1="0" x2="0" y2="1">
