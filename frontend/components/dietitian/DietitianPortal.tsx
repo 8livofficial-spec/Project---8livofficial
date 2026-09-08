@@ -40,9 +40,12 @@ import {
   XCircle,
   Droplets,
   AlertTriangle,
+  CalendarDays,
+  Trash2,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import ProviderProfileEditor from '@/components/provider/ProviderProfileEditor'
+import ProviderAvailabilityScheduler, { AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler'
 
 // ==========================================
 // TYPES & SCHEMAS
@@ -56,10 +59,34 @@ type SectionKey =
   | 'food-logs'
   | 'progress'
   | 'consultations'
+  | 'schedule'
   | 'referrals'
   | 'communications'
   | 'wallet'
   | 'profile'
+
+type AvailabilitySlot = {
+  id: string
+  available_date: string
+  start_time: string
+  end_time: string
+  is_available?: boolean
+  source?: 'MANUAL' | 'GENERATED'
+  status?: 'AVAILABLE' | 'BOOKED' | 'CANCELLED' | 'EXPIRED'
+}
+
+type ProviderConsultation = {
+  id: string
+  patientName: string
+  staff_role?: string
+  roleLabel?: string
+  booking_date?: string
+  booking_time?: string
+  status?: string
+  meetingUrl?: string
+  canJoin?: boolean
+  appointmentType?: string
+}
 
 type MealItem = {
   food: string
@@ -172,6 +199,18 @@ function formatInr(val: number) {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0)
 }
 
+const formatDate = (value: string | null) => value ? new Date(value).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) : '-'
+
+const formatTime = (time?: string | null) => {
+  if (!time) return '-'
+  const [hourText, minuteText] = String(time).split(':')
+  const date = new Date()
+  date.setHours(Number(hourText), Number(minuteText), 0, 0)
+  return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+}
+
+const formatTimeKey = (time?: string | null) => String(time || '').slice(0, 5)
+
 // ==========================================
 // MAIN DIETITIAN PORTAL COMPONENT
 // ==========================================
@@ -228,6 +267,16 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
   const [payoutAmount, setPayoutAmount] = useState('')
   const [payoutError, setPayoutError] = useState('')
   const [payoutRequesting, setPayoutRequesting] = useState(false)
+
+  // Consultations & Availability State
+  const [availability, setAvailability] = useState<AvailabilitySlot[]>([])
+  const [dietitianConsultations, setDietitianConsultations] = useState<ProviderConsultation[]>([])
+  const [consultationStats, setConsultationStats] = useState<any>({})
+  const [consultationsSearch, setConsultationsSearch] = useState('')
+  const [consultationsStatus, setConsultationsStatus] = useState('')
+  const [consultationsPage, setConsultationsPage] = useState(1)
+  const [consultationsTotalPages, setConsultationsTotalPages] = useState(1)
+  const [savingAvailability, setSavingAvailability] = useState(false)
 
   // 1. Initial Authentication & User Verification
   useEffect(() => {
@@ -316,6 +365,34 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
         if (json.success) setFoodLogs(json.foodLogs || [])
       }
 
+      // Consultations & Availability
+      if (activeSection === 'consultations' || activeSection === 'schedule' || activeSection === 'dashboard') {
+        try {
+          const availRes = await fetch('/api/provider/availability', { headers })
+          const availJson = await availRes.json()
+          if (availRes.ok) {
+            setAvailability(availJson.availability || [])
+          }
+        } catch (e) {
+          console.warn('Availability fetch notice:', e)
+        }
+
+        try {
+          const consRes = await fetch(
+            `/api/provider/consultations?page=${consultationsPage}&limit=25&search=${encodeURIComponent(consultationsSearch)}&status=${consultationsStatus}`,
+            { headers }
+          )
+          const consJson = await consRes.json()
+          if (consRes.ok) {
+            setDietitianConsultations(consJson.consultations || [])
+            setConsultationStats(consJson.stats || {})
+            if (consJson.totalPages !== undefined) setConsultationsTotalPages(consJson.totalPages)
+          }
+        } catch (e) {
+          console.warn('Consultations fetch notice:', e)
+        }
+      }
+
       // Wallet
       if (activeSection === 'wallet' || activeSection === 'dashboard') {
         const res = await fetch('/api/provider/wallet', { headers })
@@ -329,7 +406,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
     } catch (err: any) {
       console.warn('Dietitian data fetch notice:', err)
     }
-  }, [activeSection, patientSearch, foodLogFilter, providerUser])
+  }, [activeSection, patientSearch, foodLogFilter, providerUser, consultationsPage, consultationsSearch, consultationsStatus])
 
   useEffect(() => {
     loadData()
@@ -369,15 +446,117 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
       if (json.success) {
         setSuccess(`Referral ${action === 'ACCEPT' ? 'accepted and patient assigned' : 'declined'} successfully!`)
         loadData()
-      } else {
-        setError(json.error || 'Failed to update referral')
       }
     } catch (err: any) {
       setError(err.message || 'Error processing referral')
     }
   }
 
-  // 5. Publish Nutrition Plan
+  // 5. Availability Schedule Generation & Management
+  const handleGenerateAvailability = async (submission: AvailabilitySubmission) => {
+    setSavingAvailability(true)
+    setError('')
+    setSuccess('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || ''
+      const headers = { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }
+
+      if (submission.scheduleMode === 'MANUAL') {
+        let createdCount = 0
+        let overlapErrors = 0
+        const otherErrors: string[] = []
+
+        for (const slot of submission.slots) {
+          try {
+            const res = await fetch('/api/provider/availability', {
+              method: 'POST',
+              headers,
+              body: JSON.stringify({
+                scheduleMode: 'MANUAL',
+                date: slot.available_date,
+                startTime: slot.time_slot,
+                duration: slot.slot_duration,
+              }),
+            })
+            const data = await res.json()
+            if (!res.ok) {
+              if (res.status === 409) overlapErrors++
+              else otherErrors.push(data.error || 'Unknown error')
+            } else {
+              createdCount++
+            }
+          } catch (err: any) {
+            otherErrors.push(err.message || 'Network error')
+          }
+        }
+
+        await loadData()
+        if (otherErrors.length > 0) {
+          setError(`Created ${createdCount} slot(s). Errors: ${otherErrors.join(', ')}`)
+        } else if (overlapErrors > 0) {
+          setSuccess(`Created ${createdCount} slot(s). ${overlapErrors} slot(s) skipped due to overlap.`)
+        } else {
+          setSuccess(`Created all ${createdCount} manual slot(s) successfully.`)
+        }
+      } else {
+        const res = await fetch('/api/provider/availability', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(submission),
+        })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data.error || 'Unable to generate availability.')
+        setSuccess(data.message || 'Availability schedule generated successfully.')
+        await loadData()
+      }
+    } catch (err: any) {
+      setError(err.message || 'Unable to generate availability.')
+    } finally {
+      setSavingAvailability(false)
+    }
+  }
+
+  const handleDeleteAvailability = async (slotId: string) => {
+    setError('')
+    setSuccess('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || ''
+      const res = await fetch(`/api/provider/availability?id=${slotId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Unable to cancel slot.')
+      setSuccess('Availability slot cancelled.')
+      await loadData()
+    } catch (err: any) {
+      setError(err.message || 'Unable to cancel slot.')
+    }
+  }
+
+  const handleUpdateConsultation = async (consultationId: string, action: 'complete' | 'missed' | 'cancel') => {
+    setError('')
+    setSuccess('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || ''
+      const res = await fetch('/api/provider/consultations', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ consultationId, action }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Unable to update consultation.')
+      setSuccess(action === 'complete' ? 'Session marked completed.' : action === 'missed' ? 'Session marked missed.' : 'Session cancelled.')
+      await loadData()
+    } catch (err: any) {
+      setError(err.message || 'Unable to update consultation.')
+    }
+  }
+
+  // 6. Publish Nutrition Plan
   const handlePublishPlan = async (planId: string) => {
     setIsPublishing(true)
     setError('')
@@ -571,6 +750,23 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
           >
             <Video className="w-4 h-4" />
             <span>Consultations</span>
+          </button>
+
+          <button
+            onClick={() => { setActiveSection('schedule'); setSelectedPatient(null) }}
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
+              activeSection === 'schedule' ? 'bg-[#0D9488] text-white shadow-sm' : 'text-slate-300 hover:bg-[#252C48]'
+            }`}
+          >
+            <div className="flex items-center gap-3">
+              <CalendarDays className="w-4 h-4" />
+              <span>Availability</span>
+            </div>
+            {availability.filter(s => new Date(`${s.available_date}T${s.start_time}`).getTime() > Date.now()).length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-[#2C344E] text-[#2DD4BF] font-black">
+                {availability.filter(s => new Date(`${s.available_date}T${s.start_time}`).getTime() > Date.now()).length}
+              </span>
+            )}
           </button>
 
           <button
@@ -1937,33 +2133,306 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
         {/* SECTION 6: CONSULTATIONS */}
         {activeSection === 'consultations' && (
           <div className="space-y-6">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
+                <p className="text-xs font-black uppercase tracking-wider text-[#0D9488]">Telehealth Consultations</p>
                 <h1 className="text-2xl font-black text-[#1A1F36]">Nutrition Consultations</h1>
-                <p className="text-xs text-slate-500 font-semibold">Scheduled and historical telehealth sessions</p>
+                <p className="text-xs text-slate-500 font-semibold">Scheduled and historical clinical telehealth sessions</p>
               </div>
-              <Link
-                href="/provider/schedule"
-                className="px-4 py-2 rounded-full border border-[#E8DED4] text-xs font-bold text-[#1A1F36] hover:bg-white flex items-center gap-2"
+              <button
+                onClick={() => setActiveSection('schedule')}
+                className="px-4 py-2 rounded-full bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold transition-colors flex items-center gap-2 shadow-sm self-start"
               >
-                <Calendar className="w-4 h-4 text-[#0D9488]" />
+                <CalendarDays className="w-4 h-4 text-white" />
                 <span>Manage Availability</span>
-              </Link>
+              </button>
             </div>
 
-            <div className="rounded-2xl border border-[#E8DED4] bg-white p-8 text-center shadow-sm">
-              <Video className="w-10 h-10 text-[#0D9488] mx-auto mb-3" />
-              <h3 className="text-sm font-bold text-[#1A1F36]">Telehealth Consultation Engine</h3>
-              <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                Consultations use 8LIV's integrated WebRTC / Stream video infrastructure with zero setup required.
-              </p>
-              <div className="mt-4">
-                <Link
-                  href="/provider/consultations"
-                  className="px-5 py-2.5 rounded-full bg-[#1A1F36] text-white text-xs font-bold hover:bg-[#2C344E] inline-block"
-                >
-                  View All Telehealth Sessions
-                </Link>
+            {/* Stat Cards */}
+            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+              {[
+                { label: 'Today', value: consultationStats?.today || 0, color: 'text-[#0D9488]' },
+                { label: 'Upcoming', value: consultationStats?.upcoming || 0, color: 'text-[#1A1F36]' },
+                { label: 'Completed', value: consultationStats?.completed || 0, color: 'text-[#166534]' },
+                { label: 'Missed', value: consultationStats?.missed || 0, color: 'text-[#B94D4D]' },
+                { label: 'Cancelled', value: consultationStats?.cancelled || 0, color: 'text-slate-400' },
+              ].map((card) => (
+                <div key={card.label} className="rounded-2xl border border-[#E8DED4] bg-white p-4 shadow-sm">
+                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{card.label}</p>
+                  <p className={`mt-2 text-2xl font-black ${card.color}`}>{card.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Sessions Table Container */}
+            <div className="rounded-2xl border border-[#E8DED4] bg-white p-5 md:p-6 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5">
+                <h3 className="text-base font-black text-[#1A1F36]">Assigned Video Sessions</h3>
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <div className="relative">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      placeholder="Search sessions..."
+                      value={consultationsSearch}
+                      onChange={(e) => {
+                        setConsultationsSearch(e.target.value)
+                        setConsultationsPage(1)
+                      }}
+                      className="pl-10 pr-4 py-2 border border-[#E8DED4] rounded-xl text-xs w-full sm:w-52"
+                    />
+                  </div>
+                  <select
+                    value={consultationsStatus}
+                    onChange={(e) => {
+                      setConsultationsStatus(e.target.value)
+                      setConsultationsPage(1)
+                    }}
+                    className="px-3 py-2 border border-[#E8DED4] rounded-xl text-xs bg-white text-slate-700"
+                  >
+                    <option value="">All Statuses</option>
+                    <option value="scheduled">Scheduled</option>
+                    <option value="completed">Completed</option>
+                    <option value="missed_by_patient">Missed by Patient</option>
+                    <option value="cancelled_by_doctor">Cancelled by Provider</option>
+                    <option value="cancelled_by_patient">Cancelled by Patient</option>
+                  </select>
+                </div>
+              </div>
+
+              {dietitianConsultations.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left min-w-[700px]">
+                    <thead>
+                      <tr className="border-b border-[#E8DED4] text-[11px] font-black uppercase tracking-wider text-slate-400">
+                        <th className="py-3 px-2">Patient</th>
+                        <th className="py-3 px-2">Date</th>
+                        <th className="py-3 px-2">Time</th>
+                        <th className="py-3 px-2">Type</th>
+                        <th className="py-3 px-2">Status</th>
+                        <th className="py-3 px-2 text-right">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E8DED4]">
+                      {dietitianConsultations.map((session) => {
+                        const status = String(session.status || '').toLowerCase()
+                        const terminal = ['completed', 'cancelled', 'cancelled_by_doctor', 'cancelled_by_patient', 'missed', 'missed_by_patient'].includes(status)
+                        return (
+                          <tr key={session.id} className="text-xs">
+                            <td className="py-3.5 px-2 font-bold text-[#1A1F36]">{session.patientName}</td>
+                            <td className="py-3.5 px-2 text-slate-600">{formatDate(session.booking_date || null)}</td>
+                            <td className="py-3.5 px-2 text-slate-600">{formatTime(session.booking_time)}</td>
+                            <td className="py-3.5 px-2 font-semibold text-slate-700">{session.appointmentType || session.roleLabel || 'Nutrition Consult'}</td>
+                            <td className="py-3.5 px-2">
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
+                                status === 'completed' ? 'bg-[#DCFCE7] text-[#166534]' :
+                                status === 'scheduled' ? 'bg-[#E0F2FE] text-[#0369A1]' :
+                                'bg-slate-100 text-slate-600'
+                              }`}>
+                                {session.status || 'scheduled'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 px-2 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                {session.canJoin && session.meetingUrl ? (
+                                  <a
+                                    href={session.meetingUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="px-3.5 py-1.5 rounded-lg bg-[#0D9488] text-white text-xs font-bold hover:bg-[#0F766E] shadow-sm"
+                                  >
+                                    Join Call
+                                  </a>
+                                ) : (
+                                  <span className="px-3 py-1.5 text-[11px] text-slate-400 font-semibold">
+                                    {terminal ? 'Ended' : 'Opens 15m prior'}
+                                  </span>
+                                )}
+                                {!terminal && (
+                                  <>
+                                    <button
+                                      onClick={() => handleUpdateConsultation(session.id, 'complete')}
+                                      className="px-2.5 py-1.5 rounded-lg border border-[#E8DED4] text-slate-700 hover:bg-slate-50 text-[11px] font-bold"
+                                    >
+                                      Complete
+                                    </button>
+                                    <button
+                                      onClick={() => handleUpdateConsultation(session.id, 'missed')}
+                                      className="px-2.5 py-1.5 rounded-lg border border-[#FED7AA] bg-[#FFF7ED] text-[#C4622D] hover:bg-[#FFEDD5] text-[11px] font-bold"
+                                    >
+                                      Missed
+                                    </button>
+                                    <button
+                                      onClick={() => handleUpdateConsultation(session.id, 'cancel')}
+                                      className="px-2.5 py-1.5 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] text-[#B94D4D] hover:bg-[#FEE2E2] text-[11px] font-bold"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="p-8 text-center bg-[#FAF8F5] rounded-xl text-slate-400 text-xs font-bold">
+                  No scheduled video consultations found. Set your availability slots so patients can book sessions!
+                </div>
+              )}
+
+              {consultationsTotalPages > 1 && (
+                <div className="flex items-center justify-between border-t border-[#E8DED4] pt-4 mt-4 text-xs font-bold text-slate-600">
+                  <button
+                    disabled={consultationsPage <= 1}
+                    onClick={() => setConsultationsPage((p) => Math.max(1, p - 1))}
+                    className="px-3 py-1.5 border border-[#E8DED4] rounded-lg disabled:opacity-40 hover:bg-slate-50"
+                  >
+                    Previous
+                  </button>
+                  <span>Page {consultationsPage} of {consultationsTotalPages}</span>
+                  <button
+                    disabled={consultationsPage >= consultationsTotalPages}
+                    onClick={() => setConsultationsPage((p) => Math.min(consultationsTotalPages, p + 1))}
+                    className="px-3 py-1.5 border border-[#E8DED4] rounded-lg disabled:opacity-40 hover:bg-slate-50"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* SECTION 7: SCHEDULE & AVAILABILITY */}
+        {activeSection === 'schedule' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-black uppercase tracking-wider text-[#0D9488]">Appointment Availability</p>
+                <h1 className="text-2xl font-black text-[#1A1F36]">Manage Availability & Schedule</h1>
+                <p className="text-xs text-slate-500 font-semibold mt-0.5">Define your available hours and consultation slots for patients</p>
+              </div>
+              <button
+                onClick={() => setActiveSection('consultations')}
+                className="px-4 py-2 rounded-full border border-[#E8DED4] text-xs font-bold text-[#1A1F36] hover:bg-white flex items-center gap-2 self-start"
+              >
+                <Video className="w-4 h-4 text-[#0D9488]" />
+                <span>View Consultations</span>
+              </button>
+            </div>
+
+            {/* Scheduler Component */}
+            <ProviderAvailabilityScheduler
+              providerLabel="dietitian"
+              onGenerate={handleGenerateAvailability}
+              isSaving={savingAvailability}
+            />
+
+            {/* Slots Overview: Available Slots vs Booked Slots */}
+            <div className="grid gap-6 xl:grid-cols-2">
+              {/* Available Slots */}
+              <div className="rounded-2xl border border-[#E8DED4] bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-black text-[#1A1F36] flex items-center gap-2">
+                    <CalendarDays className="w-4 h-4 text-[#0D9488]" />
+                    Upcoming Available Slots
+                  </h3>
+                  <span className="text-xs font-bold text-slate-400">
+                    {availability.filter(s => new Date(`${s.available_date}T${s.start_time}`).getTime() > Date.now()).length} Slots
+                  </span>
+                </div>
+                {(() => {
+                  const now = Date.now()
+                  const futureSlots = availability.filter(
+                    (slot) => new Date(`${slot.available_date}T${slot.start_time}`).getTime() > now
+                  )
+                  const bookedKeys = new Set(
+                    dietitianConsultations
+                      .filter((c) => ['scheduled', 'calling', 'attended'].includes(String(c.status || '').toLowerCase()))
+                      .map((c) => `${c.booking_date}-${formatTimeKey(c.booking_time)}`)
+                  )
+                  const unbookedSlots = futureSlots.filter(
+                    (slot) => !bookedKeys.has(`${slot.available_date}-${formatTimeKey(slot.start_time)}`)
+                  )
+
+                  return unbookedSlots.length > 0 ? (
+                    <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+                      {unbookedSlots.slice(0, 50).map((slot) => (
+                        <div key={slot.id} className="flex items-center justify-between gap-3 p-3.5 rounded-xl bg-[#FAF8F5] border border-[#E8DED4]">
+                          <div>
+                            <p className="font-bold text-xs text-[#1A1F36]">{formatDate(slot.available_date)}</p>
+                            <p className="text-[11px] font-semibold text-slate-500 mt-0.5">
+                              {formatTime(slot.start_time)} – {formatTime(slot.end_time)} <span className="text-slate-400">• {slot.source || 'GENERATED'}</span>
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => handleDeleteAvailability(slot.id)}
+                            className="p-2 rounded-lg text-[#B94D4D] hover:bg-[#FEE2E2] transition-colors"
+                            title="Cancel slot"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center bg-[#FAF8F5] rounded-xl text-slate-400 text-xs font-bold">
+                      No upcoming availability slots. Use the scheduler above to generate slots.
+                    </div>
+                  )
+                })()}
+              </div>
+
+              {/* Booked Slots */}
+              <div className="rounded-2xl border border-[#E8DED4] bg-white p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-base font-black text-[#1A1F36] flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#0D9488]" />
+                    Booked Patient Sessions
+                  </h3>
+                  <span className="text-xs font-bold text-slate-400">
+                    {dietitianConsultations.filter(c => ['scheduled', 'calling', 'attended'].includes(String(c.status || '').toLowerCase())).length} Booked
+                  </span>
+                </div>
+                {(() => {
+                  const booked = dietitianConsultations.filter(c => ['scheduled', 'calling', 'attended'].includes(String(c.status || '').toLowerCase()))
+                  return booked.length > 0 ? (
+                    <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
+                      {booked.map((item) => (
+                        <div key={item.id} className="p-3.5 rounded-xl bg-[#FAF8F5] border border-[#E8DED4] flex items-center justify-between">
+                          <div>
+                            <p className="font-bold text-xs text-[#1A1F36]">{item.patientName}</p>
+                            <p className="text-[11px] font-semibold text-slate-500 mt-0.5">
+                              {formatDate(item.booking_date || null)} at {formatTime(item.booking_time)}
+                            </p>
+                          </div>
+                          {item.canJoin && item.meetingUrl ? (
+                            <a
+                              href={item.meetingUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-3 py-1.5 rounded-lg bg-[#0D9488] text-white text-[11px] font-bold hover:bg-[#0F766E]"
+                            >
+                              Join
+                            </a>
+                          ) : (
+                            <span className="text-[10px] font-bold px-2 py-1 rounded bg-[#E0F2FE] text-[#0369A1] uppercase">
+                              {item.status || 'Scheduled'}
+                            </span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-8 text-center bg-[#FAF8F5] rounded-xl text-slate-400 text-xs font-bold">
+                      No booked consultations yet. Bookings will appear here when patients schedule a slot.
+                    </div>
+                  )
+                })()}
               </div>
             </div>
           </div>
