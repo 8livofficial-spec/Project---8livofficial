@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import {
   X, User, Mail, Phone, Calendar, Ruler, Scale, Target, Activity,
   AlertTriangle, ShieldCheck, Heart, FileText, Pill, Stethoscope,
-  Copy, Check, ExternalLink, Sparkles, MapPin, ChevronRight
+  Copy, Check, ExternalLink, Sparkles, MapPin, ChevronRight, Apple
 } from 'lucide-react';
 
 export interface PatientProfileSidebarProps {
@@ -14,6 +14,7 @@ export interface PatientProfileSidebarProps {
   onIssueRx?: () => void;
   hasIssuedRx?: boolean;
   onViewRx?: () => void;
+  onReferDietitian?: () => void;
 }
 
 function formatDisplayValue(val: any, fallback = ''): string {
@@ -42,6 +43,7 @@ export default function PatientProfileSidebar({
   onIssueRx,
   hasIssuedRx,
   onViewRx,
+  onReferDietitian,
 }: PatientProfileSidebarProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
 
@@ -344,14 +346,14 @@ export default function PatientProfileSidebar({
         </div>
 
         {/* Drawer Sticky Footer Actions */}
-        <div className="p-4 border-t border-[#1A1F36]/10 bg-white flex items-center gap-3">
+        <div className="p-4 border-t border-[#1A1F36]/10 bg-white flex items-center gap-2.5 flex-wrap sm:flex-nowrap">
           {hasIssuedRx && onViewRx ? (
             <button
               onClick={() => {
                 onClose();
                 onViewRx();
               }}
-              className="flex-1 py-3 px-4 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-emerald-100 transition-colors cursor-pointer"
+              className="flex-1 py-3 px-3 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-300 font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-emerald-100 transition-colors cursor-pointer whitespace-nowrap"
             >
               <ShieldCheck className="w-4 h-4 text-emerald-600" /> View Issued Rx
             </button>
@@ -361,15 +363,28 @@ export default function PatientProfileSidebar({
                 onClose();
                 onIssueRx();
               }}
-              className="flex-1 py-3 px-4 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#0F766E] text-white font-bold text-xs flex items-center justify-center gap-1.5 hover:from-[#0B7A6F] hover:to-[#0D625C] shadow-sm transition-all cursor-pointer"
+              className="flex-1 py-3 px-3 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#0F766E] text-white font-bold text-xs flex items-center justify-center gap-1.5 hover:from-[#0B7A6F] hover:to-[#0D625C] shadow-sm transition-all cursor-pointer whitespace-nowrap"
             >
-              <Pill className="w-4 h-4" /> Issue E-Prescription
+              <Pill className="w-4 h-4" /> Issue Rx
             </button>
           ) : null}
 
+          {onReferDietitian && (
+            <button
+              onClick={() => {
+                onClose();
+                onReferDietitian();
+              }}
+              className="flex-1 py-3 px-3 rounded-xl bg-[#FAF8F5] text-[#0D9488] border border-[#0D9488]/30 font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#0D9488]/10 transition-colors cursor-pointer whitespace-nowrap"
+              title="Refer to clinical dietitian for medical nutrition therapy"
+            >
+              <Apple className="w-4 h-4 text-[#0D9488]" /> Refer Dietitian
+            </button>
+          )}
+
           <button
             onClick={onClose}
-            className="py-3 px-5 rounded-xl border border-[#1A1F36]/15 text-[#40516A] font-bold text-xs hover:bg-[#F5F0EB] transition-colors cursor-pointer"
+            className="py-3 px-4 rounded-xl border border-[#1A1F36]/15 text-[#40516A] font-bold text-xs hover:bg-[#F5F0EB] transition-colors cursor-pointer"
           >
             Close
           </button>
