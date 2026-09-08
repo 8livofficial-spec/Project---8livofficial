@@ -64,6 +64,9 @@ export const ProviderInvitationService = {
 
     const userId = authData.user.id
     const [firstName, ...rest] = body.fullName.trim().split(/\s+/)
+    const hasAdminCredentials = Boolean(
+      body.qualification || body.institution || body.yearsExperience || body.registrationNumber
+    )
 
     const { error: profileError } = await supabaseAdmin.from('profiles').upsert({
       id: userId,
@@ -72,6 +75,8 @@ export const ProviderInvitationService = {
       last_name: rest.join(' '),
       phone_number: phoneNumber,
       role: legacyRole(body.role),
+      qualification: body.qualification || null,
+      specialization: body.specialization || null,
     })
     if (profileError) throw profileError
 
@@ -89,15 +94,86 @@ export const ProviderInvitationService = {
         joining_date: body.joiningDate || null,
         compensation_model_placeholder: body.compensationModelPlaceholder || null,
         internal_notes: body.internalNotes || null,
-        onboarding_status: 'NOT_STARTED',
+        onboarding_status: hasAdminCredentials ? 'APPROVED' : 'NOT_STARTED',
         account_status: 'INVITED',
-        clinical_verification_status: 'PENDING',
+        clinical_verification_status: hasAdminCredentials ? 'APPROVED' : 'PENDING',
         payout_status: 'NOT_CONFIGURED',
         created_by: context.adminId,
       })
       .select('id, user_id, full_name, email, role, onboarding_status, account_status')
       .single()
     if (providerError) throw providerError
+
+    // Pre-populate professional credentials (degrees, institution, registration, years)
+    if (hasAdminCredentials) {
+      try {
+        const langs = Array.isArray(body.consultationLanguages)
+          ? body.consultationLanguages
+          : (body.consultationLanguages
+              ? String(body.consultationLanguages).split(',').map((s: string) => s.trim()).filter(Boolean)
+              : ['English', 'Hindi'])
+
+        await supabaseAdmin.from('provider_professional_details').upsert({
+          provider_id: provider.id,
+          role: body.role,
+          schema_version: 1,
+          details: {
+            qualification: body.qualification || '',
+            institution: body.institution || '',
+            yearsOfExperience: body.yearsExperience ? Number(body.yearsExperience) : 0,
+            registrationNumber: body.registrationNumber || '',
+            registrationCouncil: body.registrationCouncil || '',
+            specialization: body.specialization || '',
+            areasOfExpertise: body.specialization ? [body.specialization] : [],
+            consultationLanguages: langs,
+          },
+          verification_status: 'APPROVED',
+          submitted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'provider_id' })
+      } catch (err) {
+        console.warn('Could not upsert provider_professional_details:', err)
+      }
+    }
+
+    // Pre-populate runtime provider_profiles table for consultation matching and appointment booking
+    try {
+      await supabaseAdmin.from('provider_profiles').upsert({
+        provider_id: userId,
+        role: legacyRole(body.role),
+        full_name: body.fullName,
+        email,
+        phone_number: phoneNumber || '',
+        specialization: body.specialization || '',
+        qualification: body.qualification || '',
+        years_experience: body.yearsExperience ? Number(body.yearsExperience) : 0,
+        registration_number: body.registrationNumber || '',
+        consultation_type: body.consultationType || 'Video Consultation',
+        payout_amount: body.payoutAmount ? Number(body.payoutAmount) : (body.role === 'DOCTOR' ? 300 : 250),
+        status: 'active',
+        bank_account_details: {},
+        upi_id: '',
+        updated_at: new Date().toISOString(),
+      })
+    } catch (err) {
+      console.warn('Could not upsert provider_profiles:', err)
+    }
+
+    // Seed doctor_profiles if DOCTOR role
+    if (body.role === 'DOCTOR') {
+      try {
+        await supabaseAdmin.from('doctor_profiles').upsert({
+          id: userId,
+          full_name: body.fullName.startsWith('Dr.') ? body.fullName : `Dr. ${body.fullName}`,
+          specialty: body.specialization || 'Endocrinologist',
+          qualification: body.qualification || null,
+          mci_number: body.registrationNumber || null,
+          registration_council: body.registrationCouncil || 'Medical Council of India',
+        })
+      } catch (err) {
+        console.warn('Could not upsert doctor_profiles:', err)
+      }
+    }
 
     await supabaseAdmin.from('provider_wallets').insert({ provider_id: provider.id, currency: 'INR' })
 
@@ -121,19 +197,28 @@ export const ProviderInvitationService = {
       resourceType: 'provider_profiles_v2',
       resourceId: provider.id,
       providerId: provider.id,
-      newValues: { email, role: body.role, accountStatus: 'INVITED' },
+      newValues: { email, role: body.role, accountStatus: 'INVITED', preVerified: hasAdminCredentials },
     })
+
+    const activationLink = `${getOrigin(context.request)}/provider/activate?token=${encodeURIComponent(token)}`
 
     await EmailService.sendProviderInvitation({
       email,
       name: body.fullName,
       patientId: userId,
       role: body.role,
-      link: `${getOrigin(context.request)}/provider/activate?token=${encodeURIComponent(token)}`,
+      link: activationLink,
       expiresIn: '7 days',
     })
 
-    return { providerId: provider.id, userId, email: provider.email, role: provider.role, accountStatus: provider.account_status }
+    return {
+      providerId: provider.id,
+      userId,
+      email: provider.email,
+      role: provider.role,
+      accountStatus: provider.account_status,
+      activationLink,
+    }
   },
 }
 
@@ -199,9 +284,21 @@ export const ProviderActivationService = {
     })
     if (updateError) throw updateError
 
+    const { data: provV2 } = await supabaseAdmin
+      .from('provider_profiles_v2')
+      .select('clinical_verification_status, onboarding_status')
+      .eq('id', tokenRow.provider_id)
+      .maybeSingle()
+
+    const isPreVerified = provV2?.clinical_verification_status === 'APPROVED'
+
     await Promise.all([
       supabaseAdmin.from('provider_activation_tokens').update({ used_at: new Date().toISOString() }).eq('id', tokenRow.id),
-      supabaseAdmin.from('provider_profiles_v2').update({ account_status: 'ONBOARDING', onboarding_status: 'NOT_STARTED', updated_at: new Date().toISOString() }).eq('id', tokenRow.provider_id),
+      supabaseAdmin.from('provider_profiles_v2').update({
+        account_status: isPreVerified ? 'ACTIVE' : 'ONBOARDING',
+        onboarding_status: isPreVerified ? 'APPROVED' : 'NOT_STARTED',
+        updated_at: new Date().toISOString()
+      }).eq('id', tokenRow.provider_id),
     ])
 
     await writeProviderAudit({

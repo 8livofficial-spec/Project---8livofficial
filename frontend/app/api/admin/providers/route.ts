@@ -191,6 +191,8 @@ export async function POST(request: Request) {
       last_name: lastName || '',
       phone_number: phoneNumber || '',
       role,
+      qualification: qualification || null,
+      specialization: specialization || null,
     })
     if (profileErr) return NextResponse.json({ error: profileErr.message }, { status: 500 })
 
@@ -216,8 +218,51 @@ export async function POST(request: Request) {
     const usingProfilesFallback = Boolean(providerErr && isMissingProviderProfilesTable(providerErr))
     if (providerErr && !usingProfilesFallback) return NextResponse.json({ error: providerErr.message }, { status: 500 })
 
+    try {
+      const { data: v2Record } = await supabaseAdmin.from('provider_profiles_v2').upsert({
+        user_id: providerId,
+        legacy_provider_id: providerId,
+        full_name: fullName,
+        email,
+        phone_number: phoneNumber || null,
+        role: role.toUpperCase(),
+        specialization: specialization || null,
+        onboarding_status: 'APPROVED',
+        account_status: 'ACTIVE',
+        clinical_verification_status: 'APPROVED',
+        payout_status: 'NOT_CONFIGURED',
+        created_by: admin.user.id,
+      }).select('id').maybeSingle()
+
+      if (v2Record?.id) {
+        await supabaseAdmin.from('provider_professional_details').upsert({
+          provider_id: v2Record.id,
+          role: role.toUpperCase(),
+          schema_version: 1,
+          details: {
+            qualification: qualification || '',
+            yearsOfExperience: Number(yearsExperience || 0),
+            registrationNumber: registrationNumber || '',
+            specialization: specialization || '',
+            areasOfExpertise: specialization ? [specialization] : [],
+          },
+          verification_status: 'APPROVED',
+          submitted_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, { onConflict: 'provider_id' })
+      }
+    } catch (v2Err) {
+      console.warn('[api/admin/providers] Failed to sync v2 tables:', v2Err)
+    }
+
     if (role === 'doctor') {
-      await supabaseAdmin.from('doctor_profiles').upsert({ id: providerId, full_name: `Dr. ${fullName}` })
+      await supabaseAdmin.from('doctor_profiles').upsert({
+        id: providerId,
+        full_name: fullName.startsWith('Dr.') ? fullName : `Dr. ${fullName}`,
+        specialty: specialization || 'Endocrinologist',
+        qualification: qualification || null,
+        mci_number: registrationNumber || null,
+      })
       // SECURITY: doctor_payout_accounts is NOT pre-populated by admin.
       // The doctor self-configures bank/UPI details through their provider onboarding flow.
     }

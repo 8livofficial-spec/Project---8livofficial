@@ -1409,9 +1409,8 @@ export async function publishNutritionPlan(
   let patientAge: any = '-'
   let patientGender = '-'
   let dietitianName = 'Clinical Dietitian'
-  const dietitianReg = 'IDA-8LIV-REG'
-
-
+  let dietitianQualification = 'M.Sc. Clinical Nutrition, RD'
+  let dietitianReg = 'IDA-8LIV-REG'
 
   try {
     const { data: pat } = await supabaseAdmin
@@ -1430,12 +1429,24 @@ export async function publishNutritionPlan(
   }
 
   try {
-    const { data: diet } = await supabaseAdmin
-      .from('profiles')
-      .select('full_name')
-      .eq('id', dietitianId)
-      .maybeSingle()
-    if (diet) dietitianName = diet.full_name || 'Clinical Dietitian'
+    const [{ data: dietProfile }, { data: provRow }, { data: provV2 }] = await Promise.all([
+      supabaseAdmin.from('profiles').select('full_name, qualification').eq('id', dietitianId).maybeSingle(),
+      supabaseAdmin.from('provider_profiles').select('full_name, qualification, registration_number').eq('provider_id', dietitianId).maybeSingle(),
+      supabaseAdmin.from('provider_profiles_v2').select('full_name').eq('user_id', dietitianId).maybeSingle(),
+    ])
+
+    dietitianName =
+      provRow?.full_name ||
+      provV2?.full_name ||
+      dietProfile?.full_name ||
+      'Clinical Dietitian'
+
+    if (provRow?.qualification || dietProfile?.qualification) {
+      dietitianQualification = provRow?.qualification || dietProfile?.qualification || dietitianQualification
+    }
+    if (provRow?.registration_number) {
+      dietitianReg = provRow.registration_number
+    }
   } catch (err) {
     console.warn('Fetch dietitian info for pdf notice:', err)
   }
@@ -1459,7 +1470,7 @@ export async function publishNutritionPlan(
     patient_gender: patientGender,
     patient_age: patientAge,
     dietitian_name: dietitianName,
-    dietitian_qualification: 'M.Sc. Clinical Nutrition, RD',
+    dietitian_qualification: dietitianQualification,
     dietitian_registration_number: dietitianReg,
     meals: plan.meals,
   })

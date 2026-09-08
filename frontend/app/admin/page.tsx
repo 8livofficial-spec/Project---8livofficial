@@ -5,7 +5,7 @@ import { Suspense, useState, useEffect, useRef, type FormEvent } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
-import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Package, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer, Trash2, GitMerge, ClipboardList, DollarSign, Calendar, UserCheck, XCircle, TrendingUp, BadgeCheck, Menu, X, Copy, KeyRound, Sparkles, Check, Building2 } from 'lucide-react';
+import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Package, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer, Trash2, GitMerge, ClipboardList, DollarSign, Calendar, UserCheck, XCircle, TrendingUp, BadgeCheck, Menu, X, Copy, KeyRound, Sparkles, Check, Building2, UserPlus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import SessionMonitor from '@/components/admin/SessionMonitor';
 import { authedFetch } from '@/lib/apiClient';
@@ -1998,6 +1998,9 @@ function AdminDashboardContent() {
                   <option value="fitness_coach">Fitness Coach</option>
                 </select>
                 <button onClick={resetProviderForm} className="rounded-xl bg-[#1A1F36] px-5 py-3 text-xs font-black uppercase tracking-wider text-white">Add Provider</button>
+                <a href="/admin/providers/new" className="rounded-xl bg-[#0D9488] px-4 py-3 text-xs font-black uppercase tracking-wider text-white inline-flex items-center gap-1.5 shadow-sm hover:bg-[#0b7a70] transition-colors">
+                  <UserPlus className="h-4 w-4" /> Setup & Invite Provider
+                </a>
               </div>
             </div>
 
