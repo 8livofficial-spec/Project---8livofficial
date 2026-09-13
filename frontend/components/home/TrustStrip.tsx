@@ -1,95 +1,87 @@
 'use client'
 
-import React, { useRef, useEffect } from 'react'
-import { Stethoscope, Utensils, Dumbbell, ShieldCheck } from 'lucide-react'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { prefersReducedMotion } from '@/lib/scrollMotion'
-
-gsap.registerPlugin(ScrollTrigger)
+import React from 'react'
+import { Stethoscope, Utensils, ShieldCheck, Truck, Lock, HeartPulse, Activity } from 'lucide-react'
+import LogoLoop, { LogoItem } from '@/components/ui/LogoLoop'
 
 const trustPillars = [
   {
-    icon: <Stethoscope className="w-4 h-4 text-[#0D9488]" />,
-    label: 'Doctor-Led Care',
-    detail: 'Board-Certified Physicians',
+    icon: <Stethoscope className="w-4 h-4 text-[#00A884]" />,
+    label: 'Doctor-Led Consultations',
+    detail: 'Board-Certified Indian Physicians',
   },
   {
-    icon: <Utensils className="w-4 h-4 text-[#0D9488]" />,
-    label: 'Clinical Nutrition',
-    detail: 'Registered Dietitians',
+    icon: <Truck className="w-4 h-4 text-[#00A884]" />,
+    label: 'Doorstep Cold Delivery',
+    detail: 'Discreet & Temperature-Controlled',
   },
   {
-    icon: <Dumbbell className="w-4 h-4 text-[#0D9488]" />,
-    label: 'Fitness Coaching',
-    detail: '1-on-1 Certified Trainers',
+    icon: <Utensils className="w-4 h-4 text-[#00A884]" />,
+    label: 'Indian Diet Adaptation',
+    detail: 'No Extreme Starvation Diets',
   },
   {
-    icon: <ShieldCheck className="w-4 h-4 text-[#0D9488]" />,
-    label: 'Clinical Security',
-    detail: 'Protected Health Records',
+    icon: <Lock className="w-4 h-4 text-[#00A884]" />,
+    label: '100% Confidential',
+    detail: 'Encrypted Telehealth Records',
+  },
+  {
+    icon: <HeartPulse className="w-4 h-4 text-[#00A884]" />,
+    label: 'Dedicated Care Team',
+    detail: 'Continuous WhatsApp & App Support',
+  },
+  {
+    icon: <ShieldCheck className="w-4 h-4 text-[#00A884]" />,
+    label: 'CDSCO Aligned Medicine',
+    detail: 'Evidence-Based GLP-1 Care',
+  },
+  {
+    icon: <Activity className="w-4 h-4 text-[#00A884]" />,
+    label: 'Zero Starvation Philosophy',
+    detail: 'Metabolic Balance & Vitality',
   },
 ]
 
 export default function TrustStrip() {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const ctx = useRef<gsap.Context | null>(null)
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    ctx.current = gsap.context(() => {
-      if (prefersReducedMotion()) return
-
-      gsap.fromTo(
-        container.children,
-        { opacity: 0, y: 15 },
-        {
-          opacity: 1,
-          y: 0,
-          stagger: 0.1,
-          duration: 0.7,
-          ease: 'power3.out',
-          scrollTrigger: {
-            trigger: container,
-            start: 'top 92%',
-            once: true,
-          },
-        }
-      )
-    })
-
-    return () => ctx.current?.revert()
-  }, [])
-
-  return (
-    <div className="w-full bg-[#EDF4F2]/50 border-y border-[#D46E53]/10 py-6 sm:py-8">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div
-          ref={containerRef}
-          className="grid grid-cols-2 lg:grid-cols-4 gap-6 lg:gap-8 items-center justify-items-center"
-        >
-          {trustPillars.map((item, idx) => (
-            <div
-              key={idx}
-              className="flex items-center gap-3 w-full max-w-[240px] px-2"
-            >
-              <div className="w-8 h-8 rounded-lg bg-[#5D7068]/8 border border-[#5D7068]/15 flex items-center justify-center shrink-0">
-                {item.icon}
-              </div>
-              <div className="flex flex-col">
-                <span className="text-xs font-bold font-sora text-[#0F172A] leading-tight">
-                  {item.label}
-                </span>
-                <span className="text-[10px] text-[#5D7068] font-medium mt-0.5 uppercase tracking-wider">
-                  {item.detail}
-                </span>
-              </div>
-            </div>
-          ))}
+  const trustLogos: LogoItem[] = trustPillars.map((item, idx) => ({
+    title: item.label,
+    node: (
+      <div
+        key={idx}
+        className="flex items-center gap-3 px-4 py-3 rounded-2xl bg-slate-50/90 border border-slate-100 hover:border-[#00A884]/30 hover:bg-white hover:shadow-md transition-all duration-200 cursor-default select-none min-w-[260px] sm:min-w-[280px]"
+      >
+        <div className="w-9 h-9 rounded-xl bg-[#00A884]/10 flex items-center justify-center shrink-0">
+          {item.icon}
+        </div>
+        <div className="flex flex-col min-w-0 text-left">
+          <span className="text-xs sm:text-sm font-bold font-sora text-slate-900 leading-tight whitespace-nowrap">
+            {item.label}
+          </span>
+          <span className="text-[10px] sm:text-[11px] text-slate-500 font-medium mt-0.5 whitespace-nowrap">
+            {item.detail}
+          </span>
         </div>
       </div>
-    </div>
+    ),
+  }))
+
+  return (
+    <section aria-label="Clinical Trust Pillars" className="w-full bg-white border-y border-slate-200/80 py-4 sm:py-6 overflow-hidden">
+      <div className="w-full">
+        <LogoLoop
+          logos={trustLogos}
+          speed={45}
+          direction="left"
+          logoHeight={64}
+          gap={20}
+          hoverSpeed={10}
+          fadeOut={true}
+          fadeOutColor="#ffffff"
+          ariaLabel="Clinical Care Trust Pillars"
+          className="w-full"
+        />
+      </div>
+    </section>
   )
 }
+

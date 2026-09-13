@@ -252,19 +252,27 @@ export async function POST(request: Request) {
       // but ideally we should log this in an error tracking system.
     }
 
+    const composedAddress = formData.address || [
+      formData.street_address,
+      formData.city,
+      formData.state,
+      formData.pincode ? `PIN: ${formData.pincode}` : '',
+    ].filter(Boolean).join(', ')
+
     const assessmentPayload = {
       patient_id: patientId,
       first_name: formData.first_name,
       last_name: formData.last_name,
       age: parseInt(formData.age) || null,
       phone_number: normalizedPhone.e164,
-      address: formData.address,
+      address: composedAddress || null,
       agree_terms: formData.agree_terms,
       height_cm: parseFloat(formData.height_cm) || null,
       weight_kg: parseFloat(formData.weight_kg) || null,
       goal_weight_kg: parseFloat(formData.goal_weight_kg) || null,
       medical_history: {
         gender: formData.gender,
+        waist_cm: parseFloat(formData.waist_cm) || null,
         eligibility_status: eligibility.status,
         eligibility_reason: eligibility.reason,
         eligibility_message: eligibility.message,

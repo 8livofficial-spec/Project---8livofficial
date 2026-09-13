@@ -264,8 +264,7 @@ export default function UnifiedLogin() {
     <div className="min-h-screen bg-white flex">
       {/* Left: Branding & Visual */}
       <div 
-        className="hidden lg:flex lg:w-1/2 relative overflow-hidden items-center justify-center p-12 bg-cover bg-center bg-[#0B1120]"
-        style={{ backgroundImage: 'url("/images/hero_indian.png")' }}
+        className="hidden lg:flex lg:w-1/2 relative overflow-hidden items-center justify-center p-12 bg-gradient-to-br from-[#0B1120] via-[#0F172A] to-[#042F2E]"
       >
         <div className="absolute inset-0 bg-gradient-to-t from-[#0B1120]/95 via-[#0F172A]/75 to-[#0D9488]/20"></div>
         <div className="absolute top-0 left-0 w-96 h-96 bg-[#0D9488]/15 rounded-full blur-[140px] pointer-events-none" />

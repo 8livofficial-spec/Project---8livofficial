@@ -2,17 +2,16 @@
 
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Menu, X, LogOut, User } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { User, LogOut, ArrowRight, Menu, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
-import LetterSwap3D from '@/components/ui/letter-swap-3d'
+import PillNav from '@/components/ui/PillNav'
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [user, setUser] = useState<SupabaseUser | null>(null)
   const [role, setRole] = useState<string>('patient')
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const resolveDashboardUrl = (userRole: string) => {
     const r = (userRole || 'patient').toLowerCase().trim()
@@ -58,44 +57,6 @@ export default function Navbar() {
     }
   }
 
-  const handleDashboardClick = async (e: React.MouseEvent) => {
-    e.preventDefault()
-    setMobileMenuOpen(false)
-
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session?.user) {
-        window.location.href = '/login'
-        return
-      }
-
-      let userRole = role
-      if (!userRole || userRole === 'patient') {
-        const cookieMatch = document.cookie.match(/user_role=([^;]+)/)
-        if (cookieMatch && cookieMatch[1]) {
-          userRole = cookieMatch[1]
-        } else if (session.user.email === '8livofficial@gmail.com') {
-          userRole = 'admin'
-        } else {
-          const [{ data: doc }, { data: prov }, { data: prof }] = await Promise.all([
-            supabase.from('doctor_profiles').select('id').eq('id', session.user.id).maybeSingle(),
-            supabase.from('provider_profiles_v2').select('role').or(`id.eq.${session.user.id},user_id.eq.${session.user.id}`).maybeSingle(),
-            supabase.from('profiles').select('role').eq('id', session.user.id).maybeSingle(),
-          ])
-          if (doc) userRole = 'doctor'
-          else if (prov?.role) userRole = prov.role
-          else if (prof?.role) userRole = prof.role
-          else userRole = session.user.user_metadata?.role || 'patient'
-        }
-      }
-
-      document.cookie = `user_role=${userRole}; path=/; max-age=86400; SameSite=Lax`
-      window.location.href = resolveDashboardUrl(userRole)
-    } catch (_) {
-      window.location.href = '/patient'
-    }
-  }
-
   const handleSignOut = async () => {
     setMobileMenuOpen(false)
     await supabase.auth.signOut()
@@ -105,15 +66,10 @@ export default function Navbar() {
 
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > 30) {
-        setScrolled(true)
-      } else {
-        setScrolled(false)
-      }
+      setScrolled(window.scrollY > 20)
     }
     window.addEventListener('scroll', handleScroll, { passive: true })
 
-    // Check auth session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user || null)
       if (session?.user) {
@@ -134,125 +90,182 @@ export default function Navbar() {
     }
   }, [])
 
+  const navItems = [
+    { label: 'How It Works', href: '#how-it-works' },
+    { label: 'Medical Care', href: '#pillars' },
+    { label: 'Treatment Plans', href: '#pricing' },
+    { label: 'FAQ', href: '#faq' },
+  ]
+
   return (
-    <>
-      <motion.header 
-        initial={{ y: -60, opacity: 0 }}
-        animate={{ 
-          y: 0, 
-          opacity: scrolled ? 0.96 : 1,
-          scale: scrolled ? 0.98 : 1,
-        }}
-        transition={{ duration: 0.5, ease: "easeOut" }}
-        className="pointer-events-none fixed left-0 right-0 top-0 z-50 flex justify-center px-3 pt-2 sm:px-4 sm:pt-2.5"
+    <header className="fixed left-0 right-0 top-0 z-50 flex justify-center px-3 pt-3 sm:px-4 sm:pt-4 pointer-events-none">
+      {/* Floating Glassmorphic Capsule */}
+      <div
+        className={`pointer-events-auto flex w-full max-w-[1140px] items-center justify-between rounded-full transition-all duration-300 px-3.5 sm:px-6 py-2 ${
+          scrolled
+            ? 'bg-white/80 backdrop-blur-2xl border border-white/70 shadow-[0_12px_40px_rgba(15,23,42,0.08),inset_0_1px_1px_rgba(255,255,255,0.6)]'
+            : 'bg-white/20 backdrop-blur-2xl border border-white/35 shadow-[0_8px_32px_0_rgba(15,23,42,0.12),inset_0_1px_1px_rgba(255,255,255,0.4)]'
+        }`}
       >
-        {/* Floating Capsule */}
-        <div 
-          className={`pointer-events-auto flex w-full max-w-[1120px] items-center justify-between rounded-full border transition-all duration-300 h-10 sm:h-11
-            ${scrolled 
-              ? 'bg-[#F9F6F0]/90 backdrop-blur-xl border-[#D46E53]/20 shadow-[0_4px_20px_rgba(15,23,42,0.06)] px-3 sm:px-5' 
-              : 'bg-white/80 backdrop-blur-md border-white/60 shadow-xs px-3 sm:px-6'
-            }`}
+        {/* LEFT: Authentic Official 8LIV Logo */}
+        <Link
+          href="/"
+          className="flex items-center shrink-0 group transition-transform duration-300 hover:scale-105"
+          aria-label="8LIV Home"
         >
-          {/* Logo */}
-          <Link href="/" className="flex items-center shrink-0">
-            <img 
-              src="/brand-logo-official.png" 
-              alt="8LIV Official Logo" 
-              className="h-6 sm:h-7 md:h-8 w-auto object-contain cursor-pointer transition-transform duration-300 hover:scale-105"
-            />
-          </Link>
+          <img
+            src="/brand-logo-official.png"
+            alt="8LIV Official Logo"
+            className="h-7 sm:h-8 md:h-8.5 w-auto object-contain block drop-shadow-xs cursor-pointer"
+          />
+        </Link>
 
-          {/* Desktop Links */}
-          <nav className="hidden md:flex items-center gap-1 bg-white/60 rounded-full px-2 py-0.5 border border-white/40 shadow-2xs">
-            <Link href="/how-it-works" className="px-3 py-1 rounded-full text-[11px] font-semibold text-[#475569] hover:text-[#0F172A] hover:bg-white/90 transition-all font-sora flex items-center">
-              <LetterSwap3D text="How It Works" />
-            </Link>
-            <Link href="/medical-weight-management" className="px-3 py-1 rounded-full text-[11px] font-semibold text-[#475569] hover:text-[#0F172A] hover:bg-white/90 transition-all font-sora flex items-center">
-              <LetterSwap3D text="The Program" />
-            </Link>
-            <Link href="/membership" className="px-3 py-1 rounded-full text-[11px] font-semibold text-[#475569] hover:text-[#0F172A] hover:bg-white/90 transition-all font-sora flex items-center">
-              <LetterSwap3D text="Membership" />
-            </Link>
-            <Link href="/about" className="px-3 py-1 rounded-full text-[11px] font-semibold text-[#475569] hover:text-[#0F172A] hover:bg-white/90 transition-all font-sora flex items-center">
-              <LetterSwap3D text="Company" />
-            </Link>
-          </nav>
+        {/* CENTER: Desktop Nav Pills powered by React Bits PillNav */}
+        <div className="hidden md:flex items-center">
+          <PillNav
+            items={navItems}
+            baseColor="#00A884"
+            pillColor={scrolled ? 'rgba(241, 245, 249, 0.85)' : 'rgba(255, 255, 255, 0.35)'}
+            hoveredPillTextColor="#FFFFFF"
+            pillTextColor="#0F172A"
+            ease="power3.easeOut"
+            initialLoadAnimation={false}
+          />
+        </div>
 
-          {/* Right Action */}
-          <div className="hidden md:flex items-center shrink-0 gap-3">
-            {user ? (
-              <>
-                <button 
-                  onClick={handleDashboardClick}
-                  className="px-3 py-1 rounded-full text-[11px] font-bold text-[#0F172A] bg-white border border-[#D46E53]/25 hover:bg-[#F9F6F0] transition-all flex items-center gap-1.5 font-sora shadow-2xs cursor-pointer"
-                >
-                  <User size={12} /> My Dashboard
-                </button>
-                <button 
-                  onClick={handleSignOut}
-                  className="bg-[#0F172A] text-white font-semibold rounded-full px-3 py-1 text-[11px] hover:bg-rose-600 transition-all border border-transparent flex items-center gap-1.5 cursor-pointer font-sora"
-                >
-                  <LogOut size={12} /> Sign Out
-                </button>
-              </>
-            ) : (
-              <Link href="/login" className="bg-[#0F172A] text-white font-semibold rounded-full px-4 py-1.5 text-[11px] hover:bg-[#1E293B] hover:shadow-md transition-all border border-transparent font-sora">
-                Log In
+        {/* RIGHT: Log In & Actions */}
+        <div className="hidden md:flex items-center shrink-0 gap-2">
+          {user ? (
+            <>
+              <Link
+                href={resolveDashboardUrl(role)}
+                className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-sora font-semibold text-xs px-4 py-2 rounded-full border border-slate-700 shadow-sm transition-all"
+              >
+                <User size={13} className="text-emerald-400" />
+                <span>My Portal</span>
               </Link>
-            )}
-          </div>
+              <button
+                onClick={handleSignOut}
+                className="bg-white/40 hover:bg-rose-500 text-slate-700 hover:text-white font-semibold text-xs px-3.5 py-2 rounded-full border border-white/50 backdrop-blur-md transition-all flex items-center gap-1.5 cursor-pointer font-sora shadow-xs"
+              >
+                <LogOut size={13} />
+                <span>Sign Out</span>
+              </button>
+            </>
+          ) : (
+            <>
+              {/* Clean, Simple & Convenient Log In */}
+              <Link
+                href="/login"
+                className="inline-flex items-center gap-1.5 text-slate-700 hover:text-slate-950 hover:bg-white/60 font-sora font-semibold text-xs px-3.5 py-2 rounded-full transition-colors cursor-pointer"
+              >
+                <User size={13} className="text-slate-600" />
+                <span>Log In</span>
+              </Link>
 
-          {/* Mobile Menu Toggle Button */}
-          <button 
-            className="rounded-full border border-white/60 bg-white/70 p-1.5 text-[#0F172A] md:hidden cursor-pointer"
-            aria-label={mobileMenuOpen ? 'Close menu' : 'Open menu'}
+              {/* Primary Eligibility CTA */}
+              <Link
+                href="/assessment"
+                className="inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-sora font-semibold text-xs px-4.5 py-2 rounded-full shadow-[0_4px_14px_rgba(0,168,132,0.3)] hover:shadow-[0_6px_20px_rgba(0,168,132,0.45)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+              >
+                <span>Check Eligibility</span>
+                <ArrowRight size={13} />
+              </Link>
+            </>
+          )}
+        </div>
+
+        {/* Mobile Action + Hamburger Toggle */}
+        <div className="flex md:hidden items-center gap-2">
+          {!user && (
+            <Link
+              href="/login"
+              className="text-slate-800 bg-white/50 border border-white/60 font-sora font-semibold text-[11px] px-3 py-1.5 rounded-full flex items-center gap-1 shadow-2xs"
+            >
+              <User size={11} className="text-slate-600" />
+              <span>Log In</span>
+            </Link>
+          )}
+          <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 rounded-full border border-white/60 bg-white/60 text-slate-800 backdrop-blur-md cursor-pointer transition-colors hover:bg-white/80"
+            aria-label="Toggle Navigation Menu"
           >
-            {mobileMenuOpen ? <X size={16} /> : <Menu size={16} />}
+            {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
           </button>
         </div>
-      </motion.header>
+      </div>
 
-      {/* Mobile Menu Dropdown Overlay */}
-      <AnimatePresence>
-        {mobileMenuOpen && (
-          <motion.div 
-            initial={{ opacity: 0, y: -15, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -15, scale: 0.97 }}
-            transition={{ duration: 0.25, ease: 'easeOut' }}
-            className="fixed inset-x-3 top-16 z-40 md:hidden sm:inset-x-4 sm:top-20"
-          >
-            <div className="flex max-h-[calc(100vh-5.5rem)] flex-col space-y-2 overflow-y-auto rounded-3xl border border-[#D46E53]/20 bg-[#F9F6F0]/95 backdrop-blur-2xl p-5 shadow-2xl">
-              <Link href="/how-it-works" onClick={() => setMobileMenuOpen(false)} className="border-b border-[#D46E53]/10 py-3 px-2 text-left text-sm font-semibold text-[#0F172A] font-sora">How It Works</Link>
-              <Link href="/medical-weight-management" onClick={() => setMobileMenuOpen(false)} className="border-b border-[#D46E53]/10 py-3 px-2 text-left text-sm font-semibold text-[#0F172A] font-sora">The Program</Link>
-              <Link href="/membership" onClick={() => setMobileMenuOpen(false)} className="border-b border-[#D46E53]/10 py-3 px-2 text-left text-sm font-semibold text-[#0F172A] font-sora">Membership</Link>
-              <Link href="/about" onClick={() => setMobileMenuOpen(false)} className="border-b border-[#D46E53]/10 py-3 px-2 text-left text-sm font-semibold text-[#0F172A] font-sora">Company</Link>
-              {user ? (
-                <>
-                  <button 
-                    onClick={handleDashboardClick}
-                    className="w-full text-center bg-white border border-[#D46E53]/20 text-[#0F172A] font-bold rounded-full px-5 py-3 mt-3 block text-sm font-sora cursor-pointer"
-                  >
-                    My Dashboard
-                  </button>
-                  <button 
-                    onClick={handleSignOut}
-                    className="w-full text-center bg-rose-600 text-white font-bold rounded-full px-5 py-3 mt-2 block text-sm font-sora cursor-pointer"
-                  >
-                    Sign Out
-                  </button>
-                </>
-              ) : (
-                <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="mt-3 block w-full rounded-full bg-[#0F172A] px-5 py-3 text-center font-bold text-white text-sm shadow-md font-sora">
-                  Log In
+      {/* Mobile Menu Dropdown (Frosted Glass Overlay) */}
+      {mobileMenuOpen && (
+        <div className="pointer-events-auto fixed inset-x-3 top-16 sm:top-20 z-40 md:hidden animate-in fade-in slide-in-from-top-4 duration-200">
+          <div className="rounded-3xl border border-white/70 bg-white/90 backdrop-blur-2xl p-5 shadow-2xl space-y-3 font-sora">
+            {/* Simple Log In Card for Mobile */}
+            {!user ? (
+              <Link
+                href="/login"
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between p-3 rounded-2xl bg-white/80 hover:bg-white border border-white/80 text-slate-900 shadow-xs transition-all"
+              >
+                <div className="flex items-center gap-2">
+                  <User size={15} className="text-emerald-600" />
+                  <span className="text-xs font-semibold">Log In to Portal</span>
+                </div>
+                <span className="text-xs font-bold text-emerald-600">&rarr;</span>
+              </Link>
+            ) : (
+              <Link
+                href={resolveDashboardUrl(role)}
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between p-3 rounded-2xl bg-slate-900 text-white shadow-xs transition-all hover:bg-slate-800"
+              >
+                <div className="flex items-center gap-2">
+                  <User size={15} className="text-emerald-400" />
+                  <span className="text-xs font-semibold">My Portal</span>
+                </div>
+                <span className="text-xs font-bold text-emerald-400">&rarr;</span>
+              </Link>
+            )}
+
+            {/* Navigation Links */}
+            <div className="flex flex-col space-y-1 pt-1">
+              {navItems.map((item) => (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="py-2.5 px-3 rounded-xl text-xs font-semibold text-slate-800 hover:bg-white/70 hover:text-emerald-700 transition-colors border-b border-slate-100 last:border-0"
+                >
+                  {item.label}
                 </Link>
+              ))}
+            </div>
+
+            {/* Bottom Actions */}
+            <div className="pt-2 flex flex-col gap-2">
+              {!user ? (
+                <Link
+                  href="/assessment"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="w-full text-center bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-bold rounded-2xl py-3 text-xs shadow-md flex items-center justify-center gap-1.5"
+                >
+                  <span>Check Eligibility</span>
+                  <ArrowRight size={14} />
+                </Link>
+              ) : (
+                <button
+                  onClick={handleSignOut}
+                  className="w-full text-center bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-2xl py-2.5 text-xs shadow-sm flex items-center justify-center gap-1.5"
+                >
+                  <LogOut size={14} />
+                  <span>Sign Out</span>
+                </button>
               )}
             </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </>
+          </div>
+        </div>
+      )}
+    </header>
   )
 }
+

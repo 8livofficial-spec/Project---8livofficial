@@ -1,237 +1,229 @@
 'use client'
 
-import React, { useState, useRef } from 'react'
-import { ChevronDown, HelpCircle } from 'lucide-react'
-import gsap from 'gsap'
-import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { useScrollAnimation } from '@/hooks/useScrollAnimation'
-
-gsap.registerPlugin(ScrollTrigger)
+import React, { useState } from 'react'
+import Link from 'next/link'
+import { HelpCircle, ArrowRight, CheckCircle2, MessageCircleQuestion, ChevronDown } from 'lucide-react'
+import { motion, AnimatePresence } from 'motion/react'
+import AnimatedList from '@/components/ui/AnimatedList'
+import ScrollReveal from '@/components/ui/ScrollReveal'
 
 const faqs = [
   {
-    question: 'What is 8Liv?',
+    question: 'What is 8Liv and how does it work?',
     answer:
-      '8Liv is an online metabolic health platform that connects you with board-certified doctors, clinical dietitians, and a dedicated care team — all from home. We combine doctor-led consultations, personalized nutrition guidance, and ongoing clinical monitoring to support your long-term metabolic health.',
+      '8Liv is an online medical metabolic health clinic. We connect you with board-certified physicians, clinical dietitians, and dedicated health coaches—all from home. We combine 1-on-1 doctor video consultations, personalized Indian meal plans, and ongoing clinical monitoring with doorstep delivery of medications if prescribed.',
   },
   {
-    question: 'How does the health assessment work?',
+    question: 'How does the 3-minute health assessment work?',
     answer:
-      'Our confidential 3-minute health assessment gathers information about your health history, lifestyle, goals, and metabolic background. This helps our clinical team review your eligibility and understand your needs before your first doctor consultation. There is no commitment required to complete the assessment.',
+      'Our confidential online assessment gathers basic information about your health history, previous weight attempts, routine, and lifestyle. This helps our medical team evaluate whether you qualify for metabolic treatment before your doctor consultation. Completing the assessment is 100% confidential with zero obligation.',
   },
   {
-    question: 'Who is the 8Liv program for?',
+    question: 'Who is the 8Liv program designed for?',
     answer:
-      'The 8Liv program is designed for adults who want clinically supported metabolic health care — including those working on weight management, energy regulation, blood sugar balance, and sustainable lifestyle change. A physician reviews each individual case to confirm appropriateness before recommending any treatment pathway.',
+      'The 8Liv program is designed for adults struggling with stubborn weight, sluggish metabolism, pre-diabetes, insulin resistance, or PCOS who want evidence-based, doctor-supervised medical care rather than unsustainable crash diets. A licensed doctor reviews every patient individually before recommending any treatment.',
   },
   {
-    question: 'How does clinical care work on 8Liv?',
+    question: 'What role do GLP-1 medications play in weight loss?',
     answer:
-      'After your assessment, you are scheduled for a 1-on-1 video consultation with a licensed physician who reviews your health profile, discusses your goals, and determines whether a treatment plan is appropriate. Your care plan may include nutrition guidance, lifestyle recommendations, and — only when medically indicated — prescription medication. Ongoing follow-ups are scheduled to monitor your progress.',
+      'GLP-1 receptor agonists are modern, clinically approved prescription medications that regulate natural hunger hormones and quiet continuous food noise. When clinically appropriate, a doctor may prescribe them to help reset your metabolic set-point. Medication is always paired with high-protein nutrition and movement for long-term health.',
   },
   {
-    question: 'What role can GLP-1 medication play?',
+    question: 'How does Indian meal planning work? Do I have to starve?',
     answer:
-      'GLP-1 receptor agonists are prescription medications that work by regulating hunger signals and metabolic processes. They may be considered as part of a medically supervised care plan when a physician determines they are clinically appropriate based on your BMI, health history, and safety criteria. Medication is never the sole component of care — it is integrated with nutrition and lifestyle support throughout.',
+      'Never. Our registered clinical dietitians adapt your meal blueprint around authentic Indian home cooking—incorporating paneer, dal, household spices, and family dinners. We do not rely on punitive calorie restriction or generic Western meal templates.',
   },
   {
-    question: 'How does nutrition support work?',
+    question: 'Will I regain the weight once I stop treatment?',
     answer:
-      'Our clinical dietitians design personalised nutrition guidance adapted to your food culture, household routine, and health targets. Plans incorporate Indian dietary preferences and do not rely on punitive calorie restriction or generic templates. Your dietitian is accessible for regular check-ins and adjustments.',
+      'Our clinical focus is preventing the rebound effect by locking in a healthy metabolic set-point. Through muscle-preserving movement guidance from your personal fitness coach and gradual dietary stabilization, your body adapts to maintain its new, lower weight permanently.',
   },
   {
-    question: 'How do fitness coaches and personal trainers support my care?',
+    question: 'How are medications delivered to my home?',
     answer:
-      'In addition to your doctor and dietitian, 8Liv pairs you with a certified fitness trainer and movement coach. Your trainer designs low-impact, muscle-preserving resistance routines tailored to your current fitness level and schedule. This protects lean muscle mass while accelerating visceral fat reduction, ensuring your metabolic rate remains high.',
+      'Prescriptions approved by your 8liv doctor are fulfilled by our verified partner licensed pharmacies and shipped in discreet, temperature-controlled cold-chain packaging straight to your doorstep across India.',
   },
   {
-    question: 'Is my health information kept private?',
+    question: 'Is my personal and medical data kept private?',
     answer:
-      'Yes. Your consultation notes, health history, and personal data are protected with strict medical-grade data practices. We do not share your information with third parties outside your care team without your explicit consent.',
+      'Yes, 100%. All consultations, medical notes, and personal data are strictly confidential and protected with enterprise-grade encryption. We never share your health records with third parties without your explicit permission.',
   },
   {
     question: 'How do I get started?',
     answer:
-      'Start by completing our confidential health assessment at 8liv.in/assessment. It takes approximately 3 minutes. Once submitted, our team reviews your responses and schedules your initial physician consultation. Everything happens online — no clinic visits required.',
+      'Start by completing the free 3-minute health assessment at 8liv.in/assessment. Our medical team will review your profile and match you with a doctor for your video consultation. Everything happens online—no waiting rooms or clinic commutes.',
   },
 ]
 
-function FAQItem({ faq, index }: { faq: typeof faqs[0]; index: number }) {
-  const [open, setOpen] = useState(false)
-  const bodyRef = useRef<HTMLDivElement>(null)
+export default function FAQ() {
+  const [selectedIndex, setSelectedIndex] = useState(0)
+  const [mobileExpandedIndex, setMobileExpandedIndex] = useState<number | null>(0)
+  const activeFaq = faqs[selectedIndex] ?? faqs[0]
 
-  const toggle = () => {
-    if (!bodyRef.current) return
-    if (!open) {
-      // Open
-      bodyRef.current.style.height = '0px'
-      bodyRef.current.style.opacity = '0'
-      bodyRef.current.style.overflow = 'hidden'
-      bodyRef.current.style.display = 'block'
-      const targetHeight = bodyRef.current.scrollHeight
-      gsap.to(bodyRef.current, {
-        height: targetHeight,
-        opacity: 1,
-        duration: 0.42,
-        ease: 'power3.out',
-        onComplete: () => {
-          if (bodyRef.current) {
-            bodyRef.current.style.height = 'auto'
-            bodyRef.current.style.overflow = 'visible'
-          }
-        },
-      })
-    } else {
-      // Close
-      const currentHeight = bodyRef.current.scrollHeight
-      bodyRef.current.style.height = `${currentHeight}px`
-      bodyRef.current.style.overflow = 'hidden'
-      gsap.to(bodyRef.current, {
-        height: 0,
-        opacity: 0,
-        duration: 0.32,
-        ease: 'power2.in',
-      })
-    }
-    setOpen(!open)
+  const handleSelect = (index: number) => {
+    setSelectedIndex(index)
+    setMobileExpandedIndex(prev => (prev === index ? null : index))
   }
 
   return (
-    <div
-      className={`rounded-2xl border transition-all duration-300 ${
-        open
-          ? 'bg-white border-[#0052FF]/40 shadow-md shadow-[#0052FF]/10 ring-1 ring-[#0052FF]/20'
-          : 'bg-slate-50/70 border-slate-200 hover:bg-white hover:border-[#0052FF]/30 hover:shadow-sm'
-      }`}
-    >
-      <button
-        onClick={toggle}
-        className="w-full flex items-center justify-between gap-4 px-6 py-5 text-left cursor-pointer"
-        aria-expanded={open}
-        aria-controls={`faq-answer-${index}`}
-        id={`faq-question-${index}`}
-      >
-        <span
-          className={`font-sora text-base font-semibold leading-snug transition-colors duration-200 ${
-            open ? 'text-[#0052FF]' : 'text-[#0F172A]'
-          }`}
-        >
-          {faq.question}
-        </span>
-        <span
-          className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 ${
-            open
-              ? 'bg-[#0052FF]/15 text-[#0052FF] rotate-180'
-              : 'bg-white border border-slate-200 text-[#64748B]'
-          }`}
-        >
-          <ChevronDown className="w-4 h-4" />
-        </span>
-      </button>
-
-      <div
-        ref={bodyRef}
-        id={`faq-answer-${index}`}
-        role="region"
-        aria-labelledby={`faq-question-${index}`}
-        style={{ display: open ? 'block' : 'none', height: open ? 'auto' : '0px' }}
-      >
-        <div className="px-6 pb-6 pt-1">
-          <p className="text-sm sm:text-base text-[#475569] leading-relaxed">
-            {faq.answer}
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default function FAQ() {
-  const headerRef = useRef<HTMLDivElement>(null)
-  const listRef = useRef<HTMLDivElement>(null)
-
-  const sectionRef = useScrollAnimation<HTMLElement>((section) => {
-    if (!headerRef.current || !listRef.current) return
-
-    gsap.fromTo(
-      headerRef.current,
-      { opacity: 0, y: 30 },
-      {
-        opacity: 1,
-        y: 0,
-        duration: 0.8,
-        ease: 'power3.out',
-        scrollTrigger: {
-          trigger: section,
-          start: 'top 80%',
-          once: true,
-        },
-      }
-    )
-
-    gsap.fromTo(
-      listRef.current.children,
-      { opacity: 0, y: 24 },
-      {
-        opacity: 1,
-        y: 0,
-        stagger: 0.08,
-        duration: 0.6,
-        ease: 'power3.out',
-        scrollTrigger: {
-          trigger: listRef.current,
-          start: 'top 80%',
-          once: true,
-        },
-      }
-    )
-  })
-
-  return (
-    <section
-      ref={sectionRef}
-      id="faq"
-      className="py-20 sm:py-28 relative overflow-hidden bg-white border-b border-[#0052FF]/10"
-    >
-      {/* Ambient light */}
-      <div className="pointer-events-none absolute top-0 right-0 w-[500px] h-[400px] bg-[#0052FF]/5 rounded-full blur-[140px] -z-10" />
-
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-
-        {/* Header */}
-        <div ref={headerRef} className="text-center mb-14 sm:mb-16">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-[#0052FF]/20 mb-4 shadow-sm">
-            <HelpCircle className="w-3.5 h-3.5 text-[#0052FF]" />
-            <span className="text-xs font-semibold uppercase tracking-[0.16em] text-[#003BD4] font-sora">
-              Common Questions
-            </span>
+    <section id="faq" className="py-14 sm:py-20 lg:py-24 bg-[#FAFAF9] text-slate-900 border-b border-slate-200/80">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Section Header */}
+        <div className="text-center mb-10 sm:mb-14">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-[#0F766E] text-xs font-semibold uppercase tracking-wider mb-3 font-sora">
+            <HelpCircle className="w-3.5 h-3.5 text-[#00A884]" />
+            <span>COMMON QUESTIONS</span>
           </div>
 
-          <h2 className="font-sora text-3xl sm:text-4xl md:text-5xl font-bold text-[#0F172A] leading-tight mb-5">
-            Answers to help you{' '}
-            <span className="blue-gradient-text">get started.</span>
-          </h2>
+          <ScrollReveal
+            baseOpacity={0}
+            enableBlur={true}
+            baseRotation={3}
+            blurStrength={6}
+            containerClassName="max-w-3xl mx-auto mb-3"
+            textClassName="font-sora text-2xl sm:text-4xl md:text-5xl font-bold text-slate-900 leading-tight text-center"
+          >
+            Everything you need to know about 8liv clinical care.
+          </ScrollReveal>
 
-          <p className="text-base sm:text-lg text-[#475569] leading-relaxed max-w-2xl mx-auto">
-            If you have a question that isn&apos;t answered here, email us at{' '}
-            <a
-              href="mailto:8livofficial@gmail.com"
-              className="text-[#0052FF] font-semibold hover:underline"
-            >
-              8livofficial@gmail.com
-            </a>
-            .
+          <p className="text-xs sm:text-base text-slate-600 font-light max-w-xl mx-auto leading-relaxed">
+            Have questions about doctor consultations, GLP-1 medications, diet plans, or safety? Select any question or use arrow keys to browse.
           </p>
         </div>
 
-        {/* FAQ List */}
-        <div ref={listRef} className="space-y-3">
-          {faqs.map((faq, idx) => (
-            <FAQItem key={idx} faq={faq} index={idx} />
-          ))}
-        </div>
+        {/* Interactive Master-Detail FAQ Layout using AnimatedList */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-start">
+          {/* AnimatedList Column */}
+          <div className="lg:col-span-6 flex flex-col">
+            <div className="flex items-center justify-between px-1 mb-2 text-xs text-slate-500 font-medium">
+              <span>Frequently Asked Questions</span>
+              <span className="hidden lg:inline-block text-[11px] text-[#00A884] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 font-sora">
+                Use ↑ / ↓ arrow keys
+              </span>
+            </div>
 
+            <AnimatedList
+              items={faqs.map(f => f.question)}
+              selectedIndex={selectedIndex}
+              onItemSelect={(_item, index) => handleSelect(index)}
+              showGradients={true}
+              gradientColor="#FAFAF9"
+              enableArrowNavigation={true}
+              displayScrollbar={true}
+              renderItem={(question, index, isSelected) => {
+                const isMobileOpen = mobileExpandedIndex === index
+
+                return (
+                  <div
+                    className={`p-3.5 sm:p-4 rounded-2xl border transition-all duration-200 text-left cursor-pointer active:scale-[0.99] ${
+                      isSelected
+                        ? 'bg-white border-[#00A884] shadow-md ring-2 ring-[#00A884]/20'
+                        : 'bg-white/90 border-slate-200/90 hover:bg-white hover:border-slate-300 shadow-xs'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`text-xs font-mono font-bold px-2 py-0.5 rounded-md transition-colors ${
+                            isSelected
+                              ? 'bg-[#00A884] text-white'
+                              : 'bg-slate-100 text-slate-500'
+                          }`}
+                        >
+                          {String(index + 1).padStart(2, '0')}
+                        </span>
+                        <p
+                          className={`font-sora text-xs sm:text-sm font-semibold leading-snug m-0 transition-colors ${
+                            isSelected ? 'text-[#0F766E]' : 'text-slate-900'
+                          }`}
+                        >
+                          {question}
+                        </p>
+                      </div>
+
+                      {/* Mobile Chevron toggle indicator */}
+                      <span
+                        className={`lg:hidden shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-transform duration-200 ${
+                          isMobileOpen ? 'rotate-180 text-[#00A884] bg-emerald-50' : 'text-slate-400'
+                        }`}
+                      >
+                        <ChevronDown size={14} />
+                      </span>
+                    </div>
+
+                    {/* Smooth mobile expandable accordion answer */}
+                    <AnimatePresence initial={false}>
+                      {isMobileOpen && (
+                        <motion.div
+                          key="mobile-answer"
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+                          className="overflow-hidden lg:hidden"
+                        >
+                          <div className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-600 font-light leading-relaxed">
+                            {faqs[index].answer}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                )
+              }}
+            />
+          </div>
+
+          {/* Dedicated Answer Showcase Card (Desktop) */}
+          <div className="hidden lg:block lg:col-span-6 sticky top-24">
+            <div className="bg-white rounded-3xl p-8 border border-slate-200/90 shadow-sm relative overflow-hidden">
+              <div className="flex items-center justify-between mb-4">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-[#00A884] font-sora bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
+                  Question {String(selectedIndex + 1).padStart(2, '0')} of {String(faqs.length).padStart(2, '0')}
+                </span>
+                <div className="flex items-center gap-1.5 text-xs text-slate-500">
+                  <CheckCircle2 size={14} className="text-[#00A884]" />
+                  <span>Clinical Team Verified</span>
+                </div>
+              </div>
+
+              {/* Ultra smooth cross-fade when question changes */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={selectedIndex}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -6 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
+                >
+                  <h3 className="font-sora text-xl sm:text-2xl font-bold text-slate-900 mb-4 leading-snug">
+                    {activeFaq.question}
+                  </h3>
+
+                  <div className="text-sm sm:text-base text-slate-600 font-light leading-relaxed mb-8">
+                    {activeFaq.answer}
+                  </div>
+                </motion.div>
+              </AnimatePresence>
+
+              <div className="pt-6 border-t border-slate-100 flex items-center justify-between gap-4">
+                <div className="flex items-center gap-2 text-xs text-slate-500">
+                  <MessageCircleQuestion size={16} className="text-[#00A884]" />
+                  <span>Need personalized advice?</span>
+                </div>
+                <Link
+                  href="/assessment"
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#00A884] hover:bg-[#0F766E] text-white font-sora font-semibold text-xs transition-all shadow-xs cursor-pointer active:scale-95"
+                >
+                  <span>Check Eligibility</span>
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   )
 }
+

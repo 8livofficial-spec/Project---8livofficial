@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Script from "next/script";
 import { absoluteUrl, shouldNoIndexEnvironment, siteConfig } from "@/lib/seo/site";
+import PageTransition from "@/components/ui/PageTransition";
 import "./globals.css";
 
 const inter = {
@@ -102,7 +103,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${sora.variable} h-full antialiased`}
+      className={`${inter.variable} ${sora.variable} min-h-full antialiased`}
     >
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -113,7 +114,7 @@ export default function RootLayout({
         />
       </head>
       <body className={`min-h-full flex flex-col font-sans bg-white text-[#0F172A]`}>
-        {children}
+        <PageTransition>{children}</PageTransition>
       </body>
     </html>
   );

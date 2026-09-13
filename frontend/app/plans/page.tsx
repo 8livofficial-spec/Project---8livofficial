@@ -1,5 +1,4 @@
 import type { Metadata } from 'next'
-import Image from 'next/image'
 import Link from 'next/link'
 import { ArrowRight, Check, Dumbbell, HeartPulse, Salad, ShieldCheck, Sparkles, Stethoscope, Clock, Zap } from 'lucide-react'
 import Footer from '@/components/landing/Footer'
@@ -105,16 +104,18 @@ export default async function PlansPage() {
             </div>
           </div>
 
-          <div className="relative">
-            <div className="relative mx-auto aspect-[4/3] w-full max-w-xl overflow-hidden rounded-[1.75rem] shadow-[0_24px_80px_rgba(15,23,42,0.16)] ring-1 ring-[#D46E53]/20 sm:rounded-[2rem]">
-              <Image
-                src="/images/nutrition_indian.png"
-                alt="Balanced Indian nutrition support with 8liv care plans"
-                fill
-                priority
-                className="object-cover"
-                sizes="(max-width: 1024px) 92vw, 560px"
-              />
+          {/* Right Column: Hero Image Area with Alt Text Placeholder */}
+          <div className="relative flex justify-center lg:justify-end">
+            <div className="relative aspect-[4/3] w-full max-w-xl overflow-hidden rounded-[1.75rem] sm:rounded-[2rem] bg-slate-100 border-2 border-dashed border-slate-300 shadow-[0_24px_80px_rgba(15,23,42,0.08)] ring-1 ring-[#D46E53]/20 flex flex-col items-center justify-center p-6 text-center">
+              <div className="w-14 h-14 rounded-2xl bg-[#D46E53]/10 text-[#D46E53] flex items-center justify-center mb-3">
+                <Salad className="w-7 h-7" />
+              </div>
+              <p className="text-sm sm:text-base font-bold text-slate-800 font-sora uppercase tracking-wider mb-1">
+                [Image: Balanced Indian Nutrition Support]
+              </p>
+              <p className="text-xs sm:text-sm text-slate-500 font-light max-w-md leading-relaxed">
+                alt=&quot;Balanced Indian nutrition support with 8liv care plans&quot;
+              </p>
             </div>
           </div>
         </div>

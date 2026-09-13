@@ -35,6 +35,18 @@
   .animate-float { 
     animation: float 3s ease-in-out infinite; 
   }
+  .journey-stream-beam {
+    animation: journeyStream 14s linear infinite;
+  }
+}
+
+@keyframes journeyStream {
+  from {
+    stroke-dashoffset: 800;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
   .teal-gradient-text {
     background: linear-gradient(135deg, #00A884 0%, #0D9488 45%, #2DD4BF 100%);
     -webkit-background-clip: text;
@@ -163,19 +175,13 @@ body {
 body {
   background: var(--bg);
   color: #0F172A;
-  background-image:
-    radial-gradient(ellipse at 20% 0%, rgba(0,82,255,0.04) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 100%, rgba(0,37,212,0.03) 0%, transparent 50%);
-  background-attachment: fixed;
   font-family: var(--font-inter), sans-serif;
-  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 @media (max-width: 767px) {
   body {
-    background-attachment: scroll;
     background-image: none;
   }
 
@@ -348,7 +354,7 @@ h1, h2 {
    ============================================================ */
 html, body {
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 /* ============================================================
