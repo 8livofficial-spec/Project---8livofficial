@@ -15,6 +15,22 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(process.cwd()),
   },
+  async rewrites() {
+    return [
+      {
+        source: '/assets/Hero.jpg',
+        destination: '/images/hero.jpg',
+      },
+      {
+        source: '/assets/hero.jpg',
+        destination: '/images/hero.jpg',
+      },
+      {
+        source: '/images/Hero.jpg',
+        destination: '/images/hero.jpg',
+      },
+    ];
+  },
   async headers() {
     return [
       {

@@ -24,9 +24,20 @@ export default function Hero() {
       <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none z-0">
         {/* High-Resolution Cinematic Hero Image */}
         <img
-          src="/assets/Hero.jpg"
+          src="/images/hero.jpg"
           alt="8LIV Medical Weight Health & Vitality"
+          loading="eager"
+          // @ts-expect-error fetchpriority is standard in modern browsers
+          fetchpriority="high"
           className="w-full h-full object-cover object-[65%_25%] sm:object-[70%_35%] transform scale-[1.01] brightness-[1.12] contrast-[1.02]"
+          onError={(e) => {
+            const target = e.currentTarget
+            if (!target.src.includes('/assets/hero.jpg')) {
+              target.src = '/assets/hero.jpg'
+            } else if (!target.src.includes('/images/hero_indian.png')) {
+              target.src = '/images/hero_indian.png'
+            }
+          }}
         />
 
         {/* Minimal localized corner shade strictly behind bottom-left copy (No full-width smoke) */}

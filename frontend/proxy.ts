@@ -19,8 +19,15 @@ function normalizeWwwAlias(host: string) {
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Bypass API routes completely from SEO canonicalization and redirects
-  if (pathname.startsWith('/api')) {
+  // Bypass API routes, static assets, and media files completely from SEO canonicalization and redirects
+  if (
+    pathname.startsWith('/api') ||
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/images') ||
+    pathname.startsWith('/assets') ||
+    pathname.startsWith('/videos') ||
+    /\.(?:jpg|jpeg|png|webp|avif|gif|svg|ico|mp4|webm|woff2?|ttf|eot|css|js|map)$/i.test(pathname)
+  ) {
     return NextResponse.next();
   }
 
@@ -103,6 +110,6 @@ export function proxy(request: NextRequest) {
 // Define which paths the middleware should run on
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|icon.png|icon.svg|brand-logo.svg|brand-logo-light.svg|brand-mark.svg|images/.*).*)',
+    '/((?!_next/static|_next/image|favicon.ico|icon.png|icon.svg|brand-logo.svg|brand-logo-light.svg|brand-mark.svg|brand-logo-official.png|images/.*|assets/.*|videos/.*|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|mp4|webm|woff2?)$).*)',
   ],
 };
