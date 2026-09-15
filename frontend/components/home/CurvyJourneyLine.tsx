@@ -53,6 +53,14 @@ export default function CurvyJourneyLine() {
   const [dimensions, setDimensions] = useState({ width: 1400, height: 6000 })
   const [pricingOffset, setPricingOffset] = useState<number>(4500)
   const [isReady, setIsReady] = useState<boolean>(false)
+  const [isMobile, setIsMobile] = useState<boolean>(false)
+
+  useEffect(() => {
+    const checkMobile = () => setIsMobile(window.innerWidth < 768)
+    checkMobile()
+    window.addEventListener('resize', checkMobile, { passive: true })
+    return () => window.removeEventListener('resize', checkMobile)
+  }, [])
 
   const updatePath = useCallback(() => {
     if (typeof window === 'undefined') return
@@ -167,6 +175,9 @@ export default function CurvyJourneyLine() {
     damping: 26,
     restDelta: 0.001,
   })
+
+  // Completely unmount on mobile devices for maximum performance and 0 scroll overhead
+  if (isMobile) return null
 
   return (
     <div

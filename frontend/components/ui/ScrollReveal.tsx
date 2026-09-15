@@ -58,6 +58,29 @@ const ScrollReveal: React.FC<ScrollRevealProps> = ({
 
     // Scope to this element so cleanup only kills OUR triggers
     const ctx = gsap.context(() => {
+      const isMobile = window.innerWidth < 768
+
+      if (isMobile) {
+        // High-performance mobile reveal: 0 GPU blur thrashing, silky-smooth 60/120fps
+        gsap.fromTo(
+          el,
+          { opacity: 0, y: 14 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.6,
+            ease: 'power2.out',
+            scrollTrigger: {
+              trigger: el,
+              scroller,
+              start: 'top 90%',
+              toggleActions: 'play none none none',
+            },
+          }
+        )
+        return
+      }
+
       gsap.fromTo(
         el,
         { transformOrigin: '0% 50%', rotate: baseRotation },
@@ -117,10 +140,10 @@ const ScrollReveal: React.FC<ScrollRevealProps> = ({
   }, [scrollContainerRef, enableBlur, baseRotation, baseOpacity, rotationEnd, wordAnimationEnd, blurStrength, stagger])
 
   return (
-    <h2 ref={containerRef} className={`my-5 ${containerClassName}`}>
-      <p className={`text-[clamp(1.6rem,4vw,3rem)] leading-[1.5] font-semibold ${textClassName}`}>
+    <h2 ref={containerRef} className={`${containerClassName}`}>
+      <span className={`inline-block leading-tight font-semibold ${textClassName}`}>
         {splitText}
-      </p>
+      </span>
     </h2>
   )
 }

@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 
 import React, { useEffect, useMemo, useRef, type ReactNode, type RefObject } from 'react'
 import { gsap } from 'gsap'
@@ -31,11 +31,16 @@ const ScrollFloat: React.FC<ScrollFloatProps> = ({
 }) => {
   const containerRef = useRef<HTMLHeadingElement>(null)
 
-  const splitText = useMemo(() => {
+  const splitWords = useMemo(() => {
     const text = typeof children === 'string' ? children : ''
-    return text.split('').map((char, index) => (
-      <span className="inline-block word" key={index}>
-        {char === ' ' ? '\u00A0' : char}
+    const words = text.split(/\s+/).filter(Boolean)
+    return words.map((word, wordIndex) => (
+      <span key={wordIndex} className="inline-block whitespace-nowrap mr-[0.28em] last:mr-0">
+        {word.split('').map((char, charIndex) => (
+          <span className="inline-block char-element" key={charIndex}>
+            {char}
+          </span>
+        ))}
       </span>
     ))
   }, [children])
@@ -51,7 +56,31 @@ const ScrollFloat: React.FC<ScrollFloatProps> = ({
 
     // Use gsap.context scoped to this element so cleanup only kills OUR triggers
     const ctx = gsap.context(() => {
-      const charElements = el.querySelectorAll('.inline-block')
+      const isMobile = window.innerWidth < 768
+
+      if (isMobile) {
+        // High-performance mobile reveal: 0 GPU layer thrashing, perfectly smooth 60/120fps
+        gsap.fromTo(
+          el,
+          { opacity: 0, y: 10 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.5,
+            ease: 'power2.out',
+            scrollTrigger: {
+              trigger: el,
+              scroller,
+              start: 'top 92%',
+              toggleActions: 'play none none none',
+            },
+          }
+        )
+        return
+      }
+
+      // Desktop: Rich character-by-character float animation
+      const charElements = el.querySelectorAll('.char-element')
 
       gsap.fromTo(
         charElements,
@@ -86,11 +115,11 @@ const ScrollFloat: React.FC<ScrollFloatProps> = ({
   }, [scrollContainerRef, animationDuration, ease, scrollStart, scrollEnd, stagger])
 
   return (
-    <h2 ref={containerRef} className={`my-5 overflow-hidden ${containerClassName}`}>
-      <span className={`inline-block text-[clamp(1.6rem,4vw,3rem)] leading-[1.5] ${textClassName}`}>
-        {splitText}
+    <h3 ref={containerRef} className={`overflow-hidden ${containerClassName}`}>
+      <span className={`inline-block leading-snug ${textClassName}`}>
+        {splitWords}
       </span>
-    </h2>
+    </h3>
   )
 }
 

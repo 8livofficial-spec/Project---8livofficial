@@ -69,7 +69,29 @@ function StepCard({ item }: { item: typeof steps[0] }) {
     if (!el) return
 
     const ctx = gsap.context(() => {
-      // Card glides in from its side — scrubbed to scroll for fluid motion
+      const isMobile = window.innerWidth < 768
+
+      if (isMobile) {
+        // High-performance single entrance on mobile: 60/120fps fluid scrolling
+        gsap.fromTo(
+          el,
+          { opacity: 0, y: 18 },
+          {
+            opacity: 1,
+            y: 0,
+            duration: 0.55,
+            ease: 'power2.out',
+            scrollTrigger: {
+              trigger: el,
+              start: 'top 90%',
+              toggleActions: 'play none none none',
+            },
+          }
+        )
+        return
+      }
+
+      // Desktop: Multi-layer scrubbed glide
       gsap.fromTo(
         el,
         { opacity: 0, x: isLeft ? -40 : 40, y: 16 },
@@ -82,7 +104,7 @@ function StepCard({ item }: { item: typeof steps[0] }) {
             trigger: el,
             start: 'top 95%',
             end: 'top 30%',
-            scrub: 1.2,       // smooth lag behind scroll
+            scrub: 1.2,
           },
         }
       )
@@ -134,21 +156,21 @@ function StepCard({ item }: { item: typeof steps[0] }) {
   return (
     <div
       ref={cardRef}
-      className="p-5 sm:p-7 md:p-8 rounded-2xl sm:rounded-[2rem] bg-white border border-slate-200/90 shadow-[0_6px_24px_rgba(0,0,0,0.03)] hover:border-[#00A884]/40 hover:shadow-md transition-all will-change-transform"
+      className="p-4 sm:p-7 md:p-8 rounded-2xl sm:rounded-[2rem] bg-white border border-slate-200/90 shadow-[0_6px_24px_rgba(0,0,0,0.03)] hover:border-[#00A884]/40 hover:shadow-md transition-all will-change-transform"
     >
       <span className="inline-block px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs font-semibold text-[#00A884] border border-[#00A884]/30 bg-emerald-50/50 font-sora">
         {item.tag}
       </span>
 
-      {/* ScrollFloat title — character-by-character float up */}
+      {/* ScrollFloat title — clean word wrap & mobile optimized */}
       <ScrollFloat
         animationDuration={1.2}
         ease="power3.out"
         scrollStart="top 90%"
         scrollEnd="top 20%"
         stagger={0.02}
-        containerClassName="mt-3 sm:mt-4 mb-2 sm:mb-2.5"
-        textClassName="font-sora text-lg sm:text-xl md:text-2xl font-bold text-[#0F172A] tracking-tight"
+        containerClassName="mt-2.5 sm:mt-4 mb-2 sm:mb-2.5"
+        textClassName="font-sora text-base xs:text-lg sm:text-xl md:text-2xl font-bold text-[#0F172A] tracking-tight leading-snug"
       >
         {item.title}
       </ScrollFloat>
@@ -196,10 +218,10 @@ export default function HowItWorks() {
           {/* Central Vertical Line */}
           <div
             aria-hidden="true"
-            className="absolute top-8 bottom-8 left-4 sm:left-6 md:left-1/2 -translate-x-1/2 w-0.5 bg-slate-200 pointer-events-none"
+            className="absolute top-8 bottom-8 left-3.5 sm:left-5 md:left-1/2 -translate-x-1/2 w-0.5 bg-slate-200 pointer-events-none"
           />
 
-          <div className="space-y-10 sm:space-y-16">
+          <div className="space-y-8 sm:space-y-16">
             {steps.map((item) => {
               const isLeft = item.side === 'left'
 
@@ -207,7 +229,7 @@ export default function HowItWorks() {
                 <div key={item.step} className="relative flex items-center">
 
                   {/* Timeline Row */}
-                  <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8 items-center pl-10 sm:pl-14 md:pl-0">
+                  <div className="w-full grid grid-cols-1 md:grid-cols-2 gap-8 items-center pl-9 xs:pl-10 sm:pl-14 md:pl-0">
 
                     {/* LEFT SIDE */}
                     <div className={`${isLeft ? 'block md:pr-12 lg:pr-16' : 'hidden md:block md:invisible'}`}>
@@ -222,11 +244,11 @@ export default function HowItWorks() {
                   </div>
 
                   {/* CENTRAL NODE */}
-                  <div className="absolute left-4 sm:left-6 md:left-1/2 -translate-x-1/2 flex flex-col items-center z-10">
-                    <div className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white border-2 border-[#00A884]/40 shadow-xs flex items-center justify-center text-[#00A884] hover:scale-105 transition-transform">
+                  <div className="absolute left-3.5 sm:left-5 md:left-1/2 -translate-x-1/2 flex flex-col items-center z-10">
+                    <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white border-2 border-[#00A884]/40 shadow-xs flex items-center justify-center text-[#00A884] hover:scale-105 transition-transform">
                       {item.icon}
                     </div>
-                    <span className="text-[11px] font-bold text-slate-400 font-sora mt-1">
+                    <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 font-sora mt-1">
                       {item.step}
                     </span>
                   </div>
