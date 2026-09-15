@@ -27,8 +27,7 @@ export default function Hero() {
           src="/images/hero.jpg"
           alt="8LIV Medical Weight Health & Vitality"
           loading="eager"
-          // @ts-expect-error fetchpriority is standard in modern browsers
-          fetchpriority="high"
+          fetchPriority="high"
           className="w-full h-full object-cover object-[65%_25%] sm:object-[70%_35%] transform scale-[1.01] brightness-[1.12] contrast-[1.02]"
           onError={(e) => {
             const target = e.currentTarget

@@ -61,6 +61,13 @@ export default function CurvyJourneyLine() {
     if (!container) return
 
     const width = container.clientWidth || window.innerWidth
+
+    // Do not calculate or display journey curve on mobile screens (< 768px)
+    if (width < 768) {
+      setIsReady(false)
+      return
+    }
+
     const height = Math.max(
       container.scrollHeight || 0,
       document.documentElement.scrollHeight || 0,
@@ -70,7 +77,6 @@ export default function CurvyJourneyLine() {
     setDimensions({ width, height })
 
     const pts: { x: number; y: number }[] = []
-    const isMobile = width < 768
     const isTablet = width >= 768 && width < 1024
 
     SECTION_IDS.forEach((id, index) => {
@@ -93,10 +99,10 @@ export default function CurvyJourneyLine() {
         y = (height / (SECTION_IDS.length + 1)) * (index + 1)
       }
 
-      // Constrain horizontal sweep to prevent crossing mobile readable areas
+      // Constrain horizontal sweep to prevent crossing readable areas
       const ratio = X_RATIOS[index % X_RATIOS.length]
-      const minX = isMobile ? width * 0.44 : isTablet ? width * 0.22 : width * 0.14
-      const maxX = isMobile ? width * 0.56 : isTablet ? width * 0.78 : width * 0.86
+      const minX = isTablet ? width * 0.22 : width * 0.14
+      const maxX = isTablet ? width * 0.78 : width * 0.86
       const x = id === 'pricing' ? width * 0.5 : minX + (maxX - minX) * ratio
 
       pts.push({ x, y })
@@ -166,7 +172,7 @@ export default function CurvyJourneyLine() {
     <div
       ref={containerRef}
       aria-hidden="true"
-      className={`absolute inset-0 pointer-events-none overflow-hidden z-0 transition-opacity duration-700 ${
+      className={`hidden md:block absolute inset-0 pointer-events-none overflow-hidden z-0 transition-opacity duration-700 ${
         isReady ? 'opacity-100' : 'opacity-0'
       }`}
       style={{ height: '100%', width: '100%' }}
