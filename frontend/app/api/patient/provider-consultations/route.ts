@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { appointmentTypeForRole, getAssignedProviderForRole, labelForRole, normalizeProviderRole } from '@/lib/providerConsultations'
-import { getAuthenticatedPatient, isFutureIndiaSlot } from '@/lib/appointmentAvailability'
+import { getAuthenticatedPatient, isFutureIndiaSlot, invalidateSlotsCache } from '@/lib/appointmentAvailability'
 import { createStreamMeeting } from '@/services/video/meeting.service'
 
 type ProviderAvailability = {
@@ -375,6 +375,7 @@ export async function POST(request: Request) {
     }
 
     const response = NextResponse.json({ success: true, consultation })
+    invalidateSlotsCache()
 
     // Execute non-critical tasks in background
     Promise.resolve().then(async () => {

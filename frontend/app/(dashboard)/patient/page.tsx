@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Video, Scale, ArrowRight, X, FileText, Download, Pill, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabaseClient'
@@ -276,9 +276,12 @@ export default function PatientDashboardHome() {
         ? careTeam?.fitness_coach_id || careTeam?.trainer_id
         : null
 
+  const providerSlotCacheRef = useRef<Map<string, any[]>>(new Map())
+
   const loadProviderDates = useCallback(async (role: 'dietitian' | 'nutritionist' | 'fitness_coach', providerId: string) => {
     setProviderSlotsLoading(true)
     setProviderSlotError('')
+    providerSlotCacheRef.current.clear()
     try {
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData.session?.access_token
@@ -289,10 +292,36 @@ export default function PatientDashboardHome() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Unable to load available dates.')
-      const dates = ((data.dates || []) as Array<{ date: string }>).map(item => item.date)
+      const dates = ((data.dates || []) as Array<{ date: string }>).map(item => item.date).sort((a, b) => a.localeCompare(b))
       setProviderSlotDates(dates)
-      setSelectedProviderDate(dates[0] || '')
+
+      // Pre-populate client slot cache if slots were returned
+      if (Array.isArray(data.slots) && data.slots.length > 0) {
+        for (const slot of data.slots) {
+          const timeSlot = slot.startTime || slot.time_slot || slot.start_time || ''
+          const slotDate = slot.date || slot.available_date || ''
+          if (!timeSlot || !slotDate) continue
+          const mapped = {
+            ...slot,
+            available_date: slotDate,
+            time_slot: timeSlot,
+          }
+          if (!providerSlotCacheRef.current.has(slotDate)) {
+            providerSlotCacheRef.current.set(slotDate, [])
+          }
+          const existing = providerSlotCacheRef.current.get(slotDate)!
+          if (!existing.some(s => s.time_slot === timeSlot)) {
+            existing.push(mapped)
+          }
+        }
+      }
+
+      const firstDate = dates[0] || ''
+      setSelectedProviderDate(firstDate)
       setSelectedProviderTime('')
+      if (firstDate && providerSlotCacheRef.current.has(firstDate)) {
+        setProviderSlots(providerSlotCacheRef.current.get(firstDate) || [])
+      }
     } catch (err) {
       setProviderSlotDates([])
       setSelectedProviderDate('')
@@ -304,6 +333,18 @@ export default function PatientDashboardHome() {
   }, [])
 
   const loadProviderSlots = useCallback(async (role: 'dietitian' | 'nutritionist' | 'fitness_coach', providerId: string, date: string) => {
+    if (!date) {
+      setProviderSlots([])
+      setSelectedProviderTime('')
+      return
+    }
+
+    if (providerSlotCacheRef.current.has(date)) {
+      setProviderSlots(providerSlotCacheRef.current.get(date) || [])
+      setSelectedProviderTime('')
+      return
+    }
+
     setProviderSlotsLoading(true)
     setProviderSlotError('')
     try {
@@ -316,15 +357,15 @@ export default function PatientDashboardHome() {
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Unable to load available slots.')
-      setProviderSlots(
-        (data.slots || [])
-          .filter((slot: any) => Boolean(slot && (slot.startTime || slot.time_slot || slot.start_time)))
-          .map((slot: any) => ({
-            ...slot,
-            available_date: slot.date || slot.available_date || date || '',
-            time_slot: slot.startTime || slot.time_slot || slot.start_time || '',
-          }))
-      )
+      const mappedList = (data.slots || [])
+        .filter((slot: any) => Boolean(slot && (slot.startTime || slot.time_slot || slot.start_time)))
+        .map((slot: any) => ({
+          ...slot,
+          available_date: slot.date || slot.available_date || date || '',
+          time_slot: slot.startTime || slot.time_slot || slot.start_time || '',
+        }))
+      providerSlotCacheRef.current.set(date, mappedList)
+      setProviderSlots(mappedList)
       setSelectedProviderTime('')
     } catch (err) {
       setProviderSlots([])
@@ -337,6 +378,7 @@ export default function PatientDashboardHome() {
 
   useEffect(() => {
     if (!bookingModal.isOpen || !bookingModal.type) return
+    providerSlotCacheRef.current.clear()
     setProviderSlots([])
     setProviderSlotDates([])
     setSelectedProviderDate('')
@@ -421,6 +463,7 @@ export default function PatientDashboardHome() {
       setBookingModal({ isOpen: false, type: null })
       setSelectedProviderDate('')
       setSelectedProviderTime('')
+      providerSlotCacheRef.current.clear()
       reloadData({ force: true })
     } catch (err: any) {
       setProviderSlotError(err.message)

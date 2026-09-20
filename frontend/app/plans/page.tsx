@@ -131,7 +131,13 @@ export default async function PlansPage() {
             </p>
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div className={`grid gap-6 ${
+            durationPrograms.length === 1 ? 'grid-cols-1 max-w-md mx-auto' :
+            durationPrograms.length === 2 ? 'grid-cols-1 sm:grid-cols-2 max-w-3xl mx-auto' :
+            durationPrograms.length === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto' :
+            durationPrograms.length === 4 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 max-w-7xl mx-auto' :
+            'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 max-w-7xl mx-auto'
+          }`}>
             {durationPrograms.map((prog) => (
               <article
                 key={prog.durationMonths}

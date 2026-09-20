@@ -146,7 +146,7 @@ export async function GET(request: Request) {
           const [consultationsRes, walletRes, availableRequestsRes, completedCountRes] = await Promise.all([
             supabaseAdmin
               .from('doctor_consultations')
-              .select('id, doctor_id, patient_id, booking_date, booking_time, status, room_url, is_completed, consultation_notes, prescription_type, created_at, call_started_at, call_ended_at, prescription_text, prescription_notes, updated_at, appointment_type, meeting_provider, meeting_room, meeting_url, completed_at')
+              .select('id, doctor_id, patient_id, booking_date, booking_time, status, room_url, is_completed, prescription_type, created_at, call_started_at, call_ended_at, appointment_type, meeting_provider, meeting_room, meeting_url, completed_at')
               .eq('doctor_id', userId)
               .order('created_at', { ascending: false })
               .limit(20),
@@ -158,14 +158,14 @@ export async function GET(request: Request) {
             // Get unclaimed requests (where status is scheduled and no doctor is assigned yet)
             supabaseAdmin
               .from('doctor_consultations')
-              .select('id, doctor_id, patient_id, booking_date, booking_time, status, room_url, is_completed, consultation_notes, prescription_type, created_at, call_started_at, call_ended_at, prescription_text, prescription_notes, updated_at, appointment_type, meeting_provider, meeting_room, meeting_url, completed_at')
+              .select('id, doctor_id, patient_id, booking_date, booking_time, status, room_url, is_completed, prescription_type, created_at, call_started_at, call_ended_at, appointment_type, meeting_provider, meeting_room, meeting_url, completed_at')
               .is('doctor_id', null)
               .in('status', ['scheduled', 'calling'])
               .order('created_at', { ascending: false })
-              .limit(20),
+              .limit(10),
             supabaseAdmin
               .from('doctor_consultations')
-              .select('*', { count: 'exact', head: true })
+              .select('id', { count: 'exact', head: true })
               .eq('doctor_id', userId)
               .in('status', ['approved', 'completed', 'attended'])
           ])
@@ -186,7 +186,7 @@ export async function GET(request: Request) {
               ? supabaseAdmin.from('profiles').select('id, first_name, last_name, display_id, email, phone_number').in('id', allPatientIds)
               : Promise.resolve({ data: [] as any[], error: null }),
             allPatientIds.length > 0
-              ? supabaseAdmin.from('health_assessments').select('patient_id, first_name, last_name, phone_number, dob_month, dob_day, dob_year, age, height_cm, weight_kg, goal_weight_kg, medical_history, extra_medical_info, local_food, workout_preference, is_eligible').in('patient_id', allPatientIds)
+              ? supabaseAdmin.from('health_assessments').select('patient_id, first_name, last_name, phone_number, dob_month, dob_day, dob_year, age, height_cm, weight_kg, goal_weight_kg, medical_history, is_eligible').in('patient_id', allPatientIds)
               : Promise.resolve({ data: [] as any[], error: null }),
             allPatientIds.length > 0
               ? supabaseAdmin
@@ -241,12 +241,9 @@ export async function GET(request: Request) {
                 ? Number((assess.weight_kg / Math.pow(assess.height_cm / 100, 2)).toFixed(1))
                 : null,
               patient_history: stringifyDisplayValue(assess.medical_history),
-              patient_extra_info: stringifyDisplayValue(assess.extra_medical_info),
-              patient_local_food: assess.local_food || null,
-              patient_workout_pref: assess.workout_preference || null,
               patient_eligibility_status: getEligibilityStatus(assess),
               patient_medical_risk_flags: getRiskFlags(assess),
-              patient_medication_proof_url: (assess?.medical_history as any)?.medication_proof_url || (assess?.medical_history as any)?.medication_proof || (assess as any)?.medication_proof_url || (assess as any)?.medication_proof || null,
+              patient_medication_proof_url: (assess?.medical_history as any)?.medication_proof_url || (assess?.medical_history as any)?.medication_proof || null,
               canJoin: canJoinSession(c.booking_date, c.booking_time, c.status),
               meetingUrl: c.meeting_url || c.room_url || null,
               roleLabel: 'Doctor',
@@ -296,8 +293,9 @@ export async function GET(request: Request) {
             }
           }
         },
-        30000,
-        [`dashboard:doctor:${userId}`, `user:${userId}`]
+        60000,
+        [`dashboard:doctor:${userId}`, `user:${userId}`],
+        600000 // 10 minutes SWR window
       )
 
       return jsonWithETag(doctorPayload, etag, request, { maxAgeSec: 15 })
@@ -307,78 +305,59 @@ export async function GET(request: Request) {
     const { value: providerPayload, etag } = await serverCache.getOrSet(
       `dashboard:provider:${userId}`,
       async () => {
-        let consultationsRes: any = await supabaseAdmin
-          .from('staff_consultations')
-          .select('id, staff_id, staff_role, patient_id, booking_date, booking_time, status, meeting_url, meeting_provider, appointment_type, created_at')
-          .eq('staff_id', userId)
-          .order('booking_date', { ascending: true })
-          .order('booking_time', { ascending: true })
-          .limit(8)
-
-        if (consultationsRes.error) {
-          consultationsRes = await supabaseAdmin
+        // Parallelize all primary provider queries in a single concurrent batch
+        const [consultationsRes, assignedResult, v2ProfileRes, v2WalletRes, legacyWalletRes] = await Promise.all([
+          supabaseAdmin
             .from('staff_consultations')
-            .select('id, staff_id, staff_role, patient_id, booking_date, booking_time, status, meeting_url, meeting_provider, created_at')
+            .select('id, staff_id, staff_role, patient_id, booking_date, booking_time, status, meeting_url, meeting_provider, appointment_type, created_at')
             .eq('staff_id', userId)
             .order('booking_date', { ascending: true })
             .order('booking_time', { ascending: true })
-            .limit(8)
-        }
-
-        const [{ patients, summary }, v2ProfileRes] = await Promise.all([
+            .limit(8),
           loadAssignedProviderPatients(userId, role, { page: 1, limit: 4 }),
           supabaseAdmin
             .from('provider_profiles_v2')
             .select('id')
             .or(`id.eq.${userId},user_id.eq.${userId}`)
             .maybeSingle(),
-        ])
-
-        if (consultationsRes.error) {
-          console.warn('staff_consultations query notice:', consultationsRes.error.message)
-        }
-        const rawConsultations = consultationsRes.data || []
-
-        const v2ProfileId = v2ProfileRes.data?.id
-        let walletPayload = { balance: 0, pending_payout: 0, completed_payout: 0, lifetime_earnings: 0 }
-
-        if (v2ProfileId) {
-          const { data: v2Wallet } = await supabaseAdmin
+          supabaseAdmin
             .from('provider_wallets')
             .select('eligible_balance, processing_balance, paid_total, pending_balance, on_hold_balance')
-            .eq('provider_id', v2ProfileId)
+            .or(`provider_id.eq.${userId}`)
             .eq('currency', 'INR')
-            .maybeSingle()
-
-          if (v2Wallet) {
-            const eligible = Number(v2Wallet.eligible_balance || 0)
-            const processing = Number(v2Wallet.processing_balance || 0)
-            const paid = Number(v2Wallet.paid_total || 0)
-            const pending = Number(v2Wallet.pending_balance || 0)
-            const onHold = Number(v2Wallet.on_hold_balance || 0)
-            walletPayload = {
-              balance: eligible,
-              pending_payout: processing,
-              completed_payout: paid,
-              lifetime_earnings: eligible + processing + paid + pending + onHold,
-            }
-          }
-        }
-
-        if (walletPayload.balance === 0 && walletPayload.lifetime_earnings === 0) {
-          const { data: legacyWallet } = await supabaseAdmin
+            .maybeSingle(),
+          supabaseAdmin
             .from('wallet_accounts')
             .select('current_balance, pending_balance, total_paid, total_earned')
             .eq('provider_id', userId)
-            .maybeSingle()
+            .maybeSingle(),
+        ])
 
-          if (legacyWallet) {
-            walletPayload = {
-              balance: Number(legacyWallet.current_balance || 0),
-              pending_payout: Number(legacyWallet.pending_balance || 0),
-              completed_payout: Number(legacyWallet.total_paid || 0),
-              lifetime_earnings: Number(legacyWallet.total_earned || 0),
-            }
+        const rawConsultations = consultationsRes.data || []
+        const { patients, summary } = assignedResult || { patients: [], summary: {} }
+
+        let walletPayload = { balance: 0, pending_payout: 0, completed_payout: 0, lifetime_earnings: 0 }
+        const v2Wallet = v2WalletRes?.data
+
+        if (v2Wallet) {
+          const eligible = Number(v2Wallet.eligible_balance || 0)
+          const processing = Number(v2Wallet.processing_balance || 0)
+          const paid = Number(v2Wallet.paid_total || 0)
+          const pending = Number(v2Wallet.pending_balance || 0)
+          const onHold = Number(v2Wallet.on_hold_balance || 0)
+          walletPayload = {
+            balance: eligible,
+            pending_payout: processing,
+            completed_payout: paid,
+            lifetime_earnings: eligible + processing + paid + pending + onHold,
+          }
+        } else if (legacyWalletRes?.data) {
+          const legacyWallet = legacyWalletRes.data
+          walletPayload = {
+            balance: Number(legacyWallet.current_balance || 0),
+            pending_payout: Number(legacyWallet.pending_balance || 0),
+            completed_payout: Number(legacyWallet.total_paid || 0),
+            lifetime_earnings: Number(legacyWallet.total_earned || 0),
           }
         }
 
@@ -386,10 +365,6 @@ export async function GET(request: Request) {
         const profilesRes = patientIds.length
           ? await supabaseAdmin.from('profiles').select('id, first_name, last_name, email').in('id', patientIds)
           : { data: [], error: null }
-
-        if (profilesRes.error) {
-          console.warn('profiles query notice:', profilesRes.error.message)
-        }
 
         const profilesById = new Map(((profilesRes.data || []) as any[]).map((profile: any) => [profile.id, profile]))
         const consultations = rawConsultations.map((consultation: any) => {
@@ -418,8 +393,9 @@ export async function GET(request: Request) {
           wallet: walletPayload,
         }
       },
-      30000,
-      [`dashboard:provider:${userId}`, `user:${userId}`]
+      60000,
+      [`dashboard:provider:${userId}`, `user:${userId}`],
+      600000 // 10 minutes SWR window
     )
 
     return jsonWithETag(providerPayload, etag, request, { maxAgeSec: 15 })

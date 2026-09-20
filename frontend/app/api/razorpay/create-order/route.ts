@@ -4,6 +4,8 @@ import { getAuthenticatedPatient } from '@/lib/appointmentAvailability'
 import { APP_CONFIG } from '@/lib/appConfig'
 import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/authSecurity'
 import { getAuthoritativeSubscriptionPricing } from '@/lib/subscriptionService'
+import { supabaseAdmin } from '@/lib/supabaseServer'
+import { getMembershipValidity } from '@/lib/membershipServer'
 
 function getRazorpayClient() {
   const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID
@@ -34,6 +36,60 @@ export async function POST(request: Request) {
     const currency = String(body?.currency || 'INR').toUpperCase()
     const receipt = `rcpt_${Date.now().toString().slice(-8)}_${Math.random().toString(36).slice(2, 6)}`
     const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || 'rzp_test_mock'
+
+    // Guard 1: Prevent duplicate consultation payment if already paid or covered
+    if (paymentType === 'consultation') {
+      const membership = await getMembershipValidity(patient.user.id)
+      if (membership.active) {
+        return NextResponse.json({
+          error: 'Your treatment program membership includes consultations at ₹0. No fee is required.',
+          alreadyCovered: true,
+        }, { status: 409 })
+      }
+
+      const [{ data: assessment }, { data: existingTxn }, { data: existingConsultation }] = await Promise.all([
+        supabaseAdmin
+          .from('health_assessments')
+          .select('consultation_fee_paid')
+          .eq('patient_id', patient.user.id)
+          .maybeSingle(),
+        supabaseAdmin
+          .from('payment_transactions')
+          .select('id')
+          .eq('patient_id', patient.user.id)
+          .eq('payment_type', 'consultation')
+          .in('status', ['success', 'paid'])
+          .limit(1)
+          .maybeSingle(),
+        supabaseAdmin
+          .from('doctor_consultations')
+          .select('id, status')
+          .eq('patient_id', patient.user.id)
+          .in('status', ['scheduled', 'calling', 'attended', 'approved', 'completed'])
+          .limit(1)
+          .maybeSingle(),
+      ])
+
+      if (assessment?.consultation_fee_paid || existingTxn || existingConsultation) {
+        return NextResponse.json({
+          error: 'Consultation fee has already been paid for this account.',
+          alreadyPaid: true,
+        }, { status: 409 })
+      }
+    } else if (paymentType === 'membership' || paymentType === 'combined') {
+      // Guard 2: Prevent duplicate membership payment if active membership exists
+      const membership = await getMembershipValidity(patient.user.id)
+      if (membership.active && membership.expiresAt) {
+        const daysRemaining = Math.ceil((new Date(membership.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+        if (daysRemaining > 7) {
+          return NextResponse.json({
+            error: `You already have an active treatment program (valid for ${daysRemaining} more days). Duplicate payment is not permitted.`,
+            alreadyActive: true,
+            daysRemaining,
+          }, { status: 409 })
+        }
+      }
+    }
 
     // Server-authoritative amount calculation: Never trust client-submitted amount
     const planId = body?.planId ? String(body.planId).trim() : undefined

@@ -43,11 +43,11 @@ export async function getAuthenticatedUser(request: Request) {
     const { data, error } = await supabaseAdmin.auth.getUser(token)
     if (!error && data?.user) {
       const user = data.user
-      const role = await getUserRole(user.id, user.email)
+      const role = await getUserRole(user.id, user.email, user.user_metadata)
       authTokenCache.set(token, {
         user,
         role,
-        expiresAt: now + 60 * 1000,
+        expiresAt: now + 5 * 60 * 1000,
       })
       return { user, role }
     }

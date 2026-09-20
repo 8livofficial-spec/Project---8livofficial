@@ -16,5 +16,5 @@ export async function GET(request: Request) {
   })
   if ('error' in result) return NextResponse.json({ error: result.error }, { status: result.status })
 
-  return NextResponse.json({ dates: result.dates })
+  return NextResponse.json({ dates: result.dates, slots: result.slots || [] })
 }

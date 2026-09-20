@@ -223,7 +223,13 @@ export default function UnifiedLogin() {
       // Set cookie for Next.js middleware
       document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
 
-      // Redirect to correct dashboard based on role
+      // Blazing fast redirect directly using server-resolved target (< 50ms)
+      if (loginData.target) {
+        window.location.href = loginData.target
+        return
+      }
+
+      // Role fallback redirect
       if (role === 'admin') {
         window.location.href = '/admin'
       } else if (role === 'doctor') {
@@ -233,25 +239,7 @@ export default function UnifiedLogin() {
       } else if (['PHARMACY', 'PHARMACY_ADMIN', 'PHARMACY_STAFF', 'DELIVERY_PARTNER', 'PHARMACIST'].includes(String(role).toUpperCase())) {
         window.location.href = '/pharmacy'
       } else {
-        const statusRes = await fetch(`/api/patient/status?patientId=${loginData.user.id}`, {
-          headers: { Authorization: `Bearer ${loginData.session.access_token}` },
-        })
-        if (statusRes.ok) {
-          const statusData = await statusRes.json()
-          const target = getPatientJourneyTarget(statusData)
-          logJourneyDebug('[patient-login-redirect]', {
-            patientId: loginData.user.id,
-            assessmentFound: Boolean(statusData.assessment),
-            assessmentStatus: statusData.assessmentStatus,
-            eligibilityStatus: statusData.eligibilityStatus,
-            currentJourneyStep: statusData.currentJourneyStep,
-            redirectTarget: target,
-            reason: 'password login',
-          })
-          window.location.href = target
-        } else {
-          window.location.href = '/patient'
-        }
+        window.location.href = '/patient'
       }
     } catch (err: unknown) {
       setAuthError(err instanceof Error ? err.message : 'Authentication failed.')

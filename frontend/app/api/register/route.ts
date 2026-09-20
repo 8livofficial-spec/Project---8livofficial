@@ -24,20 +24,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: profileError.message }, { status: 500 })
     }
 
-    const { data: userData, error: userError } = await supabaseAdmin.auth.admin.getUserById(userId)
-    if (userError) {
-      console.error('Failed to fetch user email for welcome email:', userError.message)
-    } else if (userData.user?.email) {
-      try {
-        await EmailService.sendWelcomeEmail({
+    // Background welcome email dispatch - never delay registration response
+    supabaseAdmin.auth.admin.getUserById(userId).then(({ data: userData, error: userError }) => {
+      if (userError) {
+        console.error('Failed to fetch user email for welcome email:', userError.message)
+      } else if (userData?.user?.email) {
+        EmailService.sendWelcomeEmail({
           email: userData.user.email,
           name: `${firstName || ''} ${lastName || ''}`.trim() || userData.user.email.split('@')[0],
           patientId: userId,
+        }).catch((emailError) => {
+          console.error('Failed to send welcome email:', emailError)
         })
-      } catch (emailError) {
-        console.error('Failed to send welcome email:', emailError)
       }
-    }
+    }).catch((err) => {
+      console.error('Background welcome email lookup failed:', err)
+    })
 
     return NextResponse.json({ success: true })
 

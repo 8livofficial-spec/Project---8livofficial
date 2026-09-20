@@ -1,8 +1,20 @@
 import { NextResponse } from 'next/server'
 import { getActiveTreatmentPlans, computePlanPricing } from '@/lib/subscriptionService'
 
+let pricingCache: { data: any; expiresAt: number } | null = null
+
 export async function GET() {
   try {
+    const now = Date.now()
+    if (pricingCache && pricingCache.expiresAt > now) {
+      return NextResponse.json(pricingCache.data, {
+        headers: {
+          'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+          'X-Cache': 'HIT'
+        }
+      })
+    }
+
     const plans = await getActiveTreatmentPlans()
     const tiers = plans.map(p => {
       const calc = computePlanPricing(p.base_price, p.discount_percentage, p.duration_months)
@@ -22,11 +34,23 @@ export async function GET() {
       }
     })
 
-    return NextResponse.json({
+    const payload = {
       success: true,
       plans: tiers,
       tiers, // backwards compatibility
       currency: 'INR',
+    }
+
+    pricingCache = {
+      data: payload,
+      expiresAt: now + 60 * 1000,
+    }
+
+    return NextResponse.json(payload, {
+      headers: {
+        'Cache-Control': 'public, s-maxage=60, stale-while-revalidate=300',
+        'X-Cache': 'MISS'
+      }
     })
   } catch (err: any) {
     console.error('Error fetching subscription pricing:', err)

@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { getMembershipValidity } from '@/lib/membershipServer'
 import { getAssignedProviderForRole, INITIAL_DOCTOR_CONSULTATION, DOCTOR_FOLLOW_UP, normalizeAppointmentType } from '@/lib/providerConsultations'
-import { isFutureIndiaSlot } from '@/lib/appointmentAvailability'
+import { isFutureIndiaSlot, getIndiaTodayDate, invalidateSlotsCache } from '@/lib/appointmentAvailability'
 import { createStreamMeeting } from '@/services/video/meeting.service'
 import { APP_CONFIG } from '@/lib/appConfig'
 import { recordCycleConsultationUsage } from '@/lib/treatmentCycleService'
@@ -104,25 +104,41 @@ export function expectedDoctorAppointmentType(context: PatientBookingContext): A
 }
 
 async function loadActiveDoctors(providerIds?: string[]) {
+  const ids = new Set<string>()
+  const registeredIds = new Set<string>()
+
   let query = supabaseAdmin
     .from('provider_profiles')
-    .select('provider_id')
+    .select('provider_id, status')
     .eq('role', 'doctor')
-    .eq('status', 'active')
 
   if (providerIds?.length) query = query.in('provider_id', providerIds)
 
-  const { data } = await query
-  const ids = new Set((data || []).map(row => row.provider_id).filter(Boolean))
+  const { data, error } = await query
+  if (!error && data) {
+    for (const row of data) {
+      registeredIds.add(row.provider_id)
+      if (row.status === 'active') ids.add(row.provider_id)
+    }
+  }
 
-  if (ids.size === 0) {
-    let legacyQuery = supabaseAdmin
-      .from('profiles')
-      .select('id')
-      .eq('role', 'doctor')
-    if (providerIds?.length) legacyQuery = legacyQuery.in('id', providerIds)
+  let legacyQuery = supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .eq('role', 'doctor')
+
+  if (providerIds?.length) {
+    const remaining = providerIds.filter(id => !registeredIds.has(id))
+    if (remaining.length > 0) {
+      legacyQuery = legacyQuery.in('id', remaining)
+      const { data: legacyData } = await legacyQuery
+      for (const row of legacyData || []) ids.add(row.id)
+    }
+  } else {
     const { data: legacyData } = await legacyQuery
-    for (const row of legacyData || []) ids.add(row.id)
+    for (const row of legacyData || []) {
+      if (!registeredIds.has(row.id)) ids.add(row.id)
+    }
   }
 
   return ids
@@ -155,11 +171,24 @@ function validateBookingEligibility(context: PatientBookingContext, appointmentT
   return null
 }
 
+const doctorAvailabilityCache = new Map<string, { data: any; expiresAt: number }>()
+
+export function invalidateDoctorAvailabilityCache() {
+  doctorAvailabilityCache.clear()
+}
+
 export async function loadPatientDoctorAvailability(params: {
   patientId: string
   appointmentType: AppointmentType
   date?: string | null
 }) {
+  const cacheKey = `${params.patientId}:${params.appointmentType}:${params.date || 'all'}`
+  const now = Date.now()
+  const cached = doctorAvailabilityCache.get(cacheKey)
+  if (cached && cached.expiresAt > now) {
+    return cached.data
+  }
+
   const context = await getPatientBookingContext(params.patientId)
   const eligibilityError = validateBookingEligibility(context, params.appointmentType)
   if (eligibilityError) return { error: eligibilityError, status: 403 as const, dates: [], slots: [] }
@@ -184,7 +213,7 @@ export async function loadPatientDoctorAvailability(params: {
   if (params.date) {
     query = query.eq('available_date', params.date)
   } else {
-    query = query.gte('available_date', new Date().toISOString().split('T')[0])
+    query = query.gte('available_date', getIndiaTodayDate())
   }
 
   const { data, error } = await query
@@ -201,10 +230,20 @@ export async function loadPatientDoctorAvailability(params: {
   const dateCounts = new Map<string, number>()
   for (const slot of slots) dateCounts.set(slot.date, (dateCounts.get(slot.date) || 0) + 1)
 
-  return {
-    dates: Array.from(dateCounts, ([date, availableCount]) => ({ date, availableCount })),
+  const dates = Array.from(dateCounts, ([date, availableCount]) => ({ date, availableCount }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+
+  const result = {
+    dates,
     slots,
   }
+
+  doctorAvailabilityCache.set(cacheKey, {
+    data: result,
+    expiresAt: now + 30 * 1000,
+  })
+
+  return result
 }
 
 export async function bookPatientDoctorAppointment(params: {
@@ -240,7 +279,7 @@ export async function bookPatientDoctorAppointment(params: {
     if (!activeDoctors.has(slot.provider_id)) return { error: 'Selected doctor is not active.', status: 409 as const }
   }
 
-  const { data: reservedSlot, error: reserveError } = await supabaseAdmin
+  let { data: reservedSlot, error: reserveError } = await supabaseAdmin
     .from('provider_availability')
     .update({ status: 'BOOKED', is_available: false, updated_at: new Date().toISOString() })
     .eq('id', slot.id)
@@ -249,6 +288,36 @@ export async function bookPatientDoctorAppointment(params: {
     .select('id, provider_id, provider_role, available_date, start_time, end_time')
     .maybeSingle()
   if (reserveError) throw reserveError
+
+  if (!reservedSlot && params.appointmentType === INITIAL_DOCTOR_CONSULTATION && !context.primaryDoctorId) {
+    const activeDoctorIds = Array.from(await loadActiveDoctors())
+    const { data: fallbackSlots } = await supabaseAdmin
+      .from('provider_availability')
+      .select('id, provider_id, provider_role, available_date, start_time, end_time')
+      .eq('provider_role', 'doctor')
+      .eq('available_date', slot.available_date)
+      .eq('start_time', slot.start_time)
+      .eq('status', 'AVAILABLE')
+      .eq('is_available', true)
+      .in('provider_id', activeDoctorIds)
+      .limit(5)
+
+    for (const altSlot of fallbackSlots || []) {
+      const { data: altReserved } = await supabaseAdmin
+        .from('provider_availability')
+        .update({ status: 'BOOKED', is_available: false, updated_at: new Date().toISOString() })
+        .eq('id', altSlot.id)
+        .eq('status', 'AVAILABLE')
+        .eq('is_available', true)
+        .select('id, provider_id, provider_role, available_date, start_time, end_time')
+        .maybeSingle()
+      if (altReserved) {
+        reservedSlot = altReserved
+        break
+      }
+    }
+  }
+
   if (!reservedSlot) return { error: 'Selected consultation slot was just booked. Please choose another slot.', status: 409 as const }
 
   const appointmentId = randomUUID()
@@ -429,6 +498,9 @@ export async function bookPatientDoctorAppointment(params: {
   } catch (ctaErr) {
     console.warn('Non-blocking care team lock during booking:', ctaErr)
   }
+
+  invalidateDoctorAvailabilityCache()
+  invalidateSlotsCache()
 
   return {
     success: true,

@@ -1,6 +1,51 @@
 @import "tailwindcss";
 
+/* ─── Aptos Official TrueType Web Fonts ─── */
+@font-face {
+  font-family: 'Aptos';
+  src: local('Aptos Light'), local('Aptos-Light'), url('/fonts/aptos/Aptos-Light.ttf') format('truetype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Aptos';
+  src: local('Aptos'), local('Aptos Regular'), url('/fonts/aptos/Aptos-Regular.ttf') format('truetype');
+  font-weight: 400 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Aptos';
+  src: local('Aptos Bold'), local('Aptos-Bold'), url('/fonts/aptos/Aptos-Bold.ttf') format('truetype');
+  font-weight: 700 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Aptos Display';
+  src: local('Aptos Display'), url('/fonts/aptos/AptosDisplay-Regular.ttf') format('truetype');
+  font-weight: 400 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Aptos Display';
+  src: local('Aptos Display Bold'), local('AptosDisplay-Bold'), url('/fonts/aptos/AptosDisplay-Bold.ttf') format('truetype');
+  font-weight: 700 900;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
+  --font-primary: var(--font-plus-jakarta), 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-inter: var(--font-primary);
+  --font-sora: var(--font-primary);
+  --font-aptos: var(--font-primary);
   --bg: #FFFFFF; /* Clean White Background */
   --bg-cream: #F8FAFC; /* Clean Light Surface */
   --bg-card: rgba(255,255,255,0.95); /* Crisp white card */
@@ -47,12 +92,14 @@
   to {
     stroke-dashoffset: 0;
   }
-  .teal-gradient-text {
-    background: linear-gradient(135deg, #00A884 0%, #0D9488 45%, #2DD4BF 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-  }
+}
+
+.teal-gradient-text {
+  background: linear-gradient(135deg, #00A884 0%, #0D9488 45%, #2DD4BF 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
   .blue-gradient-text {
     background: linear-gradient(135deg, #00A884 0%, #0D9488 45%, #2DD4BF 100%);
     -webkit-background-clip: text;
@@ -155,7 +202,6 @@ body {
 .border-\[\#0D9488\]\/15 { border-color: rgba(0, 168, 132, 0.15) !important; }
 .border-\[\#0D9488\]\/20 { border-color: rgba(0, 168, 132, 0.2) !important; }
 .border-\[\#0D9488\]\/30 { border-color: rgba(0, 168, 132, 0.3) !important; }
-}
 
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(30px); }
@@ -175,6 +221,33 @@ body {
 }
 .pillar-image-enter {
   animation: pillarImageEnter 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* ─── Pillar auto-progress indicator (GPU-accelerated, zero React re-renders) ─── */
+@keyframes pillarProgressLine {
+  from {
+    width: 0%;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes pillarProgressRing {
+  from {
+    stroke-dashoffset: 94.2;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.pillar-progress-track {
+  animation: pillarProgressLine 4.5s linear forwards;
+}
+
+.pillar-progress-ring {
+  animation: pillarProgressRing 4.5s linear forwards;
 }
 
 /* ─── Pillars: CTA breathing glow ─── */
@@ -204,7 +277,7 @@ body {
 body {
   background: var(--bg);
   color: #0F172A;
-  font-family: var(--font-inter), sans-serif;
+  font-family: var(--font-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -247,14 +320,21 @@ body {
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--font-sora), sans-serif;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
+  font-family: var(--font-primary);
+  letter-spacing: -0.025em;
+  line-height: 1.15;
 }
 
 h1, h2 {
   letter-spacing: -0.03em;
-  line-height: 1.1;
+  line-height: 1.12;
+}
+
+/* Global utility override for font-sora & font-sans to Plus Jakarta Sans */
+.font-sora,
+.font-sans,
+[class*="font-sora"] {
+  font-family: var(--font-primary) !important;
 }
 
 .custom-scrollbar::-webkit-scrollbar {

@@ -9,8 +9,8 @@ export default function Hero() {
   const [textVisible, setTextVisible] = useState(false)
 
   useEffect(() => {
-    const timer = setTimeout(() => setTextVisible(true), 400)
-    return () => clearTimeout(timer)
+    // Immediate zero-latency entrance
+    setTextVisible(true)
   }, [])
 
   return (
@@ -27,6 +27,7 @@ export default function Hero() {
           src="/images/hero.jpg"
           alt="8LIV Medical Weight Health & Vitality"
           loading="eager"
+          decoding="async"
           fetchPriority="high"
           className="w-full h-full object-cover object-[65%_25%] sm:object-[70%_35%] transform scale-[1.01] brightness-[1.12] contrast-[1.02]"
           onError={(e) => {

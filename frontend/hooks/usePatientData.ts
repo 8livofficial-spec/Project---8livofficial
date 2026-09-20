@@ -36,12 +36,35 @@ async function fetchPatientStatus(userId: string, accessToken: string, force = f
   return request
 }
 
-async function fetchPatientDashboard(userId: string, accessToken: string) {
-  const res = await fetch(`/api/patient/dashboard?patientId=${userId}`, {
+const PATIENT_DASHBOARD_CACHE_MS = 15000
+let patientDashboardCache: { userId: string; data: any; fetchedAt: number } | null = null
+const patientDashboardRequests = new Map<string, Promise<any>>()
+
+async function fetchPatientDashboard(userId: string, accessToken: string, force = false) {
+  const now = Date.now()
+  if (!force && patientDashboardCache?.userId === userId && now - patientDashboardCache.fetchedAt < PATIENT_DASHBOARD_CACHE_MS) {
+    return patientDashboardCache.data
+  }
+
+  if (!force && patientDashboardRequests.has(userId)) {
+    return patientDashboardRequests.get(userId)!
+  }
+
+  const request = fetch(`/api/patient/dashboard?patientId=${userId}${force ? '&force=true' : ''}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   })
-  if (!res.ok) throw new Error("Failed to fetch patient dashboard from backend API")
-  return res.json()
+    .then(async (res) => {
+      if (!res.ok) throw new Error("Failed to fetch patient dashboard from backend API")
+      const data = await res.json()
+      patientDashboardCache = { userId, data, fetchedAt: Date.now() }
+      return data
+    })
+    .finally(() => {
+      patientDashboardRequests.delete(userId)
+    })
+
+  patientDashboardRequests.set(userId, request)
+  return request
 }
 
 async function fetchPatientNotifications(userId: string, accessToken: string) {
@@ -290,6 +313,7 @@ function usePatientDataInternal() {
         const dashboardData = await fetchPatientDashboard(
           session.user.id,
           session.access_token,
+          options?.force
         )
 
         setProfile(dashboardData.profile)

@@ -341,7 +341,38 @@ export async function activateSubscriptionForPatient(params: {
   const lookupKey = params.planId || params.durationMonths || 1
   const pricing = await getAuthoritativeSubscriptionPricing(lookupKey)
 
-  const startDate = new Date()
+  // 3. Prevent duplicate concurrent ACTIVE subscriptions for the same patient
+  const { data: currentActiveSub } = await supabaseAdmin
+    .from('subscriptions')
+    .select('id, start_date, end_date, duration_months, program_name, status, created_at')
+    .eq('patient_id', params.patientId)
+    .eq('status', 'ACTIVE')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+
+  if (currentActiveSub) {
+    const timeSinceCreated = Date.now() - new Date(currentActiveSub.created_at).getTime()
+    if (timeSinceCreated < 60 * 1000) {
+      console.log(`[subscriptionService] Rapid duplicate subscription request detected for patient ${params.patientId}. Returning current active subscription.`)
+      return { subscription: currentActiveSub, alreadyActivated: true }
+    }
+  }
+
+  let startDate = new Date()
+  if (currentActiveSub) {
+    const existingEndTime = new Date(currentActiveSub.end_date).getTime()
+    // If current subscription still has remaining time, seamlessly extend from that end date
+    if (existingEndTime > Date.now()) {
+      startDate = new Date(currentActiveSub.end_date)
+    }
+    // Archive previous active subscription so there is only ever one ACTIVE subscription
+    await supabaseAdmin
+      .from('subscriptions')
+      .update({ status: 'UPGRADED', updated_at: new Date().toISOString() })
+      .eq('id', currentActiveSub.id)
+  }
+
   const endDate = new Date(startDate.getTime() + pricing.durationMonths * 30 * 86400000)
 
   // 3. Create Subscription record with complete commercial terms snapshot

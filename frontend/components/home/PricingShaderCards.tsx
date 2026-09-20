@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import {
-  Sparkles,
   CheckCircle2,
   ShieldCheck,
   ArrowRight,
@@ -138,6 +137,22 @@ export default function PricingShaderCards() {
       ? plans
       : plans.filter((p) => p.durationMonths === selectedDuration)
 
+  // Dynamically adapt grid columns and max-width based on actual count of plans
+  const getContainerLayout = (count: number) => {
+    switch (count) {
+      case 1:
+        return 'grid grid-cols-1 max-w-md mx-auto gap-6 mb-12'
+      case 2:
+        return 'grid grid-cols-1 md:grid-cols-2 max-w-3xl mx-auto gap-6 mb-12'
+      case 3:
+        return 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto gap-6 mb-12'
+      case 4:
+        return 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl mx-auto gap-6 mb-12'
+      default:
+        return 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 max-w-7xl mx-auto gap-6 mb-12'
+    }
+  }
+
   return (
     <section
       id="pricing"
@@ -147,11 +162,6 @@ export default function PricingShaderCards() {
         
         {/* Header */}
         <div className="text-center max-w-3xl mx-auto mb-12 sm:mb-16">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white border border-slate-200 text-[#0F766E] text-xs font-semibold uppercase tracking-wider mb-4 font-sora shadow-xs">
-            <Sparkles className="w-3.5 h-3.5 text-[#00A884]" />
-            <span>TRANSPARENT CARE PLANS</span>
-          </div>
-
           <h2 className="font-sora text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900 leading-tight mb-4">
             Doctor-led treatment plans,{' '}
             <span className="bg-gradient-to-r from-[#00A884] via-[#0D9488] to-[#0F766E] bg-clip-text text-transparent">
@@ -164,8 +174,8 @@ export default function PricingShaderCards() {
           </p>
         </div>
 
-        {/* Pricing Cards Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
+        {/* Pricing Cards Grid — responsively auto-adapts to 1, 2, 3, 4+ cards */}
+        <div className={getContainerLayout(filteredPlans.length)}>
           {filteredPlans.map((plan) => {
             const isPopular = plan.id === '3m-metabolic' || plan.durationMonths === 3
 

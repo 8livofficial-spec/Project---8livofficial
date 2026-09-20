@@ -11,10 +11,33 @@ const failedStatuses = ['failed', 'cancelled', 'declined', 'error']
 const CONSULTATION_FEE_DEFAULT = 499
 const DOCTOR_PAYOUT_PER_CONSULT = 300
 
+// In-memory cache for aggregated finance dashboard
+const financeCache = new Map<string, { data: any; expiresAt: number }>()
+
+export function invalidateFinanceCache() {
+  financeCache.clear()
+}
+
 export async function GET(request: Request) {
   try {
     await assertAdmin(request)
     const { searchParams } = new URL(request.url)
+    const force = searchParams.get('force') === 'true'
+    const cacheKey = request.url.replace(/[?&]force=true/, '')
+    const now = Date.now()
+
+    if (!force) {
+      const cached = financeCache.get(cacheKey)
+      if (cached && cached.expiresAt > now) {
+        return NextResponse.json(cached.data, {
+          headers: {
+            'Cache-Control': 'private, no-cache',
+            'X-Cache': 'HIT',
+          },
+        })
+      }
+    }
+
     const paymentsPage = Math.max(1, Number(searchParams.get('paymentsPage') || '1'))
     const paymentsLimit = Math.min(100, Math.max(1, Number(searchParams.get('paymentsLimit') || '25')))
     const payoutsPage = Math.max(1, Number(searchParams.get('payoutsPage') || '1'))
@@ -35,7 +58,7 @@ export async function GET(request: Request) {
         supabaseAdmin.from('doctor_profiles').select('id, full_name, specialty, profile_photo_url, payout_amount'),
         supabaseAdmin.from('provider_profiles_v2').select('id, user_id, full_name, role, email, phone_number, specialization, status'),
         supabaseAdmin.from('profiles').select('id, first_name, last_name, email, role, phone_number').in('role', ['doctor', 'dietitian', 'nutritionist', 'fitness_coach', 'trainer']),
-        supabaseAdmin.from('doctor_consultations').select('id, doctor_id, status, is_completed, created_at, completed_at'),
+        supabaseAdmin.from('doctor_consultations').select('id, doctor_id, status, is_completed, created_at, completed_at').limit(1000),
       ])
       doctorProfiles = docData || []
       providerProfilesV2 = v2Data || []
@@ -212,16 +235,16 @@ export async function GET(request: Request) {
         v2AccountsRes,
         legacyAccountsRes,
       ] = await Promise.all([
-        supabaseAdmin.from('provider_payouts').select('*').order('created_at', { ascending: false }),
-        supabaseAdmin.from('provider_payout_records').select('*').order('created_at', { ascending: false }),
-        supabaseAdmin.from('provider_wallet_transactions').select('*').or('transaction_type.eq.PAYOUT_RESERVED,transaction_type.eq.PAYOUT,balance_category.eq.PROCESSING').order('created_at', { ascending: false }),
-        supabaseAdmin.from('doctor_wallet_transactions').select('*').or('type.ilike.%withdrawal%,type.eq.CONSULTATION_PAYOUT,amount.lt.0').order('created_at', { ascending: false }),
-        supabaseAdmin.from('wallet_ledger_transactions').select('*').or('transaction_type.eq.PAYOUT,amount.lt.0').order('created_at', { ascending: false }),
+        supabaseAdmin.from('provider_payouts').select('id, provider_id, payout_amount, payout_status, failure_reason, payment_reference, created_at, initiated_at').order('created_at', { ascending: false }).limit(200),
+        supabaseAdmin.from('provider_payout_records').select('id, provider_id, net_amount, gross_amount, status, failure_reason, created_at, initiated_at').order('created_at', { ascending: false }).limit(200),
+        supabaseAdmin.from('provider_wallet_transactions').select('id, payout_id, provider_id, amount, transaction_type, balance_category, created_at').or('transaction_type.eq.PAYOUT_RESERVED,transaction_type.eq.PAYOUT,balance_category.eq.PROCESSING').order('created_at', { ascending: false }).limit(200),
+        supabaseAdmin.from('doctor_wallet_transactions').select('id, doctor_id, amount, status, payout_status, created_at, type').or('type.ilike.%withdrawal%,type.eq.CONSULTATION_PAYOUT,amount.lt.0').order('created_at', { ascending: false }).limit(200),
+        supabaseAdmin.from('wallet_ledger_transactions').select('id, provider_id, doctor_id, amount, status, payout_status, payment_reference, created_at, transaction_type').or('transaction_type.eq.PAYOUT,amount.lt.0').order('created_at', { ascending: false }).limit(200),
         supabaseAdmin.from('profiles').select('id, first_name, last_name, email, role'),
         supabaseAdmin.from('provider_profiles_v2').select('id, user_id, full_name, email, role'),
-        supabaseAdmin.from('doctor_payout_accounts').select('*'),
-        supabaseAdmin.from('provider_payout_profiles').select('*'),
-        supabaseAdmin.from('provider_profiles').select('id, provider_id, full_name, bank_account_details, upi_id'),
+        supabaseAdmin.from('doctor_payout_accounts').select('id, doctor_id, account_type, beneficiary_name, account_number, ifsc, vpa').limit(200),
+        supabaseAdmin.from('provider_payout_profiles').select('id, provider_id, preferred_payout_method, upi_id, encrypted_account_number, ifsc_encrypted, beneficiary_name').limit(200),
+        supabaseAdmin.from('provider_profiles').select('id, provider_id, full_name, bank_account_details, upi_id').limit(200),
       ])
 
       const legacyPayouts = legacyRes.data || []
@@ -683,7 +706,7 @@ export async function GET(request: Request) {
       assessments.filter((a: any) => a.consultation_fee_paid || a.membership_tier).length
     )
 
-    return NextResponse.json({
+    const responsePayload = {
       doctors,
       providerPayouts: lightPayoutsData,
       paginatedPayouts,
@@ -704,6 +727,18 @@ export async function GET(request: Request) {
         todayRevenue: txnTodayRevenue,
         consultationRevenue: totalConsultationRevenue,
         membershipRevenue: totalMembershipRevenue,
+      },
+    }
+
+    financeCache.set(cacheKey, {
+      data: responsePayload,
+      expiresAt: Date.now() + 30 * 1000,
+    })
+
+    return NextResponse.json(responsePayload, {
+      headers: {
+        'Cache-Control': 'private, no-cache',
+        'X-Cache': 'MISS',
       },
     })
   } catch (err: any) {

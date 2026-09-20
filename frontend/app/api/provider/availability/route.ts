@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { getAuthenticatedProvider } from '@/lib/providerServer'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { serverCache, jsonWithETag } from '@/lib/serverCache'
+import { invalidateDoctorAvailabilityCache } from '@/lib/patientAppointmentBooking'
+import { invalidateSlotsCache } from '@/lib/appointmentAvailability'
 
 const activeStatuses = ['AVAILABLE', 'BOOKED']
 type Source = 'MANUAL' | 'GENERATED'
@@ -113,11 +115,11 @@ export async function GET(request: Request) {
 
         return { availability: availabilityData || [], consultations }
       },
-      8000,
+      30000,
       [`avail:${provider.user.id}`]
     )
 
-    return jsonWithETag(result, etag, request, { maxAgeSec: 6 })
+    return jsonWithETag(result, etag, request, { maxAgeSec: 15 })
   } catch (err: any) {
     console.error('Provider availability GET fatal error:', err)
     return NextResponse.json({ availability: [], consultations: [], error: err.message }, { status: 200 })
@@ -492,6 +494,8 @@ export async function POST(request: Request) {
 
     const totalSaved = inserts.length + reactivations.length
     serverCache.invalidate(`avail:${provider.user.id}`)
+    invalidateDoctorAvailabilityCache()
+    invalidateSlotsCache()
 
     return NextResponse.json({
       inserted: totalSaved,
@@ -519,6 +523,8 @@ export async function DELETE(request: Request) {
   if (!data?.id) return NextResponse.json({ error: 'Only an available slot can be cancelled.' }, { status: 409 })
 
   serverCache.invalidate(`avail:${provider.user.id}`)
+  invalidateDoctorAvailabilityCache()
+  invalidateSlotsCache()
   return NextResponse.json({ success: true })
 }
 
@@ -549,5 +555,7 @@ export async function PUT(request: Request) {
   if (!data?.id) return NextResponse.json({ error: 'Slot not found or unauthorized.' }, { status: 404 })
 
   serverCache.invalidate(`avail:${provider.user.id}`)
+  invalidateDoctorAvailabilityCache()
+  invalidateSlotsCache()
   return NextResponse.json({ success: true })
 }

@@ -177,6 +177,7 @@ export default function ConsultationSchedulingPage() {
   const [selectedDate, setSelectedDate] = useState('')
   const [slotsLoading, setSlotsLoading] = useState(true)
   const [dateSlotsLoading, setDateSlotsLoading] = useState(false)
+  const [slotsError, setSlotsError] = useState('')
   const [loading, setLoading] = useState(false)
   const [paymentOpen, setPaymentOpen] = useState(false)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('upi')
@@ -189,9 +190,7 @@ export default function ConsultationSchedulingPage() {
   const [doctorCallingAlert, setDoctorCallingAlert] = useState<{ roomUrl: string; consultationId: string } | null>(null)
 
   const selectableDates = useMemo(() => {
-    return [...availableDates].sort((a, b) => {
-      return new Date(`${a}T00:00:00`).getTime() - new Date(`${b}T00:00:00`).getTime()
-    })
+    return [...availableDates].sort((a, b) => a.localeCompare(b))
   }, [availableDates])
 
   const groupedSlots = useMemo(() => {
@@ -259,6 +258,7 @@ export default function ConsultationSchedulingPage() {
 
   const loadAvailableSlots = useCallback(async () => {
     setSlotsLoading(true)
+    setSlotsError('')
     slotCacheRef.current.clear()
     try {
       const params = new URLSearchParams({ appointmentType })
@@ -269,15 +269,44 @@ export default function ConsultationSchedulingPage() {
       }
 
       const dates = ((data.dates || []) as Array<{ date: string }>).map(item => item.date).sort((a, b) => {
-        return new Date(`${a}T00:00:00`).getTime() - new Date(`${b}T00:00:00`).getTime()
+        return a.localeCompare(b)
       })
       setAvailableDates(dates)
+
+      // Pre-populate slotCacheRef with all slots from initial response so tab and date switching is instant (0ms)
+      if (Array.isArray(data.slots) && data.slots.length > 0) {
+        const slotsByDate = new Map<string, AvailableDoctorSlot[]>()
+        for (const slot of data.slots) {
+          const timeSlot = slot.startTime || slot.time_slot || slot.start_time || ''
+          if (!timeSlot) continue
+          const slotDate = slot.date || slot.available_date || ''
+          if (!slotDate) continue
+          const mapped: AvailableDoctorSlot = {
+            ...slot,
+            available_date: slotDate,
+            time_slot: timeSlot,
+          }
+          if (!slotsByDate.has(slotDate)) slotsByDate.set(slotDate, [])
+          const existing = slotsByDate.get(slotDate)!
+          const key = isActiveMemberFollowUp ? `${mapped.slotId || mapped.providerId || 'doc'}-${mapped.time_slot}` : mapped.time_slot
+          if (!existing.some(s => (isActiveMemberFollowUp ? `${s.slotId || s.providerId || 'doc'}-${s.time_slot}` : s.time_slot) === key)) {
+            existing.push(mapped)
+          }
+        }
+        for (const [d, sList] of slotsByDate) {
+          slotCacheRef.current.set(d, sList)
+        }
+      }
 
       if (dates.length > 0) {
         const nextDate = dates[0]
         setSelectedSlot(null)
         setSelectedDate(nextDate)
-        await loadSlotsForDate(nextDate)
+        if (slotCacheRef.current.has(nextDate)) {
+          setSelectedDateSlots(slotCacheRef.current.get(nextDate) || [])
+        } else {
+          await loadSlotsForDate(nextDate)
+        }
       } else {
         setSelectedSlot(null)
         setSelectedDate('')
@@ -289,6 +318,7 @@ export default function ConsultationSchedulingPage() {
         return
       }
       console.error('Failed to load available doctor slots:', err)
+      setSlotsError(err instanceof Error ? err.message : 'Failed to load available doctor slots.')
     } finally {
       setSlotsLoading(false)
     }
@@ -389,18 +419,20 @@ export default function ConsultationSchedulingPage() {
     )
   }
 
+  const isAlreadyPaid = Boolean(
+    assessment?.consultation_fee_paid ||
+    onboardingState.consultationPaymentStatus === 'PAID' ||
+    isActiveMemberFollowUp ||
+    reusePaymentFromBookingId ||
+    isBookingPending
+  )
+
   const handleConfirmBooking = async () => {
     if (!selectedSlot) {
       alert("Please select a consultation time first.")
       return
     }
     setPaymentError('')
-    // If already paid or active member follow up, book directly
-    if (reusePaymentFromBookingId || isActiveMemberFollowUp || isBookingPending || assessment?.consultation_fee_paid) {
-      void handlePaidBooking()
-      return
-    }
-    // Launch Razorpay directly without intermediate fake/extra modal steps
     void handlePaidBooking()
   }
 
@@ -438,7 +470,7 @@ export default function ConsultationSchedulingPage() {
     setPaymentError('')
 
     try {
-      const needsPayment = !isActiveMemberFollowUp && !reusePaymentFromBookingId && !isBookingPending && !assessment?.consultation_fee_paid
+      const needsPayment = !isAlreadyPaid
 
       if (needsPayment) {
         // 1. Create order on backend
@@ -452,81 +484,84 @@ export default function ConsultationSchedulingPage() {
           }),
         })
         const orderData = await orderRes.json()
-        if (!orderRes.ok || orderData.error) {
+        if (orderRes.status === 409 && (orderData.alreadyPaid || orderData.alreadyCovered)) {
+          // Consultation fee already paid on backend — proceed directly to slot confirmation
+          console.log('[booking] Consultation fee already verified on backend. Proceeding to slot assignment.')
+        } else if (!orderRes.ok || orderData.error) {
           throw new Error(orderData.error || 'Failed to initialize payment gateway')
-        }
+        } else {
+          const patientId = user?.id || profile?.id || assessment?.patient_id
+          const patientName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || assessment?.first_name || 'Patient'
+          const patientEmail = user?.email || (profile as any)?.email || 'care@8liv.in'
+          const rawContact = profile?.phone_number || assessment?.phone_number || ''
+          const patientContact = rawContact.replace(/\D/g, '').slice(-10)
 
-        const patientId = user?.id || profile?.id || assessment?.patient_id
-        const patientName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || assessment?.first_name || 'Patient'
-        const patientEmail = user?.email || (profile as any)?.email || 'care@8liv.in'
-        const rawContact = profile?.phone_number || assessment?.phone_number || ''
-        const patientContact = rawContact.replace(/\D/g, '').slice(-10)
-
-        // 2. Open Razorpay Checkout
-        await loadRazorpayScript()
-        if (typeof window === 'undefined' || !(window as any).Razorpay) {
-          throw new Error('Could not load Razorpay checkout interface. Please disable ad-blockers and try again.')
-        }
-
-        await new Promise<void>((resolve, reject) => {
-          const options: any = {
-            key: orderData.key,
-            amount: orderData.amount,
-            currency: orderData.currency || 'INR',
-            name: '8Liv',
-            description: 'Initial Doctor Consultation Fee',
-            prefill: {
-              name: patientName,
-              email: patientEmail,
-              ...(patientContact.length === 10 ? { contact: patientContact } : {}),
-            },
-            theme: {
-              color: '#C4622D',
-            },
+          // 2. Open Razorpay Checkout
+          await loadRazorpayScript()
+          if (typeof window === 'undefined' || !(window as any).Razorpay) {
+            throw new Error('Could not load Razorpay checkout interface. Please disable ad-blockers and try again.')
           }
-          if (orderData.id && String(orderData.id).startsWith('order_') && !orderData.isMock) {
-            options.order_id = orderData.id
-          }
-          options.handler = async function (response: any) {
-            try {
-              // Verify payment on backend
-              const verifyRes = await patientFetch('/api/payment/verify', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  patientId,
-                  paymentType: 'consultation',
-                  amount: CONSULTATION_FEE,
-                  paymentMethod,
-                  razorpay_order_id: response.razorpay_order_id,
-                  razorpay_payment_id: response.razorpay_payment_id,
-                  razorpay_signature: response.razorpay_signature,
-                }),
-              })
-              const verifyData = await verifyRes.json()
-              if (!verifyRes.ok || verifyData.error) {
-                throw new Error(verifyData.error || 'Payment verification failed.')
-              }
-              resolve()
-            } catch (verifyErr) {
-              reject(verifyErr)
+
+          await new Promise<void>((resolve, reject) => {
+            const options: any = {
+              key: orderData.key,
+              amount: orderData.amount,
+              currency: orderData.currency || 'INR',
+              name: '8Liv',
+              description: 'Initial Doctor Consultation Fee',
+              prefill: {
+                name: patientName,
+                email: patientEmail,
+                ...(patientContact.length === 10 ? { contact: patientContact } : {}),
+              },
+              theme: {
+                color: '#C4622D',
+              },
             }
-          }
-          options.modal = {
-            ondismiss: function () {
-              reject(new Error('Payment cancelled.'))
-            },
-          }
-          try {
-            const rzp = new (window as any).Razorpay(options)
-            rzp.on('payment.failed', function (resp: any) {
-              reject(new Error(resp?.error?.description || 'Payment failed. Please try again.'))
-            })
-            rzp.open()
-          } catch (openErr: any) {
-            reject(new Error(openErr?.message || 'Unable to open Razorpay payment gateway.'))
-          }
-        })
+            if (orderData.id && String(orderData.id).startsWith('order_') && !orderData.isMock) {
+              options.order_id = orderData.id
+            }
+            options.handler = async function (response: any) {
+              try {
+                // Verify payment on backend
+                const verifyRes = await patientFetch('/api/payment/verify', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    patientId,
+                    paymentType: 'consultation',
+                    amount: CONSULTATION_FEE,
+                    paymentMethod,
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature: response.razorpay_signature,
+                  }),
+                })
+                const verifyData = await verifyRes.json()
+                if (!verifyRes.ok || verifyData.error) {
+                  throw new Error(verifyData.error || 'Payment verification failed.')
+                }
+                resolve()
+              } catch (verifyErr) {
+                reject(verifyErr)
+              }
+            }
+            options.modal = {
+              ondismiss: function () {
+                reject(new Error('Payment cancelled.'))
+              },
+            }
+            try {
+              const rzp = new (window as any).Razorpay(options)
+              rzp.on('payment.failed', function (resp: any) {
+                reject(new Error(resp?.error?.description || 'Payment failed. Please try again.'))
+              })
+              rzp.open()
+            } catch (openErr: any) {
+              reject(new Error(openErr?.message || 'Unable to open Razorpay payment gateway.'))
+            }
+          })
+        }
       }
 
       setPaymentStage('assigning')
@@ -977,12 +1012,45 @@ export default function ConsultationSchedulingPage() {
                         )}
                       </div>
                     </div>
+                  ) : slotsError ? (
+                    <div className="text-center py-10 bg-amber-50/70 rounded-2xl border border-amber-200/80 p-6">
+                      <div className="w-10 h-10 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-3">
+                        <AlertCircle className="w-5 h-5" />
+                      </div>
+                      <p className="text-sm font-bold text-amber-900 font-sora">{slotsError}</p>
+                      <p className="text-xs text-amber-700/80 mt-1 max-w-sm mx-auto">
+                        Please check your requirements or try refreshing available appointments.
+                      </p>
+                      <div className="mt-4 flex items-center justify-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => void loadAvailableSlots()}
+                          className="px-4 py-2 bg-[#0D9488] hover:bg-[#0F766E] text-white rounded-xl text-xs font-bold font-sora transition-colors cursor-pointer"
+                        >
+                          Refresh Slots
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => router.push('/patient')}
+                          className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold font-sora transition-colors cursor-pointer"
+                        >
+                          Go to Dashboard
+                        </button>
+                      </div>
+                    </div>
                   ) : (
                     <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                       <p className="text-sm font-bold text-slate-800 font-sora">No consultation slots currently open</p>
                       <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
                         Your doctor will open new schedule availability shortly. You can also request an urgent callback from support.
                       </p>
+                      <button
+                        type="button"
+                        onClick={() => void loadAvailableSlots()}
+                        className="mt-4 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold font-sora transition-colors cursor-pointer"
+                      >
+                        Refresh Availability
+                      </button>
                     </div>
                   )}
                 </div>
@@ -1262,6 +1330,41 @@ export default function ConsultationSchedulingPage() {
                     )}
                   </div>
                 </div>
+              ) : slotsError ? (
+                <div className="rounded-2xl border p-8 text-center bg-[#FFF8F3]" style={{ borderColor: 'rgba(196, 98, 45, 0.25)' }}>
+                  <div className="w-12 h-12 rounded-full bg-[#C4622D]/10 text-[#C4622D] flex items-center justify-center mx-auto mb-3">
+                    <AlertCircle className="w-6 h-6" />
+                  </div>
+                  <h3 className="text-base font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                    {slotsError}
+                  </h3>
+                  <p className="text-xs mt-1.5 max-w-md mx-auto" style={{ color: designTokens.colors.textSecondary }}>
+                    {slotsError.toLowerCase().includes('assessment')
+                      ? 'Please complete your health intake assessment before proceeding to book your initial physician consultation.'
+                      : 'Please check your status or try reloading the latest doctor schedules.'}
+                  </p>
+                  <div className="mt-5 flex items-center justify-center gap-3">
+                    {slotsError.toLowerCase().includes('assessment') ? (
+                      <button
+                        type="button"
+                        onClick={() => router.push('/patient/assessment')}
+                        className="px-5 py-2.5 rounded-xl font-bold text-xs text-white transition-all cursor-pointer"
+                        style={{ backgroundColor: designTokens.colors.secondary }}
+                      >
+                        Complete Health Assessment
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void loadAvailableSlots()}
+                        className="px-5 py-2.5 rounded-xl font-bold text-xs text-white transition-all cursor-pointer"
+                        style={{ backgroundColor: designTokens.colors.primary }}
+                      >
+                        Refresh Availability
+                      </button>
+                    )}
+                  </div>
+                </div>
               ) : (
                 <div className="rounded-xl p-5 border border-dashed text-center" style={{ borderColor: designTokens.colors.border }}>
                   <h3 className="text-base font-bold" style={{ color: designTokens.colors.textPrimary }}>
@@ -1270,6 +1373,14 @@ export default function ConsultationSchedulingPage() {
                   <p className="text-sm mt-2" style={{ color: designTokens.colors.textSecondary }}>
                     You can join the waiting list, request a callback, or check again for future availability.
                   </p>
+                  <button
+                    type="button"
+                    onClick={() => void loadAvailableSlots()}
+                    className="mt-4 px-5 py-2.5 rounded-xl font-bold text-xs text-white transition-all cursor-pointer"
+                    style={{ backgroundColor: designTokens.colors.primary }}
+                  >
+                    Check for New Slots
+                  </button>
                 </div>
               )}
             </div>
@@ -1320,8 +1431,8 @@ export default function ConsultationSchedulingPage() {
                       <p className="text-xs font-semibold uppercase" style={{ color: designTokens.colors.textTertiary }}>
                         Consultation Fee
                       </p>
-                      <p className="font-bold" style={{ color: designTokens.colors.textPrimary }}>
-                        INR {CONSULTATION_FEE}
+                      <p className="font-bold" style={{ color: isAlreadyPaid ? '#0D9488' : designTokens.colors.textPrimary }}>
+                        {isAlreadyPaid ? (isActiveMemberFollowUp ? '₹0 (Member Benefit)' : '₹0 (Paid ✓)') : `INR ${CONSULTATION_FEE}`}
                       </p>
                     </div>
                   </div>
@@ -1330,13 +1441,13 @@ export default function ConsultationSchedulingPage() {
                 {/* CTA Button */}
                 <button
                   onClick={handleConfirmBooking}
-                  disabled={!selectedSlot || loading}
+                  disabled={!selectedSlot || loading || patientDataLoading}
                   className="w-full py-4 px-6 rounded-xl font-bold text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg cursor-pointer"
                   style={{
                     backgroundColor: selectedSlot ? designTokens.colors.primary : designTokens.colors.textTertiary,
                   }}
                 >
-                  {loading ? 'Processing...' : 'Confirm Appointment'}
+                  {loading ? 'Processing...' : isAlreadyPaid ? 'Confirm Appointment (₹0)' : 'Pay & Confirm Appointment'}
                 </button>
 
                 <p className="text-xs text-center" style={{ color: designTokens.colors.textTertiary }}>

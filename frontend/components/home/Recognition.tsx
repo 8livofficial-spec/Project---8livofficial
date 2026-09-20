@@ -135,6 +135,7 @@ export default function Recognition() {
                     src="/images/reality_woman_wellness.jpg"
                     alt="8LIV Confident Patient Metabolic Wellness"
                     loading="lazy"
+                    decoding="async"
                     className="w-full h-full object-cover object-top transition-transform duration-700 hover:scale-105"
                   />
                   {/* Gentle gradient wash on portrait edge */}
@@ -247,6 +248,7 @@ export default function Recognition() {
                   src={item.imageSrc}
                   alt={item.imageAlt}
                   loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover object-center"
                 />
                 {/* Subtle soft gradient fade into card body */}

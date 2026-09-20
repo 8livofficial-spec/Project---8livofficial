@@ -22,6 +22,8 @@ class MemoryServerCache {
     return `"${hash}"`
   }
 
+  private inFlight = new Map<string, Promise<any>>()
+
   public getEntry<T>(key: string): CacheEntry<T> | undefined {
     return this.cache.get(key)
   }
@@ -30,31 +32,82 @@ class MemoryServerCache {
     key: string,
     fetcher: () => Promise<T>,
     ttlMs = 5000,
-    tags: string[] = []
-  ): Promise<{ value: T; etag: string; isHit: boolean }> {
+    tags: string[] = [],
+    swrMs = 300000 // 5 minutes stale-while-revalidate window
+  ): Promise<{ value: T; etag: string; isHit: boolean; isStale?: boolean }> {
     const now = Date.now()
     const cached = this.cache.get(key)
 
-    if (cached && cached.expiresAt > now) {
-      return { value: cached.value as T, etag: cached.etag, isHit: true }
+    if (cached) {
+      if (cached.expiresAt > now) {
+        return { value: cached.value as T, etag: cached.etag, isHit: true }
+      }
+
+      // SWR: serve stale data immediately in 0ms, and refresh in background
+      if (swrMs > 0 && (now - cached.expiresAt < swrMs)) {
+        if (!this.inFlight.has(key)) {
+          const bgPromise = (async () => {
+            try {
+              const freshValue = await fetcher()
+              const freshEtag = this.generateETag(freshValue)
+              this.cache.set(key, {
+                value: freshValue,
+                etag: freshEtag,
+                expiresAt: Date.now() + ttlMs,
+                tags,
+              })
+            } catch (bgErr) {
+              console.warn(`[serverCache] SWR background update error for ${key}:`, bgErr)
+            } finally {
+              this.inFlight.delete(key)
+            }
+          })()
+          this.inFlight.set(key, bgPromise)
+        }
+        return { value: cached.value as T, etag: cached.etag, isHit: true, isStale: true }
+      }
     }
 
-    const value = await fetcher()
-    const etag = this.generateETag(value)
-
-    // Enforce size constraint (LRU approximation: evict oldest entry)
-    if (this.cache.size >= this.maxEntries) {
-      const firstKey = this.cache.keys().next().value
-      if (firstKey) this.cache.delete(firstKey)
+    // Coalesce in-flight requests to the same key to avoid duplicate DB queries
+    if (this.inFlight.has(key)) {
+      try {
+        const val = await this.inFlight.get(key)
+        const current = this.cache.get(key)
+        if (current) {
+          return { value: current.value as T, etag: current.etag, isHit: true }
+        }
+        return { value: val as T, etag: this.generateETag(val), isHit: false }
+      } catch (err) {
+        // Fallback to independent execution if in-flight failed
+      }
     }
 
-    this.cache.set(key, {
-      value,
-      etag,
-      expiresAt: now + ttlMs,
-      tags,
-    })
+    const execPromise = (async () => {
+      try {
+        const value = await fetcher()
+        const etag = this.generateETag(value)
 
+        // Enforce size constraint (LRU approximation: evict oldest entry)
+        if (this.cache.size >= this.maxEntries) {
+          const firstKey = this.cache.keys().next().value
+          if (firstKey) this.cache.delete(firstKey)
+        }
+
+        this.cache.set(key, {
+          value,
+          etag,
+          expiresAt: Date.now() + ttlMs,
+          tags,
+        })
+
+        return { value, etag }
+      } finally {
+        this.inFlight.delete(key)
+      }
+    })()
+
+    this.inFlight.set(key, execPromise)
+    const { value, etag } = await execPromise
     return { value, etag, isHit: false }
   }
 

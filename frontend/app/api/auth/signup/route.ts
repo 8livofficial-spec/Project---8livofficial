@@ -88,19 +88,24 @@ export async function POST(request: Request) {
     })
 
     const link = `${getOrigin(request)}/verify-email?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`
-    await EmailService.sendEmailVerification({
+    
+    // Background email dispatch - never block the user's registration response with SMTP network latency
+    EmailService.sendEmailVerification({
       email,
       name: `${firstName} ${lastName}`.trim() || email.split('@')[0],
       patientId: data.user.id,
       link,
+    }).catch((emailError) => {
+      console.error('[Signup] Background verification email sending failed:', emailError)
     })
 
-    await writeAuthAudit({ userId: data.user.id, email, event: 'SIGNUP', status: 'SUCCESS', ip, userAgent })
+    writeAuthAudit({ userId: data.user.id, email, event: 'SIGNUP', status: 'SUCCESS', ip, userAgent })
 
     return NextResponse.json({ success: true, userId: data.user.id, message: 'Verification email sent.' })
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Unable to create account.'
-    await writeAuthAudit({ event: 'SIGNUP', status: 'FAILED', ip, userAgent, metadata: { error: message } })
+    writeAuthAudit({ event: 'SIGNUP', status: 'FAILED', ip, userAgent, metadata: { error: message } })
     return NextResponse.json({ error: message }, { status: 500 })
   }
 }
+

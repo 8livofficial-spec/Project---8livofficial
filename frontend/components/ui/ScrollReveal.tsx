@@ -101,43 +101,25 @@ const ScrollReveal: React.FC<ScrollRevealProps> = ({
 
       gsap.fromTo(
         wordElements,
-        { opacity: baseOpacity, willChange: 'opacity' },
+        { opacity: baseOpacity, y: 8, willChange: 'opacity, transform' },
         {
-          ease: 'none',
+          ease: 'power2.out',
           opacity: 1,
+          y: 0,
           stagger,
+          duration: 0.6,
           scrollTrigger: {
             trigger: el,
             scroller,
-            start: 'top bottom',
-            end: wordAnimationEnd,
-            scrub: 1.5,
+            start: 'top 88%',
+            toggleActions: 'play none none none',
           },
         }
       )
-
-      if (enableBlur) {
-        gsap.fromTo(
-          wordElements,
-          { filter: `blur(${blurStrength}px)` },
-          {
-            ease: 'none',
-            filter: 'blur(0px)',
-            stagger,
-            scrollTrigger: {
-              trigger: el,
-              scroller,
-              start: 'top bottom',
-              end: wordAnimationEnd,
-              scrub: 1.5,
-            },
-          }
-        )
-      }
     }, el)
 
     return () => ctx.revert()
-  }, [scrollContainerRef, enableBlur, baseRotation, baseOpacity, rotationEnd, wordAnimationEnd, blurStrength, stagger])
+  }, [scrollContainerRef, baseOpacity, stagger])
 
   return (
     <h2 ref={containerRef} className={`${containerClassName}`}>

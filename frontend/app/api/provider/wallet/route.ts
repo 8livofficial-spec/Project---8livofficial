@@ -215,11 +215,11 @@ export async function GET(request: Request) {
           earnings: v3Earnings || [],
         }
       },
-      8000,
+      30000,
       [`wallet:${userId}`]
     )
 
-    return jsonWithETag(walletPayload, etag, request, { maxAgeSec: 6 })
+    return jsonWithETag(walletPayload, etag, request, { maxAgeSec: 15 })
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Unable to load wallet.' }, { status: 500 })
   }

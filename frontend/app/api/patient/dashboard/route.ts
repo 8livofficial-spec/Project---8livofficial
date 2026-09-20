@@ -43,16 +43,37 @@ function getCurrentJourneyStep(state: {
   return 'DASHBOARD'
 }
 
+const patientApiDashboardCache = new Map<string, { data: any; expiresAt: number }>()
+
+export function invalidatePatientApiDashboardCache(patientId?: string) {
+  if (patientId) {
+    patientApiDashboardCache.delete(patientId)
+  } else {
+    patientApiDashboardCache.clear()
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url)
     const patientId = searchParams.get('patientId')
+    const force = searchParams.get('force') === 'true'
 
     if (!patientId) {
       return NextResponse.json({ error: 'Missing patientId' }, { status: 400 })
     }
 
     await assertPatientOrAssignedProvider(request, patientId)
+
+    const now = Date.now()
+    if (!force) {
+      const cached = patientApiDashboardCache.get(patientId)
+      if (cached && cached.expiresAt > now) {
+        return NextResponse.json(cached.data, {
+          headers: { 'Cache-Control': 'private, no-cache', 'X-Cache': 'HIT' }
+        })
+      }
+    }
 
     // Fetch all patient dashboard data in parallel
     const [
@@ -283,7 +304,7 @@ export async function GET(request: Request) {
     )
 
     if (shouldRecoverJourney) {
-      await updatePatientJourneyState(patientId, {
+      updatePatientJourneyState(patientId, {
         assessmentStatus: 'COMPLETED',
         assessmentProgress: 5,
         eligibilityStatus,
@@ -303,7 +324,7 @@ export async function GET(request: Request) {
           assessmentId: assessment?.id,
           recoveredAt: new Date().toISOString(),
         },
-      })
+      }).catch(err => console.warn('[patient/dashboard] Non-blocking journey update error:', err))
     }
 
     logJourneyDebug('[patient-dashboard-status]', {
@@ -316,7 +337,7 @@ export async function GET(request: Request) {
       reason: assessmentStatus !== 'COMPLETED' ? 'assessment incomplete' : 'journey state resolved',
     })
 
-    return NextResponse.json({
+    const responseData = {
       profile,
       assessment,
       careTeam,
@@ -356,6 +377,15 @@ export async function GET(request: Request) {
       dietPlan,
       fitnessPlan,
       activePrescription: activePrescriptionRes?.data || null
+    }
+
+    patientApiDashboardCache.set(patientId, {
+      data: responseData,
+      expiresAt: now + 15 * 1000,
+    })
+
+    return NextResponse.json(responseData, {
+      headers: { 'Cache-Control': 'private, no-cache', 'X-Cache': 'MISS' }
     })
   } catch (err: unknown) {
     console.error("API Error in /api/patient/dashboard:", err)

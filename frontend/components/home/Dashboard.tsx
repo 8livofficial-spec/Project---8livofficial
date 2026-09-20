@@ -3,7 +3,6 @@
 import React from 'react'
 import ComparisonSlider from '@/components/ui/comparison-slider'
 import CountUp from '@/components/ui/CountUp'
-import { Sparkles } from 'lucide-react'
 
 export default function Dashboard() {
   return (
@@ -15,11 +14,6 @@ export default function Dashboard() {
 
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-12 sm:mb-16">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-100 border border-slate-200 text-[#0F766E] text-xs font-semibold uppercase tracking-wider mb-4 font-sora">
-            <Sparkles className="w-3.5 h-3.5 text-[#00A884]" />
-            <span>REAL CLINICAL RESULTS</span>
-          </div>
-
           <h2 className="font-sora text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900 leading-tight mb-4">
             Visible progress with{' '}
             <span className="bg-gradient-to-r from-[#00A884] via-[#0D9488] to-[#0F766E] bg-clip-text text-transparent">

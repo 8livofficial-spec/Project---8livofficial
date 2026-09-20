@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState, useRef, useCallback } from 'react'
-import { motion, useScroll, useSpring, useTransform } from 'framer-motion'
+import { motion, useScroll, useTransform } from 'framer-motion'
 
 const SECTION_IDS = [
   'hero',
@@ -122,59 +122,40 @@ export default function CurvyJourneyLine() {
     setIsReady(true)
   }, [])
 
-  // Production-grade listener: ResizeObserver + window resize + asset load
+  // Production-grade listener: debounced window resize + post-mount layout settlement
   useEffect(() => {
-    let rafId: number | null = null
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
 
-    const handleUpdate = () => {
-      if (rafId) cancelAnimationFrame(rafId)
-      rafId = requestAnimationFrame(() => {
-        updatePath()
-      })
+    const handleDebouncedUpdate = () => {
+      if (timeoutId) clearTimeout(timeoutId)
+      timeoutId = setTimeout(() => {
+        requestAnimationFrame(updatePath)
+      }, 150)
     }
 
-    // Initial setup with double RAF for layout settlement
-    requestAnimationFrame(() => {
-      updatePath()
-      setTimeout(updatePath, 350)
-      setTimeout(updatePath, 1200)
-    })
+    // Initial setup for layout settlement
+    const t1 = setTimeout(updatePath, 100)
+    const t2 = setTimeout(updatePath, 800)
 
-    window.addEventListener('resize', handleUpdate, { passive: true })
-    window.addEventListener('load', handleUpdate, { passive: true })
-
-    // Observe document container changes
-    let observer: ResizeObserver | null = null
-    const target = containerRef.current?.parentElement || document.body
-
-    if (typeof ResizeObserver !== 'undefined' && target) {
-      observer = new ResizeObserver(() => {
-        handleUpdate()
-      })
-      observer.observe(target)
-    }
+    window.addEventListener('resize', handleDebouncedUpdate, { passive: true })
+    window.addEventListener('load', handleDebouncedUpdate, { passive: true })
 
     return () => {
-      if (rafId) cancelAnimationFrame(rafId)
-      window.removeEventListener('resize', handleUpdate)
-      window.removeEventListener('load', handleUpdate)
-      observer?.disconnect()
+      if (timeoutId) clearTimeout(timeoutId)
+      clearTimeout(t1)
+      clearTimeout(t2)
+      window.removeEventListener('resize', handleDebouncedUpdate)
+      window.removeEventListener('load', handleDebouncedUpdate)
     }
   }, [updatePath])
 
-  // Framer Motion spring scroll driver
+  // Framer Motion zero-lag scroll driver (direct hardware-accelerated progress, no lagging spring)
   const { scrollY } = useScroll()
   const rawProgress = useTransform(
     scrollY,
     [0, Math.max(1000, pricingOffset)],
     [0, 1]
   )
-
-  const smoothProgress = useSpring(rawProgress, {
-    stiffness: 90,
-    damping: 26,
-    restDelta: 0.001,
-  })
 
   // Completely unmount on mobile devices for maximum performance and 0 scroll overhead
   if (isMobile) return null
@@ -242,7 +223,7 @@ export default function CurvyJourneyLine() {
           strokeLinecap="round"
           fill="none"
           style={{
-            pathLength: smoothProgress,
+            pathLength: rawProgress,
           }}
         />
 

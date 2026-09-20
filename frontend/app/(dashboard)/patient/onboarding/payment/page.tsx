@@ -62,7 +62,9 @@ export default function OnboardingPaymentPage() {
   const [progress, setProgress] = useState(0)
   const [processingMsg, setProcessingMsg] = useState('Initiating payment...')
   const [txnId, setTxnId] = useState('')
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const progressRef = useRef<any>(null)
+
 
   useEffect(() => {
     const load = async () => {
@@ -84,9 +86,10 @@ export default function OnboardingPaymentPage() {
         return
       }
       // Already paid → go straight to dashboard
-      if (statusData.dashboardAccess) { router.replace('/patient'); return }
-
-      setAssessment(data)
+      if (statusData.dashboardAccess || statusData.onboarding_completed || statusData.activeMembership?.active) {
+        router.replace('/patient')
+        return
+      }
 
       setAssessment(data)
       setProfile(statusData.profile)
@@ -146,6 +149,9 @@ export default function OnboardingPaymentPage() {
   }
 
   const validateAndPay = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) {
@@ -171,7 +177,14 @@ export default function OnboardingPaymentPage() {
       })
 
       const orderData = await orderRes.json()
+      if (orderRes.status === 409 || orderData.alreadyCovered || orderData.alreadyActive) {
+        // Treatment program or fee already covered/active - direct to dashboard
+        router.replace('/patient')
+        return
+      }
+
       if (!orderRes.ok || orderData.error) {
+        setStep('review')
         throw new Error(orderData.error || 'Failed to create payment order')
       }
 
@@ -262,6 +275,7 @@ export default function OnboardingPaymentPage() {
       })
     } catch (err: any) {
       console.error('Onboarding payment error:', err)
+      setIsSubmitting(false);
       setStep('failed')
     }
   }
@@ -418,9 +432,10 @@ export default function OnboardingPaymentPage() {
 
                 <button
                   onClick={validateAndPay}
-                  className="w-full bg-[#0D9488] hover:bg-[#097A70] text-white font-sora font-bold rounded-2xl py-4 text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#0D9488]/20 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+                  disabled={isSubmitting}
+                  className="w-full bg-[#0D9488] hover:bg-[#097A70] disabled:opacity-60 text-white font-sora font-bold rounded-2xl py-4 text-sm flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#0D9488]/20 hover:scale-[1.01] active:scale-[0.99] cursor-pointer disabled:cursor-not-allowed"
                 >
-                  <Lock size={15} /> Pay ₹{total.toLocaleString('en-IN')} with Razorpay
+                  <Lock size={15} /> {isSubmitting ? 'Processing Payment...' : `Pay ₹${total.toLocaleString('en-IN')} with Razorpay`}
                 </button>
                 <button
                   onClick={() => router.replace('/plans')}

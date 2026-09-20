@@ -28,10 +28,23 @@ export async function getCurrentProvider(request: Request) {
 
   const now = Date.now()
   const cached = providerCache.get(auth.user.id)
-  if (cached && cached.expiresAt > now) {
-    return cached.data
+  if (cached) {
+    if (cached.expiresAt > now) {
+      return cached.data
+    }
+    // SWR: return cached immediately if within 10 minutes, refresh in background
+    if (now - cached.expiresAt < 10 * 60 * 1000) {
+      setTimeout(() => {
+        getCurrentProviderDirect(auth).catch(() => {})
+      }, 0)
+      return cached.data
+    }
   }
 
+  return await getCurrentProviderDirect(auth)
+}
+
+async function getCurrentProviderDirect(auth: any) {
   const [profileRes, v2ProviderRes, providerRes] = await Promise.all([
     supabaseAdmin
       .from('profiles')
@@ -112,7 +125,7 @@ export async function getCurrentProvider(request: Request) {
     role: (role === 'trainer' ? 'fitness_coach' : role) as ProviderRole,
   }
 
-  providerCache.set(auth.user.id, { data: result, expiresAt: now + 60000 })
+  providerCache.set(auth.user.id, { data: result, expiresAt: Date.now() + 5 * 60 * 1000 })
   return result
 }
 

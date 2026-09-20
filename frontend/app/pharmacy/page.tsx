@@ -81,33 +81,25 @@ export default function PharmacyPortalPage() {
     setLoading(true)
     setError('')
     try {
-      // 1. Fetch pharmacy compliance status from onboarding endpoint (allowed for PENDING & UNDER_REVIEW)
-      const onbRes = await authedFetch('/api/pharmacy/onboarding')
-      const onbData = await onbRes.json()
-      
-      if (onbRes.ok && onbData.pharmacy) {
-        setPharmacy(onbData.pharmacy)
+      // Parallel fetch of compliance status and fulfillment orders (< 400ms)
+      const [onbData, ordersData] = await Promise.all([
+        authedFetch('/api/pharmacy/onboarding')
+          .then(async (r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+        authedFetch('/api/pharmacy/orders')
+          .then(async (r) => (r.ok ? r.json() : null))
+          .catch(() => null),
+      ])
 
-        // If verified and active, fetch fulfillment orders
-        if (onbData.pharmacy.verification_status === 'VERIFIED' && onbData.pharmacy.status === 'ACTIVE') {
-          const ordersRes = await authedFetch('/api/pharmacy/orders')
-          const ordersData = await ordersRes.json()
-          if (ordersRes.ok) {
-            setOrders(ordersData.orders || [])
-          } else {
-            setError(ordersData.error || 'Failed to load fulfillment orders.')
-          }
-        }
-      } else {
-        // Fallback: try orders endpoint
-        const res = await authedFetch('/api/pharmacy/orders')
-        const data = await res.json()
-        if (res.ok) {
-          setOrders(data.orders || [])
-          if (data.pharmacy) setPharmacy(data.pharmacy)
-        } else {
-          setError(data.error || 'Failed to load pharmacy account.')
-        }
+      const pharm = onbData?.pharmacy || ordersData?.pharmacy || null
+      if (pharm) {
+        setPharmacy(pharm)
+      }
+
+      if (ordersData?.orders) {
+        setOrders(ordersData.orders)
+      } else if (!pharm && onbData?.error) {
+        setError(onbData.error || 'Failed to load pharmacy account.')
       }
     } catch (err: any) {
       setError(err.message || 'Unable to connect to pharmacy fulfillment service.')

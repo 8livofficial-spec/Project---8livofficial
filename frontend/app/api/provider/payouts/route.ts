@@ -2,6 +2,16 @@ import { NextResponse } from 'next/server'
 import { getAuthenticatedProvider } from '@/lib/providerServer'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 
+const providerPayoutsCache = new Map<string, { payouts: any[]; expiresAt: number }>()
+
+export function invalidateProviderPayoutsCache(providerId?: string) {
+  if (providerId) {
+    providerPayoutsCache.delete(providerId)
+  } else {
+    providerPayoutsCache.clear()
+  }
+}
+
 export async function GET(request: Request) {
   try {
     const provider = await getAuthenticatedProvider(request)
@@ -9,6 +19,17 @@ export async function GET(request: Request) {
 
     const userId = provider.user.id
     const profileId = provider.profile?.id || userId
+    const now = Date.now()
+    const force = new URL(request.url).searchParams.get('force') === 'true'
+
+    if (!force) {
+      const cached = providerPayoutsCache.get(userId)
+      if (cached && cached.expiresAt > now) {
+        return NextResponse.json({ payouts: cached.payouts }, {
+          headers: { 'Cache-Control': 'private, no-cache', 'X-Cache': 'HIT' }
+        })
+      }
+    }
 
     const { data: v2Profile } = await supabaseAdmin
       .from('provider_profiles_v2')
@@ -89,7 +110,14 @@ export async function GET(request: Request) {
       return true
     }).sort((a, b) => new Date(b.created_at || b.initiated_at || 0).getTime() - new Date(a.created_at || a.initiated_at || 0).getTime())
 
-    return NextResponse.json({ payouts })
+    providerPayoutsCache.set(userId, {
+      payouts,
+      expiresAt: now + 30 * 1000,
+    })
+
+    return NextResponse.json({ payouts }, {
+      headers: { 'Cache-Control': 'private, no-cache', 'X-Cache': 'MISS' }
+    })
   } catch (error: any) {
     return NextResponse.json({ error: error.message || 'Unable to load payouts.' }, { status: 500 })
   }

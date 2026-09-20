@@ -2,12 +2,16 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { assertAdmin, enforceRateLimit } from '@/lib/apiSecurity'
 import { APP_CONFIG } from '@/lib/appConfig'
+import { invalidateFinanceCache } from '../finance/route'
 
 export async function PATCH(request: Request) {
   try {
     const admin = await assertAdmin(request)
     const limited = enforceRateLimit(request, `admin-provider-payouts:${admin.id}`, APP_CONFIG.rateLimits.adminSensitive)
     if (limited) return limited
+
+    // Ensure subsequent financial views show fresh settled state
+    invalidateFinanceCache()
 
     const body = await request.json()
     const payoutId = body.transactionId || body.payoutId || body.id

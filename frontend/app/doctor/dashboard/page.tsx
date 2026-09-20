@@ -650,14 +650,14 @@ export default function DoctorDashboard() {
   const isFetchingDashboardRef = useRef(false);
   const initialOverviewLoadedRef = useRef(false);
 
-  // ── Auth check ──────────────────────────────────────────────────────────
+  // ── Auth check & Blazing Fast Parallel Initialization ────────────────────
   useEffect(() => {
     let isMounted = true;
     const init = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (!isMounted) return;
-        if (error || !session) {
+        if (error || !session?.user) {
           if (error) console.warn('Doctor session load error:', error.message);
           await supabase.auth.signOut();
           if (isMounted) router.push('/?role=doctor');
@@ -665,106 +665,70 @@ export default function DoctorDashboard() {
         }
         setDoctor(session.user);
 
-        // Fetch user profile securely via our backend to bypass any RLS limitations on Profiles
-        const profileRes = await authedFetch('/api/staff/profile', {
-          method: 'POST'
-        });
-        const profileData = await profileRes.json().catch(() => ({}));
-        let userProfile = profileData?.profile;
-        const profErr = profileData?.error;
-
-        // Resilient fallback: If API had transient network timeout, check session user_metadata and doctor_profiles
-        if (!userProfile && (session.user.user_metadata?.role === 'doctor' || session.user.email?.includes('doctor'))) {
-          userProfile = {
-            id: session.user.id,
-            role: 'doctor',
-            first_name: session.user.user_metadata?.first_name || 'Dr',
-            last_name: session.user.user_metadata?.last_name || '',
-          };
-        }
-
-        if (!userProfile) {
-          const { data: docProf } = await supabase
-            .from('doctor_profiles')
-            .select('id')
-            .eq('id', session.user.id)
-            .maybeSingle();
-
-          if (docProf) {
-            userProfile = {
-              id: session.user.id,
-              role: 'doctor',
-              first_name: 'Dr',
-              last_name: '',
-            };
-          }
-        }
-
-        if (userProfile && userProfile.role !== 'doctor') {
+        // Quick role check: if role is explicitly non-doctor, reject
+        const metaRole = session.user.user_metadata?.role?.toLowerCase();
+        const cookieMatch = document.cookie.match(/user_role=([^;]+)/);
+        const cookieRole = cookieMatch ? decodeURIComponent(cookieMatch[1]).toLowerCase() : null;
+        if (metaRole && metaRole !== 'doctor' && cookieRole && cookieRole !== 'doctor') {
           console.warn('Access Denied: User is not a doctor.');
           alert('Access Denied. You must be a doctor to view this dashboard.');
           await supabase.auth.signOut();
           document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 UTC; SameSite=Lax';
           if (isMounted) router.push('/login');
           return;
-        } else if (!userProfile && profErr) {
-          console.warn('Staff profile fetch warning (non-fatal):', profErr);
         }
 
-        // Ensure doctor profile exists via backend service-role
-        try {
-          await authedFetch('/api/provider/ensure-profile', {
-            method: 'POST',
-            body: JSON.stringify({
-              first_name: userProfile?.first_name || 'Dr',
-              last_name: userProfile?.last_name || 'Unknown'
+        const defaultFullName = session.user.user_metadata?.full_name ||
+          `Dr. ${session.user.user_metadata?.first_name || session.user.user_metadata?.display_id?.split(' ')[0] || ''} ${session.user.user_metadata?.last_name || ''}`.trim() || 'Dr. Physician';
+
+        // Fetch Doctor Profile & Aggregated Dashboard Data IN PARALLEL (bypassing 4 sequential roundtrips)
+        const [profileRes, dashboardData] = await Promise.all([
+          supabase
+            .from('doctor_profiles')
+            .select('*')
+            .eq('id', session.user.id)
+            .maybeSingle(),
+          authedFetch('/api/provider/dashboard')
+            .then(async (res) => {
+              if (res.ok) return res.json();
+              return null;
             })
-          });
-        } catch (err) {
-          console.warn('Profile initialization error (non-critical):', err);
-        }
+            .catch((err) => {
+              console.error('Failed to load doctor dashboard aggregated overview:', err);
+              return null;
+            })
+        ]);
 
         if (!isMounted) return;
 
-        // Load doctor profile
-        const { data: profile } = await supabase
-          .from('doctor_profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .maybeSingle();
-
-        if (!isMounted) return;
-
-        if (profile) {
-          setDoctorProfile(profile);
+        // Set doctor profile
+        if (profileRes.data) {
+          setDoctorProfile(profileRes.data);
         } else {
           setDoctorProfile({
             id: session.user.id,
-            full_name: `Dr. ${userProfile?.first_name || ''} ${userProfile?.last_name || ''}`.trim() || 'Dr. Unknown',
+            full_name: defaultFullName,
             specialty: 'Physician'
           });
+
+          // Only if doctor profile is completely absent, initialize it in the background
+          authedFetch('/api/provider/ensure-profile', {
+            method: 'POST',
+            body: JSON.stringify({
+              first_name: session.user.user_metadata?.first_name || 'Dr',
+              last_name: session.user.user_metadata?.last_name || 'Unknown'
+            })
+          }).catch((e) => console.warn('Background profile ensure non-fatal:', e));
         }
 
-        const loadDashboardAggregated = async () => {
-          if (isFetchingDashboardRef.current) return;
-          try {
-            isFetchingDashboardRef.current = true;
-            const res = await authedFetch('/api/provider/dashboard');
-            if (res.ok && isMounted) {
-              const data = await res.json();
-              if (data.consultations) setConsultations(data.consultations);
-              if (data.availableRequests) setAvailableRequests(data.availableRequests);
-              if (data.wallet) setWallet(data.wallet);
-              initialOverviewLoadedRef.current = true;
-            }
-          } catch (err) {
-            console.error('Failed to load doctor dashboard aggregated overview:', err);
-          } finally {
-            isFetchingDashboardRef.current = false;
-          }
-        };
+        // Populate dashboard state
+        if (dashboardData) {
+          if (dashboardData.consultations) setConsultations(dashboardData.consultations);
+          if (dashboardData.availableRequests) setAvailableRequests(dashboardData.availableRequests);
+          if (dashboardData.wallet) setWallet(dashboardData.wallet);
+          initialOverviewLoadedRef.current = true;
+        }
 
-        await loadDashboardAggregated();
         if (isMounted) setLoading(false);
       } catch (err) {
         console.error('Doctor dashboard initialization failed (non-fatal):', err);

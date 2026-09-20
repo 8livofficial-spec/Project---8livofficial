@@ -30,6 +30,16 @@ export type PharmacyAccessContext = {
   isAdmin: boolean
 }
 
+const pharmacyContextCache = new Map<string, { context: PharmacyAccessContext; expiresAt: number }>()
+
+export function invalidatePharmacyStaffCache(userId?: string) {
+  if (userId) {
+    pharmacyContextCache.delete(userId)
+  } else {
+    pharmacyContextCache.clear()
+  }
+}
+
 /**
  * Server-side Pharmacy Access Control
  * Enforces:
@@ -75,6 +85,12 @@ export async function assertPharmacyStaff(request: Request): Promise<PharmacyAcc
       pharmacyUser: null,
       isAdmin: true,
     }
+  }
+
+  const now = Date.now()
+  const cached = pharmacyContextCache.get(auth.user.id)
+  if (cached && cached.expiresAt > now) {
+    return cached.context
   }
 
   // Find partner_pharmacy_users association
@@ -141,13 +157,20 @@ export async function assertPharmacyStaff(request: Request): Promise<PharmacyAcc
     throw err
   }
 
-  return {
+  const resolvedContext: PharmacyAccessContext = {
     user: auth.user,
     role: pharmacyUser?.role || 'PHARMACY_STAFF',
     pharmacy,
     pharmacyUser: pharmacyUser || null,
     isAdmin: false,
   }
+
+  pharmacyContextCache.set(auth.user.id, {
+    context: resolvedContext,
+    expiresAt: now + 60 * 1000,
+  })
+
+  return resolvedContext
 }
 
 /**

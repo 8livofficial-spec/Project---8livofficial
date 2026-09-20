@@ -12,7 +12,6 @@ import {
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
 import ScrollReveal from '@/components/ui/ScrollReveal'
-import ScrollFloat from '@/components/ui/ScrollFloat'
 
 gsap.registerPlugin(ScrollTrigger)
 
@@ -69,85 +68,25 @@ function StepCard({ item }: { item: typeof steps[0] }) {
     if (!el) return
 
     const ctx = gsap.context(() => {
+      // Clean, hardware-accelerated entrance animation
       const isMobile = window.innerWidth < 768
 
-      if (isMobile) {
-        // High-performance single entrance on mobile: 60/120fps fluid scrolling
-        gsap.fromTo(
-          el,
-          { opacity: 0, y: 18 },
-          {
-            opacity: 1,
-            y: 0,
-            duration: 0.55,
-            ease: 'power2.out',
-            scrollTrigger: {
-              trigger: el,
-              start: 'top 90%',
-              toggleActions: 'play none none none',
-            },
-          }
-        )
-        return
-      }
-
-      // Desktop: Multi-layer scrubbed glide
       gsap.fromTo(
         el,
-        { opacity: 0, x: isLeft ? -40 : 40, y: 16 },
+        { opacity: 0, x: isMobile ? 0 : (isLeft ? -24 : 24), y: 16 },
         {
           opacity: 1,
           x: 0,
           y: 0,
+          duration: 0.6,
           ease: 'power2.out',
           scrollTrigger: {
             trigger: el,
-            start: 'top 95%',
-            end: 'top 30%',
-            scrub: 1.2,
+            start: 'top 88%',
+            toggleActions: 'play none none none',
           },
         }
       )
-
-      // Description fades in slightly after the card
-      const desc = el.querySelector('.card-desc')
-      if (desc) {
-        gsap.fromTo(
-          desc,
-          { opacity: 0, y: 10 },
-          {
-            opacity: 1,
-            y: 0,
-            ease: 'power2.out',
-            scrollTrigger: {
-              trigger: el,
-              start: 'top 88%',
-              end: 'top 25%',
-              scrub: 1.5,
-            },
-          }
-        )
-      }
-
-      // Bullet row follows last
-      const bullet = el.querySelector('.card-bullet')
-      if (bullet) {
-        gsap.fromTo(
-          bullet,
-          { opacity: 0, y: 6 },
-          {
-            opacity: 1,
-            y: 0,
-            ease: 'power2.out',
-            scrollTrigger: {
-              trigger: el,
-              start: 'top 82%',
-              end: 'top 20%',
-              scrub: 1.8,
-            },
-          }
-        )
-      }
     }, el)
 
     return () => ctx.revert()
@@ -162,18 +101,9 @@ function StepCard({ item }: { item: typeof steps[0] }) {
         {item.tag}
       </span>
 
-      {/* ScrollFloat title — clean word wrap & mobile optimized */}
-      <ScrollFloat
-        animationDuration={1.2}
-        ease="power3.out"
-        scrollStart="top 90%"
-        scrollEnd="top 20%"
-        stagger={0.02}
-        containerClassName="mt-2.5 sm:mt-4 mb-2 sm:mb-2.5"
-        textClassName="font-sora text-base xs:text-lg sm:text-xl md:text-2xl font-bold text-[#0F172A] tracking-tight leading-snug"
-      >
+      <h3 className="mt-2.5 sm:mt-4 mb-2 sm:mb-2.5 font-sora text-base xs:text-lg sm:text-xl md:text-2xl font-bold text-[#0F172A] tracking-tight leading-snug">
         {item.title}
-      </ScrollFloat>
+      </h3>
 
       <p className="card-desc text-xs sm:text-sm md:text-base text-[#64748B] font-light leading-relaxed mb-3 sm:mb-4">
         {item.description}

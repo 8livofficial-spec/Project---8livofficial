@@ -570,7 +570,7 @@ function AdminDashboardContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to request refund.');
       alert('Refund request recorded.');
-      await fetchPayoutsData();
+      await fetchPayoutsData(true);
     } catch (err: any) {
       alert(err.message || 'Failed to request refund.');
     }
@@ -595,7 +595,7 @@ function AdminDashboardContent() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Failed to update payout.');
-      await fetchPayoutsData();
+      await fetchPayoutsData(true);
     } catch (err: any) {
       alert(err.message || 'Failed to update payout.');
     }
@@ -734,6 +734,20 @@ function AdminDashboardContent() {
           setLoading(false);
           router.push('/');
           return;
+        }
+
+        // Fast path: If session user metadata already confirms admin role, unblock UI immediately
+        const userRole = (session.user.user_metadata?.role || '').toLowerCase();
+        if (userRole === 'admin') {
+          setAdminUser({
+            id: session.user.id,
+            email: session.user.email,
+            first_name: session.user.user_metadata?.first_name || 'Admin',
+            last_name: session.user.user_metadata?.last_name || 'User',
+            role: 'admin',
+          });
+          setAuthChecking(false);
+          setLoading(false);
         }
 
         const profileRes = await adminFetch('/api/admin/profile');
@@ -934,7 +948,8 @@ function AdminDashboardContent() {
     setLoading(false);
   };
 
-  const fetchPayoutsData = async () => {
+  const fetchPayoutsData = async (force: boolean | any = false) => {
+    const isForce = force === true;
     setPayoutLoading(true);
     try {
       const params = new URLSearchParams({
@@ -947,6 +962,9 @@ function AdminDashboardContent() {
         paymentTab,
         search: managementSearch,
       });
+      if (isForce) {
+        params.set('force', 'true');
+      }
       const res = await adminFetch(`/api/admin/finance?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to load finance data.');
       const data = await res.json();
@@ -1050,7 +1068,7 @@ function AdminDashboardContent() {
       if (!res.ok) throw new Error(data.error || 'Failed to update transaction status.');
       alert('Withdrawal request successfully marked as paid!');
       setApprovingPayout(null);
-      fetchPayoutsData();
+      fetchPayoutsData(true);
     } catch (err: any) {
       alert('Error: ' + err.message);
     } finally {
@@ -1075,7 +1093,7 @@ function AdminDashboardContent() {
         throw new Error(data.error || 'Failed to initiate RazorpayX payout.');
       }
       alert(`RazorpayX payout submitted. Payout ID: ${data.payout?.id || payoutId}`);
-      fetchPayoutsData();
+      fetchPayoutsData(true);
     } catch (err: any) {
       alert('Error initiating RazorpayX payout: ' + err.message);
     }
@@ -1096,7 +1114,7 @@ function AdminDashboardContent() {
         throw new Error(data.error || 'Failed to reject payout.');
       }
       alert('Payout request rejected. Funds have been returned to the provider wallet balance.');
-      fetchPayoutsData();
+      fetchPayoutsData(true);
     } catch (err: any) {
       alert('Error rejecting payout: ' + err.message);
     }
@@ -1130,7 +1148,7 @@ function AdminDashboardContent() {
       setAdjustAmount('');
       setAdjustReason('');
       setAdjustingProvider(null);
-      await fetchPayoutsData();
+      await fetchPayoutsData(true);
     } catch (err: any) {
       alert('Adjustment failed: ' + err.message);
     } finally {
@@ -3045,7 +3063,7 @@ function AdminDashboardContent() {
                 <p className="text-slate-500 font-bold mt-2">Approve RazorpayX consultation payouts and track doctor wallet transfers.</p>
               </div>
               <button 
-                onClick={fetchPayoutsData} 
+                onClick={() => fetchPayoutsData(true)} 
                 className="bg-white border border-slate-200 hover:border-indigo-200 text-slate-700 hover:text-indigo-600 font-bold px-5 py-3 rounded-2xl text-xs shadow-sm transition-all flex items-center gap-2 hover:-translate-y-0.5 active:scale-95"
               >
                 <RefreshCw className={`w-4 h-4 ${payoutLoading ? 'animate-spin' : ''}`}/> Refresh Data

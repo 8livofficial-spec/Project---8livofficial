@@ -102,6 +102,21 @@ export async function POST(request: Request) {
 
     // 5. Atomic Update based on Payment Type
     if (paymentType === 'consultation') {
+      const { data: existingAssessment } = await supabaseAdmin
+        .from('health_assessments')
+        .select('consultation_fee_paid')
+        .eq('patient_id', patientId)
+        .maybeSingle()
+
+      if (existingAssessment?.consultation_fee_paid) {
+        return NextResponse.json({
+          success: true,
+          transaction_id: razorpay_payment_id,
+          already_processed: true,
+          message: 'Consultation fee has already been verified and applied to this account.'
+        })
+      }
+
       const { error } = await supabaseAdmin
         .from('health_assessments')
         .update({ consultation_fee_paid: true })

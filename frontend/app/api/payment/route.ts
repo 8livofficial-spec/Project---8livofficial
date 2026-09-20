@@ -6,6 +6,7 @@ import { assignMembershipCareTeam } from '@/lib/smartAssignmentEngine'
 import { assertPatientOrAssignedProvider } from '@/lib/apiSecurity'
 import { APP_CONFIG } from '@/lib/appConfig'
 import { activateSubscriptionForPatient } from '@/lib/subscriptionService'
+import { getMembershipValidity } from '@/lib/membershipServer'
 
 function generateTxnId(): string {
   return `TXN8LIV${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`
@@ -41,6 +42,27 @@ export async function POST(request: Request) {
     const programName = `${durationMonths} Month Treatment Program`
 
     if (paymentType === 'consultation') {
+      const membership = await getMembershipValidity(patientId)
+      if (membership.active) {
+        return NextResponse.json({
+          error: 'Your treatment program membership includes consultations at ₹0. No fee is required.',
+          alreadyCovered: true,
+        }, { status: 409 })
+      }
+
+      const { data: existingAssessment } = await supabaseAdmin
+        .from('health_assessments')
+        .select('consultation_fee_paid')
+        .eq('patient_id', patientId)
+        .maybeSingle()
+
+      if (existingAssessment?.consultation_fee_paid) {
+        return NextResponse.json({
+          error: 'Consultation fee has already been paid for this account.',
+          alreadyPaid: true,
+        }, { status: 409 })
+      }
+
       const { error } = await supabaseAdmin
         .from('health_assessments')
         .update({ consultation_fee_paid: true })
@@ -48,6 +70,18 @@ export async function POST(request: Request) {
 
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     } else if (paymentType === 'membership' || paymentType === 'combined') {
+      const membership = await getMembershipValidity(patientId)
+      if (membership.active && membership.expiresAt) {
+        const daysRemaining = Math.ceil((new Date(membership.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
+        if (daysRemaining > 7) {
+          return NextResponse.json({
+            error: `You already have an active treatment program (${daysRemaining} days remaining). Duplicate payment is not allowed.`,
+            alreadyActive: true,
+            daysRemaining,
+          }, { status: 409 })
+        }
+      }
+
       const { error } = await supabaseAdmin
         .from('health_assessments')
         .update({

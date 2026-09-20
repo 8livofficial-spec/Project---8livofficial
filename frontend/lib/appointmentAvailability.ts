@@ -84,6 +84,14 @@ export async function getAuthenticatedPatient(request: Request) {
   }
 }
 
+export function getIndiaTodayDate(): string {
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date())
+  } catch {
+    return new Date().toISOString().split('T')[0]
+  }
+}
+
 export function getIndiaSlotTimestamp(date: string, time: string) {
   const normalizedTime = String(time || '').slice(0, 5)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{2}:\d{2}$/.test(normalizedTime)) return null
@@ -179,15 +187,28 @@ function mapAvailableSlot(row: AvailabilityRow): AvailableSlot {
   }
 }
 
+const availableDatesCache = new Map<string, { dates: Array<{ date: string; availableCount: number }>; slots: AvailableSlot[]; expiresAt: number }>()
+const availableSlotsCache = new Map<string, { slots: AvailableSlot[]; expiresAt: number }>()
+
+export function invalidateSlotsCache() {
+  availableDatesCache.clear()
+  availableSlotsCache.clear()
+}
+
 export async function loadAvailableDates(params: { patientId: string; role: BookableRole; providerId?: string | null }) {
   const timingStart = performance.now()
-  console.log(`[Timer] loadAvailableDates started for role=${params.role}, providerId=${params.providerId}`)
+  const cacheKey = `${params.patientId}:${params.role}:${params.providerId || 'any'}`
+  const now = Date.now()
+  const cached = availableDatesCache.get(cacheKey)
+  if (cached && cached.expiresAt > now) {
+    return { dates: cached.dates, slots: cached.slots }
+  }
 
   try {
     const authorization = await authorizeRequestedProvider(params.patientId, params.role, params.providerId)
     if ('error' in authorization) {
       console.log(`[Timer] loadAvailableDates authorization failed in ${(performance.now() - timingStart).toFixed(2)}ms`)
-      return { ...authorization, dates: [] as Array<{ date: string; availableCount: number }> }
+      return { ...authorization, dates: [] as Array<{ date: string; availableCount: number }>, slots: [] as AvailableSlot[] }
     }
 
     const providerId = authorization.providerId
@@ -232,36 +253,61 @@ export async function loadAvailableDates(params: { patientId: string; role: Book
 
     if (activeDoctorIds.length === 0) {
       console.log(`[Timer] loadAvailableDates completed (no active providers) in ${(performance.now() - timingStart).toFixed(2)}ms`)
-      return { dates: [] }
+      return { dates: [], slots: [] }
     }
 
     // 2. Query provider_availability directly
-    const todayStr = new Date().toISOString().split('T')[0]
+    const todayStr = getIndiaTodayDate()
     const { data: slots, error } = await supabaseAdmin
       .from('provider_availability')
-      .select('available_date, start_time')
+      .select('id, provider_id, provider_role, available_date, start_time, end_time, status, source, slot_duration')
       .eq('provider_role', params.role)
       .eq('status', 'AVAILABLE')
       .eq('is_available', true)
       .in('provider_id', activeDoctorIds)
       .gte('available_date', todayStr)
+      .order('available_date', { ascending: true })
+      .order('start_time', { ascending: true })
 
     if (error) throw error
 
     const futureSlots = (slots || []).filter((slot) => isFutureIndiaSlot(slot.available_date, slot.start_time))
 
     const counts = new Map<string, number>()
+    const mappedSlots: AvailableSlot[] = []
+    const slotsByDate = new Map<string, AvailableSlot[]>()
+
     futureSlots.forEach((slot) => {
       counts.set(slot.available_date, (counts.get(slot.available_date) || 0) + 1)
+      const mapped: AvailableSlot = {
+        slotId: slot.id,
+        providerId: slot.provider_id,
+        providerRole: String(slot.provider_role).toUpperCase(),
+        date: slot.available_date,
+        startTime: String(slot.start_time).slice(0, 5),
+        endTime: String(slot.end_time || '').slice(0, 5),
+        status: 'AVAILABLE',
+        source: slot.source === 'MANUAL' ? 'MANUAL' : 'GENERATED',
+        slotDuration: Number(slot.slot_duration || 30),
+      }
+      mappedSlots.push(mapped)
+      if (!slotsByDate.has(slot.available_date)) {
+        slotsByDate.set(slot.available_date, [])
+      }
+      slotsByDate.get(slot.available_date)!.push(mapped)
     })
 
     const dates = Array.from(counts, ([date, availableCount]) => ({ date, availableCount }))
       .sort((a, b) => a.date.localeCompare(b.date))
 
-    const duration = performance.now() - timingStart
-    console.log(`[Timer] loadAvailableDates completed successfully in ${duration.toFixed(2)}ms with ${dates.length} dates`)
+    // Pre-populate availableSlotsCache for each date so individual date requests return instantly in 0ms
+    for (const [date, dSlots] of slotsByDate) {
+      const dateCacheKey = `${params.patientId}:${params.role}:${params.providerId || 'any'}:${date}`
+      availableSlotsCache.set(dateCacheKey, { slots: dSlots, expiresAt: now + 30 * 1000 })
+    }
 
-    return { dates }
+    availableDatesCache.set(cacheKey, { dates, slots: mappedSlots, expiresAt: now + 30 * 1000 })
+    return { dates, slots: mappedSlots }
   } catch (err) {
     const duration = performance.now() - timingStart
     console.error(`[Timer] loadAvailableDates failed in ${duration.toFixed(2)}ms:`, err)
@@ -280,14 +326,18 @@ export async function loadAvailableSlots(params: {
   date?: string | null
 }) {
   const timingStart = performance.now()
-  console.log(`[Timer] loadAvailableSlots started for role=${params.role}, providerId=${params.providerId}, date=${params.date}`)
+  if (!params.date) {
+    return { error: 'A date is required to load slots.', status: 400 as const, slots: [] as AvailableSlot[] }
+  }
+
+  const cacheKey = `${params.patientId}:${params.role}:${params.providerId || 'any'}:${params.date}`
+  const now = Date.now()
+  const cached = availableSlotsCache.get(cacheKey)
+  if (cached && cached.expiresAt > now) {
+    return { slots: cached.slots }
+  }
 
   try {
-    if (!params.date) {
-      console.log(`[Timer] loadAvailableSlots failed (missing date) in ${(performance.now() - timingStart).toFixed(2)}ms`)
-      return { error: 'A date is required to load slots.', status: 400 as const, slots: [] as AvailableSlot[] }
-    }
-
     const authorization = await authorizeRequestedProvider(params.patientId, params.role, params.providerId)
     if ('error' in authorization) {
       console.log(`[Timer] loadAvailableSlots authorization failed in ${(performance.now() - timingStart).toFixed(2)}ms`)
@@ -366,9 +416,7 @@ export async function loadAvailableSlots(params: {
         slotDuration: Number(slot.slot_duration || 30),
       }))
 
-    const duration = performance.now() - timingStart
-    console.log(`[Timer] loadAvailableSlots completed successfully in ${duration.toFixed(2)}ms with ${availableSlots.length} slots`)
-
+    availableSlotsCache.set(cacheKey, { slots: availableSlots, expiresAt: now + 15 * 1000 })
     return { slots: availableSlots }
   } catch (err) {
     const duration = performance.now() - timingStart

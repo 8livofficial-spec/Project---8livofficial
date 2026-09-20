@@ -63,7 +63,23 @@ export default function BillingPage() {
     })
   }
 
+  const daysRemaining = activeSub?.end_date ? Math.max(0, Math.ceil((new Date(activeSub.end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0
+
   const handlePlanSelect = async (plan: any) => {
+    const isCurrentActivePlan = activeSub && (
+      activeSub.plan_id === plan.id ||
+      Number(activeSub.duration_months) === Number(plan.durationMonths) ||
+      String(activeSub.program_name).toLowerCase().includes(String(plan.durationMonths) + ' month')
+    )
+
+    if (isCurrentActivePlan && daysRemaining > 7) {
+      setStatusMsg({
+        type: 'error',
+        message: `You are already enrolled in ${plan.name} with ${daysRemaining} days remaining. Duplicate payments are disabled.`
+      })
+      return
+    }
+
     setUpgrading(true)
     setStatusMsg(null)
 
@@ -88,6 +104,15 @@ export default function BillingPage() {
       })
 
       const orderData = await orderRes.json()
+      if (orderRes.status === 409 || orderData.alreadyCovered || orderData.alreadyActive) {
+        setStatusMsg({
+          type: 'error',
+          message: orderData.error || `Your ${plan.name} is already active on your account.`
+        })
+        setUpgrading(false)
+        return
+      }
+
       if (!orderRes.ok || orderData.error) {
         throw new Error(orderData.error || 'Failed to initialize treatment program order.')
       }
@@ -339,16 +364,27 @@ export default function BillingPage() {
           {plans.map((prog) => {
             const discountPct = Number(prog.discountPercentage || 0)
             const discountAmt = Number(prog.discountAmount || 0)
+            const isCurrentPlan = activeSub && (
+              activeSub.plan_id === prog.id ||
+              Number(activeSub.duration_months) === Number(prog.durationMonths) ||
+              String(activeSub.program_name).toLowerCase().includes(String(prog.durationMonths) + ' month')
+            )
+            const isActivelyEnrolled = isCurrentPlan && daysRemaining > 0
+
             return (
               <div
                 key={prog.id || prog.durationMonths}
-                className="bg-white rounded-2xl p-5 border border-[#1A1F36]/8 shadow-sm flex flex-col justify-between relative"
+                className={`bg-white rounded-2xl p-5 border ${isActivelyEnrolled ? 'border-[#0D9488] ring-2 ring-[#0D9488]/20 bg-teal-50/10' : 'border-[#1A1F36]/8'} shadow-sm flex flex-col justify-between relative`}
               >
-                {discountPct > 0 && (
+                {isActivelyEnrolled ? (
+                  <div className="absolute -top-2.5 left-4 rounded-full bg-[#0D9488] px-2.5 py-0.5 text-[10px] font-black text-white uppercase tracking-wider shadow-sm">
+                    Current Active Program
+                  </div>
+                ) : discountPct > 0 ? (
                   <div className="absolute -top-2.5 right-4 rounded-full bg-[#C4622D] px-2.5 py-0.5 text-[10px] font-black text-white uppercase">
                     {discountPct}% OFF (Save ₹{discountAmt.toLocaleString('en-IN')})
                   </div>
-                )}
+                ) : null}
                 <div>
                   <h4 className="font-bold font-sora text-[#1A1F36]">{prog.name}</h4>
                   <p className="text-2xl font-black text-[#1A1F36] mt-2">₹{Number(prog.finalPrice).toLocaleString('en-IN')}</p>
@@ -359,14 +395,22 @@ export default function BillingPage() {
                 <button
                   type="button"
                   onClick={() => handlePlanSelect(prog)}
-                  disabled={upgrading}
-                  className="mt-5 w-full rounded-xl bg-[#1A1F36] py-2.5 text-xs font-bold text-white transition hover:bg-[#C4622D] disabled:opacity-50 cursor-pointer flex items-center justify-center gap-2"
+                  disabled={upgrading || (isActivelyEnrolled && daysRemaining > 7)}
+                  className={`mt-5 w-full rounded-xl py-2.5 text-xs font-bold transition flex items-center justify-center gap-2 ${
+                    isActivelyEnrolled && daysRemaining > 7
+                      ? 'bg-[#0D9488]/15 text-[#0D9488] cursor-not-allowed border border-[#0D9488]/30 font-extrabold'
+                      : 'bg-[#1A1F36] text-white hover:bg-[#C4622D] disabled:opacity-50 cursor-pointer'
+                  }`}
                 >
                   {upgrading ? (
                     <>
                       <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                       <span>Processing...</span>
                     </>
+                  ) : isActivelyEnrolled && daysRemaining > 7 ? (
+                    <span>Current Active Program ✓</span>
+                  ) : isActivelyEnrolled ? (
+                    <span>Extend Plan (+{prog.durationMonths} Mo)</span>
                   ) : (
                     <span>Select {prog.name}</span>
                   )}

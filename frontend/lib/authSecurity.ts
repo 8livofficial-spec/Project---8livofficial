@@ -112,12 +112,43 @@ export function rateLimitResponse(retryAfterSeconds: number, message?: string) {
 
 
 export async function findUserByEmail(email: string) {
-  const { data, error } = await supabaseAdmin.auth.admin.listUsers()
-  if (error) throw error
-  return data.users.find((user) => normalizeEmail(user.email) === email) || null
+  const normalized = normalizeEmail(email)
+  if (!normalized) return null
+
+  try {
+    // 1. O(1) indexed lookup via profiles table
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('email', normalized)
+      .maybeSingle()
+
+    if (profile?.id) {
+      const { data: userRecord } = await supabaseAdmin.auth.admin.getUserById(profile.id)
+      if (userRecord?.user) return userRecord.user
+    }
+  } catch (err) {
+    console.warn('[findUserByEmail] Fast-path lookup warning:', err)
+  }
+
+  // 2. Targeted fallback (page 1, 50 users) only if profile lookup yielded nothing
+  try {
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 50 })
+    if (!error && data?.users) {
+      return data.users.find((user) => normalizeEmail(user.email) === normalized) || null
+    }
+  } catch (err) {
+    console.error('[findUserByEmail] listUsers fallback error:', err)
+  }
+
+  return null
 }
 
-export async function getUserRole(userId: string, email?: string | null) {
+export async function getUserRole(
+  userId: string,
+  email?: string | null,
+  userMetadata?: Record<string, unknown> | null
+) {
   const normalizedEmail = normalizeEmail(email)
   // SECURITY: Admin bypass emails are driven EXCLUSIVELY by ADMIN_BYPASS_EMAILS env var (comma-separated).
   const adminBypassEmails = (process.env.ADMIN_BYPASS_EMAILS || '')
@@ -126,21 +157,15 @@ export async function getUserRole(userId: string, email?: string | null) {
     .filter(Boolean)
   if (adminBypassEmails.length > 0 && adminBypassEmails.includes(normalizedEmail)) return 'admin'
 
-  // 1. Check partner_pharmacy_users (authoritative source for pharmacy team members)
-  try {
-    const { data: pharmacyUser } = await supabaseAdmin
-      .from('partner_pharmacy_users')
-      .select('role')
-      .eq('user_id', userId)
-      .eq('status', 'ACTIVE')
-      .maybeSingle()
-
-    if (pharmacyUser) return 'pharmacy'
-  } catch (err) {
-    console.error('[getUserRole] Error checking partner_pharmacy_users:', err)
+  // Fast-path 1: Check userMetadata if provided (0ms DB cost)
+  if (userMetadata?.role) {
+    const metaRole = String(userMetadata.role).toLowerCase()
+    if (['pharmacy', 'pharmacy_admin', 'pharmacy_staff'].includes(metaRole)) return 'pharmacy'
+    if (['admin', 'doctor', 'dietitian', 'trainer', 'fitness_coach', 'nutritionist'].includes(metaRole)) return metaRole
+    if (metaRole === 'patient') return 'patient'
   }
 
-  // 2. Check profiles
+  // Fast-path 2: Check profiles table (single indexed query)
   try {
     const { data: profile } = await supabaseAdmin
       .from('profiles')
@@ -151,56 +176,46 @@ export async function getUserRole(userId: string, email?: string | null) {
     if (profile?.role) {
       const pRole = String(profile.role).toLowerCase()
       if (pRole === 'pharmacy' || pRole.includes('pharmacy')) return 'pharmacy'
-      return profile.role
+      if (['admin', 'doctor', 'dietitian', 'trainer', 'fitness_coach', 'nutritionist', 'patient'].includes(pRole)) {
+        return pRole
+      }
     }
   } catch (err) {
     console.error('[getUserRole] Error checking profiles:', err)
   }
 
-  // 3. Check auth metadata
+  // Fallback: Run legacy partner_pharmacy_users, doctor_profiles, provider_profiles_v2 in PARALLEL
   try {
-    const { data: authUserData } = await supabaseAdmin.auth.admin.getUserById(userId)
-    const metaRole = authUserData?.user?.user_metadata?.role?.toLowerCase()
-    if (metaRole === 'pharmacy' || metaRole === 'pharmacy_admin' || metaRole === 'pharmacy_staff') {
-      return 'pharmacy'
-    }
-    if (metaRole && ['doctor', 'dietitian', 'trainer', 'fitness_coach', 'nutritionist', 'admin'].includes(metaRole)) {
-      return metaRole
-    }
+    const [pharmRes, docRes, provRes] = await Promise.all([
+      supabaseAdmin
+        .from('partner_pharmacy_users')
+        .select('role')
+        .eq('user_id', userId)
+        .eq('status', 'ACTIVE')
+        .maybeSingle(),
+      supabaseAdmin
+        .from('doctor_profiles')
+        .select('id')
+        .eq('id', userId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('provider_profiles_v2')
+        .select('role')
+        .eq('id', userId)
+        .maybeSingle(),
+    ])
+
+    if (pharmRes.data) return 'pharmacy'
+    if (docRes.data?.id) return 'doctor'
+    if (provRes.data?.role) return provRes.data.role
   } catch (err) {
-    // Non-blocking
-  }
-
-  // 4. Check doctor_profiles
-  try {
-    const { data: doctorProfile } = await supabaseAdmin
-      .from('doctor_profiles')
-      .select('id')
-      .eq('id', userId)
-      .maybeSingle()
-
-    if (doctorProfile?.id) return 'doctor'
-  } catch (err) {
-    console.error('[getUserRole] Error checking doctor_profiles:', err)
-  }
-
-  // 5. Check provider_profiles_v2
-  try {
-    const { data: providerProfile } = await supabaseAdmin
-      .from('provider_profiles_v2')
-      .select('role')
-      .eq('id', userId)
-      .maybeSingle()
-
-    if (providerProfile?.role) return providerProfile.role
-  } catch (err) {
-    // Non-blocking
+    console.error('[getUserRole] Parallel fallback error:', err)
   }
 
   return 'patient'
 }
 
-export async function writeAuthAudit(params: {
+export function writeAuthAudit(params: {
   userId?: string | null
   email?: string | null
   event: string
@@ -209,8 +224,9 @@ export async function writeAuthAudit(params: {
   userAgent?: string | null
   metadata?: Record<string, unknown>
 }) {
-  try {
-    await supabaseAdmin
+  // Fire-and-forget: execute asynchronously without blocking authentication responses
+  Promise.resolve(
+    supabaseAdmin
       .from('auth_audit_logs')
       .insert({
         user_id: params.userId || null,
@@ -221,9 +237,9 @@ export async function writeAuthAudit(params: {
         user_agent: params.userAgent || null,
         metadata: params.metadata || {},
       })
-  } catch (error) {
-    console.error('Failed to write auth audit log:', error)
-  }
+  ).catch((error) => {
+    console.warn('[writeAuthAudit] Non-blocking log write warning:', error)
+  })
 }
 
 export function createSupabasePasswordClient() {
