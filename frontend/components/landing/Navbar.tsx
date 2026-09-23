@@ -108,8 +108,8 @@ export default function Navbar() {
       <div
         className={`pointer-events-auto flex w-full max-w-[1140px] items-center justify-between rounded-full transition-all duration-300 px-3.5 sm:px-6 py-2 ${
           scrolled
-            ? 'bg-white/80 backdrop-blur-2xl border border-white/70 shadow-[0_12px_40px_rgba(15,23,42,0.08),inset_0_1px_1px_rgba(255,255,255,0.6)]'
-            : 'bg-white/20 backdrop-blur-2xl border border-white/35 shadow-[0_8px_32px_0_rgba(15,23,42,0.12),inset_0_1px_1px_rgba(255,255,255,0.4)]'
+            ? 'bg-white/80 backdrop-blur-lg border border-white/70 shadow-[0_12px_40px_rgba(15,23,42,0.08),inset_0_1px_1px_rgba(255,255,255,0.6)] transform-gpu will-change-transform'
+            : 'bg-white/20 backdrop-blur-lg border border-white/35 shadow-[0_8px_32px_0_rgba(15,23,42,0.12),inset_0_1px_1px_rgba(255,255,255,0.4)] transform-gpu will-change-transform'
         }`}
       >
         {/* LEFT: Authentic Official 8LIV Logo */}

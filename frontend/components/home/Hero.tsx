@@ -29,7 +29,7 @@ export default function Hero() {
           loading="eager"
           decoding="async"
           fetchPriority="high"
-          className="w-full h-full object-cover object-[65%_25%] sm:object-[70%_35%] transform scale-[1.01] brightness-[1.12] contrast-[1.02]"
+          className="w-full h-full object-cover object-[65%_25%] sm:object-[70%_35%] transform-gpu will-change-transform"
           onError={(e) => {
             const target = e.currentTarget
             if (!target.src.includes('/assets/hero.jpg')) {
@@ -40,8 +40,7 @@ export default function Hero() {
           }}
         />
 
-        {/* Minimal localized corner shade strictly behind bottom-left copy (No full-width smoke) */}
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950/50 via-transparent to-transparent sm:bg-gradient-to-tr sm:from-slate-950/60 sm:via-transparent sm:to-transparent" />
+        {/* Image kept perfectly clear with no dark overlays */}
       </div>
 
       {/* ========================================================= */}
@@ -52,12 +51,12 @@ export default function Hero() {
           textVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-6'
         }`}
       >
-        <div className="max-w-sm sm:max-w-md text-left flex flex-col items-start">
+        <div className="max-w-[18rem] sm:max-w-sm md:max-w-lg text-left flex flex-col items-start">
           
           {/* 3D FoldText Headline */}
-          <h1 className="font-sora text-2xl xs:text-3xl sm:text-4xl md:text-[2.2rem] lg:text-[2.5rem] font-bold text-white leading-[1.1] tracking-tight mb-2.5 drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
+          <h1 className="font-sora text-xl sm:text-2xl md:text-4xl font-bold text-white leading-[1.15] tracking-tight mb-3 md:mb-4 drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
             <FoldText
-              text="Weight Loss,"
+              text="Weight Loss Shouldn't"
               splitBy="char"
               hinge="top"
               trigger="mount"
@@ -72,7 +71,7 @@ export default function Hero() {
               className="block font-sora"
             />
             <FoldText
-              text="Redefined for Life."
+              text="Feel Like a Constant Fight."
               splitBy="char"
               hinge="top"
               trigger="mount"
@@ -88,25 +87,22 @@ export default function Hero() {
             />
           </h1>
 
-          {/* Compact Pure Light Subtext */}
-          <p className="text-[11px] sm:text-xs text-white/90 font-light leading-relaxed mb-3.5 max-w-sm drop-shadow-[0_1px_5px_rgba(0,0,0,0.85)]">
-            Doctor-guided GLP-1 therapy combined with home-cooked Indian meals. Quiet constant food noise, boost daily energy, and reset your natural weight floor.
-          </p>
+
 
           {/* Action Group: Compact pill button */}
-          <div className="mb-3.5 sm:mb-4 w-full sm:w-auto">
+          <div className="mb-4 sm:mb-5 w-full sm:w-auto">
             <Link
               href="/assessment"
               id="hero-clean-cta"
-              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 rounded-full bg-[#00A884] hover:bg-[#009272] text-white font-sora font-semibold text-xs shadow-md shadow-[#00A884]/30 hover:shadow-lg hover:shadow-[#00A884]/40 transition-all duration-200 active:scale-[0.98] group cursor-pointer"
+              className="inline-flex items-center justify-center gap-2 px-6 py-3 sm:px-8 sm:py-3.5 rounded-full bg-[#00A884] hover:bg-[#009272] text-white font-sora font-semibold text-xs sm:text-sm shadow-lg shadow-[#00A884]/30 hover:shadow-xl hover:shadow-[#00A884]/40 transition-all duration-200 active:scale-[0.98] group cursor-pointer"
             >
-              <span>CHECK MY ELIGIBILITY</span>
-              <ArrowRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-1" />
+              <span>Check My Eligibility</span>
+              <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 transition-transform duration-200 group-hover:translate-x-1" />
             </Link>
           </div>
 
           {/* Left-Aligned Clinical Trust Checkmarks */}
-          <div className="flex flex-wrap items-center gap-y-1.5 gap-x-4 text-[10px] sm:text-[11px] text-white/80 font-medium pt-2.5 border-t border-white/15 w-full max-w-sm drop-shadow-[0_1px_4px_rgba(0,0,0,0.85)]">
+          <div className="flex flex-wrap items-center gap-y-2 gap-x-4 text-[10px] sm:text-[11.5px] text-white/80 font-medium pt-3 sm:pt-4 border-t border-white/15 w-full max-w-lg drop-shadow-[0_1px_4px_rgba(0,0,0,0.85)]">
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF] shrink-0" />
               <span>100% Online Telehealth</span>
@@ -117,7 +113,7 @@ export default function Hero() {
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#2DD4BF] shrink-0" />
-              <span>Cold-Chain Delivery</span>
+              <span>Temperature-Controlled Delivery</span>
             </div>
           </div>
 

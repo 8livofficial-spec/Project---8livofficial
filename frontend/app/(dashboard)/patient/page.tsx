@@ -3,6 +3,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Video, Scale, ArrowRight, X, FileText, Download, Pill, ShieldCheck } from 'lucide-react'
 import Link from 'next/link'
+import ContextualActionWidget from '@/components/patient/ContextualActionWidget';
+import TreatmentCard from '@/components/patient/TreatmentCard';
+import CarePlanTimeline from '@/components/patient/CarePlanTimeline';
+
 import { supabase } from '@/lib/supabaseClient'
 import { authedFetch } from '@/lib/apiClient'
 import { usePatientData } from '@/hooks/usePatientData'
@@ -58,7 +62,85 @@ const formatSlotTime = (time: string) => {
   return parsed.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
 }
 
+
+const OnboardingModal = ({
+  isOpen,
+  onClose,
+  hasBookedDietitian,
+  hasBookedFitnessCoach,
+  onBookDietitian,
+  onBookFitnessCoach
+}: {
+  isOpen: boolean;
+  onClose: () => void;
+  hasBookedDietitian: boolean;
+  hasBookedFitnessCoach: boolean;
+  onBookDietitian: () => void;
+  onBookFitnessCoach: () => void;
+}) => {
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
+      <div className="bg-white rounded-[24px] p-8 max-w-lg w-full relative shadow-2xl space-y-6">
+        <button onClick={onClose} className="absolute top-6 right-6 p-2 bg-[#F5F0EB] rounded-full hover:bg-[#EDE8E3] transition-colors">
+          <X className="w-5 h-5 text-slate-600" />
+        </button>
+        <div className="text-center space-y-2">
+          <div className="w-16 h-16 bg-[#EEF7F1] text-[#10b981] rounded-full flex items-center justify-center mx-auto mb-4">
+            <ShieldCheck className="w-8 h-8" />
+          </div>
+          <h2 className="text-2xl font-bold text-[#1A1F36]">Welcome to your Care Program!</h2>
+          <p className="text-slate-500">Your Doctor consultation is complete. Let's get you set up with your dedicated Dietitian and Fitness Coach to begin your journey.</p>
+        </div>
+        
+        <div className="space-y-4 pt-4">
+          <button 
+            onClick={onBookDietitian}
+            disabled={hasBookedDietitian}
+            className={'w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all ' + (hasBookedDietitian ? 'border-[#10b981] bg-[#10b981]/10 opacity-70' : 'border-[#C4622D] bg-[#FFF4EC] hover:bg-[#F2C8BE]')}
+          >
+            <div className="flex items-center gap-4">
+              <div className={'p-3 rounded-full text-white ' + (hasBookedDietitian ? 'bg-[#10b981]' : 'bg-[#C4622D]')}>
+                <FileText className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-[#1A1F36]">{hasBookedDietitian ? 'Dietitian Scheduled' : 'Book Dietitian'}</p>
+                <p className="text-sm text-slate-600 font-medium">Nutrition & Meal Planning</p>
+              </div>
+            </div>
+            {!hasBookedDietitian && <ArrowRight className="text-[#C4622D] w-5 h-5" />}
+          </button>
+
+          <button 
+            onClick={onBookFitnessCoach}
+            disabled={hasBookedFitnessCoach}
+            className={'w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all ' + (hasBookedFitnessCoach ? 'border-[#10b981] bg-[#10b981]/10 opacity-70' : 'border-[#2563eb] bg-[#eff6ff] hover:bg-[#dbeafe]')}
+          >
+            <div className="flex items-center gap-4">
+              <div className={'p-3 rounded-full text-white ' + (hasBookedFitnessCoach ? 'bg-[#10b981]' : 'bg-[#2563eb]')}>
+                <Video className="w-5 h-5" />
+              </div>
+              <div className="text-left">
+                <p className="font-bold text-[#1A1F36]">{hasBookedFitnessCoach ? 'Fitness Coach Scheduled' : 'Book Fitness Coach'}</p>
+                <p className="text-sm text-slate-600 font-medium">Workout & Activity Planning</p>
+              </div>
+            </div>
+            {!hasBookedFitnessCoach && <ArrowRight className="text-[#2563eb] w-5 h-5" />}
+          </button>
+        </div>
+        
+        {hasBookedDietitian && hasBookedFitnessCoach && (
+          <button onClick={onClose} className="w-full bg-[#1A1F36] text-white py-4 rounded-xl font-bold mt-4 hover:bg-[#C4622D] transition-colors">
+            Go to Dashboard
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function PatientDashboardHome() {
+
   const { 
     user,
     profile, 
@@ -75,6 +157,19 @@ export default function PatientDashboardHome() {
     fitnessPlan,
     activePrescription: initialActiveRx
   } = usePatientData()
+
+  
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false);
+  const [hasDismissedOnboarding, setHasDismissedOnboarding] = useState(false);
+  const hasBookedDietitian = staffConsultations.some(c => c.staff_role === 'dietitian');
+  const hasBookedFitnessCoach = staffConsultations.some(c => c.staff_role === 'fitness_coach' || c.staff_role === 'trainer');
+  const needsCareTeamSetup = (!hasBookedDietitian || !hasBookedFitnessCoach) && !loading;
+
+  useEffect(() => {
+    if (needsCareTeamSetup && !hasDismissedOnboarding) {
+      setShowOnboardingModal(true);
+    }
+  }, [needsCareTeamSetup, hasDismissedOnboarding, loading]);
 
   const [showWeightLogModal, setShowWeightLogModal] = useState(false)
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null)
@@ -835,6 +930,7 @@ export default function PatientDashboardHome() {
                 setSelectedProviderDate('')
                 setSelectedProviderTime('')
                 setProviderSlotError('')
+                if (needsCareTeamSetup && !hasDismissedOnboarding) setShowOnboardingModal(true);
               }}
               className="absolute top-6 right-6 p-1 bg-[#F5F0EB] hover:bg-[#EDE8E3] rounded-full text-[#1A1F36] transition-all"
             >

@@ -61,7 +61,6 @@ type SectionKey =
   | 'consultations'
   | 'schedule'
   | 'referrals'
-  | 'communications'
   | 'wallet'
   | 'profile'
 
@@ -237,7 +236,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
   const [patientSearch, setPatientSearch] = useState('')
   const [selectedPatient, setSelectedPatient] = useState<PatientRecord | null>(null)
   const [workspaceData, setWorkspaceData] = useState<any>(null)
-  const [workspaceTab, setWorkspaceTab] = useState<'overview' | 'assessment' | 'plans' | 'food-logs' | 'progress' | 'consultations' | 'communication'>('overview')
+  const [workspaceTab, setWorkspaceTab] = useState<'overview' | 'assessment' | 'plans' | 'food-logs' | 'progress' | 'consultations'>('overview')
 
   // Plans & Templates State
   const [plans, setPlans] = useState<PlanRecord[]>([])
@@ -1131,7 +1130,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
 
                 {/* Workspace Tabs */}
                 <div className="flex border-b border-[#E8DED4] gap-6 text-xs font-bold overflow-x-auto">
-                  {(['overview', 'assessment', 'plans', 'food-logs', 'progress', 'communication'] as const).map((tab) => (
+                  {(['overview', 'assessment', 'plans', 'food-logs', 'progress'] as const).map((tab) => (
                     <button
                       key={tab}
                       onClick={() => setWorkspaceTab(tab)}
@@ -1560,94 +1559,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                   </div>
                 )}
 
-                {/* Tab 6: Communication */}
-                {workspaceTab === 'communication' && (
-                  <div className="rounded-2xl border border-[#E8DED4] bg-white p-6 shadow-sm space-y-6">
-                    <div>
-                      <h3 className="text-base font-black text-[#1A1F36]">Structured Doctor Communication</h3>
-                      <p className="text-xs text-slate-400 font-semibold">Send clinical updates or Treatment Review Requests to referring doctors</p>
-                    </div>
 
-                    <form
-                      onSubmit={async (e) => {
-                        e.preventDefault()
-                        setSendingComm(true)
-                        try {
-                          const { data: { session } } = await supabase.auth.getSession()
-                          const res = await fetch('/api/dietitian/communications', {
-                            method: 'POST',
-                            headers: {
-                              'Content-Type': 'application/json',
-                              Authorization: `Bearer ${session?.access_token || ''}`,
-                            },
-                            body: JSON.stringify({
-                              patient_id: selectedPatient.id,
-                              doctor_id: workspaceData?.referrals?.[0]?.doctor_id || selectedPatient.id,
-                              communication_type: commType,
-                              concern_summary: commSummary,
-                              message: commMessage,
-                            }),
-                          })
-                          const json = await res.json()
-                          if (json.success) {
-                            setSuccess('Clinical communication transmitted to doctor!')
-                            setCommSummary('')
-                            setCommMessage('')
-                          }
-                        } catch (err: any) {
-                          setError(err.message || 'Error transmitting communication')
-                        } finally {
-                          setSendingComm(false)
-                        }
-                      }}
-                      className="space-y-4 max-w-xl"
-                    >
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Communication Type</label>
-                        <select
-                          value={commType}
-                          onChange={(e) => setCommType(e.target.value)}
-                          className="w-full px-3 py-2 border border-[#E8DED4] rounded-xl text-xs font-semibold"
-                        >
-                          <option value="CLINICAL_CONCERN">Clinical Concern</option>
-                          <option value="PROGRESS_UPDATE">Progress Update</option>
-                          <option value="TREATMENT_REVIEW_REQUEST">Treatment Review Request</option>
-                          <option value="FOLLOW_UP_REQUEST">Follow-up Request</option>
-                          <option value="NUTRITION_SUMMARY">Nutrition Summary</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Subject / Summary</label>
-                        <input
-                          type="text"
-                          required
-                          value={commSummary}
-                          onChange={(e) => setCommSummary(e.target.value)}
-                          placeholder="e.g. Hypoglycemia symptoms reported during fasting window"
-                          className="w-full px-3 py-2 border border-[#E8DED4] rounded-xl text-xs"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-bold text-slate-600 mb-1">Detailed Clinical Message</label>
-                        <textarea
-                          required
-                          rows={4}
-                          value={commMessage}
-                          onChange={(e) => setCommMessage(e.target.value)}
-                          placeholder="Describe your clinical observation for the attending physician..."
-                          className="w-full px-3 py-2 border border-[#E8DED4] rounded-xl text-xs"
-                        />
-                      </div>
-                      <button
-                        type="submit"
-                        disabled={sendingComm}
-                        className="px-5 py-2.5 rounded-full bg-[#1A1F36] text-white text-xs font-bold hover:bg-[#2C344E] transition-colors"
-                      >
-                        {sendingComm ? 'Sending...' : 'Transmit to Doctor'}
-                      </button>
-                    </form>
-                  </div>
-                )}
               </div>
             )}
           </div>

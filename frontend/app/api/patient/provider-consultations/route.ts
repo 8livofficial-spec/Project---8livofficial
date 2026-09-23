@@ -76,10 +76,7 @@ async function getAssignedProviderId(patientId: string, role: string) {
 }
 
 async function getAvailableProviderSlots(patientId: string, role: string, selectedDate?: string) {
-  const providerId = await getAssignedProviderId(patientId, role)
-  if (!providerId) {
-    return { providerId: null, slots: [] as ProviderSlot[], error: `No active assigned ${labelForRole(role)} found for this patient.` }
-  }
+  const assignedProviderId = await getAssignedProviderId(patientId, role)
 
   const today = new Date().toISOString().split('T')[0]
   const dateFilter = selectedDate && isDate(selectedDate) ? selectedDate : ''
@@ -89,10 +86,13 @@ async function getAvailableProviderSlots(patientId: string, role: string, select
   let query = supabaseAdmin
     .from('provider_availability')
     .select('id, provider_id, provider_role, available_date, start_time, end_time, slot_duration, max_consultations_per_day, max_consultations_per_hour')
-    .eq('provider_id', providerId)
     .eq('is_available', true)
     .eq('status', 'AVAILABLE')
     .in('provider_role', roles)
+
+  if (assignedProviderId) {
+    query = query.eq('provider_id', assignedProviderId)
+  }
 
   if (dateFilter) {
     query = query.eq('available_date', dateFilter)
@@ -105,23 +105,25 @@ async function getAvailableProviderSlots(patientId: string, role: string, select
     .order('start_time', { ascending: true })
 
   if (availabilityError) {
-    return { providerId, slots: [] as ProviderSlot[], error: availabilityError.message }
+    return { providerId: assignedProviderId, slots: [] as ProviderSlot[], error: availabilityError.message }
   }
 
-  if (!availability?.length) return { providerId, slots: [] as ProviderSlot[] }
+  if (!availability?.length) return { providerId: assignedProviderId, slots: [] as ProviderSlot[] }
 
   const dates = Array.from(new Set((availability as ProviderAvailability[]).map((row) => row.available_date)))
+  const allProviderIds = Array.from(new Set((availability as ProviderAvailability[]).map(r => r.provider_id)))
+
   const [{ data: existingSessions }, { data: leaveRows }] = await Promise.all([
     supabaseAdmin
       .from('staff_consultations')
-      .select('booking_date, booking_time, status')
-      .eq('staff_id', providerId)
+      .select('staff_id, booking_date, booking_time, status')
+      .in('staff_id', allProviderIds)
       .in('booking_date', dates)
       .in('status', ['scheduled', 'calling', 'attended']),
     supabaseAdmin
       .from('provider_leave')
-      .select('starts_at, ends_at, status')
-      .eq('provider_id', providerId)
+      .select('provider_id, starts_at, ends_at, status')
+      .in('provider_id', allProviderIds)
       .eq('status', 'ACTIVE')
   ])
 
@@ -129,8 +131,9 @@ async function getAvailableProviderSlots(patientId: string, role: string, select
   for (const session of existingSessions || []) {
     const time = normalizeTime(session.booking_time)
     if (!time) continue
-    if (!bookedByDate.has(session.booking_date)) bookedByDate.set(session.booking_date, new Set())
-    bookedByDate.get(session.booking_date)!.add(time)
+    const key = `${session.staff_id}-${session.booking_date}`
+    if (!bookedByDate.has(key)) bookedByDate.set(key, new Set())
+    bookedByDate.get(key)!.add(time)
   }
 
   const slots: ProviderSlot[] = []
@@ -139,7 +142,7 @@ async function getAvailableProviderSlots(patientId: string, role: string, select
     const end = toMinutes(row.end_time)
     if (start === null || end === null || end <= start) continue
 
-    const bookedForDay = bookedByDate.get(row.available_date) || new Set<string>()
+    const bookedForDay = bookedByDate.get(`${row.provider_id}-${row.available_date}`) || new Set<string>()
     const dailyLimit = row.max_consultations_per_day || null
     if (dailyLimit && bookedForDay.size >= dailyLimit) continue
     const time = normalizeTime(row.start_time)
@@ -154,6 +157,7 @@ async function getAvailableProviderSlots(patientId: string, role: string, select
 
     const slotStart = new Date(`${row.available_date}T${time}:00`).getTime()
     const onLeave = (leaveRows || []).some(leave => {
+      if (leave.provider_id !== row.provider_id) return false
       const leaveStart = new Date(leave.starts_at).getTime()
       const leaveEnd = new Date(leave.ends_at).getTime()
       return Number.isFinite(leaveStart) && Number.isFinite(leaveEnd) && slotStart >= leaveStart && slotStart < leaveEnd
@@ -164,14 +168,14 @@ async function getAvailableProviderSlots(patientId: string, role: string, select
       availability_id: row.id,
       available_date: row.available_date,
       time_slot: time,
-      provider_id: providerId,
+      provider_id: row.provider_id,
       provider_role: row.provider_role,
     })
   }
 
   const unique = new Map(slots.map((slot) => [`${slot.provider_id}-${slot.available_date}-${slot.time_slot}`, slot]))
   return {
-    providerId,
+    providerId: assignedProviderId,
     slots: Array.from(unique.values()).sort((a, b) => {
       return new Date(`${a.available_date}T${a.time_slot}:00`).getTime() - new Date(`${b.available_date}T${b.time_slot}:00`).getTime()
     }),
@@ -270,9 +274,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Selected slot is no longer available. Please choose another time.' }, { status: 409 })
     }
 
-    const providerId = availableResult.providerId
+    const providerId = selectedSlot.provider_id
     if (!providerId) {
-      return NextResponse.json({ error: `No assigned ${labelForRole(role)} found for this patient.` }, { status: 404 })
+      return NextResponse.json({ error: `Could not identify provider for this slot.` }, { status: 404 })
+    }
+
+    // "Take As You Go" Assignment: If patient does not have an assigned provider for this role, assign the one they just booked!
+    const assignedProviderId = await getAssignedProviderId(patientId, role)
+    if (!assignedProviderId) {
+      const dbRoleMap: Record<string, string> = {
+        'dietitian': 'dietitian_id',
+        'nutritionist': 'nutritionist_id',
+        'fitness_coach': 'fitness_coach_id',
+        'trainer': 'trainer_id'
+      }
+      const assignCol = dbRoleMap[role] || dbRoleMap[normalizeProviderRole(role)]
+      if (assignCol) {
+        await supabaseAdmin
+          .from('care_team_assignments')
+          .upsert(
+            { patient_id: patientId, [assignCol]: providerId, status: 'active', updated_at: new Date().toISOString() },
+            { onConflict: 'patient_id' }
+          )
+      }
     }
 
     const { data: conflictingSession } = await supabaseAdmin

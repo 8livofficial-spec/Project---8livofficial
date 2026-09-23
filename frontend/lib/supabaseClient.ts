@@ -15,6 +15,19 @@ const globalForSupabase = globalThis as typeof globalThis & {
 // race while rotating the same refresh token and invalidate each other's token.
 export const supabase = globalForSupabase.__browserSupabaseClient ?? createClient(supabaseUrl, supabaseKey)
 
+if (!globalForSupabase.__browserSupabaseClient) {
+  // Monkey-patch getSession to automatically sign out on invalid refresh token.
+  // This prevents infinite loops of AuthApiError when the token is missing/invalid on the client.
+  const originalGetSession = supabase.auth.getSession.bind(supabase.auth)
+  supabase.auth.getSession = async () => {
+    const result = await originalGetSession()
+    if (result.error && result.error.message.toLowerCase().includes('refresh token')) {
+      await supabase.auth.signOut()
+    }
+    return result
+  }
+}
+
 if (typeof window !== 'undefined') {
   globalForSupabase.__browserSupabaseClient = supabase
 }

@@ -295,6 +295,10 @@ export async function POST(request: Request) {
         },
         medication_history: {
           type: formData.medication_history_choice
+        },
+        lab_work: {
+          preference: formData.lab_preference || 'none',
+          report_url: formData.lab_report_url || null,
         }
       },
       is_eligible: eligibility.status !== 'NOT_ELIGIBLE',

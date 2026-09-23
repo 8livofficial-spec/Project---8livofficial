@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { Activity, Apple, CalendarDays, Dumbbell, FileText, LayoutDashboard, LogOut, MessageCircle, Search, Settings, Users, Video, Wallet } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
-import StaffChat from '@/components/StaffChat'
+
 import ProviderAvailabilityScheduler, { AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler'
 import ProviderProfileEditor from './ProviderProfileEditor'
 import DietitianPortal from '@/components/dietitian/DietitianPortal'
@@ -301,7 +301,7 @@ function clearProviderCache(match?: string) {
   }
 }
 
-function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' | 'schedule' | 'consultations' | 'plans' | 'messages' | 'wallet' | 'profile' }) {
+function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' | 'schedule' | 'consultations' | 'plans' | 'wallet' | 'profile' }) {
   const router = useRouter()
   const pathname = usePathname()
   const { provider, providerLoading, error, setError, authedFetch, signOut } = useProviderData()
@@ -353,8 +353,6 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
       endpoint = `/api/provider/consultations?page=${consultationsPage}&limit=25&search=${encodeURIComponent(consultationsSearch)}&status=${consultationsStatus}`
     } else if (activeSection === 'plans') {
       endpoint = '/api/provider/plans'
-    } else if (activeSection === 'messages') {
-      endpoint = '/api/provider/messages'
     } else if (activeSection === 'wallet') {
       endpoint = '/api/provider/wallet'
     }
@@ -396,10 +394,6 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
         setPlans(data.plans || [])
         setPatients(data.patients || [])
         setSelectedPatientId((data.patients || [])[0]?.id || '')
-      }
-
-      if (activeSection === 'messages') {
-        setPatients(data.patients || [])
       }
 
       if (activeSection === 'wallet') {
@@ -778,18 +772,7 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
                 copy={copy}
               />
             )}
-            {section === 'messages' && provider && !sectionLoading && (
-              patients.length ? (
-                <div className="rounded-[28px] bg-white p-5 shadow-sm border border-[#E8DED4]">
-                  <StaffChat
-                    staffId={provider.id}
-                    staffName={provider.name}
-                    patients={patients.map((patient) => ({ id: patient.id, first_name: patient.name, last_name: '' }))}
-                    accentColor={copy.accent}
-                  />
-                </div>
-              ) : <EmptyState />
-            )}
+
             {section === 'wallet' && !sectionLoading && (
               <WalletModule
                 wallet={walletState}
@@ -813,7 +796,7 @@ function sectionLabel(section: string) {
   if (section === 'schedule') return 'Provider Schedule'
   if (section === 'consultations') return 'Video Consultations'
   if (section === 'plans') return 'Care Plans'
-  if (section === 'messages') return 'Patient Messages'
+
   if (section === 'wallet') return 'Provider Wallet'
   return 'Provider Profile'
 }
@@ -1736,7 +1719,7 @@ function EmptyState() {
   )
 }
 
-export default function ProviderPortal({ section }: { section: 'dashboard' | 'patients' | 'schedule' | 'consultations' | 'plans' | 'messages' | 'wallet' | 'profile' }) {
+export default function ProviderPortal({ section }: { section: 'dashboard' | 'patients' | 'schedule' | 'consultations' | 'plans' | 'wallet' | 'profile' }) {
   const { provider } = useProviderData()
   if (provider && (provider.role === 'dietitian' || provider.role === 'nutritionist')) {
     return <DietitianPortal defaultSection={section as any} />

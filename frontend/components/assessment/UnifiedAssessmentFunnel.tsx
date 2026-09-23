@@ -38,6 +38,8 @@ import {
   MapPin,
   Heart,
   Activity,
+  UploadCloud,
+  CheckCircle,
 } from 'lucide-react'
 import {
   ScreenerWelcomeIllustration,
@@ -54,6 +56,8 @@ import {
   HealthHistoryIllustration,
   AccountSecurityIllustration,
   AssessmentBrandHeader,
+  BiologicalGenderHeaderIcon,
+  LabWorkIllustration,
 } from './AssessmentIllustrations'
 
 export type FunnelStage =
@@ -64,6 +68,7 @@ export type FunnelStage =
   | 'intake_vitals'
   | 'intake_safety'
   | 'intake_history'
+  | 'intake_lab'
   | 'intake_medication'
   | 'intake_account'
 
@@ -136,6 +141,10 @@ export default function UnifiedAssessmentFunnel({
     // Medication
     medication_history_choice: 'never_used',
 
+    // Lab Work
+    lab_preference: 'none' as 'none' | 'upload' | 'third_party' | 'skip',
+    lab_report_url: '',
+
     // Account
     email: '',
     password: '',
@@ -148,6 +157,10 @@ export default function UnifiedAssessmentFunnel({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isMobile, setIsMobile] = useState(false)
   const [resultsRevealStep, setResultsRevealStep] = useState<number>(0)
+  
+  // Lab upload state
+  const [isUploadingLab, setIsUploadingLab] = useState(false)
+  const [uploadError, setUploadError] = useState('')
 
   // Accessible unique IDs
   const ageId = useId()
@@ -226,15 +239,10 @@ export default function UnifiedAssessmentFunnel({
   const waistFormatted = convertUnits(screenerInputs.waistCm, 'waist')
   const results = computeAssessment(screenerInputs)
 
-  // Auto-advance on gender selection for mobile screener
+  // Handle gender selection without auto-advancing immediately
   const handleGenderSelect = (gender: BiologicalGender) => {
     setScreenerInputs((prev) => ({ ...prev, gender }))
     setFormData((prev) => ({ ...prev, gender }))
-    if (isMobile) {
-      setTimeout(() => {
-        setScreenerStep(2)
-      }, 250)
-    }
   }
 
   // Prepopulate Vitals from Screener when moving to Intake
@@ -248,6 +256,39 @@ export default function UnifiedAssessmentFunnel({
       gender: screenerInputs.gender,
     }))
     setStage('intake_contact')
+  }
+
+  // Handle Lab Report Upload
+  const handleLabUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploadingLab(true)
+    setUploadError('')
+    try {
+      const fileExt = file.name.split('.').pop()
+      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
+      const filePath = `lab_reports/${fileName}`
+
+      // Upload to supabase storage bucket 'patient-documents'
+      const { error } = await supabase.storage
+        .from('patient-documents')
+        .upload(filePath, file)
+
+      if (error) throw error
+
+      // Get public URL (or just save path if bucket is private)
+      const { data: { publicUrl } } = supabase.storage
+        .from('patient-documents')
+        .getPublicUrl(filePath)
+
+      setFormData(prev => ({ ...prev, lab_report_url: publicUrl }))
+    } catch (err: any) {
+      console.error('Upload error:', err)
+      setUploadError(err.message || 'Failed to upload file.')
+    } finally {
+      setIsUploadingLab(false)
+    }
   }
 
   // Handle phone auto-formatting live
@@ -408,39 +449,33 @@ export default function UnifiedAssessmentFunnel({
             {/* Screener Header */}
             <div className="flex items-start justify-between gap-4 mb-6">
               <div>
-                {isMobile ? (
-                  /* 5 Progress Dots with current step label */
-                  <div className="mb-4">
-                    <div className="flex items-center gap-1.5 mb-2">
-                      {[1, 2, 3, 4, 5].map((stepNum) => (
-                        <button
-                          key={stepNum}
-                          type="button"
-                          onClick={() => setScreenerStep(stepNum)}
-                          aria-label={`Go to step ${stepNum}`}
-                          className={`h-1.5 rounded-full transition-all cursor-pointer ${
-                            screenerStep === stepNum
-                              ? 'w-7 bg-[#00A884]'
-                              : screenerStep > stepNum
-                              ? 'w-3.5 bg-slate-400'
-                              : 'w-3.5 bg-slate-200'
-                          }`}
-                        />
-                      ))}
-                    </div>
-                    <span className="text-xs font-semibold text-[#00A884]">
-                      {screenerStep === 1 && 'Step 1 of 5: Biological gender'}
-                      {screenerStep === 2 && 'Step 2 of 5: Your age'}
-                      {screenerStep === 3 && 'Step 3 of 5: Your height'}
-                      {screenerStep === 4 && 'Step 4 of 5: Your weight'}
-                      {screenerStep === 5 && 'Step 5 of 5: Waist measurement'}
-                    </span>
+                {/* 5 Progress Dots with current step label */}
+                <div className="mb-4">
+                  <div className="flex items-center gap-1.5 mb-2">
+                    {[1, 2, 3, 4, 5].map((stepNum) => (
+                      <button
+                        key={stepNum}
+                        type="button"
+                        onClick={() => setScreenerStep(stepNum)}
+                        aria-label={`Go to step ${stepNum}`}
+                        className={`h-1.5 rounded-full transition-all cursor-pointer ${
+                          screenerStep === stepNum
+                            ? 'w-7 bg-[#0066FF]'
+                            : screenerStep > stepNum
+                            ? 'w-3.5 bg-slate-400'
+                            : 'w-3.5 bg-slate-200'
+                        }`}
+                      />
+                    ))}
                   </div>
-                ) : (
-                  <span className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-1.5">
-                    Step 1 of 1 · Metabolic check-in
+                  <span className="text-xs font-semibold text-[#0066FF]">
+                    {screenerStep === 1 && 'Step 1 of 5: Biological gender'}
+                    {screenerStep === 2 && 'Step 2 of 5: Your age'}
+                    {screenerStep === 3 && 'Step 3 of 5: Your height'}
+                    {screenerStep === 4 && 'Step 4 of 5: Your weight'}
+                    {screenerStep === 5 && 'Step 5 of 5: Waist measurement'}
                   </span>
-                )}
+                </div>
 
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight leading-snug">
                   Tell us about you
@@ -455,9 +490,8 @@ export default function UnifiedAssessmentFunnel({
               </div>
             </div>
 
-            {/* Mobile View: 1 Question Per View */}
-            {isMobile ? (
-              <div className="space-y-6">
+            {/* 1 Question Per View Flow (Universal for Desktop & Mobile) */}
+            <div className="space-y-6">
                 {/* Step 1: Biological Gender */}
                 {screenerStep === 1 && (
                   <div className="py-2">
@@ -471,34 +505,43 @@ export default function UnifiedAssessmentFunnel({
                       <button
                         type="button"
                         onClick={() => handleGenderSelect('female')}
-                        className={`p-5 rounded-2xl border transition-all flex flex-col items-center text-center gap-3 cursor-pointer ${
+                        className={`p-5 rounded-2xl border transition-all flex flex-col items-center text-center gap-3 cursor-pointer hover:border-blue-300 hover:bg-slate-50 ${
                           screenerInputs.gender === 'female'
-                            ? 'bg-emerald-50/70 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
-                            : 'bg-white border-slate-200 hover:bg-slate-50'
+                            ? 'bg-blue-50/70 border-[#0066FF] ring-2 ring-[#0066FF]/20 shadow-xs'
+                            : 'bg-white border-slate-200'
                         }`}
                       >
                         <GenderFemaleIllustration className="w-20 h-20" />
                         <div>
-                          <span className="text-sm font-bold text-slate-900 block">Female</span>
+                          <span className={`text-sm font-bold block ${screenerInputs.gender === 'female' ? 'text-slate-900' : 'text-slate-900'}`}>Female</span>
                           <span className="text-[11px] text-slate-500">Biological female</span>
                         </div>
                       </button>
                       <button
                         type="button"
                         onClick={() => handleGenderSelect('male')}
-                        className={`p-5 rounded-2xl border transition-all flex flex-col items-center text-center gap-3 cursor-pointer ${
+                        className={`p-5 rounded-2xl border transition-all flex flex-col items-center text-center gap-3 cursor-pointer hover:border-blue-300 hover:bg-slate-50 ${
                           screenerInputs.gender === 'male'
-                            ? 'bg-emerald-50/70 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
-                            : 'bg-white border-slate-200 hover:bg-slate-50'
+                            ? 'bg-blue-50/70 border-[#0066FF] ring-2 ring-[#0066FF]/20 shadow-xs'
+                            : 'bg-white border-slate-200'
                         }`}
                       >
                         <GenderMaleIllustration className="w-20 h-20" />
                         <div>
-                          <span className="text-sm font-bold text-slate-900 block">Male</span>
+                          <span className={`text-sm font-bold block ${screenerInputs.gender === 'male' ? 'text-slate-900' : 'text-slate-900'}`}>Male</span>
                           <span className="text-[11px] text-slate-500">Biological male</span>
                         </div>
                       </button>
                     </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setScreenerStep(2)}
+                      className="mt-6 w-full min-h-[48px] rounded-xl bg-slate-900 text-white font-semibold text-sm flex items-center justify-center gap-1.5 cursor-pointer shadow-xs hover:bg-slate-800 transition-colors"
+                    >
+                      <span>Next</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
                   </div>
                 )}
 
@@ -676,208 +719,6 @@ export default function UnifiedAssessmentFunnel({
                   </div>
                 )}
               </div>
-            ) : (
-              /* Desktop View: 2-Column Grid Layout */
-              <div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Gender */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-sm font-semibold text-slate-900 block">
-                          Biological gender
-                        </label>
-                        <span className="text-[11px] font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">Required</span>
-                      </div>
-                      <p className="text-xs text-slate-500 mb-4">
-                        Used to establish accurate fat distribution benchmarks.
-                      </p>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <button
-                        type="button"
-                        onClick={() => handleGenderSelect('female')}
-                        className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center gap-3.5 ${
-                          screenerInputs.gender === 'female'
-                            ? 'bg-white border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
-                            : 'bg-white/70 border-slate-200 hover:bg-white text-slate-700'
-                        }`}
-                      >
-                        <GenderFemaleIllustration className="w-14 h-14 shrink-0" />
-                        <div className="text-left">
-                          <span className="text-sm font-bold text-slate-900 block">Female</span>
-                          <span className="text-[11px] text-slate-500">Biological</span>
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleGenderSelect('male')}
-                        className={`p-4 rounded-xl border transition-all cursor-pointer flex items-center gap-3.5 ${
-                          screenerInputs.gender === 'male'
-                            ? 'bg-white border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
-                            : 'bg-white/70 border-slate-200 hover:bg-white text-slate-700'
-                        }`}
-                      >
-                        <GenderMaleIllustration className="w-14 h-14 shrink-0" />
-                        <div className="text-left">
-                          <span className="text-sm font-bold text-slate-900 block">Male</span>
-                          <span className="text-[11px] text-slate-500">Biological</span>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Age */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <AgeIllustration className="w-14 h-14 sm:w-16 sm:h-16 shrink-0" />
-                        <div>
-                          <label htmlFor={ageId} className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                            Age
-                          </label>
-                          <span className="text-base font-bold text-slate-900">
-                            {screenerInputs.age} yrs
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <input
-                      id={ageId}
-                      type="range"
-                      min={18}
-                      max={85}
-                      step={1}
-                      inputMode="numeric"
-                      value={screenerInputs.age}
-                      onChange={(e) =>
-                        setScreenerInputs((prev) => ({ ...prev, age: Number(e.target.value) }))
-                      }
-                      className="w-full h-8 bg-transparent cursor-pointer appearance-none focus:outline-none [&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:bg-slate-200 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-slate-800 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:-mt-[7px]"
-                    />
-                    <div className="flex justify-between text-xs text-slate-400 mt-2">
-                      <span>18 yrs</span>
-                      <span>85 yrs</span>
-                    </div>
-                  </div>
-
-                  {/* Height */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <HeightIllustration className="w-14 h-14 sm:w-16 sm:h-16 shrink-0" />
-                        <div>
-                          <label htmlFor={heightId} className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                            Height
-                          </label>
-                          <span className="text-base font-bold text-slate-900">
-                            {heightFormatted.dualLabel}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <input
-                      id={heightId}
-                      type="range"
-                      min={130}
-                      max={220}
-                      step={1}
-                      inputMode="numeric"
-                      value={screenerInputs.heightCm}
-                      onChange={(e) =>
-                        setScreenerInputs((prev) => ({ ...prev, heightCm: Number(e.target.value) }))
-                      }
-                      className="w-full h-8 bg-transparent cursor-pointer appearance-none focus:outline-none [&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:bg-slate-200 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-slate-800 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:-mt-[7px]"
-                    />
-                    <div className="flex justify-between text-xs text-slate-400 mt-2">
-                      <span>130 cm (4&apos;3&quot;)</span>
-                      <span>220 cm (7&apos;3&quot;)</span>
-                    </div>
-                  </div>
-
-                  {/* Weight */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <WeightIllustration className="w-14 h-14 sm:w-16 sm:h-16 shrink-0" />
-                        <div>
-                          <label htmlFor={weightId} className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                            Weight
-                          </label>
-                          <span className="text-base font-bold text-slate-900">
-                            {weightFormatted.dualLabel}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <input
-                      id={weightId}
-                      type="range"
-                      min={35}
-                      max={200}
-                      step={1}
-                      inputMode="numeric"
-                      value={screenerInputs.weightKg}
-                      onChange={(e) =>
-                        setScreenerInputs((prev) => ({ ...prev, weightKg: Number(e.target.value) }))
-                      }
-                      className="w-full h-8 bg-transparent cursor-pointer appearance-none focus:outline-none [&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:bg-slate-200 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-slate-800 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:-mt-[7px]"
-                    />
-                    <div className="flex justify-between text-xs text-slate-400 mt-2">
-                      <span>35 kg (77 lbs)</span>
-                      <span>200 kg (441 lbs)</span>
-                    </div>
-                  </div>
-
-                  {/* Waist Circumference */}
-                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 md:col-span-2">
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-3">
-                        <WaistIllustration className="w-14 h-14 sm:w-16 sm:h-16 shrink-0" />
-                        <div>
-                          <label htmlFor={waistId} className="text-xs font-semibold text-slate-500 uppercase tracking-wider block">
-                            Waist circumference
-                          </label>
-                          <span className="text-base font-bold text-slate-900">
-                            {waistFormatted.dualLabel}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <input
-                      id={waistId}
-                      type="range"
-                      min={45}
-                      max={160}
-                      step={1}
-                      inputMode="numeric"
-                      value={screenerInputs.waistCm}
-                      onChange={(e) =>
-                        setScreenerInputs((prev) => ({ ...prev, waistCm: Number(e.target.value) }))
-                      }
-                      className="w-full h-8 bg-transparent cursor-pointer appearance-none focus:outline-none [&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:bg-slate-200 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-thumb]:w-5 [&::-webkit-slider-thumb]:h-5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-slate-800 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:-mt-[7px]"
-                    />
-                    <div className="flex items-start gap-1.5 text-xs text-slate-500 mt-2">
-                      <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-slate-400" />
-                      <span>Measure around your belly button, standing relaxed.</span>
-                    </div>
-                  </div>
-                </div>
-
-
-                {/* Bottom CTA for Desktop */}
-                <div className="mt-8 pt-6 border-t border-slate-200 flex items-center justify-between">
-                  <span className="text-xs text-slate-500">Takes under 1 minute</span>
-                  <button
-                    type="button"
-                    onClick={() => setStage('results')}
-                    className="min-h-[48px] px-8 rounded-xl bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition-colors cursor-pointer shadow-xs"
-                  >
-                    See my results
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         )}
 
@@ -1570,10 +1411,165 @@ export default function UnifiedAssessmentFunnel({
             <button
               type="button"
               onClick={() => {
+                syncProgressSilent('intake_lab', 4)
+                setStage('intake_lab')
+              }}
+              className="w-full min-h-[48px] rounded-xl bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+            >
+              <span>Continue to lab work</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* ===================================================================
+            SCREEN 7: LAB WORK / BLOOD REPORT (NEW)
+            =================================================================== */}
+        {stage === 'intake_lab' && (
+          <div className="bg-white border border-slate-200 rounded-[24px] p-6 sm:p-8 md:p-10 text-slate-900 shadow-sm transition-all">
+            <AssessmentBrandHeader />
+            <button
+              type="button"
+              onClick={() => setStage('intake_history')}
+              className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 mb-4 cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back
+            </button>
+
+            <div className="flex justify-center mb-6">
+              <LabWorkIllustration className="w-20 h-20" />
+            </div>
+
+            <span className="text-xs font-semibold text-[#0066FF] uppercase tracking-wider block mb-1 text-center">
+              Optional · Lab Work
+            </span>
+            <h1 className="text-2xl sm:text-3xl font-bold text-slate-900 tracking-tight leading-snug mb-2 text-center">
+              Blood Report
+            </h1>
+            <p className="text-sm text-slate-500 mb-8 text-center max-w-md mx-auto">
+              For our doctors to provide accurate medical weight loss guidance, we recommend providing a recent blood report. You can also opt-in for a home test.
+            </p>
+
+            <div className="space-y-4 mb-8">
+              {/* Option 1: Upload */}
+              <div 
+                className={`p-4 rounded-xl border transition-all ${
+                  formData.lab_preference === 'upload' ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500/20' : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, lab_preference: 'upload' }))}
+                  className="w-full flex items-center justify-between text-left cursor-pointer focus:outline-none"
+                >
+                  <div>
+                    <span className="text-sm font-bold text-slate-900 block mb-1">I have a blood report</span>
+                    <span className="text-xs text-slate-500">Upload your PDF or image file directly.</span>
+                  </div>
+                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${formData.lab_preference === 'upload' ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
+                    {formData.lab_preference === 'upload' && <div className="w-2 h-2 rounded-full bg-white" />}
+                  </div>
+                </button>
+                
+                {formData.lab_preference === 'upload' && (
+                  <div className="mt-4 pt-4 border-t border-slate-200/60">
+                    <div className="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center hover:bg-slate-100 transition-colors cursor-pointer relative">
+                      <input 
+                        type="file" 
+                        accept=".pdf,.jpg,.jpeg,.png"
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                        onChange={handleLabUpload}
+                        disabled={isUploadingLab}
+                      />
+                      <div className="flex flex-col items-center justify-center pointer-events-none">
+                        {isUploadingLab ? (
+                          <>
+                            <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-blue-500 animate-spin mb-2" />
+                            <span className="text-sm font-semibold text-slate-700">Uploading...</span>
+                          </>
+                        ) : (
+                          <>
+                            <UploadCloud className="w-8 h-8 text-slate-400 mb-2" />
+                            <span className="text-sm font-semibold text-slate-700 text-center px-4">
+                              {formData.lab_report_url ? 'Report uploaded successfully. Tap to replace.' : 'Tap to select file'}
+                            </span>
+                            <span className="text-xs text-slate-500 mt-1">PDF, JPG or PNG</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                    {uploadError && <p className="text-red-500 text-xs mt-2 text-center">{uploadError}</p>}
+                  </div>
+                )}
+              </div>
+
+              {/* Option 2: 3rd Party */}
+              <div 
+                className={`p-4 rounded-xl border transition-all ${
+                  formData.lab_preference === 'third_party' ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500/20' : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, lab_preference: 'third_party' }))}
+                  className="w-full flex items-center justify-between text-left cursor-pointer focus:outline-none"
+                >
+                  <div>
+                    <span className="text-sm font-bold text-slate-900 block mb-1">I need a blood test</span>
+                    <span className="text-xs text-slate-500">We&apos;ll arrange a home collection via partners.</span>
+                  </div>
+                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${formData.lab_preference === 'third_party' ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
+                    {formData.lab_preference === 'third_party' && <div className="w-2 h-2 rounded-full bg-white" />}
+                  </div>
+                </button>
+
+                {formData.lab_preference === 'third_party' && (
+                  <div className="mt-4 pt-4 border-t border-slate-200/60">
+                    <div className="bg-[#F0F8FF] p-4 rounded-lg flex items-start gap-3">
+                      <CheckCircle className="w-5 h-5 text-blue-500 shrink-0 mt-0.5" />
+                      <p className="text-xs text-slate-700 leading-relaxed">
+                        <strong className="text-slate-900">We&apos;ll take care of it!</strong> Our care team will coordinate with our 3rd-party lab partners to collect your sample at home. Once done, the report will be shared with both you and your doctor.
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Option 3: Skip */}
+              <div 
+                className={`p-4 rounded-xl border transition-all ${
+                  formData.lab_preference === 'skip' ? 'bg-blue-50 border-blue-500 ring-1 ring-blue-500/20' : 'bg-slate-50 border-slate-200'
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => setFormData(prev => ({ ...prev, lab_preference: 'skip' }))}
+                  className="w-full flex items-center justify-between text-left cursor-pointer focus:outline-none"
+                >
+                  <div>
+                    <span className="text-sm font-bold text-slate-900 block mb-1">Skip for now</span>
+                    <span className="text-xs text-slate-500">I&apos;ll provide a report later.</span>
+                  </div>
+                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${formData.lab_preference === 'skip' ? 'border-blue-500 bg-blue-500' : 'border-slate-300'}`}>
+                    {formData.lab_preference === 'skip' && <div className="w-2 h-2 rounded-full bg-white" />}
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              disabled={formData.lab_preference === 'none'}
+              onClick={() => {
                 syncProgressSilent('intake_medication', 4)
                 setStage('intake_medication')
               }}
-              className="w-full min-h-[48px] rounded-xl bg-slate-900 text-white font-semibold text-sm hover:bg-slate-800 transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              className={`w-full min-h-[48px] rounded-xl font-semibold text-sm transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-xs ${
+                formData.lab_preference !== 'none'
+                  ? 'bg-slate-900 text-white hover:bg-slate-800'
+                  : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+              }`}
             >
               <span>Continue to medication history</span>
               <ChevronRight className="w-4 h-4" />
@@ -1589,7 +1585,7 @@ export default function UnifiedAssessmentFunnel({
             <AssessmentBrandHeader />
             <button
               type="button"
-              onClick={() => setStage('intake_history')}
+              onClick={() => setStage('intake_lab')}
               className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 mb-4 cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />

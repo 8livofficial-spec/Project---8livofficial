@@ -337,6 +337,9 @@ h1, h2 {
   font-family: var(--font-primary) !important;
 }
 
+.custom-scrollbar {
+  -webkit-overflow-scrolling: touch;
+}
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
@@ -461,9 +464,14 @@ h1, h2 {
 /* ============================================================
    GLOBAL OVERFLOW GUARD — no horizontal scroll ever
    ============================================================ */
+html {
+  scroll-behavior: smooth;
+}
+
 html, body {
   max-width: 100%;
   overflow-x: clip;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ============================================================

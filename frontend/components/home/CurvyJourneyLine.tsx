@@ -164,10 +164,10 @@ export default function CurvyJourneyLine() {
     <div
       ref={containerRef}
       aria-hidden="true"
-      className={`hidden md:block absolute inset-0 pointer-events-none overflow-hidden z-0 transition-opacity duration-700 ${
+      className={`hidden md:block absolute inset-0 pointer-events-none overflow-hidden z-0 transition-opacity duration-700 transform-gpu ${
         isReady ? 'opacity-100' : 'opacity-0'
       }`}
-      style={{ height: '100%', width: '100%' }}
+      style={{ height: '100%', width: '100%', willChange: 'opacity' }}
     >
       <svg
         className="w-full h-full"

@@ -11,19 +11,33 @@ import React from 'react'
 export function ScreenerWelcomeIllustration({ className = 'w-16 h-16' }: { className?: string }) {
   return (
     <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
-      <rect width="80" height="80" rx="20" fill="#ECFDF5" />
-      <circle cx="40" cy="40" r="26" fill="#D1FAE5" />
-      {/* Metabolic pulse & scale icon */}
-      <path
-        d="M26 42H32L36 30L44 50L48 38L52 42H56"
-        stroke="#00A884"
-        strokeWidth="3.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <circle cx="40" cy="22" r="4" fill="#00A884" />
-      <circle cx="58" cy="28" r="2.5" fill="#34D399" />
-      <circle cx="22" cy="54" r="3" fill="#6EE7B7" />
+      <rect width="80" height="80" rx="20" fill="#F0FDF4" />
+      <circle cx="40" cy="40" r="28" fill="#D1FAE5" />
+      <rect x="24" y="20" width="32" height="42" rx="4" fill="#FFFFFF" stroke="#047857" strokeWidth="2" />
+      <rect x="34" y="16" width="12" height="6" rx="2" fill="#34D399" stroke="#047857" strokeWidth="2" />
+      <path d="M30 32H44" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
+      <path d="M30 40H50" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
+      <path d="M30 48H40" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
+      <path d="M42 52L50 60L66 40" stroke="#059669" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M42 52L50 60L66 40" stroke="#10B981" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+// Biological Gender Header Icon
+export function BiologicalGenderHeaderIcon({ className = 'w-12 h-12' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
+      <circle cx="28" cy="28" r="24" fill="#F0F8FF" />
+      {/* Male Symbol */}
+      <circle cx="22" cy="24" r="7" stroke="#2563EB" strokeWidth="3" />
+      <path d="M27 19L32 14M32 14H27M32 14V19" stroke="#2563EB" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Female Symbol */}
+      <circle cx="34" cy="32" r="7" stroke="#8B5CF6" strokeWidth="3" />
+      <path d="M34 39V46M31 43H37" stroke="#8B5CF6" strokeWidth="3" strokeLinecap="round" />
+      {/* Accents */}
+      <circle cx="12" cy="24" r="1.5" fill="#10B981" />
+      <path d="M14 16L16 18" stroke="#10B981" strokeWidth="2" strokeLinecap="round" />
     </svg>
   )
 }
@@ -32,16 +46,14 @@ export function ScreenerWelcomeIllustration({ className = 'w-16 h-16' }: { class
 export function GenderFemaleIllustration({ className = 'w-10 h-10' }: { className?: string }) {
   return (
     <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
-      <circle cx="24" cy="24" r="22" fill="#F0FDF4" stroke="#D1FAE5" strokeWidth="1.5" />
-      <circle cx="24" cy="18" r="7" fill="#00A884" />
-      <path
-        d="M13 36C13 30.4772 17.9249 26 24 26C30.0751 26 35 30.4772 35 36"
-        stroke="#00A884"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
-      {/* Small subtle bow/sparkle */}
-      <circle cx="31" cy="14" r="2" fill="#34D399" />
+      {/* Body / Shirt */}
+      <path d="M14 42C14 36 18 32 24 32C30 32 34 36 34 42H14Z" fill="#0066FF" />
+      {/* Hair back */}
+      <path d="M15 28C14 20 16 12 24 12C32 12 34 20 33 28L31 34H17L15 28Z" fill="#1E293B" />
+      {/* Face */}
+      <circle cx="24" cy="22" r="7" fill="#FDE68A" />
+      {/* Hair front / bangs */}
+      <path d="M17 22C17 18 20 14 24 14C28 14 31 18 31 22" fill="#1E293B" />
     </svg>
   )
 }
@@ -50,14 +62,13 @@ export function GenderFemaleIllustration({ className = 'w-10 h-10' }: { classNam
 export function GenderMaleIllustration({ className = 'w-10 h-10' }: { className?: string }) {
   return (
     <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
-      <circle cx="24" cy="24" r="22" fill="#F0FDF4" stroke="#D1FAE5" strokeWidth="1.5" />
-      <circle cx="24" cy="18" r="7" fill="#0F766E" />
-      <path
-        d="M13 36C13 30.4772 17.9249 26 24 26C30.0751 26 35 30.4772 35 36"
-        stroke="#0F766E"
-        strokeWidth="3"
-        strokeLinecap="round"
-      />
+      {/* Body / Shirt */}
+      <path d="M12 42C12 35 17 30 24 30C31 30 36 35 36 42H12Z" fill="#0066FF" />
+      {/* Face */}
+      <circle cx="24" cy="22" r="6.5" fill="#FDE68A" />
+      {/* Hair short */}
+      <path d="M17 22C17 16 20 14 24 14C28 14 31 16 31 22C31 22 29 18 24 18C19 18 17 22 17 22Z" fill="#1E293B" />
+      <path d="M17 19C17 14 20 12 24 12C28 12 31 14 31 19" fill="#1E293B" />
     </svg>
   )
 }
@@ -66,12 +77,18 @@ export function GenderMaleIllustration({ className = 'w-10 h-10' }: { className?
 export function AgeIllustration({ className = 'w-12 h-12' }: { className?: string }) {
   return (
     <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
-      <rect width="56" height="56" rx="16" fill="#F8FAFC" />
-      <circle cx="28" cy="28" r="18" fill="#F1F5F9" stroke="#CBD5E1" strokeWidth="2" />
-      <circle cx="28" cy="28" r="2.5" fill="#0F172A" />
-      <path d="M28 17V28L35 32" stroke="#00A884" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M20 12L15 17" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
-      <path d="M36 12L41 17" stroke="#94A3B8" strokeWidth="2" strokeLinecap="round" />
+      {/* Calendar body */}
+      <rect x="14" y="16" width="28" height="24" rx="4" fill="#0066FF" />
+      <rect x="14" y="24" width="28" height="16" rx="4" fill="#FFFFFF" stroke="#0066FF" strokeWidth="2" />
+      <path d="M14 24H42" stroke="#0066FF" strokeWidth="2" />
+      {/* Rings */}
+      <rect x="20" y="12" width="3" height="8" rx="1.5" fill="#1E293B" />
+      <rect x="33" y="12" width="3" height="8" rx="1.5" fill="#1E293B" />
+      {/* Number 32 */}
+      <text x="28" y="36" fill="#0066FF" fontSize="14" fontWeight="bold" fontFamily="sans-serif" textAnchor="middle">32</text>
+      {/* Green Clock Badge */}
+      <circle cx="38" cy="38" r="8" fill="#10B981" stroke="#FFFFFF" strokeWidth="2" />
+      <path d="M38 34V38L40 40" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -80,15 +97,18 @@ export function AgeIllustration({ className = 'w-12 h-12' }: { className?: strin
 export function HeightIllustration({ className = 'w-12 h-12' }: { className?: string }) {
   return (
     <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
-      <rect width="56" height="56" rx="16" fill="#F8FAFC" />
-      {/* Ruler bar on left */}
-      <rect x="14" y="12" width="6" height="32" rx="3" fill="#E2E8F0" />
-      <path d="M16 18H20M16 24H18M16 30H20M16 36H18" stroke="#94A3B8" strokeWidth="1.5" strokeLinecap="round" />
-      {/* Human silhouette */}
-      <circle cx="34" cy="18" r="4.5" fill="#00A884" />
-      <path d="M28 42V31C28 27.5 30.5 25 34 25C37.5 25 40 27.5 40 31V42" stroke="#00A884" strokeWidth="2.5" strokeLinecap="round" />
-      {/* Vertical measure arrow */}
-      <path d="M44 14V42M44 14L41 17M44 14L47 17M44 42L41 39M44 42L47 39" stroke="#0F766E" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="24" cy="28" r="20" fill="#F0F8FF" />
+      {/* Height lines on background */}
+      <path d="M12 20H16M14 28H16M12 36H16" stroke="#BAE6FD" strokeWidth="2" strokeLinecap="round" />
+      {/* Person */}
+      <circle cx="24" cy="18" r="4" fill="#0066FF" />
+      <rect x="20" y="24" width="8" height="12" rx="2" fill="#0066FF" />
+      <rect x="20" y="34" width="3" height="10" rx="1.5" fill="#0066FF" />
+      <rect x="25" y="34" width="3" height="10" rx="1.5" fill="#0066FF" />
+      <rect x="18" y="24" width="2" height="8" rx="1" fill="#0066FF" />
+      <rect x="28" y="24" width="2" height="8" rx="1" fill="#0066FF" />
+      {/* Green Arrow */}
+      <path d="M38 18V42M38 18L35 21M38 18L41 21M38 42L35 39M38 42L41 39" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   )
 }
@@ -97,15 +117,15 @@ export function HeightIllustration({ className = 'w-12 h-12' }: { className?: st
 export function WeightIllustration({ className = 'w-12 h-12' }: { className?: string }) {
   return (
     <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
-      <rect width="56" height="56" rx="16" fill="#F8FAFC" />
-      {/* Scale platform */}
-      <rect x="12" y="14" width="32" height="30" rx="8" fill="#F1F5F9" stroke="#CBD5E1" strokeWidth="2" />
-      {/* Digital display */}
-      <rect x="20" y="18" width="16" height="8" rx="3" fill="#0F172A" />
-      <circle cx="28" cy="22" r="1.5" fill="#34D399" />
-      {/* Foot standing markers */}
-      <rect x="16" y="29" width="7" height="11" rx="3.5" fill="#CBD5E1" />
-      <rect x="33" y="29" width="7" height="11" rx="3.5" fill="#CBD5E1" />
+      <circle cx="28" cy="28" r="24" fill="#F0F8FF" />
+      {/* Scale Body */}
+      <path d="M14 20C14 16.6863 16.6863 14 20 14H36C39.3137 14 42 16.6863 42 20V36C42 40.4183 38.4183 44 34 44H22C17.5817 44 14 40.4183 14 36V20Z" fill="#0066FF" />
+      {/* Dial Window */}
+      <circle cx="28" cy="26" r="10" fill="#FFFFFF" />
+      <path d="M22 26C22 22.6863 24.6863 20 28 20C31.3137 20 34 22.6863 34 26" stroke="#E2E8F0" strokeWidth="2" />
+      {/* Green Needle */}
+      <path d="M28 26L25 21" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" />
+      <circle cx="28" cy="26" r="2" fill="#0066FF" />
     </svg>
   )
 }
@@ -114,19 +134,14 @@ export function WeightIllustration({ className = 'w-12 h-12' }: { className?: st
 export function WaistIllustration({ className = 'w-12 h-12' }: { className?: string }) {
   return (
     <svg viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
-      <rect width="56" height="56" rx="16" fill="#F8FAFC" />
-      {/* Torso outline */}
-      <path
-        d="M18 14C23 19 23 37 18 42M38 14C33 19 33 37 38 42"
-        stroke="#CBD5E1"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-      />
-      {/* Belly button */}
-      <circle cx="28" cy="28" r="1.5" fill="#94A3B8" />
-      {/* Tape measure loop */}
-      <ellipse cx="28" cy="28" rx="14" ry="4" fill="#FEF3C7" stroke="#F59E0B" strokeWidth="2" />
-      <path d="M22 26V30M28 26V30M34 26V30" stroke="#D97706" strokeWidth="1.5" strokeLinecap="round" />
+      {/* Torso */}
+      <path d="M18 16C18 16 22 24 22 30C22 36 18 44 18 44H38C38 44 34 36 34 30C34 24 38 16 38 16H18Z" fill="#93C5FD" stroke="#0F172A" strokeWidth="2" strokeLinejoin="round" />
+      <path d="M24 44V40M32 44V40" stroke="#0F172A" strokeWidth="2" strokeLinecap="round" />
+      {/* Green Tape Measure Loop */}
+      <ellipse cx="28" cy="30" rx="14" ry="4" fill="none" stroke="#10B981" strokeWidth="3" />
+      <ellipse cx="28" cy="30" rx="14" ry="4" fill="none" stroke="#FFFFFF" strokeWidth="3" strokeDasharray="3 3" />
+      <path d="M12 30C12 30 14 26 18 24" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="2 2" />
+      <path d="M44 30C44 30 42 26 38 24" stroke="#10B981" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="2 2" />
     </svg>
   )
 }
@@ -265,7 +280,31 @@ export function AccountSecurityIllustration({ className = 'w-14 h-14' }: { class
   )
 }
 
-// 14. 8Liv Transparent Official Logo (Blends seamlessly with any background)
+// 14. Lab Work / Blood Report Illustration
+export function LabWorkIllustration({ className = 'w-14 h-14' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" className={className} aria-hidden="true">
+      <rect width="64" height="64" rx="18" fill="#F0F8FF" />
+      {/* Background soft circle */}
+      <circle cx="32" cy="32" r="22" fill="#DBEAFE" />
+      {/* Test Tube / Lab Vial */}
+      <rect x="26" y="20" width="12" height="26" rx="6" fill="#FFFFFF" stroke="#0066FF" strokeWidth="2" />
+      {/* Liquid inside the vial */}
+      <path d="M27 34V40C27 42.209 29.239 44 32 44C34.761 44 37 42.209 37 40V34H27Z" fill="#2563EB" />
+      {/* Bubbles */}
+      <circle cx="30" cy="38" r="1.5" fill="#FFFFFF" />
+      <circle cx="34" cy="41" r="1" fill="#FFFFFF" />
+      {/* Medical Cross Accent */}
+      <circle cx="48" cy="20" r="8" fill="#10B981" />
+      <path d="M48 16V24M44 20H52" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" />
+      {/* Checkmarks / Lines indicating report */}
+      <path d="M14 46H20" stroke="#93C5FD" strokeWidth="2" strokeLinecap="round" />
+      <path d="M16 52H24" stroke="#93C5FD" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+// 15. 8Liv Transparent Official Logo (Blends seamlessly with any background)
 export function EightLivTransparentLogo({ className = 'h-7 sm:h-8 w-auto' }: { className?: string }) {
   return (
     <img

@@ -233,29 +233,27 @@ function DashboardLayoutContent({
     { icon: Package, label: 'Deliveries', href: '/patient/medicine-orders' }
   ]
 
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-[#F5F0EB] flex items-center justify-center text-[#C4622D]">
-        <div className="w-12 h-12 border-4 border-current border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
-
   // ── Onboarding & consultation booking pages: full-screen, no dashboard chrome ──
   if (isStandaloneFlowPage) {
+    if (loading || flowStep !== 'ready') {
+      return (
+        <div className="min-h-screen bg-[#F5F0EB] flex items-center justify-center text-[#C4622D]">
+          <div className="w-12 h-12 border-4 border-current border-t-transparent rounded-full animate-spin" />
+        </div>
+      )
+    }
     return <>{children}</>
   }
 
   if (flowStep === 'appointment_scheduled' && isAppointmentDetailsPage) {
+    if (loading) {
+      return (
+        <div className="min-h-screen bg-[#F5F0EB] flex items-center justify-center text-[#C4622D]">
+          <div className="w-12 h-12 border-4 border-current border-t-transparent rounded-full animate-spin" />
+        </div>
+      )
+    }
     return <AppointmentOnlyLayout>{children}</AppointmentOnlyLayout>
-  }
-
-  if (flowStep !== 'ready') {
-    return (
-      <div className="min-h-screen bg-[#F5F0EB] flex items-center justify-center text-[#C4622D]">
-        <div className="w-12 h-12 border-4 border-current border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
   }
 
   return (
@@ -354,8 +352,14 @@ function DashboardLayoutContent({
         />
         
         {/* Workspace scrollable viewport */}
-        <main className="flex-grow overflow-y-auto p-6 pb-20 lg:pb-6 custom-scrollbar">
-          {children}
+        <main className="flex-grow overflow-y-auto p-6 pb-20 lg:pb-6 custom-scrollbar relative">
+          {(loading || flowStep !== 'ready') ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-[#F5F0EB]/50 backdrop-blur-sm z-10">
+              <div className="w-10 h-10 border-4 border-[#C4622D] border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : (
+            children
+          )}
         </main>
       </div>
 
