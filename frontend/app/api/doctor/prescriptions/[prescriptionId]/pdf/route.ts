@@ -38,8 +38,13 @@ export async function GET(request: Request, context: RouteContext) {
     let signedPdfPath = prescription.signed_pdf_path
     let fallbackBuffer: Buffer | undefined
 
-    if (!signedPdfPath) {
-      const generated = await ensurePrescriptionPdf(prescriptionId)
+    const isInvalidPath =
+      !signedPdfPath ||
+      !signedPdfPath.toLowerCase().endsWith('.pdf') ||
+      signedPdfPath.toLowerCase().endsWith('.txt')
+
+    if (isInvalidPath) {
+      const generated = await ensurePrescriptionPdf(prescriptionId, true)
       signedPdfPath = generated.path
       fallbackBuffer = generated.pdfBuffer
     }
@@ -61,10 +66,13 @@ export async function GET(request: Request, context: RouteContext) {
           .from('prescription-documents')
           .download(signedPdfPath)
         if (dlErr || !downloaded) {
-          throw new Error('Failed to retrieve prescription PDF document.')
+          const generated = await ensurePrescriptionPdf(prescriptionId, true)
+          signedPdfPath = generated.path
+          pdfBytes = new Uint8Array(generated.pdfBuffer!)
+        } else {
+          const arrayBuf = await downloaded.arrayBuffer()
+          pdfBytes = new Uint8Array(arrayBuf)
         }
-        const arrayBuf = await downloaded.arrayBuffer()
-        pdfBytes = new Uint8Array(arrayBuf)
       }
 
       const fileName = `8LIV-Prescription-${prescription.prescription_number || prescriptionId}.pdf`

@@ -95,6 +95,40 @@ export default function PatientMedicineOrderDetailPage() {
         </div>
       </div>
 
+      {/* In-House Doorstep Delivery OTP Card */}
+      {order.status === 'DISPATCHED' && order.delivery_otp && (
+        <div className="rounded-3xl border-2 border-[#C4622D] bg-[#FDF9F6] p-6 shadow-sm animate-in fade-in duration-200">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-5 w-5 text-[#C4622D]" />
+                <span className="text-xs font-black uppercase tracking-wider text-[#C4622D]">
+                  Doorstep Delivery Verification OTP
+                </span>
+              </div>
+              <h3 className="mt-1 text-lg font-black text-[#1A1F36]">
+                Share this 6-digit code with your 8LIV rider
+              </h3>
+              <p className="mt-0.5 text-xs text-[#8896A4]">
+                {order.driver_name ? `Rider ${order.driver_name}` : 'Our delivery executive'} will enter this code at your doorstep before handing over your sealed medication package.
+              </p>
+              {order.driver_phone && (
+                <p className="mt-1 text-xs font-bold text-[#1A1F36]">
+                  Rider Contact: <a href={`tel:${order.driver_phone}`} className="text-[#C4622D] underline">{order.driver_phone}</a>
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col items-center justify-center rounded-2xl bg-white border border-[#C4622D]/30 px-6 py-3.5 shadow-xs">
+              <span className="text-xs font-black uppercase tracking-wider text-[#8896A4]">Your OTP</span>
+              <span className="text-3xl font-black tracking-[0.25em] text-[#1A1F36] font-mono mt-0.5">
+                {order.delivery_otp}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 6-Stage Timeline Tracker Component */}
       <FulfillmentTimelineTracker
         status={order.status}

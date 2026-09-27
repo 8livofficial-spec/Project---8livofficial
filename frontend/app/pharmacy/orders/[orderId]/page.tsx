@@ -16,6 +16,7 @@ import {
   ShieldAlert,
   Send,
   Loader2,
+  ExternalLink,
 } from 'lucide-react'
 import { authedFetch } from '@/lib/apiClient'
 
@@ -270,6 +271,18 @@ export default function PharmacyOrderDetailPage() {
                 <CheckCircle2 className="h-4 w-4" />
                 Confirm Delivery
               </button>
+            )}
+
+            {order.courier_name?.includes('In-House') && (
+              <Link
+                href={`/driver/${order.order_id}`}
+                target="_blank"
+                className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-400 bg-cyan-50 px-3.5 py-2 text-xs font-black text-cyan-900 shadow-xs transition-transform hover:scale-[1.02] active:scale-[0.98]"
+              >
+                <span>🛵</span>
+                <span>Open Rider View</span>
+                <ExternalLink className="h-3 w-3" />
+              </Link>
             )}
 
             {/* Exception buttons available before final delivery */}

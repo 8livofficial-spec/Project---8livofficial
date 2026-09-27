@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
-import { Download, Pill, MapPin, Truck, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
+import { Download, Pill, MapPin, Truck, CheckCircle2, Clock, AlertCircle, Loader2 } from 'lucide-react'
 import { authedFetch } from '@/lib/apiClient'
 import { INDIAN_STATES } from '@/lib/constants/indianStates'
 
@@ -72,11 +72,31 @@ export default function PatientPrescriptionDetailPage() {
     loadData()
   }, [params.prescriptionId])
 
+  const [downloadingPdf, setDownloadingPdf] = useState(false)
+
   const download = async () => {
-    const res = await authedFetch(`/api/patient/prescriptions/${params.prescriptionId}/pdf`)
-    const payload = await res.json()
-    if (!res.ok) return setError(payload.error || 'Unable to open signed prescription.')
-    window.open(payload.url, '_blank', 'noopener,noreferrer')
+    try {
+      setDownloadingPdf(true)
+      setError('')
+      const res = await authedFetch(`/api/patient/prescriptions/${params.prescriptionId}/pdf?download=1`)
+      if (!res.ok) {
+        const payload = await res.json().catch(() => ({}))
+        throw new Error(payload.error || 'Unable to download signed prescription.')
+      }
+      const blob = await res.blob()
+      const blobUrl = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = blobUrl
+      a.download = `8LIV-Prescription-${rx?.prescription_number || params.prescriptionId}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(blobUrl)
+    } catch (err: any) {
+      setError(err.message || 'Failed to download prescription.')
+    } finally {
+      setDownloadingPdf(false)
+    }
   }
 
   const handleConfirmDelivery = async () => {
@@ -153,8 +173,20 @@ export default function PatientPrescriptionDetailPage() {
               Authorized {new Date(rx.issued_at || rx.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
             </p>
           </div>
-          <button onClick={download} className="inline-flex items-center gap-2 rounded-xl bg-[#1A1F36] px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition-transform hover:scale-[1.02]">
-            <Download className="h-4 w-4" /> Download signed PDF
+          <button
+            onClick={download}
+            disabled={downloadingPdf}
+            className="inline-flex items-center gap-2 rounded-xl bg-[#1A1F36] hover:bg-[#C4622D] px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition-all hover:scale-[1.02] disabled:opacity-70 disabled:hover:scale-100 disabled:cursor-not-allowed shadow-md cursor-pointer"
+          >
+            {downloadingPdf ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" /> Preparing PDF...
+              </>
+            ) : (
+              <>
+                <Download className="h-4 w-4" /> Download signed PDF
+              </>
+            )}
           </button>
         </div>
       </div>

@@ -335,4 +335,53 @@ export const EmailService = {
       `),
     })
   },
+
+  async sendDeliveryOutForDeliveryOtp(input: EmailRecipient & {
+    orderReference: string
+    otpCode: string
+    driverName?: string | null
+    driverPhone?: string | null
+    deliveryAddress: string
+  }) {
+    return sendEmail({
+      to: input.email,
+      patientId: input.patientId,
+      template: 'DELIVERY_OUT_FOR_DELIVERY_OTP',
+      subject: `Your 8LIV Medicine Delivery is Out for Delivery • OTP: ${input.otpCode}`,
+      html: baseTemplate('Medicine Package Out for Delivery', `
+        <p style="font-size: 16px; line-height: 1.6;">Hello ${escapeHtml(input.name || 'there')},</p>
+        <p style="font-size: 15px; line-height: 1.6; color: #40516A;">
+          Your 8LIV treatment package (<strong>${escapeHtml(input.orderReference)}</strong>) is now out for delivery with our designated delivery executive.
+        </p>
+
+        <div style="background: #FDF9F6; border: 2px dashed #C4622D; border-radius: 16px; padding: 24px; text-align: center; margin: 24px 0;">
+          <p style="font-size: 12px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #C4622D; margin: 0 0 8px 0;">
+            CONFIDENTIAL DELIVERY CONFIRMATION OTP
+          </p>
+          <div style="font-size: 38px; font-weight: 900; letter-spacing: 8px; color: #1A1F36; font-family: monospace;">
+            ${escapeHtml(input.otpCode)}
+          </div>
+          <p style="font-size: 13px; color: #6B7A90; margin: 8px 0 0 0;">
+            Please share this 6-digit code with your rider only upon receiving the sealed package.
+          </p>
+        </div>
+
+        <div style="background: #F5F0EB; border-radius: 14px; padding: 18px; margin: 18px 0;">
+          <h4 style="margin: 0 0 10px 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.08em; color: #1A1F36;">Delivery Executive Details</h4>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Rider:</strong> ${escapeHtml(input.driverName || '8LIV In-House Delivery Staff')}</p>
+          ${input.driverPhone ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Contact:</strong> ${escapeHtml(input.driverPhone)}</p>` : ''}
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Destination:</strong> ${escapeHtml(input.deliveryAddress)}</p>
+        </div>
+
+        <div style="background: #EFF6FF; border-left: 4px solid #3B82F6; padding: 12px 16px; border-radius: 8px; margin-top: 18px;">
+          <p style="margin: 0; font-size: 13px; color: #1E40AF; font-weight: 600;">
+            ❄️ Cold-Chain Reminder: For refrigerated GLP-1 medicines, please unpack immediately and store between 2°C – 8°C.
+          </p>
+        </div>
+      `),
+    })
+  },
 }
+
+export const emailService = EmailService
+

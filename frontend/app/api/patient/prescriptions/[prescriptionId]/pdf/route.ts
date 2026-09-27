@@ -11,14 +11,21 @@ export async function GET(request: Request, context: RouteContext) {
     const { prescriptionId } = await context.params
     const requestUrl = new URL(request.url)
     const isDownload = requestUrl.searchParams.get('download') === '1' || requestUrl.searchParams.get('format') === 'pdf'
+    const force = requestUrl.searchParams.get('force') === '1'
 
     const prescription = await assertPatientPrescriptionOwnership(prescriptionId, auth.user.id)
 
     let signedPdfPath = prescription.signed_pdf_path
     let fallbackBuffer: Buffer | undefined
 
-    if (!signedPdfPath) {
-      const generated = await ensurePrescriptionPdf(prescriptionId)
+    const isInvalidPath =
+      force ||
+      !signedPdfPath ||
+      !signedPdfPath.toLowerCase().endsWith('.pdf') ||
+      signedPdfPath.toLowerCase().endsWith('.txt')
+
+    if (isInvalidPath) {
+      const generated = await ensurePrescriptionPdf(prescriptionId, true)
       signedPdfPath = generated.path
       fallbackBuffer = generated.pdfBuffer
     }
@@ -40,10 +47,13 @@ export async function GET(request: Request, context: RouteContext) {
           .from('prescription-documents')
           .download(signedPdfPath)
         if (dlErr || !downloaded) {
-          throw new Error('Failed to retrieve prescription PDF document.')
+          const generated = await ensurePrescriptionPdf(prescriptionId, true)
+          signedPdfPath = generated.path
+          pdfBytes = new Uint8Array(generated.pdfBuffer!)
+        } else {
+          const arrayBuf = await downloaded.arrayBuffer()
+          pdfBytes = new Uint8Array(arrayBuf)
         }
-        const arrayBuf = await downloaded.arrayBuffer()
-        pdfBytes = new Uint8Array(arrayBuf)
       }
 
       const fileName = `8LIV-Prescription-${prescription.prescription_number || prescriptionId}.pdf`
