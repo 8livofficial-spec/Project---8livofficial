@@ -80,6 +80,23 @@ export interface UnifiedAssessmentFunnelProps {
 }
 
 const STORAGE_KEY = '8liv_assessment_draft_v2'
+const SUBMIT_TIMEOUT_MS = 45000
+
+async function fetchJsonWithTimeout(url: string, options: RequestInit, timeoutMs = SUBMIT_TIMEOUT_MS) {
+  const controller = new AbortController()
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: controller.signal,
+    })
+    const data = await response.json().catch(() => ({}))
+    return { response, data }
+  } finally {
+    window.clearTimeout(timeout)
+  }
+}
 
 export default function UnifiedAssessmentFunnel({
   initialStage = 'screener',
@@ -369,7 +386,7 @@ export default function UnifiedAssessmentFunnel({
 
       // If user is not yet logged in, sign up first
       if (!userId) {
-        const signupRes = await fetch('/api/auth/signup', {
+        const { response: signupRes, data: signupData } = await fetchJsonWithTimeout('/api/auth/signup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -379,7 +396,6 @@ export default function UnifiedAssessmentFunnel({
             lastName: formData.last_name,
           }),
         })
-        const signupData = await signupRes.json()
         if (!signupRes.ok) {
           throw new Error(signupData.error || 'Failed to create account.')
         }
@@ -387,7 +403,7 @@ export default function UnifiedAssessmentFunnel({
       }
 
       // Submit complete assessment payload
-      const response = await fetch('/api/assessment', {
+      const { response, data: result } = await fetchJsonWithTimeout('/api/assessment', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -402,7 +418,6 @@ export default function UnifiedAssessmentFunnel({
         }),
       })
 
-      const result = await response.json()
       if (!response.ok) {
         throw new Error(result.error || 'Unable to submit assessment.')
       }
@@ -425,7 +440,9 @@ export default function UnifiedAssessmentFunnel({
       await supabase.auth.signOut()
       window.location.href = `/verification-pending?email=${encodeURIComponent(formData.email)}`
     } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'An error occurred during submission.')
+      setFormError(err instanceof DOMException && err.name === 'AbortError'
+        ? 'This is taking longer than expected. Please check your connection and try again.'
+        : err instanceof Error ? err.message : 'An error occurred during submission.')
     } finally {
       setIsSubmitting(false)
     }

@@ -164,7 +164,7 @@ export default function OnboardingPaymentPage() {
       setProcessingMsg('Initializing Razorpay gateway...')
 
       const amountInRupees = total
-      const orderRes = await authedFetch('/api/razorpay/create-order', {
+      const orderRes = await authedFetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -226,7 +226,7 @@ export default function OnboardingPaymentPage() {
             setProgress(80)
             setProcessingMsg('Verifying payment signature...')
 
-            const verifyRes = await authedFetch('/api/payment/verify', {
+            const verifyRes = await authedFetch('/api/verify-payment', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({

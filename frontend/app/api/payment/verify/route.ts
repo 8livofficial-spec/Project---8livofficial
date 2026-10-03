@@ -9,6 +9,12 @@ import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/authSecuri
 import { activateSubscriptionForPatient, getAuthoritativeSubscriptionPricing } from '@/lib/subscriptionService'
 import crypto from 'crypto'
 
+function signaturesMatch(generatedSignature: string, receivedSignature: string) {
+  const generated = Buffer.from(generatedSignature, 'hex')
+  const received = Buffer.from(receivedSignature, 'hex')
+  return generated.length === received.length && crypto.timingSafeEqual(generated, received)
+}
+
 export async function POST(request: Request) {
   const ip = getClientIp(request)
 
@@ -27,7 +33,7 @@ export async function POST(request: Request) {
       razorpay_signature,
     } = body
 
-    if (!patientId || !paymentType || !razorpay_payment_id) {
+    if (!patientId || !paymentType || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return NextResponse.json({ error: 'Missing required payment details' }, { status: 400 })
     }
 
@@ -40,31 +46,21 @@ export async function POST(request: Request) {
     // 2. Authorization
     await assertPatientOrAssignedProvider(request, patientId)
 
-    // 3. Signature Verification / Sandbox Bypass
+    // 3. Signature Verification
     const keySecret = process.env.RAZORPAY_KEY_SECRET
-    const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
-    const secretIsMisconfigured = !keySecret || keySecret === keyId
-    const isMock = APP_CONFIG.payment.allowMock && (!razorpay_signature || razorpay_signature === 'mock_signature' || secretIsMisconfigured || String(razorpay_payment_id).startsWith('pay_mock_'))
-
-    if (APP_CONFIG.payment.mode === 'production' && isMock && !secretIsMisconfigured) {
-      return NextResponse.json({ error: 'Mock payments are disabled in production' }, { status: 400 })
+    if (!keySecret) {
+      console.error('RAZORPAY_KEY_SECRET is not configured on the server.')
+      return NextResponse.json({ error: 'Payment gateway configuration error' }, { status: 500 })
     }
 
-    if (!isMock) {
-      if (!keySecret) {
-        console.error('RAZORPAY_KEY_SECRET is not configured on the server.')
-        return NextResponse.json({ error: 'Payment gateway configuration error' }, { status: 500 })
-      }
-      
-      const payload = `${razorpay_order_id}|${razorpay_payment_id}`
-      const generatedSignature = crypto
-        .createHmac('sha256', keySecret)
-        .update(payload)
-        .digest('hex')
+    const payload = `${razorpay_order_id}|${razorpay_payment_id}`
+    const generatedSignature = crypto
+      .createHmac('sha256', keySecret)
+      .update(payload)
+      .digest('hex')
 
-      if (generatedSignature !== razorpay_signature) {
-        return NextResponse.json({ error: 'Invalid payment signature. Verification failed.' }, { status: 400 })
-      }
+    if (!signaturesMatch(generatedSignature, String(razorpay_signature))) {
+      return NextResponse.json({ error: 'Invalid payment signature. Verification failed.' }, { status: 400 })
     }
 
     // 4. Idempotency Check (Check if payment was already successfully processed)
@@ -158,7 +154,7 @@ export async function POST(request: Request) {
       amount: amount || 0,
       currency: 'INR',
       payment_method: paymentMethod || 'upi',
-      payment_provider: isMock ? 'razorpay_sim' : 'razorpay',
+      payment_provider: 'razorpay',
       transaction_id: razorpay_payment_id,
       status: 'success',
       membership_tier: programName,

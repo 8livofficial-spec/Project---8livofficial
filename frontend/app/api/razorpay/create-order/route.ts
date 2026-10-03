@@ -8,12 +8,13 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 import { getMembershipValidity } from '@/lib/membershipServer'
 
 function getRazorpayClient() {
-  const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID
+  const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
   const keySecret = process.env.RAZORPAY_KEY_SECRET
-  // Secret must differ from key ID and be non-empty
-  if (!keyId || !keySecret || keySecret === keyId) {
-    return null
+
+  if (!keyId || !keySecret) {
+    throw new Error('Razorpay credentials are not configured.')
   }
+
   return new Razorpay({
     key_id: keyId,
     key_secret: keySecret,
@@ -35,14 +36,13 @@ export async function POST(request: Request) {
     const paymentType = body?.paymentType || 'consultation'
     const currency = String(body?.currency || 'INR').toUpperCase()
     const receipt = `rcpt_${Date.now().toString().slice(-8)}_${Math.random().toString(36).slice(2, 6)}`
-    const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID || 'rzp_test_mock'
+    const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID
 
-    // Guard 1: Prevent duplicate consultation payment if already paid or covered
     if (paymentType === 'consultation') {
       const membership = await getMembershipValidity(patient.user.id)
       if (membership.active) {
         return NextResponse.json({
-          error: 'Your treatment program membership includes consultations at ₹0. No fee is required.',
+          error: 'Your treatment program membership includes consultations at INR 0. No fee is required.',
           alreadyCovered: true,
         }, { status: 409 })
       }
@@ -77,7 +77,6 @@ export async function POST(request: Request) {
         }, { status: 409 })
       }
     } else if (paymentType === 'membership' || paymentType === 'combined') {
-      // Guard 2: Prevent duplicate membership payment if active membership exists
       const membership = await getMembershipValidity(patient.user.id)
       if (membership.active && membership.expiresAt) {
         const daysRemaining = Math.ceil((new Date(membership.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
@@ -91,12 +90,11 @@ export async function POST(request: Request) {
       }
     }
 
-    // Server-authoritative amount calculation: Never trust client-submitted amount
     const planId = body?.planId ? String(body.planId).trim() : undefined
     const rawDuration = Number(body?.durationMonths)
     const lookupKey = planId || (rawDuration > 0 ? rawDuration : 1)
 
-    let amount = 499 // Initial consultation fee is ₹499 PAID (intentional, client-approved)
+    let amount = 499
     let selectedPricing: any = null
 
     if (paymentType === 'membership' || paymentType === 'combined') {
@@ -110,24 +108,15 @@ export async function POST(request: Request) {
       }
     }
 
-    const razorpay = getRazorpayClient()
-    if (!razorpay) {
-      // No valid credentials — return mock order so checkout can still open
-      const mockOrderId = `order_mock_${Date.now()}`
-      console.warn('[Razorpay] No valid credentials configured, using mock order')
-      return NextResponse.json({
-        id: mockOrderId,
-        amount: Math.round(amount * 100),
-        currency,
-        receipt,
-        key: keyId,
-        isMock: true,
-      })
+    const amountInPaise = Math.round(amount * 100)
+    if (!Number.isFinite(amountInPaise) || amountInPaise < 100) {
+      return NextResponse.json({ error: 'Amount must be at least 100 paise.' }, { status: 400 })
     }
 
     try {
+      const razorpay = getRazorpayClient()
       const order = await razorpay.orders.create({
-        amount: Math.round(amount * 100),
+        amount: amountInPaise,
         currency,
         receipt,
         notes: {
@@ -140,6 +129,7 @@ export async function POST(request: Request) {
 
       return NextResponse.json({
         id: order.id,
+        order_id: order.id,
         amount: order.amount,
         currency: order.currency,
         receipt: order.receipt,
@@ -147,18 +137,13 @@ export async function POST(request: Request) {
         isMock: false,
       })
     } catch (razorpayErr: any) {
-      // Razorpay API error (bad secret, network, etc.) — fall back to mock so UI doesn't hang
-      console.error('[Razorpay] Order creation failed, falling back to mock:', razorpayErr?.error?.description || razorpayErr.message)
-      const mockOrderId = `order_mock_${Date.now()}`
+      const statusCode = Number(razorpayErr?.statusCode || razorpayErr?.error?.statusCode || 500)
+      const isAuthError = statusCode === 401 || statusCode === 403
+      console.error('[Razorpay] Order creation failed:', razorpayErr?.error?.description || razorpayErr.message)
+
       return NextResponse.json({
-        id: mockOrderId,
-        amount: Math.round(amount * 100),
-        currency,
-        receipt,
-        key: keyId,
-        isMock: true,
-        fallbackReason: razorpayErr?.error?.description || 'Payment gateway error',
-      })
+        error: isAuthError ? 'Razorpay authentication failed.' : 'Failed to create Razorpay order.',
+      }, { status: isAuthError ? 401 : 500 })
     }
   } catch (err: any) {
     console.error('Error creating Razorpay order:', err)

@@ -1,10 +1,27 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { assertAdmin } from '@/lib/apiSecurity'
+import { isETagFresh, jsonWithETag, serverCache } from '@/lib/serverCache'
 
 export async function GET(request: Request) {
   try {
     await assertAdmin(request)
+
+    const cacheKey = 'dashboard:admin:summary'
+    const cachedEntry = serverCache.getEntry<any>(cacheKey)
+    if (cachedEntry && cachedEntry.expiresAt > Date.now() && isETagFresh(request, cachedEntry.etag)) {
+      return new NextResponse(null, {
+        status: 304,
+        headers: {
+          ETag: cachedEntry.etag,
+          'Cache-Control': 'private, no-cache, max-age=15',
+        },
+      })
+    }
+
+    const { value: payload, etag } = await serverCache.getOrSet(
+      cacheKey,
+      async () => {
 
     const todayKey = new Date().toISOString().split('T')[0]
     const startOfMonth = new Date()
@@ -19,18 +36,41 @@ export async function GET(request: Request) {
     let providerPayouts: any[] = []
     let ledger: any[] = []
     let recentCons: any[] = []
+    let totalPatientsCount = 0
+    let activePatientsCount = 0
+    let totalDoctorsCount = 0
 
     try {
-      const { data } = await supabaseAdmin
+      const [{ count: totalCount }, { count: activeCount }, { data }] = await Promise.all([
+        supabaseAdmin
+          .from('health_assessments')
+          .select('patient_id', { count: 'exact', head: true }),
+        supabaseAdmin
+          .from('health_assessments')
+          .select('patient_id', { count: 'exact', head: true })
+          .or('consultation_fee_paid.eq.true,booking_date.not.is.null,membership_tier.not.is.null'),
+        supabaseAdmin
         .from('health_assessments')
         .select('patient_id, is_eligible, consultation_fee_paid, booking_date, booking_time, membership_tier, created_at')
+        .order('created_at', { ascending: false })
+        .limit(1000)
+      ])
+      totalPatientsCount = totalCount || 0
+      activePatientsCount = activeCount || 0
       assessments = data || []
     } catch {}
 
     try {
-      const { data } = await supabaseAdmin
+      const [{ count }, { data }] = await Promise.all([
+        supabaseAdmin
+          .from('doctor_profiles')
+          .select('id', { count: 'exact', head: true }),
+        supabaseAdmin
         .from('doctor_profiles')
         .select('id, last_seen_at')
+        .limit(1000)
+      ])
+      totalDoctorsCount = count || 0
       doctorProfiles = data || []
     } catch {}
 
@@ -38,6 +78,8 @@ export async function GET(request: Request) {
       const { data } = await supabaseAdmin
         .from('doctor_consultations')
         .select('id, patient_id, doctor_id, status, is_completed, booking_date, booking_time, created_at')
+        .order('created_at', { ascending: false })
+        .limit(1000)
       consultations = data || []
       recentCons = (data || []).slice(0, 12)
     } catch {}
@@ -55,6 +97,7 @@ export async function GET(request: Request) {
       const { data } = await supabaseAdmin
         .from('provider_payouts')
         .select('payout_amount, payout_status')
+        .limit(1000)
       providerPayouts = data || []
     } catch {}
 
@@ -64,12 +107,14 @@ export async function GET(request: Request) {
         .select('amount, transaction_type, status, created_at')
         .eq('transaction_type', 'CONSULTATION_CREDIT')
         .eq('status', 'SUCCESS')
+        .order('created_at', { ascending: false })
+        .limit(1000)
       ledger = data || []
     } catch {}
 
     // 2. Calculate Stats
-    const activePatients = assessments.filter((p: any) => p.consultation_fee_paid || p.booking_date || p.membership_tier).length
-    const totalDoctors = doctorProfiles.length
+    const activePatients = activePatientsCount || assessments.filter((p: any) => p.consultation_fee_paid || p.booking_date || p.membership_tier).length
+    const totalDoctors = totalDoctorsCount || doctorProfiles.length
     const doctorsOnline = doctorProfiles.filter((doc: any) => {
       if (!doc.last_seen_at) return false
       return Date.now() - new Date(doc.last_seen_at).getTime() <= 5 * 60 * 1000
@@ -164,9 +209,9 @@ export async function GET(request: Request) {
       .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime())
       .slice(0, 12)
 
-    return NextResponse.json({
+    return {
       summary: {
-        totalPatients: assessments.length,
+        totalPatients: totalPatientsCount || assessments.length,
         activePatients,
         totalDoctors,
         doctorsOnline,
@@ -184,7 +229,14 @@ export async function GET(request: Request) {
         silverMembers
       },
       recentActivities
-    })
+    }
+      },
+      30000,
+      ['dashboard:admin'],
+      300000
+    )
+
+    return jsonWithETag(payload, etag, request, { maxAgeSec: 15 })
   } catch (err: unknown) {
     console.error("API Error in GET /api/admin/dashboard:", err)
     const message = err instanceof Error ? err.message : 'Internal Server Error'

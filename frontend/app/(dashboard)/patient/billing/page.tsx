@@ -91,7 +91,7 @@ export default function BillingPage() {
       }
 
       // 1. Authoritative order initialization with Bearer authentication
-      const orderRes = await authedFetch('/api/razorpay/create-order', {
+      const orderRes = await authedFetch('/api/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -117,37 +117,6 @@ export default function BillingPage() {
         throw new Error(orderData.error || 'Failed to initialize treatment program order.')
       }
 
-      // 2. Simulated / Sandbox Gateway bypass when mock credentials configured
-      if (orderData.isMock || !orderData.key || orderData.key === 'rzp_test_mock') {
-        const verifyRes = await authedFetch('/api/payment/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            patientId: session.user.id,
-            paymentType: 'membership',
-            planId: plan.id,
-            durationMonths: plan.durationMonths,
-            amount: plan.finalPrice,
-            shippingState: assessment?.shipping_state || '',
-            paymentMethod: 'upi',
-            razorpay_order_id: orderData.id || `order_mock_${Math.floor(Math.random() * 100000)}`,
-            razorpay_payment_id: `pay_mock_${Date.now()}`,
-            razorpay_signature: 'mock_signature',
-          }),
-        })
-
-        const result = await verifyRes.json()
-        if (!verifyRes.ok || result.error) {
-          throw new Error(result.error || `Failed to activate ${plan.name}.`)
-        }
-
-        setStatusMsg({ type: 'success', message: `Successfully updated treatment program to ${plan.name}! 🎉` })
-        await reloadData({ force: true })
-        await loadSubscription()
-        return
-      }
-
-      // 3. Live Razorpay Modal Gateway Integration
       await loadRazorpayScript()
       if (typeof window === 'undefined' || !(window as any).Razorpay) {
         throw new Error('Razorpay checkout could not be loaded. Please disable ad-blockers and retry.')
@@ -181,7 +150,7 @@ export default function BillingPage() {
 
         options.handler = async function (response: any) {
           try {
-            const verifyRes = await authedFetch('/api/payment/verify', {
+            const verifyRes = await authedFetch('/api/verify-payment', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
@@ -215,10 +184,14 @@ export default function BillingPage() {
         options.modal = {
           ondismiss: function () {
             setUpgrading(false)
+            reject(new Error('Payment cancelled by user.'))
           },
         }
 
         const rzp = new (window as any).Razorpay(options)
+        rzp.on('payment.failed', function (resp: any) {
+          reject(new Error(resp?.error?.description || 'Payment failed. Please try again.'))
+        })
         rzp.open()
       })
     } catch (err: any) {

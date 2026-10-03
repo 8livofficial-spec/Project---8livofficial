@@ -72,14 +72,14 @@ export async function POST(request: Request) {
 
     await writeAuthAudit({ userId: user.id, email: user.email, event: 'EMAIL_VERIFIED', status: 'SUCCESS' })
 
-    try {
-      await EmailService.sendWelcomeEmail({
+    if (purpose === 'EMAIL_VERIFICATION') {
+      EmailService.sendWelcomeEmail({
         email: user.email || '',
         patientId: user.id,
         name: (user.email || '').split('@')[0],
+      }).catch((emailError) => {
+        console.error('Welcome email after verification failed:', emailError)
       })
-    } catch (emailError) {
-      console.error('Welcome email after verification failed:', emailError)
     }
 
     return NextResponse.json({ success: true, nextPath })
