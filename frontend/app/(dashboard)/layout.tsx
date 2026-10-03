@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { LayoutDashboard, Calendar, TrendingDown, Package, Video, X, PhoneCall } from 'lucide-react'
+import { LayoutDashboard, Calendar, TrendingDown, Package, Video, X, PhoneCall, AlertCircle } from 'lucide-react'
 import { usePatientData, PatientDataProvider } from '@/hooks/usePatientData'
 import { supabase } from '@/lib/supabaseClient'
 import Sidebar from '@/components/patient/Sidebar'
@@ -32,7 +32,7 @@ function DashboardLayoutContent({
   const pathname = usePathname()
   const router = useRouter()
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false)
-  const { user, profile, assessment, consultation, notifications, loading, flowStep, onboardingState } = usePatientData()
+  const { user, profile, assessment, consultation, notifications, loading, error, flowStep, onboardingState, reloadData } = usePatientData()
 
   // Global real-time doctor calling alert (works on any patient page)
   const [globalCallAlert, setGlobalCallAlert] = useState<{ roomUrl: string; consultationId: string } | null>(null)
@@ -235,7 +235,43 @@ function DashboardLayoutContent({
 
   // ── Onboarding & consultation booking pages: full-screen, no dashboard chrome ──
   if (isStandaloneFlowPage) {
-    if (loading || flowStep !== 'ready') {
+    const canRenderStandalonePage =
+      isConsultationRoomPage ||
+      flowStep === 'ready' ||
+      flowStep === 'needs_consultation' ||
+      (isConsultationBookingPage && flowStep === 'appointment_scheduled')
+
+    if (error && !loading) {
+      return (
+        <div className="min-h-screen bg-[#F5F0EB] flex items-center justify-center p-6 text-[#1A1F36]">
+          <div className="w-full max-w-sm rounded-2xl border border-[#C4622D]/20 bg-white p-6 text-center shadow-sm">
+            <AlertCircle className="mx-auto mb-3 h-9 w-9 text-[#C4622D]" />
+            <h1 className="text-lg font-bold">Unable to load your consultation</h1>
+            <p className="mt-2 text-sm text-[#40516A]">
+              We could not confirm your patient status. Please retry, or sign in again if this keeps happening.
+            </p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => void reloadData({ force: true })}
+                className="rounded-xl bg-[#1A1F36] px-4 py-3 text-sm font-bold text-white"
+              >
+                Try Again
+              </button>
+              <button
+                type="button"
+                onClick={() => router.replace('/login')}
+                className="rounded-xl border border-[#1A1F36]/10 px-4 py-3 text-sm font-bold text-[#1A1F36]"
+              >
+                Back to Login
+              </button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
+    if (loading || !canRenderStandalonePage) {
       return (
         <div className="min-h-screen bg-[#F5F0EB] flex items-center justify-center text-[#C4622D]">
           <div className="w-12 h-12 border-4 border-current border-t-transparent rounded-full animate-spin" />
