@@ -33,9 +33,10 @@ export async function POST(request: Request) {
     if (!rate.allowed) return rateLimitResponse(rate.retryAfter || 60, rate.message)
 
     const body = await request.json()
-    const paymentType = body?.paymentType || 'consultation'
+    const paymentType = body?.paymentType ? String(body.paymentType) : 'standard'
     const currency = String(body?.currency || 'INR').toUpperCase()
-    const receipt = `rcpt_${Date.now().toString().slice(-8)}_${Math.random().toString(36).slice(2, 6)}`
+    const requestedReceipt = body?.receipt ? String(body.receipt).trim() : ''
+    const receipt = requestedReceipt || `rcpt_${Date.now().toString().slice(-8)}_${Math.random().toString(36).slice(2, 6)}`
     const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID
 
     if (paymentType === 'consultation') {
@@ -93,11 +94,14 @@ export async function POST(request: Request) {
     const planId = body?.planId ? String(body.planId).trim() : undefined
     const rawDuration = Number(body?.durationMonths)
     const lookupKey = planId || (rawDuration > 0 ? rawDuration : 1)
+    const isStandardOrder = paymentType === 'standard'
 
-    let amount = 499
+    let amount = isStandardOrder ? Number(body?.amount) / 100 : 499
     let selectedPricing: any = null
 
-    if (paymentType === 'membership' || paymentType === 'combined') {
+    if (isStandardOrder && !Number.isFinite(Number(body?.amount))) {
+      return NextResponse.json({ error: 'Amount is required in paise.' }, { status: 400 })
+    } else if (paymentType === 'membership' || paymentType === 'combined') {
       selectedPricing = await getAuthoritativeSubscriptionPricing(lookupKey)
       if (paymentType === 'membership') {
         amount = selectedPricing.finalPrice
@@ -108,7 +112,7 @@ export async function POST(request: Request) {
       }
     }
 
-    const amountInPaise = Math.round(amount * 100)
+    const amountInPaise = isStandardOrder ? Math.round(Number(body.amount)) : Math.round(amount * 100)
     if (!Number.isFinite(amountInPaise) || amountInPaise < 100) {
       return NextResponse.json({ error: 'Amount must be at least 100 paise.' }, { status: 400 })
     }

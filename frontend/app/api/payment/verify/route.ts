@@ -33,20 +33,17 @@ export async function POST(request: Request) {
       razorpay_signature,
     } = body
 
-    if (!patientId || !paymentType || !razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
       return NextResponse.json({ error: 'Missing required payment details' }, { status: 400 })
     }
 
     // 1. Rate Limiting
-    const rate = checkRateLimit(`payment_verify:${ip}:${patientId}`, APP_CONFIG.rateLimits.paymentVerify)
+    const rate = checkRateLimit(`payment_verify:${ip}:${patientId || razorpay_order_id}`, APP_CONFIG.rateLimits.paymentVerify)
     if (!rate.allowed) {
       return rateLimitResponse(rate.retryAfter || 60, rate.message)
     }
 
-    // 2. Authorization
-    await assertPatientOrAssignedProvider(request, patientId)
-
-    // 3. Signature Verification
+    // 2. Signature Verification
     const keySecret = process.env.RAZORPAY_KEY_SECRET
     if (!keySecret) {
       console.error('RAZORPAY_KEY_SECRET is not configured on the server.')
@@ -62,6 +59,21 @@ export async function POST(request: Request) {
     if (!signaturesMatch(generatedSignature, String(razorpay_signature))) {
       return NextResponse.json({ error: 'Invalid payment signature. Verification failed.' }, { status: 400 })
     }
+
+    if (!patientId && !paymentType) {
+      return NextResponse.json({
+        success: true,
+        transaction_id: razorpay_payment_id,
+        order_id: razorpay_order_id,
+      })
+    }
+
+    if (!patientId || !paymentType) {
+      return NextResponse.json({ error: 'Missing patient payment context' }, { status: 400 })
+    }
+
+    // 3. Authorization for app-specific patient payment workflows
+    await assertPatientOrAssignedProvider(request, patientId)
 
     // 4. Idempotency Check (Check if payment was already successfully processed)
     const { data: existingTxn, error: lookupError } = await supabaseAdmin
