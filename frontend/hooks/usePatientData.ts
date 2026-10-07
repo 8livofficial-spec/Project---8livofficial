@@ -295,6 +295,8 @@ function usePatientDataInternal() {
   const [flowStep, setFlowStep] = useState<FlowStep>('loading')
 
   const reloadData = useCallback(async (options?: { force?: boolean }) => {
+    setLoading(true)
+    setError(null)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       

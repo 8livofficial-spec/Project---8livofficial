@@ -7,13 +7,7 @@ import { assertPatientOrAssignedProvider } from '@/lib/apiSecurity'
 import { APP_CONFIG } from '@/lib/appConfig'
 import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/authSecurity'
 import { activateSubscriptionForPatient, getAuthoritativeSubscriptionPricing } from '@/lib/subscriptionService'
-import crypto from 'crypto'
-
-function signaturesMatch(generatedSignature: string, receivedSignature: string) {
-  const generated = Buffer.from(generatedSignature, 'hex')
-  const received = Buffer.from(receivedSignature, 'hex')
-  return generated.length === received.length && crypto.timingSafeEqual(generated, received)
-}
+import { findRazorpayTransaction, verifyRazorpayPaymentSignature } from '@/lib/payments/razorpayServer'
 
 export async function POST(request: Request) {
   const ip = getClientIp(request)
@@ -44,19 +38,11 @@ export async function POST(request: Request) {
     }
 
     // 2. Signature Verification
-    const keySecret = process.env.RAZORPAY_KEY_SECRET
-    if (!keySecret) {
-      console.error('RAZORPAY_KEY_SECRET is not configured on the server.')
-      return NextResponse.json({ error: 'Payment gateway configuration error' }, { status: 500 })
-    }
-
-    const payload = `${razorpay_order_id}|${razorpay_payment_id}`
-    const generatedSignature = crypto
-      .createHmac('sha256', keySecret)
-      .update(payload)
-      .digest('hex')
-
-    if (!signaturesMatch(generatedSignature, String(razorpay_signature))) {
+    if (!verifyRazorpayPaymentSignature({
+      orderId: String(razorpay_order_id),
+      paymentId: String(razorpay_payment_id),
+      signature: String(razorpay_signature),
+    })) {
       return NextResponse.json({ error: 'Invalid payment signature. Verification failed.' }, { status: 400 })
     }
 
@@ -76,15 +62,7 @@ export async function POST(request: Request) {
     await assertPatientOrAssignedProvider(request, patientId)
 
     // 4. Idempotency Check (Check if payment was already successfully processed)
-    const { data: existingTxn, error: lookupError } = await supabaseAdmin
-      .from('payment_transactions')
-      .select('*')
-      .eq('transaction_id', razorpay_payment_id)
-      .maybeSingle()
-
-    if (lookupError) {
-      console.error('Database lookup error during payment verification:', lookupError.message)
-    }
+    const existingTxn = await findRazorpayTransaction(String(razorpay_payment_id), String(razorpay_order_id))
 
     if (existingTxn) {
       if (existingTxn.status === 'success') {
@@ -180,9 +158,16 @@ export async function POST(request: Request) {
       },
     }
 
-    const { error: txnError } = await supabaseAdmin
-      .from('payment_transactions')
-      .upsert(txnPayload, { onConflict: 'transaction_id' })
+    const txnQuery = existingTxn?.id
+      ? supabaseAdmin
+          .from('payment_transactions')
+          .update(txnPayload)
+          .eq('id', existingTxn.id)
+      : supabaseAdmin
+          .from('payment_transactions')
+          .upsert(txnPayload, { onConflict: 'transaction_id' })
+
+    const { error: txnError } = await txnQuery
 
     if (txnError) {
       console.error('Failed to record verified payment transaction:', txnError.message)

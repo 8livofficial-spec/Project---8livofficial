@@ -1,25 +1,11 @@
 import { NextResponse } from 'next/server'
-import Razorpay from 'razorpay'
 import { getAuthenticatedPatient } from '@/lib/appointmentAvailability'
 import { APP_CONFIG } from '@/lib/appConfig'
 import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/authSecurity'
 import { getAuthoritativeSubscriptionPricing } from '@/lib/subscriptionService'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { getMembershipValidity } from '@/lib/membershipServer'
-
-function getRazorpayClient() {
-  const keyId = process.env.RAZORPAY_KEY_ID || process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID
-  const keySecret = process.env.RAZORPAY_KEY_SECRET
-
-  if (!keyId || !keySecret) {
-    throw new Error('Razorpay credentials are not configured.')
-  }
-
-  return new Razorpay({
-    key_id: keyId,
-    key_secret: keySecret,
-  })
-}
+import { buildRazorpayOrderMetadata, getRazorpayClient, getRazorpayKeyId } from '@/lib/payments/razorpayServer'
 
 export async function POST(request: Request) {
   try {
@@ -37,7 +23,7 @@ export async function POST(request: Request) {
     const currency = String(body?.currency || 'INR').toUpperCase()
     const requestedReceipt = body?.receipt ? String(body.receipt).trim() : ''
     const receipt = requestedReceipt || `rcpt_${Date.now().toString().slice(-8)}_${Math.random().toString(36).slice(2, 6)}`
-    const keyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || process.env.RAZORPAY_KEY_ID
+    const keyId = getRazorpayKeyId()
 
     if (paymentType === 'consultation') {
       const membership = await getMembershipValidity(patient.user.id)
@@ -131,6 +117,34 @@ export async function POST(request: Request) {
         },
       })
 
+      const pendingMetadata = buildRazorpayOrderMetadata({
+        orderId: order.id,
+        receipt: order.receipt,
+        paymentType,
+        planId: selectedPricing?.planId || planId || '',
+        durationMonths: selectedPricing?.durationMonths || rawDuration || 1,
+      })
+
+      const { error: pendingTxnError } = await supabaseAdmin
+        .from('payment_transactions')
+        .upsert({
+          patient_id: patient.user.id,
+          amount: Number(order.amount || amountInPaise) / 100,
+          currency: order.currency || currency,
+          payment_method: 'razorpay',
+          payment_provider: 'razorpay',
+          transaction_id: order.id,
+          status: 'pending',
+          membership_tier: selectedPricing?.programName || null,
+          payment_type: paymentType,
+          metadata: pendingMetadata,
+        }, { onConflict: 'transaction_id' })
+
+      if (pendingTxnError) {
+        console.error('[Razorpay] Failed to record pending order:', pendingTxnError.message)
+        return NextResponse.json({ error: 'Failed to initialize payment tracking.' }, { status: 500 })
+      }
+
       return NextResponse.json({
         id: order.id,
         order_id: order.id,
@@ -146,8 +160,11 @@ export async function POST(request: Request) {
       console.error('[Razorpay] Order creation failed:', razorpayErr?.error?.description || razorpayErr.message)
 
       return NextResponse.json({
-        error: isAuthError ? 'Razorpay authentication failed.' : 'Failed to create Razorpay order.',
-      }, { status: isAuthError ? 401 : 500 })
+        error: isAuthError
+          ? 'Payment gateway authentication failed. Please verify Razorpay API keys in production environment settings.'
+          : (razorpayErr?.error?.description || razorpayErr?.message || 'Failed to create Razorpay order.'),
+        code: 'PAYMENT_GATEWAY_ERROR',
+      }, { status: 502 })
     }
   } catch (err: any) {
     console.error('Error creating Razorpay order:', err)

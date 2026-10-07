@@ -282,6 +282,36 @@ function DashboardLayoutContent({
   }
 
   if (flowStep === 'appointment_scheduled' && isAppointmentDetailsPage) {
+    if (error && !loading) {
+      return (
+        <div className="min-h-screen bg-[#F5F0EB] flex items-center justify-center p-6 text-[#1A1F36]">
+          <div className="w-full max-w-sm rounded-2xl border border-[#C4622D]/20 bg-white p-6 text-center shadow-sm">
+            <AlertCircle className="mx-auto mb-3 h-9 w-9 text-[#C4622D]" />
+            <h1 className="text-lg font-bold">Unable to load your appointment</h1>
+            <p className="mt-2 text-sm text-[#40516A]">
+              We could not load your appointment details. Please retry, or sign in again if this keeps happening.
+            </p>
+            <div className="mt-5 flex flex-col gap-2">
+              <button
+                type="button"
+                onClick={() => void reloadData({ force: true })}
+                className="rounded-xl bg-[#1A1F36] px-4 py-3 text-sm font-bold text-white"
+              >
+                Try Again
+              </button>
+              <button
+                type="button"
+                onClick={() => router.replace('/login')}
+                className="rounded-xl border border-[#1A1F36]/10 px-4 py-3 text-sm font-bold text-[#1A1F36]"
+              >
+                Back to Login
+              </button>
+            </div>
+          </div>
+        </div>
+      )
+    }
+
     if (loading) {
       return (
         <div className="min-h-screen bg-[#F5F0EB] flex items-center justify-center text-[#C4622D]">
@@ -389,7 +419,33 @@ function DashboardLayoutContent({
         
         {/* Workspace scrollable viewport */}
         <main className="flex-grow overflow-y-auto p-6 pb-20 lg:pb-6 custom-scrollbar relative">
-          {(loading || flowStep !== 'ready') ? (
+          {error && !loading ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-[#F5F0EB]/90 backdrop-blur-sm z-10 p-6">
+              <div className="w-full max-w-sm rounded-2xl border border-[#C4622D]/20 bg-white p-6 text-center shadow-sm">
+                <AlertCircle className="mx-auto mb-3 h-9 w-9 text-[#C4622D]" />
+                <h2 className="text-lg font-bold">Unable to load this page</h2>
+                <p className="mt-2 text-sm text-[#40516A]">
+                  Your session data did not load correctly. Please retry, or sign in again if this keeps happening.
+                </p>
+                <div className="mt-5 flex flex-col gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void reloadData({ force: true })}
+                    className="rounded-xl bg-[#1A1F36] px-4 py-3 text-sm font-bold text-white"
+                  >
+                    Try Again
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.replace('/login')}
+                    className="rounded-xl border border-[#1A1F36]/10 px-4 py-3 text-sm font-bold text-[#1A1F36]"
+                  >
+                    Back to Login
+                  </button>
+                </div>
+              </div>
+            </div>
+          ) : (loading || flowStep !== 'ready') ? (
             <div className="absolute inset-0 flex items-center justify-center bg-[#F5F0EB]/50 backdrop-blur-sm z-10">
               <div className="w-10 h-10 border-4 border-[#C4622D] border-t-transparent rounded-full animate-spin" />
             </div>

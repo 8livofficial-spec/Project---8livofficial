@@ -35,12 +35,10 @@ async function patientFetch(input: RequestInfo | URL, init: RequestInit = {}) {
     throw new Error(SESSION_EXPIRED)
   }
 
-  const retriedResponse = await request(refreshedToken)
-  if (retriedResponse.status === 401) {
-    await supabase.auth.signOut()
-    throw new Error(SESSION_EXPIRED)
-  }
-  return retriedResponse
+  // Session refreshed successfully — retry request with fresh token.
+  // Never sign out on retried response: if an endpoint responds with 401/502/etc.,
+  // return the response so the UI error handler can display the server's error message.
+  return await request(refreshedToken)
 }
 
 type AvailableDoctorSlot = {
@@ -1100,6 +1098,13 @@ export default function ConsultationSchedulingPage() {
                     </div>
                   </div>
 
+                  {paymentError && (
+                    <div className="flex items-start gap-2 rounded-xl p-3 mb-4 bg-red-50 text-red-700 text-xs font-medium border border-red-200">
+                      <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                      <span>{paymentError}</span>
+                    </div>
+                  )}
+
                   <div className="mt-5 space-y-3">
                     <button
                       type="button"
@@ -1433,6 +1438,13 @@ export default function ConsultationSchedulingPage() {
                     </div>
                   </div>
                 </div>
+
+                {paymentError && (
+                  <div className="flex items-start gap-2 rounded-xl p-3 mb-4 bg-red-50 text-red-700 text-xs font-medium border border-red-200">
+                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <span>{paymentError}</span>
+                  </div>
+                )}
 
                 {/* CTA Button */}
                 <button
