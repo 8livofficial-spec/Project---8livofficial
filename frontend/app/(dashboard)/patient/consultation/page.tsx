@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Video, PhoneCall, Lock, Shield, CheckCircle, MapPin, Users, CreditCard, Smartphone, Building2, AlertCircle, CalendarPlus, Sun, CloudSun, Moon, Clock, CalendarDays, ArrowLeft } from 'lucide-react'
 import { usePatientData } from '@/hooks/usePatientData'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, syncSupabaseAuthCookie } from '@/lib/supabaseClient'
 
 const CONSULTATION_FEE = 499
 const SESSION_EXPIRED = 'SESSION_EXPIRED'
@@ -594,6 +594,8 @@ export default function ConsultationSchedulingPage() {
 
       setAssignment(data.assignment || null)
       setPaymentStage('confirmed')
+      const { data: { session: activeSession } } = await supabase.auth.getSession()
+      syncSupabaseAuthCookie(activeSession)
       await reloadData()
       await loadAvailableSlots()
       router.replace(`/patient/appointments/${data.bookingId || data.assignment?.bookingId || data.assignment?.consultationId}`)

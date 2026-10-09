@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, syncSupabaseAuthCookie } from '@/lib/supabaseClient'
 import { getPatientJourneyTarget } from '@/lib/patientJourney'
 import { logJourneyDebug } from '@/lib/logger'
 import UnifiedAssessmentFunnel from '@/components/assessment/UnifiedAssessmentFunnel'
@@ -39,6 +39,7 @@ export default function AssessmentPage() {
           }
           if (!role) role = 'patient'
 
+          syncSupabaseAuthCookie(session)
           document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
 
           if (role === 'admin') {

@@ -14,7 +14,7 @@ import {
   SENSITIVE_SAFETY_QUESTIONS,
   PRIOR_MEDICATION_OPTIONS,
 } from '@/lib/metabolicAssessment'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, syncSupabaseAuthCookie } from '@/lib/supabaseClient'
 import {
   Info,
   Calendar,
@@ -432,6 +432,7 @@ export default function UnifiedAssessmentFunnel({
       }
 
       if (accessToken) {
+        syncSupabaseAuthCookie(session)
         const target = result.status === 'NOT_ELIGIBLE' ? '/not-eligible' : '/consultation-payment'
         window.location.href = target
         return
@@ -439,6 +440,7 @@ export default function UnifiedAssessmentFunnel({
 
       // If newly registered, redirect to verification
       await supabase.auth.signOut()
+      syncSupabaseAuthCookie(null)
       window.location.href = `/verification-pending?email=${encodeURIComponent(formData.email)}`
     } catch (err) {
       setFormError(err instanceof DOMException && err.name === 'AbortError'

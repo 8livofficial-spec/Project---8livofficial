@@ -17,7 +17,7 @@ import {
   Phone,
   RefreshCw,
 } from 'lucide-react'
-import { supabase } from '@/lib/supabaseClient'
+import { supabase, syncSupabaseAuthCookie } from '@/lib/supabaseClient'
 import { getPatientJourneyTarget } from '@/lib/patientJourney'
 import { logJourneyDebug } from '@/lib/logger'
 
@@ -67,6 +67,9 @@ export default function UnifiedLogin() {
 
   const handleSuccessfulRedirect = (role?: string, target?: string) => {
     const userRole = role || 'patient'
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      syncSupabaseAuthCookie(session)
+    }).catch(() => {})
     document.cookie = `user_role=${userRole}; path=/; max-age=86400; SameSite=Lax`
 
     if (target) {
@@ -125,6 +128,7 @@ export default function UnifiedLogin() {
             return
           }
 
+          syncSupabaseAuthCookie(session)
           document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
 
           if (role === 'admin') {

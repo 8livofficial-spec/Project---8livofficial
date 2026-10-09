@@ -70,7 +70,7 @@ export function proxy(request: NextRequest) {
         ? '/?role=doctor'
         : pathname.startsWith('/pharmacy')
         ? '/login?role=pharmacy'
-        : '/';
+        : '/login';
       const loginUrl = new URL(redirectPath, request.url);
       return withSeoPrivacyHeaders(NextResponse.redirect(loginUrl), pathname);
     }
@@ -92,7 +92,7 @@ export function proxy(request: NextRequest) {
         ? '/?role=doctor'
         : pathname.startsWith('/pharmacy')
         ? '/login?role=pharmacy'
-        : '/';
+        : '/login';
       const loginUrl = new URL(redirectPath, request.url);
       return withSeoPrivacyHeaders(NextResponse.redirect(loginUrl), pathname);
     }
