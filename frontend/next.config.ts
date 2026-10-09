@@ -7,7 +7,7 @@ dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 dotenv.config({ path: path.resolve(process.cwd(), "frontend", ".env.local") });
 
 const nextConfig: NextConfig = {
-  // other config options...
+  output: 'standalone',
   allowedDevOrigins: ["little-emote-livestock.ngrok-free.dev", "172.21.100.123"],
   images: {
     qualities: [72, 75, 78, 85, 90],
@@ -43,6 +43,18 @@ const nextConfig: NextConfig = {
           {
             key: 'X-Content-Type-Options',
             value: 'nosniff',
+          },
+          {
+            key: 'X-Frame-Options',
+            value: 'DENY',
+          },
+          {
+            key: 'Content-Security-Policy',
+            value: "frame-ancestors 'none';",
+          },
+          {
+            key: 'X-DNS-Prefetch-Control',
+            value: 'on',
           },
           {
             key: 'Referrer-Policy',

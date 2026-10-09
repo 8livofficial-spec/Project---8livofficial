@@ -6,6 +6,7 @@ import { User, LogOut, ArrowRight, Menu, X } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import PillNav from '@/components/ui/PillNav'
+import { authedFetch } from '@/lib/apiClient'
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
@@ -24,36 +25,21 @@ export default function Navbar() {
     return '/patient'
   }
 
-  const fetchUserRole = async (currentUser: SupabaseUser) => {
+  const fetchUserRole = async (_currentUser: SupabaseUser) => {
     try {
-      if (currentUser.email === '8livofficial@gmail.com') {
-        setRole('admin')
-        document.cookie = 'user_role=admin; path=/; max-age=86400; SameSite=Lax'
-        return
+      const res = await authedFetch('/api/auth/role')
+      if (res.ok) {
+        const data = await res.json()
+        if (data?.role) {
+          setRole(data.role)
+          document.cookie = `user_role=${data.role}; path=/; max-age=86400; SameSite=Lax`
+          return
+        }
       }
-
-      const cookieMatch = document.cookie.match(/user_role=([^;]+)/)
-      if (cookieMatch && cookieMatch[1]) {
-        setRole(cookieMatch[1])
-        return
-      }
-
-      const [{ data: doc }, { data: prov }, { data: prof }] = await Promise.all([
-        supabase.from('doctor_profiles').select('id').eq('id', currentUser.id).maybeSingle(),
-        supabase.from('provider_profiles_v2').select('role').or(`id.eq.${currentUser.id},user_id.eq.${currentUser.id}`).maybeSingle(),
-        supabase.from('profiles').select('role').eq('id', currentUser.id).maybeSingle(),
-      ])
-
-      let resolvedRole = 'patient'
-      if (doc) resolvedRole = 'doctor'
-      else if (prov?.role) resolvedRole = prov.role
-      else if (prof?.role) resolvedRole = prof.role
-      else resolvedRole = currentUser.user_metadata?.role || 'patient'
-
-      setRole(resolvedRole)
-      document.cookie = `user_role=${resolvedRole}; path=/; max-age=86400; SameSite=Lax`
+      setRole('patient')
     } catch (err) {
       console.warn('Failed to resolve user role:', err)
+      setRole('patient')
     }
   }
 

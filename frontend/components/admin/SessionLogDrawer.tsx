@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, Clock, Video, UserCheck, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { authedFetch } from '@/lib/apiClient';
 
 interface SessionLogDrawerProps {
   isOpen: boolean;
@@ -22,8 +23,7 @@ export default function SessionLogDrawer({ isOpen, onClose, sessionId }: Session
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-      const res = await fetch(`${backendUrl}/api/admin/sessions/${sessionId}/log`);
+      const res = await authedFetch(`/api/admin/sessions/${sessionId}/log`);
       if (res.ok) {
         const data = await res.json();
         setLogs(data);

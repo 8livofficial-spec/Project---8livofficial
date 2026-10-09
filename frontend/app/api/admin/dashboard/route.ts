@@ -40,8 +40,17 @@ export async function GET(request: Request) {
     let activePatientsCount = 0
     let totalDoctorsCount = 0
 
-    try {
-      const [{ count: totalCount }, { count: activeCount }, { data }] = await Promise.all([
+    // 1. Fetch raw data in parallel with Promise.allSettled
+    const [
+      assessmentsResult,
+      doctorProfilesResult,
+      consultationsResult,
+      paymentsResult,
+      payoutsResult,
+      ledgerResult,
+    ] = await Promise.allSettled([
+      // 1. Assessments
+      Promise.all([
         supabaseAdmin
           .from('health_assessments')
           .select('patient_id', { count: 'exact', head: true }),
@@ -50,67 +59,77 @@ export async function GET(request: Request) {
           .select('patient_id', { count: 'exact', head: true })
           .or('consultation_fee_paid.eq.true,booking_date.not.is.null,membership_tier.not.is.null'),
         supabaseAdmin
-        .from('health_assessments')
-        .select('patient_id, is_eligible, consultation_fee_paid, booking_date, booking_time, membership_tier, created_at')
-        .order('created_at', { ascending: false })
-        .limit(1000)
-      ])
-      totalPatientsCount = totalCount || 0
-      activePatientsCount = activeCount || 0
-      assessments = data || []
-    } catch {}
-
-    try {
-      const [{ count }, { data }] = await Promise.all([
+          .from('health_assessments')
+          .select('patient_id, is_eligible, consultation_fee_paid, booking_date, booking_time, membership_tier, created_at')
+          .order('created_at', { ascending: false })
+          .limit(1000)
+      ]),
+      // 2. Doctor Profiles
+      Promise.all([
         supabaseAdmin
           .from('doctor_profiles')
           .select('id', { count: 'exact', head: true }),
         supabaseAdmin
-        .from('doctor_profiles')
-        .select('id, last_seen_at')
-        .limit(1000)
-      ])
-      totalDoctorsCount = count || 0
-      doctorProfiles = data || []
-    } catch {}
-
-    try {
-      const { data } = await supabaseAdmin
+          .from('doctor_profiles')
+          .select('id, last_seen_at')
+          .limit(1000)
+      ]),
+      // 3. Consultations
+      supabaseAdmin
         .from('doctor_consultations')
         .select('id, patient_id, doctor_id, status, is_completed, booking_date, booking_time, created_at')
         .order('created_at', { ascending: false })
-        .limit(1000)
-      consultations = data || []
-      recentCons = (data || []).slice(0, 12)
-    } catch {}
-
-    try {
-      const { data } = await supabaseAdmin
+        .limit(1000),
+      // 4. Payments
+      supabaseAdmin
         .from('payment_transactions')
         .select('id, amount, status, payment_type, membership_tier, created_at')
         .order('created_at', { ascending: false })
-        .limit(100)
-      payments = data || []
-    } catch {}
-
-    try {
-      const { data } = await supabaseAdmin
+        .limit(100),
+      // 5. Payouts
+      supabaseAdmin
         .from('provider_payouts')
         .select('payout_amount, payout_status')
-        .limit(1000)
-      providerPayouts = data || []
-    } catch {}
-
-    try {
-      const { data } = await supabaseAdmin
+        .limit(1000),
+      // 6. Ledger
+      supabaseAdmin
         .from('wallet_ledger_transactions')
         .select('amount, transaction_type, status, created_at')
         .eq('transaction_type', 'CONSULTATION_CREDIT')
         .eq('status', 'SUCCESS')
         .order('created_at', { ascending: false })
-        .limit(1000)
-      ledger = data || []
-    } catch {}
+        .limit(1000),
+    ])
+
+    if (assessmentsResult.status === 'fulfilled') {
+      const [{ count: totalCount }, { count: activeCount }, { data }] = assessmentsResult.value
+      totalPatientsCount = totalCount || 0
+      activePatientsCount = activeCount || 0
+      assessments = data || []
+    }
+
+    if (doctorProfilesResult.status === 'fulfilled') {
+      const [{ count }, { data }] = doctorProfilesResult.value
+      totalDoctorsCount = count || 0
+      doctorProfiles = data || []
+    }
+
+    if (consultationsResult.status === 'fulfilled') {
+      consultations = consultationsResult.value.data || []
+      recentCons = (consultations || []).slice(0, 12)
+    }
+
+    if (paymentsResult.status === 'fulfilled') {
+      payments = paymentsResult.value.data || []
+    }
+
+    if (payoutsResult.status === 'fulfilled') {
+      providerPayouts = payoutsResult.value.data || []
+    }
+
+    if (ledgerResult.status === 'fulfilled') {
+      ledger = ledgerResult.value.data || []
+    }
 
     // 2. Calculate Stats
     const activePatients = activePatientsCount || assessments.filter((p: any) => p.consultation_fee_paid || p.booking_date || p.membership_tier).length

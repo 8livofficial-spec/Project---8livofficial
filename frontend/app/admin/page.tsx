@@ -736,19 +736,6 @@ function AdminDashboardContent() {
           return;
         }
 
-        // Fast path: If session user metadata already confirms admin role, unblock UI immediately
-        const userRole = (session.user.user_metadata?.role || '').toLowerCase();
-        if (userRole === 'admin') {
-          setAdminUser({
-            id: session.user.id,
-            email: session.user.email,
-            first_name: session.user.user_metadata?.first_name || 'Admin',
-            last_name: session.user.user_metadata?.last_name || 'User',
-            role: 'admin',
-          });
-          setAuthChecking(false);
-          setLoading(false);
-        }
 
         const profileRes = await adminFetch('/api/admin/profile');
         if (!profileRes.ok) {
@@ -1192,8 +1179,7 @@ function AdminDashboardContent() {
     }
     setPrescribeLoading(true);
     try {
-      const API_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://127.0.0.1:8000';
-      const response = await fetch(`${API_URL}/api/prescribe`, {
+      const response = await fetch('/api/prescribe', {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ patient_id: selectedPatient.patient_id, prescription_type: type }),

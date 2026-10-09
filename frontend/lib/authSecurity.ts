@@ -157,13 +157,8 @@ export async function getUserRole(
     .filter(Boolean)
   if (adminBypassEmails.length > 0 && adminBypassEmails.includes(normalizedEmail)) return 'admin'
 
-  // Fast-path 1: Check userMetadata if provided (0ms DB cost)
-  if (userMetadata?.role) {
-    const metaRole = String(userMetadata.role).toLowerCase()
-    if (['pharmacy', 'pharmacy_admin', 'pharmacy_staff'].includes(metaRole)) return 'pharmacy'
-    if (['admin', 'doctor', 'dietitian', 'trainer', 'fitness_coach', 'nutritionist'].includes(metaRole)) return metaRole
-    if (metaRole === 'patient') return 'patient'
-  }
+  // SECURITY NOTE: userMetadata.role is client-writable via supabase.auth.updateUser()
+  // and MUST NEVER be trusted for role authorization or privilege assignment.
 
   // Fast-path 2: Check profiles table (single indexed query)
   try {

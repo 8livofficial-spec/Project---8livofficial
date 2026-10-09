@@ -58,7 +58,7 @@ export const APP_CONFIG = {
   payment: {
     // Mode (production / sandbox)
     mode: process.env.NEXT_PUBLIC_PAYMENT_MODE || 'sandbox',
-    // Allow mock payments in development, block in production
-    allowMock: process.env.NEXT_PUBLIC_MOCK_PAYMENT === 'true' || process.env.NODE_ENV !== 'production'
+    // Allow mock payments ONLY in development and ONLY when explicitly enabled by server env
+    allowMock: process.env.NODE_ENV !== 'production' && process.env.ALLOW_MOCK_PAYMENT === 'true'
   }
 }

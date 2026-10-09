@@ -1,17 +1,40 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseServer';
+import { getAuthenticatedUser } from '@/lib/apiSecurity';
 import { appointmentTypeForRole, labelForRole, normalizeProviderRole } from '@/lib/providerConsultations';
+
+// Sanitize query to avoid PostgREST filter injection
+function sanitizeQueryTarget(target: string): string {
+  if (target.startsWith('https://')) {
+    try {
+      new URL(target);
+      return target;
+    } catch {
+      return '';
+    }
+  }
+  // Only allow alphanumeric, hyphens, and underscores for call IDs and UUIDs
+  return target.replace(/[^a-zA-Z0-9_-]/g, '');
+}
 
 export async function POST(req: Request) {
   try {
-    const { roomUrl, queryId } = await req.json();
+    const auth = await getAuthenticatedUser(req);
+    if (!auth) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { roomUrl, queryId } = await req.json().catch(() => ({}));
 
     if (!roomUrl && !queryId) {
       return NextResponse.json({ error: 'roomUrl or queryId is required' }, { status: 400 });
     }
 
-    // Target search term: prefer provider-independent appointment/call IDs; tolerate legacy URLs during migration.
-    const searchTarget = roomUrl || queryId;
+    const rawTarget = String(roomUrl || queryId || '').trim();
+    const searchTarget = sanitizeQueryTarget(rawTarget);
+    if (!searchTarget) {
+      return NextResponse.json({ error: 'Invalid search identifier' }, { status: 400 });
+    }
 
     // 1. Search in doctor_consultations
     let docQuery = supabaseAdmin
@@ -21,15 +44,24 @@ export async function POST(req: Request) {
     if (searchTarget.startsWith('https://')) {
       docQuery = docQuery.or(`room_url.eq.${searchTarget},meeting_url.eq.${searchTarget}`);
     } else {
-      docQuery = docQuery.or(`id.eq.${searchTarget},call_id.eq.${searchTarget},room_url.eq.${searchTarget},meeting_url.eq.${searchTarget},meeting_room.eq.${searchTarget},room_url.ilike.%${searchTarget}%,meeting_url.ilike.%${searchTarget}%,meeting_room.ilike.%${searchTarget}%`);
+      docQuery = docQuery.or(`id.eq.${searchTarget},call_id.eq.${searchTarget},meeting_room.eq.${searchTarget}`);
     }
 
     const { data: docConsult, error: docErr } = await docQuery.maybeSingle();
-
     if (docErr) throw docErr;
 
     if (docConsult) {
-      // Find patient profile too to make sure it's the right patient
+      // Authorization Check: Must be patient, assigned doctor, or admin
+      const isAuthorized =
+        auth.role === 'admin' ||
+        auth.user.id === docConsult.patient_id ||
+        auth.user.id === docConsult.doctor_id;
+
+      if (!isAuthorized) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+
+      // Find patient profile
       const { data: patientProfile } = await supabaseAdmin
         .from('profiles')
         .select('first_name, last_name')
@@ -60,22 +92,29 @@ export async function POST(req: Request) {
     if (searchTarget.startsWith('https://')) {
       staffQuery = staffQuery.or(`room_url.eq.${searchTarget},meeting_url.eq.${searchTarget}`);
     } else {
-      staffQuery = staffQuery.or(`id.eq.${searchTarget},call_id.eq.${searchTarget},room_url.eq.${searchTarget},meeting_url.eq.${searchTarget},meeting_room.eq.${searchTarget},room_url.ilike.%${searchTarget}%,meeting_url.ilike.%${searchTarget}%,meeting_room.ilike.%${searchTarget}%`);
+      staffQuery = staffQuery.or(`id.eq.${searchTarget},call_id.eq.${searchTarget},meeting_room.eq.${searchTarget}`);
     }
 
     const { data: staffConsult, error: staffErr } = await staffQuery.maybeSingle();
-
     if (staffErr) throw staffErr;
 
     if (staffConsult) {
-      // Fetch staff details from profiles
+      // Authorization Check: Must be patient, assigned staff, or admin
+      const isAuthorized =
+        auth.role === 'admin' ||
+        auth.user.id === staffConsult.patient_id ||
+        auth.user.id === staffConsult.staff_id;
+
+      if (!isAuthorized) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+      }
+
       const { data: staffProfile } = await supabaseAdmin
         .from('profiles')
         .select('first_name, last_name, role')
         .eq('id', staffConsult.staff_id)
         .maybeSingle();
 
-      // Fetch patient details from profiles
       const { data: patientProfile } = await supabaseAdmin
         .from('profiles')
         .select('first_name, last_name')
@@ -107,7 +146,6 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ error: 'Consultation not found' }, { status: 404 });
-
   } catch (err: unknown) {
     console.error('Error in POST /api/patient/consultation-details:', err);
     const message = err instanceof Error ? err.message : 'Internal Server Error';

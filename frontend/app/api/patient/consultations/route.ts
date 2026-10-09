@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { randomUUID } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { EmailService } from '@/lib/emailService'
+import { WhatsAppNotificationService } from '@/lib/whatsapp/whatsappNotificationService'
 import { loadPatientJourneyState, updatePatientJourneyState } from '@/lib/patientJourneyServer'
 import { finalizeConsultationAssignment, reserveDoctorForInitialConsultation } from '@/lib/smartAssignmentEngine'
 import { getAuthenticatedPatient, getIndiaSlotTimestamp, isFutureIndiaSlot } from '@/lib/appointmentAvailability'
@@ -627,12 +628,13 @@ export async function POST(request: Request) {
           supabaseAdmin.auth.admin.getUserById(patientId),
           supabaseAdmin
             .from('profiles')
-            .select('first_name, last_name, display_id')
+            .select('first_name, last_name, display_id, phone_number')
             .eq('id', patientId)
             .maybeSingle()
         ])
 
         const patientEmail = userData?.user?.email
+        const patientPhone = profile?.phone_number || (userData?.user as any)?.phone
         const patientName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ')
           || profile?.display_id
           || patientEmail?.split('@')[0]
@@ -661,6 +663,25 @@ export async function POST(request: Request) {
             bookingId: consultation.id,
             meetingType: 'Video Consultation',
           }).catch(err => console.error('Failed to send appointment confirmation email in background:', err))
+        }
+
+        if (patientPhone) {
+          WhatsAppNotificationService.sendAppointmentConfirmation(patientPhone, {
+            patientName,
+            doctorName: doctor?.full_name || 'Assigned Doctor',
+            date: slot.available_date,
+            time: slot.time_slot,
+            bookingId: consultation.id,
+          }).catch(err => console.warn('[WhatsApp] Appointment confirmation notification notice:', err))
+
+          if (isInitialConsultation && !reusedPayment) {
+            WhatsAppNotificationService.sendPaymentReceipt(patientPhone, {
+              patientName,
+              amount: CONSULTATION_FEE,
+              paymentId: txnId || consultation.id,
+              planOrType: 'Doctor Video Consultation',
+            }).catch(err => console.warn('[WhatsApp] Consultation fee receipt notice:', err))
+          }
         }
       } catch (backgroundErr) {
         console.error('Failed executing background booking tasks:', backgroundErr)

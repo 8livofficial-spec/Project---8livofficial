@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { EmailService } from '@/lib/emailService'
+import { WhatsAppNotificationService } from '@/lib/whatsapp/whatsappNotificationService'
 import { updatePatientJourneyState } from '@/lib/patientJourneyServer'
 import { assignMembershipCareTeam } from '@/lib/smartAssignmentEngine'
 import { assertPatientOrAssignedProvider } from '@/lib/apiSecurity'
@@ -61,30 +62,58 @@ export async function POST(request: Request) {
     // 3. Authorization for app-specific patient payment workflows
     await assertPatientOrAssignedProvider(request, patientId)
 
-    // 4. Idempotency Check (Check if payment was already successfully processed)
+    // 4. Cryptographic Order Binding & Validation
     const existingTxn = await findRazorpayTransaction(String(razorpay_payment_id), String(razorpay_order_id))
-
-    if (existingTxn) {
-      if (existingTxn.status === 'success') {
-        return NextResponse.json({
-          success: true,
-          transaction_id: razorpay_payment_id,
-          already_processed: true,
-          message: 'Payment has already been successfully verified and processed.'
-        })
-      } else {
-        // If txn existed but was not success, we can update it or continue
-        console.log(`Payment transaction ${razorpay_payment_id} exists with status: ${existingTxn.status}. Proceeding to finalize success.`)
-      }
+    if (!existingTxn) {
+      return NextResponse.json({ error: 'Order not found in transaction registry. Verification rejected.' }, { status: 400 })
     }
 
-    const planId = body?.planId || (metadata as any)?.planId || undefined
-    const rawDuration = Number(body?.durationMonths || (metadata as any)?.durationMonths || (membershipTier ? parseInt(String(membershipTier)) : 1) || 1)
+    // Security Binding 1: Prevent IDOR (order must belong to this patient)
+    if (existingTxn.patient_id && existingTxn.patient_id !== patientId) {
+      return NextResponse.json({ error: 'Unauthorized: Order does not belong to this patient.' }, { status: 403 })
+    }
+
+    // Security Binding 2: Prevent Payment Type Substitution (e.g. ₹1 standard order activating a membership)
+    if (existingTxn.payment_type && existingTxn.payment_type !== paymentType) {
+      return NextResponse.json({
+        error: `Invalid payment type. Order was created for ${existingTxn.payment_type}, cannot verify as ${paymentType}.`
+      }, { status: 400 })
+    }
+
+    if (existingTxn.status === 'success') {
+      return NextResponse.json({
+        success: true,
+        transaction_id: razorpay_payment_id,
+        already_processed: true,
+        message: 'Payment has already been successfully verified and processed.'
+      })
+    }
+
+    const planId = body?.planId || (metadata as any)?.planId || (existingTxn.metadata as any)?.planId || undefined
+    const rawDuration = Number(body?.durationMonths || (metadata as any)?.durationMonths || (existingTxn.metadata as any)?.durationMonths || (membershipTier ? parseInt(String(membershipTier)) : 1) || 1)
     const durationMonths = rawDuration > 0 ? rawDuration : 1
     
-    // Resolve authoritative plan from database
+    // Resolve authoritative plan and price from database
     const pricing = await getAuthoritativeSubscriptionPricing(planId || durationMonths)
     const programName = pricing.programName
+
+    // Security Binding 3: Verify paid amount matches authoritative pricing
+    let expectedMinAmount = 0
+    if (paymentType === 'consultation') {
+      expectedMinAmount = 499
+    } else if (paymentType === 'membership') {
+      expectedMinAmount = pricing.finalPrice
+    } else if (paymentType === 'combined') {
+      const subtotal = pricing.finalPrice + 499
+      expectedMinAmount = subtotal + Math.round(subtotal * 0.18)
+    }
+
+    const orderRecordedAmount = Number(existingTxn.amount || 0)
+    if (expectedMinAmount > 0 && orderRecordedAmount < expectedMinAmount) {
+      return NextResponse.json({
+        error: `Price tampering detected. Order amount (INR ${orderRecordedAmount}) is less than required plan price (INR ${expectedMinAmount}).`,
+      }, { status: 400 })
+    }
 
     // 5. Atomic Update based on Payment Type
     if (paymentType === 'consultation') {
@@ -219,12 +248,13 @@ export async function POST(request: Request) {
         supabaseAdmin.auth.admin.getUserById(patientId),
         supabaseAdmin
           .from('profiles')
-          .select('first_name, last_name, display_id')
+          .select('first_name, last_name, display_id, phone_number')
           .eq('id', patientId)
           .maybeSingle(),
       ])
 
       const patientEmail = userData?.user?.email
+      const patientPhone = profile?.phone_number || (userData?.user as any)?.phone
       const patientName = [profile?.first_name, profile?.last_name].filter(Boolean).join(' ')
         || profile?.display_id
         || patientEmail?.split('@')[0]
@@ -253,8 +283,17 @@ export async function POST(request: Request) {
           })
         }
       }
-    } catch (emailError) {
-      console.error('Failed to send payment email notifications:', emailError)
+
+      if (patientPhone) {
+        WhatsAppNotificationService.sendPaymentReceipt(patientPhone, {
+          patientName,
+          amount: amount || 0,
+          paymentId: razorpay_payment_id,
+          planOrType: programName || (paymentType === 'membership' ? '8LIV Membership Program' : '8LIV Healthcare Services'),
+        }).catch(waErr => console.warn('[WhatsApp] Payment receipt dispatch notice:', waErr))
+      }
+    } catch (notificationError) {
+      console.error('Failed to send payment notifications:', notificationError)
     }
 
     // 10. Auto Smart Care Team Assignment for Membership

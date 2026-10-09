@@ -5,6 +5,7 @@ import {
   Calendar, Stethoscope, Apple, Dumbbell, AlertTriangle 
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import { authedFetch } from '@/lib/apiClient';
 import SessionLogDrawer from './SessionLogDrawer';
 
 interface SessionMonitorProps {
@@ -28,10 +29,9 @@ export default function SessionMonitor({ memberId }: SessionMonitorProps) {
 
   const fetchData = async () => {
     try {
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
       const [statsRes, sessRes] = await Promise.all([
-        fetch(`${backendUrl}/api/admin/members/${memberId}/sessions/stats`),
-        fetch(`${backendUrl}/api/admin/members/${memberId}/sessions`)
+        authedFetch(`/api/admin/members/${memberId}/sessions/stats`),
+        authedFetch(`/api/admin/members/${memberId}/sessions`)
       ]);
       
       if (statsRes.ok) setStats(await statsRes.json());
@@ -48,8 +48,7 @@ export default function SessionMonitor({ memberId }: SessionMonitorProps) {
     const newDate = prompt("Enter new datetime (YYYY-MM-DDTHH:MM:SS):");
     if (!newDate) return;
     
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-    await fetch(`${backendUrl}/api/admin/sessions/${sessionId}/reschedule`, {
+    await authedFetch(`/api/admin/sessions/${sessionId}/reschedule`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ new_datetime: newDate })
@@ -59,8 +58,7 @@ export default function SessionMonitor({ memberId }: SessionMonitorProps) {
 
   const handleCancel = async (sessionId: string) => {
     if (!confirm("Are you sure you want to cancel this session?")) return;
-    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
-    await fetch(`${backendUrl}/api/admin/sessions/${sessionId}/cancel`, {
+    await authedFetch(`/api/admin/sessions/${sessionId}/cancel`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: "Admin Cancelled" })

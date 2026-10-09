@@ -294,12 +294,13 @@ export default function UnifiedAssessmentFunnel({
 
       if (error) throw error
 
-      // Get public URL (or just save path if bucket is private)
-      const { data: { publicUrl } } = supabase.storage
+      // Generate a signed URL for secure, time-limited clinical review
+      const { data: signedData, error: signError } = await supabase.storage
         .from('patient-documents')
-        .getPublicUrl(filePath)
+        .createSignedUrl(filePath, 60 * 60 * 24 * 7)
 
-      setFormData(prev => ({ ...prev, lab_report_url: publicUrl }))
+      const secureUrl = (!signError && signedData?.signedUrl) ? signedData.signedUrl : filePath
+      setFormData(prev => ({ ...prev, lab_report_url: secureUrl }))
     } catch (err: any) {
       console.error('Upload error:', err)
       setUploadError(err.message || 'Failed to upload file.')

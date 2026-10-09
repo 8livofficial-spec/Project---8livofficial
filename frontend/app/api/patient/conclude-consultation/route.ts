@@ -2,6 +2,18 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseServer';
 import { getAuthenticatedUser } from '@/lib/apiSecurity';
 
+function sanitizeMatchTarget(target: string): string {
+  if (target.startsWith('https://')) {
+    try {
+      new URL(target);
+      return target;
+    } catch {
+      return '';
+    }
+  }
+  return target.replace(/[^a-zA-Z0-9_-]/g, '');
+}
+
 export async function POST(req: Request) {
   try {
     const auth = await getAuthenticatedUser(req);
@@ -28,7 +40,9 @@ export async function POST(req: Request) {
       .eq('patient_id', patientId);
 
     // Now look for active consultation and update its status
-    const matchTarget = appointmentId || roomUrl;
+    const rawTarget = appointmentId || roomUrl;
+    const matchTarget = rawTarget ? sanitizeMatchTarget(String(rawTarget)) : '';
+
     if (matchTarget) {
       // 1. Search in doctor_consultations
       let docQuery = supabaseAdmin
@@ -40,7 +54,7 @@ export async function POST(req: Request) {
       if (matchTarget.startsWith('https://')) {
         docQuery = docQuery.or(`room_url.eq.${matchTarget},meeting_url.eq.${matchTarget}`);
       } else {
-        docQuery = docQuery.or(`id.eq.${matchTarget},call_id.eq.${matchTarget},room_url.eq.${matchTarget},meeting_url.eq.${matchTarget},meeting_room.eq.${matchTarget},room_url.ilike.%${matchTarget}%,meeting_url.ilike.%${matchTarget}%,meeting_room.ilike.%${matchTarget}%`);
+        docQuery = docQuery.or(`id.eq.${matchTarget},call_id.eq.${matchTarget},meeting_room.eq.${matchTarget}`);
       }
 
       const { data: docConsult } = await docQuery.maybeSingle();
@@ -71,7 +85,7 @@ export async function POST(req: Request) {
       if (matchTarget.startsWith('https://')) {
         staffQuery = staffQuery.or(`room_url.eq.${matchTarget},meeting_url.eq.${matchTarget}`);
       } else {
-        staffQuery = staffQuery.or(`id.eq.${matchTarget},call_id.eq.${matchTarget},room_url.eq.${matchTarget},meeting_url.eq.${matchTarget},meeting_room.eq.${matchTarget},room_url.ilike.%${matchTarget}%,meeting_url.ilike.%${matchTarget}%,meeting_room.ilike.%${matchTarget}%`);
+        staffQuery = staffQuery.or(`id.eq.${matchTarget},call_id.eq.${matchTarget},meeting_room.eq.${matchTarget}`);
       }
 
       const { data: staffConsult } = await staffQuery.maybeSingle();
@@ -83,9 +97,8 @@ export async function POST(req: Request) {
           .from('staff_consultations')
           .update({
             status: nextStatus,
-            meeting_status: nextStatus === 'completed' ? 'COMPLETED' : 'WAITING',
-            is_completed: nextStatus === 'completed',
-            completed_at: nextStatus === 'completed' ? new Date().toISOString() : null,
+            meeting_status: 'COMPLETED',
+            call_ended_at: new Date().toISOString(),
             updated_at: new Date().toISOString()
           })
           .eq('id', staffConsult.id);
@@ -93,7 +106,6 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json({ success: true });
-
   } catch (err: unknown) {
     console.error('Error in POST /api/patient/conclude-consultation:', err);
     const message = err instanceof Error ? err.message : 'Internal Server Error';

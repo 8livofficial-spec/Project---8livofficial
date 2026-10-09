@@ -60,13 +60,27 @@ export function proxy(request: NextRequest) {
       return withSeoPrivacyHeaders(NextResponse.next(), pathname);
     }
 
-    // Get the role from the cookie we set during login
+    // 1. Verify existence of active Supabase auth session cookie
     const cookieHeader = request.headers.get('cookie') || '';
+    const hasAuthCookie = /sb-[a-z0-9_-]+-auth-token|sb-access-token|supabase-auth-token/i.test(cookieHeader);
+
+    // If unauthenticated, redirect directly to appropriate login surface
+    if (!hasAuthCookie) {
+      const redirectPath = pathname.startsWith('/doctor')
+        ? '/?role=doctor'
+        : pathname.startsWith('/pharmacy')
+        ? '/login?role=pharmacy'
+        : '/';
+      const loginUrl = new URL(redirectPath, request.url);
+      return withSeoPrivacyHeaders(NextResponse.redirect(loginUrl), pathname);
+    }
+
+    // 2. Evaluate role from verified session cookie
     const roleMatch = cookieHeader.match(/user_role=([^;]+)/);
     const userRole = roleMatch ? decodeURIComponent(roleMatch[1]) : null;
     const normalizedRole = userRole?.toUpperCase();
 
-    // If no role cookie exists, redirect to login
+    // If authenticated session exists but role cookie is not set yet, redirect to portal selector
     if (!userRole) {
       const redirectPath = pathname.startsWith('/doctor')
         ? '/?role=doctor'

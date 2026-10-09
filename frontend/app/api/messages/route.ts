@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { getAuthenticatedUser } from '@/lib/apiSecurity'
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 // GET: Fetch messages between two users
 export async function GET(request: Request) {
   try {
@@ -9,8 +11,8 @@ export async function GET(request: Request) {
     const userId = searchParams.get('userId')
     const contactId = searchParams.get('contactId')
 
-    if (!userId || !contactId) {
-      return NextResponse.json({ error: 'Missing userId or contactId' }, { status: 400 })
+    if (!userId || !contactId || !UUID_REGEX.test(userId) || !UUID_REGEX.test(contactId)) {
+      return NextResponse.json({ error: 'Valid UUID userId and contactId are required' }, { status: 400 })
     }
 
     const authUser = await getAuthenticatedUser(request)
@@ -45,8 +47,8 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { senderId, receiverId, messageText } = body
 
-    if (!senderId || !receiverId || !messageText) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 })
+    if (!senderId || !receiverId || !messageText || !UUID_REGEX.test(senderId) || !UUID_REGEX.test(receiverId)) {
+      return NextResponse.json({ error: 'Missing or invalid required fields (senderId, receiverId, messageText)' }, { status: 400 })
     }
 
     const authUser = await getAuthenticatedUser(request)
@@ -63,7 +65,7 @@ export async function POST(request: Request) {
       .insert({
         sender_id: senderId,
         receiver_id: receiverId,
-        message_text: messageText,
+        message_text: String(messageText).slice(0, 5000),
         is_read: false
       })
       .select()

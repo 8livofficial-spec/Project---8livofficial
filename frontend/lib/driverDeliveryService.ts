@@ -2,6 +2,7 @@ import crypto from 'crypto'
 import { supabaseAdmin } from './supabaseServer'
 import { emailService } from './emailService'
 import { audit } from './prescriptionService'
+import { WhatsAppNotificationService } from './whatsapp/whatsappNotificationService'
 
 export type InHouseDeliveryMeta = {
   delivery_mode?: 'IN_HOUSE' | 'COURIER'
@@ -117,6 +118,8 @@ export async function initiatePickupAndDispatch(params: {
   let patientEmail = ''
   let patientName = order.delivery_address_snapshot?.recipient_name || 'Valued Patient'
 
+  let patientPhone = order.patient_phone_snapshot || ''
+
   if (patientId) {
     // Try to get auth user email
     const { data: authUser } = await supabaseAdmin.auth.admin.getUserById(patientId)
@@ -132,6 +135,7 @@ export async function initiatePickupAndDispatch(params: {
 
     if (profile) {
       if (profile.email && !patientEmail) patientEmail = profile.email
+      if (profile.phone_number && !patientPhone) patientPhone = profile.phone_number
       if (profile.first_name || profile.last_name) {
         patientName = [profile.first_name, profile.last_name].filter(Boolean).join(' ')
       }
@@ -226,6 +230,18 @@ export async function initiatePickupAndDispatch(params: {
     }
   }
 
+  // 7. Dispatch patient WhatsApp notification with OTP (non-blocking)
+  if (patientPhone) {
+    WhatsAppNotificationService.sendDeliveryOutForDeliveryOtp(patientPhone, {
+      patientName,
+      orderReference: orderRef,
+      otpCode,
+      driverName: effectiveDriverName,
+      driverPhone: effectiveDriverPhone,
+      deliverySlot: updatedMeta.delivery_slot || undefined,
+    }).catch((waErr) => console.warn('[driverDeliveryService] WhatsApp notification notice:', waErr.message))
+  }
+
   return {
     success: true,
     orderId,
@@ -270,11 +286,12 @@ export async function resendDeliveryOtp(orderId: string) {
     throw new Error('Patient email not found for this order.')
   }
 
-  // Re-use current OTP if still valid, or generate new
+  // Re-use current OTP if still valid and not locked out, or generate new
   let otp = meta.delivery_otp
-  if (!otp) {
+  if (!otp || Number((meta as any).failed_attempts || 0) >= 5) {
     otp = generateDeliveryOtp()
     meta.delivery_otp = otp
+    ;(meta as any).failed_attempts = 0
     meta.otp_generated_at = new Date().toISOString()
     meta.otp_expires_at = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString()
     await supabaseAdmin
@@ -364,12 +381,16 @@ export async function verifyOtpAndCompleteDelivery(params: {
     return { success: true, alreadyDelivered: true, message: 'This package has already been delivered.' }
   }
 
-  const meta = parseDeliveryMeta(order.internal_notes)
-  const storedOtp = meta.delivery_otp
+  if (order.status !== 'DISPATCHED' && order.status !== 'OUT_FOR_DELIVERY') {
+    throw new Error('Order is not currently dispatched for delivery.')
+  }
 
-  // Verify OTP
-  if (!storedOtp || storedOtp.trim() !== enteredOtp.trim()) {
-    throw new Error('Incorrect OTP. Please check the 6-digit code received by the patient in their email or app.')
+  const meta = parseDeliveryMeta(order.internal_notes)
+
+  // Rate-limiting / brute-force protection: Max 5 failed attempts allowed
+  const failedAttempts = Number((meta as any).failed_attempts || 0)
+  if (failedAttempts >= 5) {
+    throw new Error('Too many failed OTP attempts. Maximum 5 attempts reached. Please request a new OTP.')
   }
 
   // Check expiry if set
@@ -380,8 +401,24 @@ export async function verifyOtpAndCompleteDelivery(params: {
     }
   }
 
+  const storedOtp = meta.delivery_otp
+
+  // Verify OTP
+  if (!storedOtp || storedOtp.trim() !== enteredOtp.trim()) {
+    const newFailed = failedAttempts + 1
+    ;(meta as any).failed_attempts = newFailed
+    await supabaseAdmin
+      .from('pharmacy_orders')
+      .update({ internal_notes: JSON.stringify(meta) })
+      .eq('id', orderId)
+
+    const remaining = Math.max(0, 5 - newFailed)
+    throw new Error(`Incorrect OTP. ${remaining} attempt(s) remaining before lockout.`)
+  }
+
   const now = new Date().toISOString()
   meta.otp_verified_at = now
+  ;(meta as any).failed_attempts = 0
   meta.delivered_by = meta.driver_name || '8LIV In-House Rider'
   if (driverNotes) meta.notes = driverNotes
 
