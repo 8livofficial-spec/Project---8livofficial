@@ -114,15 +114,16 @@ export class WhatsAppClient {
    * Core method to post a payload to Meta WhatsApp Cloud API
    */
   public static async postMessagePayload(payload: Record<string, unknown>): Promise<WhatsAppSendResult> {
-    if (!WHATSAPP_CONFIG.isConfigured()) {
-      if (WHATSAPP_CONFIG.isMockEnabled()) {
-        console.log('[WhatsAppClient MOCK] Sending simulated message payload:', payload)
-        return {
-          success: true,
-          messageId: `mock_wamid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-          status: 'SENT',
-        }
+    if (WHATSAPP_CONFIG.isMockEnabled()) {
+      console.log('[WhatsAppClient MOCK] Simulated dispatch to:', payload.to, 'Payload:', JSON.stringify(payload))
+      return {
+        success: true,
+        messageId: `mock_wamid_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        status: 'SENT',
       }
+    }
+
+    if (!WHATSAPP_CONFIG.isConfigured()) {
       return {
         success: false,
         status: 'FAILED',

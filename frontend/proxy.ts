@@ -80,8 +80,14 @@ export function proxy(request: NextRequest) {
     const userRole = roleMatch ? decodeURIComponent(roleMatch[1]) : null;
     const normalizedRole = userRole?.toUpperCase();
 
-    // If authenticated session exists but role cookie is not set yet, redirect to portal selector
+    // If authenticated session exists but role cookie is not set yet:
     if (!userRole) {
+      if (pathname.startsWith('/patient')) {
+        // Authenticated user accessing patient route — allow through and set default patient role cookie
+        const response = NextResponse.next();
+        response.cookies.set('user_role', 'patient', { path: '/', maxAge: 86400, sameSite: 'lax' });
+        return withSeoPrivacyHeaders(response, pathname);
+      }
       const redirectPath = pathname.startsWith('/doctor')
         ? '/?role=doctor'
         : pathname.startsWith('/pharmacy')

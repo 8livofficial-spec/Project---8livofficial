@@ -135,6 +135,10 @@ export class WhatsAppOtpService {
     const expiresAt = new Date(now + WHATSAPP_CONFIG.otpTtlSeconds * 1000)
     const resendCooldownUntil = new Date(now + WHATSAPP_CONFIG.resendCooldownSeconds * 1000)
 
+    if (WHATSAPP_CONFIG.isMockEnabled() || process.env.NODE_ENV !== 'production') {
+      console.log(`[WhatsApp OTP Dev] Code for ${phoneE164} (${purpose}): ${rawOtp}`)
+    }
+
     // 3. Persist challenge to database
     let challengeId: string | undefined
     try {
@@ -157,7 +161,10 @@ export class WhatsAppOtpService {
         .select('id')
         .single()
 
-      if (!insertErr && inserted) {
+      if (insertErr) {
+        throw insertErr
+      }
+      if (inserted) {
         challengeId = inserted.id
       }
     } catch {

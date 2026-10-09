@@ -102,66 +102,27 @@ export default function UnifiedLogin() {
         }
 
         if (session?.user) {
-          if (requestedRole === 'pharmacy') {
-            const userMetaRole = session.user.user_metadata?.role?.toUpperCase()
-            let isPharm = ['PHARMACY', 'PHARMACY_ADMIN', 'PHARMACY_STAFF'].includes(userMetaRole)
-            if (!isPharm) {
-              const { data: prof } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', session.user.id)
-                .maybeSingle()
-              if (prof?.role === 'pharmacy') isPharm = true
-            }
-            if (!isPharm) {
-              const { data: pharmUser } = await supabase
-                .from('partner_pharmacy_users')
-                .select('id')
-                .eq('user_id', session.user.id)
-                .eq('status', 'ACTIVE')
-                .maybeSingle()
-              if (pharmUser) isPharm = true
-            }
-
-            if (!isPharm) {
-              await supabase.auth.signOut()
-              document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-              setCheckingAuth(false)
-              return
-            }
-          }
-
           let role = ''
-          const userMetaRole = session.user.user_metadata?.role?.toLowerCase()
-          if (userMetaRole === 'pharmacy' || userMetaRole === 'pharmacy_admin' || userMetaRole === 'pharmacy_staff') {
-            role = 'pharmacy'
-          } else {
-            const { data: pharmUser } = await supabase
-              .from('partner_pharmacy_users')
-              .select('id')
-              .eq('user_id', session.user.id)
-              .eq('status', 'ACTIVE')
-              .maybeSingle()
-            if (pharmUser) {
-              role = 'pharmacy'
-            }
-          }
-
-          if (!role) {
-            try {
-              const roleRes = await fetch('/api/auth/role', {
-                headers: { Authorization: `Bearer ${session.access_token}` },
-              })
-              if (roleRes.ok) {
-                const roleData = await roleRes.json()
-                if (roleData?.role) {
-                  role = roleData.role
-                }
+          try {
+            const roleRes = await fetch('/api/auth/role', {
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            })
+            if (roleRes.ok) {
+              const roleData = await roleRes.json()
+              if (roleData?.role) {
+                role = roleData.role
               }
-            } catch (err) {
-              console.warn('[Login] Error fetching authoritative role:', err)
             }
-            if (!role) role = 'patient'
+          } catch (err) {
+            console.warn('[Login] Error fetching authoritative role:', err)
+          }
+          if (!role) role = 'patient'
+
+          if (requestedRole === 'pharmacy' && role !== 'pharmacy') {
+            await supabase.auth.signOut()
+            document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
+            setCheckingAuth(false)
+            return
           }
 
           document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
