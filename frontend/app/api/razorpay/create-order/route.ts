@@ -9,23 +9,26 @@ import { buildRazorpayOrderMetadata, getRazorpayClient, getRazorpayKeyId } from 
 
 export async function POST(request: Request) {
   try {
-    const patient = await getAuthenticatedPatient(request)
-    if ('error' in patient) {
-      return NextResponse.json({ error: patient.error }, { status: patient.status })
-    }
-
     const ip = getClientIp(request)
-    const rate = checkRateLimit(`razorpay_order:${ip}:${patient.user.id}`, APP_CONFIG.rateLimits.booking)
-    if (!rate.allowed) return rateLimitResponse(rate.retryAfter || 60, rate.message)
-
-    const body = await request.json()
+    const body = await request.json().catch(() => ({}))
     const paymentType = body?.paymentType ? String(body.paymentType) : 'standard'
     const currency = String(body?.currency || 'INR').toUpperCase()
     const requestedReceipt = body?.receipt ? String(body.receipt).trim() : ''
     const receipt = requestedReceipt || `rcpt_${Date.now().toString().slice(-8)}_${Math.random().toString(36).slice(2, 6)}`
     const keyId = getRazorpayKeyId()
 
-    if (paymentType === 'consultation') {
+    const patient = await getAuthenticatedPatient(request)
+    const isPatientAuth = !('error' in patient) && Boolean(patient?.user?.id)
+
+    if (!isPatientAuth && (paymentType === 'consultation' || paymentType === 'membership' || paymentType === 'combined')) {
+      return NextResponse.json({ error: 'Unauthorized. Please sign in to continue.' }, { status: 401 })
+    }
+
+    const rateKey = isPatientAuth ? `razorpay_order:${ip}:${patient.user.id}` : `razorpay_order:${ip}`
+    const rate = checkRateLimit(rateKey, APP_CONFIG.rateLimits.booking)
+    if (!rate.allowed) return rateLimitResponse(rate.retryAfter || 60, rate.message)
+
+    if (paymentType === 'consultation' && isPatientAuth) {
       const membership = await getMembershipValidity(patient.user.id)
       if (membership.active) {
         return NextResponse.json({
@@ -63,7 +66,7 @@ export async function POST(request: Request) {
           alreadyPaid: true,
         }, { status: 409 })
       }
-    } else if (paymentType === 'membership' || paymentType === 'combined') {
+    } else if ((paymentType === 'membership' || paymentType === 'combined') && isPatientAuth) {
       const membership = await getMembershipValidity(patient.user.id)
       if (membership.active && membership.expiresAt) {
         const daysRemaining = Math.ceil((new Date(membership.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
@@ -110,7 +113,7 @@ export async function POST(request: Request) {
         currency,
         receipt,
         notes: {
-          patientId: patient.user.id,
+          patientId: isPatientAuth ? patient.user.id : 'guest',
           paymentType,
           planId: selectedPricing?.planId || planId || '',
           durationMonths: selectedPricing?.durationMonths || rawDuration || 1,
@@ -125,24 +128,26 @@ export async function POST(request: Request) {
         durationMonths: selectedPricing?.durationMonths || rawDuration || 1,
       })
 
-      const { error: pendingTxnError } = await supabaseAdmin
-        .from('payment_transactions')
-        .upsert({
-          patient_id: patient.user.id,
-          amount: Number(order.amount || amountInPaise) / 100,
-          currency: order.currency || currency,
-          payment_method: 'razorpay',
-          payment_provider: 'razorpay',
-          transaction_id: order.id,
-          status: 'pending',
-          membership_tier: selectedPricing?.programName || null,
-          payment_type: paymentType,
-          metadata: pendingMetadata,
-        }, { onConflict: 'transaction_id' })
+      if (isPatientAuth) {
+        const { error: pendingTxnError } = await supabaseAdmin
+          .from('payment_transactions')
+          .upsert({
+            patient_id: patient.user.id,
+            amount: Number(order.amount || amountInPaise) / 100,
+            currency: order.currency || currency,
+            payment_method: 'razorpay',
+            payment_provider: 'razorpay',
+            transaction_id: order.id,
+            status: 'pending',
+            membership_tier: selectedPricing?.programName || null,
+            payment_type: paymentType,
+            metadata: pendingMetadata,
+          }, { onConflict: 'transaction_id' })
 
-      if (pendingTxnError) {
-        console.error('[Razorpay] Failed to record pending order:', pendingTxnError.message)
-        return NextResponse.json({ error: 'Failed to initialize payment tracking.' }, { status: 500 })
+        if (pendingTxnError) {
+          console.error('[Razorpay] Failed to record pending order:', pendingTxnError.message)
+          return NextResponse.json({ error: 'Failed to initialize payment tracking.' }, { status: 500 })
+        }
       }
 
       return NextResponse.json({
@@ -163,8 +168,8 @@ export async function POST(request: Request) {
         error: isAuthError
           ? 'Payment gateway authentication failed. Please verify Razorpay API keys in production environment settings.'
           : (razorpayErr?.error?.description || razorpayErr?.message || 'Failed to create Razorpay order.'),
-        code: 'PAYMENT_GATEWAY_ERROR',
-      }, { status: 502 })
+        code: isAuthError ? 'AUTH_FAILED' : 'PAYMENT_GATEWAY_ERROR',
+      }, { status: isAuthError ? 401 : 500 })
     }
   } catch (err: any) {
     console.error('Error creating Razorpay order:', err)

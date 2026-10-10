@@ -28,21 +28,25 @@ export async function POST(request: Request) {
       razorpay_signature,
     } = body
 
-    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+    const orderId = String(razorpay_order_id || body?.order_id || '')
+    const paymentId = String(razorpay_payment_id || body?.payment_id || '')
+    const signature = String(razorpay_signature || body?.signature || '')
+
+    if (!orderId || !paymentId || !signature) {
       return NextResponse.json({ error: 'Missing required payment details' }, { status: 400 })
     }
 
     // 1. Rate Limiting
-    const rate = checkRateLimit(`payment_verify:${ip}:${patientId || razorpay_order_id}`, APP_CONFIG.rateLimits.paymentVerify)
+    const rate = checkRateLimit(`payment_verify:${ip}:${patientId || orderId}`, APP_CONFIG.rateLimits.paymentVerify)
     if (!rate.allowed) {
       return rateLimitResponse(rate.retryAfter || 60, rate.message)
     }
 
     // 2. Signature Verification
     if (!verifyRazorpayPaymentSignature({
-      orderId: String(razorpay_order_id),
-      paymentId: String(razorpay_payment_id),
-      signature: String(razorpay_signature),
+      orderId: String(orderId),
+      paymentId: String(paymentId),
+      signature: String(signature),
     })) {
       return NextResponse.json({ error: 'Invalid payment signature. Verification failed.' }, { status: 400 })
     }
@@ -50,8 +54,9 @@ export async function POST(request: Request) {
     if (!patientId && !paymentType) {
       return NextResponse.json({
         success: true,
-        transaction_id: razorpay_payment_id,
-        order_id: razorpay_order_id,
+        transaction_id: paymentId,
+        order_id: orderId,
+        message: 'Payment verified successfully',
       })
     }
 
