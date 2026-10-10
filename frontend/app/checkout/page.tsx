@@ -1,10 +1,11 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { ShieldCheck, CheckCircle2, ArrowLeft, RefreshCw, CreditCard } from 'lucide-react'
+import { ShieldCheck, CheckCircle2, ArrowLeft, CreditCard } from 'lucide-react'
 import { RazorpayCheckoutButton } from '@/components/payments/RazorpayCheckoutButton'
 
+export default function CheckoutPage() {
   const [amount, setAmount] = useState<number>(499)
   const [customerName, setCustomerName] = useState<string>('')
   const [customerEmail, setCustomerEmail] = useState<string>('')
@@ -21,7 +22,7 @@ import { RazorpayCheckoutButton } from '@/components/payments/RazorpayCheckoutBu
     message: 'Ready for checkout',
   })
 
-  React.useEffect(() => {
+  useEffect(() => {
     const key = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || ''
     setIsTestMode(key.startsWith('rzp_test_') || !key)
 
