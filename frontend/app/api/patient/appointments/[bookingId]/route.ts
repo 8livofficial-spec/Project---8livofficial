@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import { getMembershipValidity } from '@/lib/membershipServer'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { createStreamMeeting } from '@/services/video/meeting.service'
+import { invalidateDoctorAvailabilityCache } from '@/lib/patientAppointmentBooking'
+import { invalidateSlotsCache } from '@/lib/appointmentAvailability'
+import { invalidatePatientApiDashboardCache } from '@/lib/patientDashboardCache'
 
 type RouteContext = {
   params: Promise<{ bookingId: string }>
@@ -330,6 +333,9 @@ export async function PATCH(request: Request, context: RouteContext) {
         .eq('provider_role', 'doctor')
         .eq('available_date', consultation.booking_date)
         .eq('start_time', consultation.booking_time)
+      invalidateDoctorAvailabilityCache()
+      invalidateSlotsCache()
+      invalidatePatientApiDashboardCache(patientId)
     }
 
     await supabaseAdmin

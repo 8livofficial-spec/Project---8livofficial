@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 import { getMembershipValidity } from '@/lib/membershipServer'
 import { getAssignedProviderForRole, INITIAL_DOCTOR_CONSULTATION, DOCTOR_FOLLOW_UP, normalizeAppointmentType } from '@/lib/providerConsultations'
 import { isFutureIndiaSlot, getIndiaTodayDate, invalidateSlotsCache } from '@/lib/appointmentAvailability'
+import { invalidatePatientApiDashboardCache } from '@/lib/patientDashboardCache'
 import { createStreamMeeting } from '@/services/video/meeting.service'
 import { APP_CONFIG } from '@/lib/appConfig'
 import { recordCycleConsultationUsage } from '@/lib/treatmentCycleService'
@@ -172,75 +173,141 @@ function validateBookingEligibility(context: PatientBookingContext, appointmentT
 }
 
 const doctorAvailabilityCache = new Map<string, { data: any; expiresAt: number }>()
+let activeDoctorCache: { ids: string[]; expiresAt: number } | null = null
 
 export function invalidateDoctorAvailabilityCache() {
   doctorAvailabilityCache.clear()
+  activeDoctorCache = null
+}
+
+async function getCachedActiveDoctorIds(): Promise<string[]> {
+  const now = Date.now()
+  if (activeDoctorCache && activeDoctorCache.expiresAt > now) {
+    return activeDoctorCache.ids
+  }
+  const ids = Array.from(await loadActiveDoctors())
+  activeDoctorCache = { ids, expiresAt: now + 60 * 1000 }
+  return ids
 }
 
 export async function loadPatientDoctorAvailability(params: {
   patientId: string
-  appointmentType: AppointmentType
+  appointmentType?: AppointmentType | null
   date?: string | null
+  force?: boolean
 }) {
-  const cacheKey = `${params.patientId}:${params.appointmentType}:${params.date || 'all'}`
   const now = Date.now()
-  const cached = doctorAvailabilityCache.get(cacheKey)
-  if (cached && cached.expiresAt > now) {
-    return cached.data
+
+  // Fast-path: Check patient-isolated cache first if appointmentType is already specified and not forced
+  if (!params.force && params.appointmentType) {
+    const fastKey = `${params.patientId}:${params.appointmentType}:${params.date || 'all'}`
+    const fastCached = doctorAvailabilityCache.get(fastKey)
+    if (fastCached && fastCached.expiresAt > now) {
+      return fastCached.data
+    }
   }
 
   const context = await getPatientBookingContext(params.patientId)
-  const eligibilityError = validateBookingEligibility(context, params.appointmentType)
-  if (eligibilityError) return { error: eligibilityError, status: 403 as const, dates: [], slots: [] }
+  const resolvedAppointmentType = params.appointmentType || expectedDoctorAppointmentType(context)
 
-  const providerIds = (params.appointmentType === DOCTOR_FOLLOW_UP || context.primaryDoctorId)
-    ? [context.primaryDoctorId!]
-    : Array.from(await loadActiveDoctors())
-
-  if (!providerIds.length) return { dates: [], slots: [] }
-
-  let query = supabaseAdmin
-    .from('provider_availability')
-    .select('id, provider_id, provider_role, available_date, start_time, end_time, slot_duration, source')
-    .eq('provider_role', 'doctor')
-    .eq('status', 'AVAILABLE')
-    .eq('is_available', true)
-    .in('provider_id', providerIds)
-    .order('available_date', { ascending: true })
-    .order('start_time', { ascending: true })
-    .limit(1000)
-
-  if (params.date) {
-    query = query.eq('available_date', params.date)
-  } else {
-    query = query.gte('available_date', getIndiaTodayDate())
+  const cacheKey = `${params.patientId}:${resolvedAppointmentType}:${params.date || 'all'}`
+  if (!params.force) {
+    const cached = doctorAvailabilityCache.get(cacheKey)
+    if (cached && cached.expiresAt > now) {
+      return cached.data
+    }
   }
 
-  const { data, error } = await query
-  if (error) throw error
+  const eligibilityError = validateBookingEligibility(context, resolvedAppointmentType)
+  if (eligibilityError) return { error: eligibilityError, status: 403 as const, dates: [], slots: [], appointmentType: resolvedAppointmentType }
 
-  const activeDoctors = params.appointmentType === DOCTOR_FOLLOW_UP
-    ? new Set(providerIds)
-    : await loadActiveDoctors(Array.from(new Set((data || []).map(row => row.provider_id).filter(Boolean))))
+  const assignedDoctorId = (resolvedAppointmentType === DOCTOR_FOLLOW_UP || context.primaryDoctorId)
+    ? context.primaryDoctorId
+    : null
 
-  const slots = ((data || []) as AvailabilityRow[])
-    .filter(row => activeDoctors.has(row.provider_id) && isFutureIndiaSlot(row.available_date, row.start_time))
+  // Optimization 1: Specific Date — use PostgreSQL RPC get_available_appointment_slots directly
+  if (params.date) {
+    const { data: rpcSlots, error: rpcErr } = await supabaseAdmin.rpc('get_available_appointment_slots', {
+      p_provider_role: 'doctor',
+      p_available_date: params.date,
+      p_provider_id: assignedDoctorId || null,
+    })
+    if (rpcErr) throw rpcErr
+
+    const slots = (rpcSlots || []).map((row: any) => ({
+      slotId: row.slot_id,
+      providerId: row.provider_id,
+      providerRole: String(row.provider_role || 'doctor').toUpperCase(),
+      date: String(row.available_date),
+      startTime: String(row.start_time || '').slice(0, 5),
+      endTime: String(row.end_time || '').slice(0, 5),
+      status: 'AVAILABLE',
+      source: row.slot_source === 'MANUAL' ? 'MANUAL' : 'GENERATED',
+      slotDuration: Number(row.slot_duration || 30),
+    }))
+
+    const dates = [{ date: params.date, availableCount: slots.length }]
+    const result = {
+      dates,
+      slots,
+      appointmentType: resolvedAppointmentType,
+    }
+
+    doctorAvailabilityCache.set(cacheKey, {
+      data: result,
+      expiresAt: now + 5 * 1000,
+    })
+
+    return result
+  }
+
+  // Optimization 2: Initial view (all dates) — parallelize RPC dates and availability query
+  const providerIds = assignedDoctorId
+    ? [assignedDoctorId]
+    : await getCachedActiveDoctorIds()
+
+  if (!providerIds.length) return { dates: [], slots: [], appointmentType: resolvedAppointmentType }
+
+  const [{ data: rpcDates, error: datesErr }, { data: availData, error: availErr }] = await Promise.all([
+    supabaseAdmin.rpc('get_available_appointment_dates', {
+      p_provider_role: 'doctor',
+      p_provider_id: assignedDoctorId || null,
+    }),
+    supabaseAdmin
+      .from('provider_availability')
+      .select('id, provider_id, provider_role, available_date, start_time, end_time, slot_duration, source')
+      .eq('provider_role', 'doctor')
+      .eq('status', 'AVAILABLE')
+      .eq('is_available', true)
+      .in('provider_id', providerIds)
+      .gte('available_date', getIndiaTodayDate())
+      .order('available_date', { ascending: true })
+      .order('start_time', { ascending: true })
+      .limit(1000)
+  ])
+
+  if (datesErr) throw datesErr
+  if (availErr) throw availErr
+
+  const activeDoctorSet = new Set(providerIds)
+  const slots = ((availData || []) as AvailabilityRow[])
+    .filter(row => activeDoctorSet.has(row.provider_id) && isFutureIndiaSlot(row.available_date, row.start_time))
     .map(mapSlot)
 
-  const dateCounts = new Map<string, number>()
-  for (const slot of slots) dateCounts.set(slot.date, (dateCounts.get(slot.date) || 0) + 1)
-
-  const dates = Array.from(dateCounts, ([date, availableCount]) => ({ date, availableCount }))
-    .sort((a, b) => a.date.localeCompare(b.date))
+  const dates = (rpcDates || []).map((row: any) => ({
+    date: String(row.available_date),
+    availableCount: Number(row.available_count),
+  }))
 
   const result = {
     dates,
     slots,
+    appointmentType: resolvedAppointmentType,
   }
 
   doctorAvailabilityCache.set(cacheKey, {
     data: result,
-    expiresAt: now + 30 * 1000,
+    expiresAt: now + 5 * 1000,
   })
 
   return result
@@ -501,6 +568,7 @@ export async function bookPatientDoctorAppointment(params: {
 
   invalidateDoctorAvailabilityCache()
   invalidateSlotsCache()
+  invalidatePatientApiDashboardCache(params.patientId)
 
   return {
     success: true,

@@ -15,14 +15,40 @@ import {
 } from 'lucide-react';
 import StaffChat from '@/components/StaffChat';
 import ProviderAvailabilityScheduler, { GeneratedSlot, AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler';
-import StreamConsultationCall from '@/components/video/StreamConsultationCall';
+import dynamic from 'next/dynamic';
 import DoctorPrescriptionBuilderModal from '@/components/doctor/DoctorPrescriptionBuilderModal';
 import OfficialPrescriptionModal from '@/components/doctor/OfficialPrescriptionModal';
 import RevokePrescriptionModal from '@/components/doctor/RevokePrescriptionModal';
 import ReferDietitianModal from '@/components/doctor/ReferDietitianModal';
 import ProviderProfileEditor from '@/components/provider/ProviderProfileEditor';
 import PatientProfileSidebar from '@/components/doctor/PatientProfileSidebar';
-import { ResponsiveContainer, LineChart, Line, CartesianGrid, XAxis, YAxis, Tooltip } from 'recharts';
+
+const StreamConsultationCall = dynamic(
+  () => import('@/components/video/StreamConsultationCall'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full min-h-[500px] items-center justify-center bg-slate-900 rounded-3xl text-white">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-4 border-[#0052FF] border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm font-semibold text-slate-300">Connecting to consultation room...</p>
+        </div>
+      </div>
+    ),
+  }
+);
+
+const DoctorPatientWeightChart = dynamic(
+  () => import('@/components/doctor/DoctorPatientWeightChart'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-60 w-full flex items-center justify-center bg-slate-50 rounded-2xl animate-pulse">
+        <div className="w-8 h-8 border-2 border-[#10B981] border-t-transparent rounded-full animate-spin" />
+      </div>
+    ),
+  }
+);
 
 const inputCls = 'w-full border border-slate-200 rounded-2xl p-3 bg-white outline-none transition-all text-[#0F172A] placeholder-[#94A3B8] font-medium focus:bg-white focus:border-[#0052FF] focus:ring-4 focus:ring-[#0052FF]/10 [color-scheme:light]';
 const labelCls = 'block text-xs font-bold text-[#475569] mb-1 uppercase tracking-wider';
@@ -3938,23 +3964,7 @@ export default function DoctorDashboard() {
                       <h3 className="text-xs font-black text-[#8896A4] uppercase tracking-widest mb-6 flex items-center gap-1.5">
                         <Activity className="w-4 h-4 text-[#C4622D]" /> Patient Progress Summary
                       </h3>
-                      {!selectedPatient.weight_logs || selectedPatient.weight_logs.length === 0 ? (
-                        <div className="h-48 flex items-center justify-center text-[#8896A4] text-sm font-bold">
-                          No weight logs recorded by this user yet.
-                        </div>
-                      ) : (
-                        <div className="h-60 w-full min-w-0" style={{ minHeight: 240 }}>
-                          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={240}>
-                            <LineChart data={selectedPatient.weight_logs}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#F1F5F9" />
-                              <XAxis dataKey="date" stroke="#94A3B8" fontSize={10} tickLine={false} />
-                              <YAxis domain={['dataMin - 5', 'dataMax + 5']} stroke="#94A3B8" fontSize={10} tickLine={false} />
-                              <Tooltip contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', fontFamily: 'sans-serif' }} />
-                              <Line type="monotone" dataKey="weight" stroke="#10B981" strokeWidth={3} dot={{ r: 4, strokeWidth: 2 }} activeDot={{ r: 6 }} name="Weight (kg)" />
-                            </LineChart>
-                          </ResponsiveContainer>
-                        </div>
-                      )}
+                      <DoctorPatientWeightChart weightLogs={selectedPatient.weight_logs} />
                     </div>
 
                     {/* Secondary Health Intake */}

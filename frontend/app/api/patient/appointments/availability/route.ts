@@ -10,10 +10,14 @@ export async function GET(request: Request) {
     if ('error' in patient) return NextResponse.json({ error: patient.error }, { status: patient.status })
 
     const { searchParams } = new URL(request.url)
-    const appointmentType = parsePatientAppointmentType(searchParams.get('appointmentType'))
+    const rawAppointmentType = searchParams.get('appointmentType')
+    const appointmentType = rawAppointmentType && rawAppointmentType.toUpperCase() !== 'AUTO'
+      ? parsePatientAppointmentType(rawAppointmentType)
+      : null
     const date = String(searchParams.get('date') || '')
+    const force = searchParams.get('force') === 'true'
 
-    if (!appointmentType) {
+    if (rawAppointmentType && rawAppointmentType.toUpperCase() !== 'AUTO' && !appointmentType) {
       return NextResponse.json({ error: 'A supported appointmentType is required.' }, { status: 400 })
     }
     if (date && !isDate(date)) {
@@ -24,13 +28,22 @@ export async function GET(request: Request) {
       patientId: patient.user.id,
       appointmentType,
       date: date || null,
+      force,
     })
 
     if ('error' in result) {
       return NextResponse.json({ error: result.error }, { status: result.status })
     }
 
-    return NextResponse.json({ dates: result.dates, slots: result.slots })
+    return NextResponse.json(
+      { dates: result.dates, slots: result.slots, appointmentType: result.appointmentType },
+      {
+        headers: {
+          'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+        },
+      }
+    )
   } catch (err: any) {
     console.error('Error loading patient appointment availability:', err)
     return NextResponse.json({ error: err.message || 'Unable to load appointment availability.' }, { status: 500 })

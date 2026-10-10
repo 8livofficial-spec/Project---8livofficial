@@ -43,15 +43,8 @@ function getCurrentJourneyStep(state: {
   return 'DASHBOARD'
 }
 
-const patientApiDashboardCache = new Map<string, { data: any; expiresAt: number }>()
-
-export function invalidatePatientApiDashboardCache(patientId?: string) {
-  if (patientId) {
-    patientApiDashboardCache.delete(patientId)
-  } else {
-    patientApiDashboardCache.clear()
-  }
-}
+import { getCachedPatientDashboard, setCachedPatientDashboard, invalidatePatientApiDashboardCache } from '@/lib/patientDashboardCache'
+export { invalidatePatientApiDashboardCache }
 
 export async function GET(request: Request) {
   try {
@@ -65,11 +58,10 @@ export async function GET(request: Request) {
 
     await assertPatientOrAssignedProvider(request, patientId)
 
-    const now = Date.now()
     if (!force) {
-      const cached = patientApiDashboardCache.get(patientId)
-      if (cached && cached.expiresAt > now) {
-        return NextResponse.json(cached.data, {
+      const cached = getCachedPatientDashboard(patientId)
+      if (cached) {
+        return NextResponse.json(cached, {
           headers: { 'Cache-Control': 'private, no-cache', 'X-Cache': 'HIT' }
         })
       }
@@ -89,6 +81,7 @@ export async function GET(request: Request) {
       weightLogsRes,
       consultationsRes,
       notificationsRes,
+      unreadNotifsRes,
       dietPlanRes,
       fitnessPlanRes,
       activePrescriptionRes
@@ -129,7 +122,7 @@ export async function GET(request: Request) {
         .select('id, staff_id, staff_role, booking_date, booking_time, status, room_url, meeting_url, created_at')
         .eq('patient_id', patientId)
         .order('created_at', { ascending: false })
-        .limit(20),
+        .limit(5),
       supabaseAdmin
         .from('payment_transactions')
         .select('transaction_id, amount, status, metadata, created_at')
@@ -141,22 +134,29 @@ export async function GET(request: Request) {
       getMembershipValidity(patientId),
       supabaseAdmin
         .from('progress_logs')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('user_id', patientId)
         .order('created_at', { ascending: false })
-        .limit(180),
+        .limit(14),
       supabaseAdmin
         .from('doctor_consultations')
         .select('id, patient_id, doctor_id, booking_date, booking_time, status, prescription_text, room_url, created_at, updated_at')
         .eq('patient_id', patientId)
         .order('created_at', { ascending: false })
-        .limit(25),
+        .limit(5),
       supabaseAdmin
         .from('patient_notifications')
         .select('*')
         .eq('patient_id', patientId)
         .order('created_at', { ascending: false })
-        .limit(50),
+        .limit(10),
+      supabaseAdmin
+        .from('patient_notifications')
+        .select('*')
+        .eq('patient_id', patientId)
+        .eq('is_read', false)
+        .order('created_at', { ascending: false })
+        .limit(25),
       supabaseAdmin
         .from('diet_plans')
         .select('*')
@@ -192,9 +192,19 @@ export async function GET(request: Request) {
     const latestAppointment = latestRes.data
     const staffConsults = staffRes.data || []
     const paymentsList = paymentsRes.data || []
+    const totalWeightLogsCount = weightLogsRes.count || (weightLogsRes.data || []).length
     const weightLogs = [...(weightLogsRes.data || [])].reverse()
     const consultations = consultationsRes.data || []
-    let notifications = notificationsRes.data || []
+
+    // Merge unread notifications with recent notifications to ensure unread alerts are never hidden
+    const notifMap = new Map<string, any>()
+    for (const n of unreadNotifsRes.data || []) notifMap.set(n.id, n)
+    for (const n of notificationsRes.data || []) {
+      if (!notifMap.has(n.id)) notifMap.set(n.id, n)
+    }
+    let notifications = Array.from(notifMap.values())
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 20)
     const dietPlan = dietPlanRes.data || null
     const fitnessPlan = fitnessPlanRes.data || null
 
@@ -271,7 +281,7 @@ export async function GET(request: Request) {
       membershipExpiryNotification
       && !notifications.some((notification: any) => notification.id === membershipExpiryNotification.id)
     ) {
-      notifications = [membershipExpiryNotification, ...notifications].slice(0, 50)
+      notifications = [membershipExpiryNotification, ...notifications].slice(0, 10)
     }
     const effectiveDashboardAccess = membershipActive && firstConsultationCompleted
     const currentJourneyStep = getCurrentJourneyStep({
@@ -371,6 +381,7 @@ export async function GET(request: Request) {
           }
         : null,
       // Aggregated dashboard extensions
+      totalWeightLogsCount,
       weightLogs,
       consultations,
       notifications,
@@ -379,13 +390,10 @@ export async function GET(request: Request) {
       activePrescription: activePrescriptionRes?.data || null
     }
 
-    patientApiDashboardCache.set(patientId, {
-      data: responseData,
-      expiresAt: now + 15 * 1000,
-    })
+    setCachedPatientDashboard(patientId, responseData, 10 * 1000)
 
     return NextResponse.json(responseData, {
-      headers: { 'Cache-Control': 'private, no-cache', 'X-Cache': 'MISS' }
+      headers: { 'Cache-Control': 'private, no-cache, no-store, must-revalidate', 'X-Cache': 'MISS' }
     })
   } catch (err: unknown) {
     console.error("API Error in /api/patient/dashboard:", err)

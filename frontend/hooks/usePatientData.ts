@@ -230,6 +230,7 @@ export interface PatientDataContextValue {
   profile: PatientProfile | null
   assessment: HealthAssessment | null
   weightLogs: WeightLog[]
+  totalWeightLogsCount?: number
   consultations: Consultation[]
   consultation: Consultation | null
   notifications: Notification[]
@@ -267,6 +268,7 @@ function usePatientDataInternal() {
   const [profile, setProfile] = useState<PatientProfile | null>(null)
   const [assessment, setAssessment] = useState<HealthAssessment | null>(null)
   const [weightLogs, setWeightLogs] = useState<WeightLog[]>([])
+  const [totalWeightLogsCount, setTotalWeightLogsCount] = useState<number>(0)
   const [consultations, setConsultations] = useState<Consultation[]>([])
   const [consultation, setConsultation] = useState<Consultation | null>(null) // Latest doctor consult for meds
   const [notifications, setNotifications] = useState<Notification[]>([])
@@ -351,6 +353,7 @@ function usePatientDataInternal() {
         })
 
         setWeightLogs(dashboardData.weightLogs || [])
+        setTotalWeightLogsCount(dashboardData.totalWeightLogsCount || dashboardData.weightLogs?.length || 0)
         setConsultations(dashboardData.consultations || [])
         if (dashboardData.consultations && dashboardData.consultations.length > 0) {
           setConsultation(dashboardData.consultations[0])
@@ -372,21 +375,6 @@ function usePatientDataInternal() {
         const membershipStatus = dashboardData.membershipStatus
         const dashboardAccess = dashboardData.dashboardAccess === true
         const firstConsultationCompleted = dashboardData.firstConsultationCompleted === true
-
-        // Derive onboarding flow step
-        if (dashboardAccess) {
-          setFlowStep('ready')
-        } else if (dashboardData.bookingId && consultationStatus !== 'COMPLETED' && membershipStatus === 'NOT_SELECTED') {
-          setFlowStep('appointment_scheduled')
-        } else if (consultationStatus === 'COMPLETED' && membershipStatus === 'NOT_SELECTED') {
-          setFlowStep('needs_plan')
-        } else if (assessRow?.membership_tier && membershipStatus !== 'ACTIVE') {
-          setFlowStep('needs_payment')
-        } else if (assessRow?.is_eligible) {
-          setFlowStep('needs_consultation')
-        } else {
-          setFlowStep('needs_plan')
-        }
 
         const isUserEligible = eligibilityStatus === 'ELIGIBLE' || eligibilityStatus === 'REVIEW_REQUIRED' || Boolean(assessRow?.is_eligible)
         const isUserNotEligible = eligibilityStatus === 'NOT_ELIGIBLE' || (assessRow && assessRow.is_eligible === false && !isUserEligible)
@@ -463,21 +451,6 @@ function usePatientDataInternal() {
         const dashboardAccess = statusData.dashboardAccess === true
         const firstConsultationCompleted = statusData.firstConsultationCompleted === true
 
-        // Derive onboarding flow step
-        if (dashboardAccess) {
-          setFlowStep('ready')
-        } else if (statusData.bookingId && consultationStatus !== 'COMPLETED' && membershipStatus === 'NOT_SELECTED') {
-          setFlowStep('appointment_scheduled')
-        } else if (consultationStatus === 'COMPLETED' && membershipStatus === 'NOT_SELECTED') {
-          setFlowStep('needs_plan')
-        } else if (assessRow?.membership_tier && membershipStatus !== 'ACTIVE') {
-          setFlowStep('needs_payment')
-        } else if (assessRow?.is_eligible) {
-          setFlowStep('needs_consultation')
-        } else {
-          setFlowStep('needs_plan')
-        }
-
         const isUserEligible = eligibilityStatus === 'ELIGIBLE' || eligibilityStatus === 'REVIEW_REQUIRED' || Boolean(assessRow?.is_eligible)
         const isUserNotEligible = eligibilityStatus === 'NOT_ELIGIBLE' || (assessRow && assessRow.is_eligible === false && !isUserEligible)
 
@@ -511,17 +484,17 @@ function usePatientDataInternal() {
         if (assessRow) {
           if (pathname === '/patient/progress') {
             const [logsRes, consultsRes] = await Promise.all([
-              fetch('/api/patient/progress-logs', {
+              fetch('/api/patient/progress-logs?page=1&limit=50', {
                 headers: { Authorization: `Bearer ${session.access_token}` },
               })
                 .then(async (r) => {
                   if (r.ok) {
                     const d = await r.json()
-                    return { data: d.logs || [] }
+                    return { data: d.logs || [], totalCount: d.pagination?.totalCount || 0 }
                   }
-                  return { data: [] }
+                  return { data: [], totalCount: 0 }
                 })
-                .catch(() => ({ data: [] })),
+                .catch(() => ({ data: [], totalCount: 0 })),
               supabase
                 .from('doctor_consultations')
                 .select('id, patient_id, doctor_id, booking_date, booking_time, status, prescription_text, room_url, created_at, updated_at')
@@ -529,36 +502,10 @@ function usePatientDataInternal() {
                 .order('created_at', { ascending: false })
             ])
             setWeightLogs(logsRes.data || [])
+            setTotalWeightLogsCount(logsRes.totalCount || logsRes.data?.length || 0)
             setConsultations(consultsRes.data || [])
             if (consultsRes.data && consultsRes.data.length > 0) {
               setConsultation(consultsRes.data[0])
-            }
-          } else if (pathname === '/patient/appointments') {
-            const [consultsRes, staffConsultsRes] = await Promise.all([
-              supabase
-                .from('doctor_consultations')
-                .select('id, patient_id, doctor_id, booking_date, booking_time, status, prescription_text, room_url, created_at, updated_at')
-                .eq('patient_id', session.user.id)
-                .order('created_at', { ascending: false }),
-              supabase
-                .from('staff_consultations')
-                .select('*')
-                .eq('patient_id', session.user.id)
-                .order('created_at', { ascending: false })
-            ])
-            setConsultations(consultsRes.data || [])
-            if (consultsRes.data && consultsRes.data.length > 0) {
-              setConsultation(consultsRes.data[0])
-            }
-            setStaffConsultations(staffConsultsRes.data || [])
-          } else if (pathname === '/patient/prescriptions') {
-            const { data: consults } = await supabase
-              .from('doctor_consultations')
-              .select('id, patient_id, doctor_id, booking_date, booking_time, status, prescription_text, room_url, created_at, updated_at')
-              .eq('patient_id', session.user.id)
-              .order('created_at', { ascending: false })
-            if (consults && consults.length > 0) {
-              setConsultation(consults[0])
             }
           }
         }
@@ -579,8 +526,16 @@ function usePatientDataInternal() {
   useEffect(() => {
     if (!user?.id) return
 
-    // Realtime channel for live notifications updates with unique suffix to avoid cache collisions
-    const channelName = `live-notifs-${user.id}-${Math.floor(Math.random() * 1000000)}`
+    // Stable realtime channel for notifications with clean deduplication
+    const channelName = `live-notifs-${user.id}`
+    const existing = supabase.getChannels().find((c) => {
+      const ch = c as { topic?: string; name?: string }
+      return ch.topic === channelName || ch.name === channelName
+    })
+    if (existing) {
+      supabase.removeChannel(existing)
+    }
+
     const channel = supabase
       .channel(channelName)
       .on(
@@ -592,7 +547,6 @@ function usePatientDataInternal() {
           filter: `patient_id=eq.${user.id}`
         },
         () => {
-          // Trigger data reload immediately to refresh dashboard indicators
           reloadData({ force: true })
         }
       )
@@ -608,6 +562,7 @@ function usePatientDataInternal() {
     profile,
     assessment,
     weightLogs,
+    totalWeightLogsCount,
     consultations,
     consultation,
     notifications,

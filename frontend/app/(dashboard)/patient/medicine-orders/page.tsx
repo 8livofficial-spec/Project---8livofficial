@@ -21,9 +21,12 @@ const STATUS_LABELS: Record<string, string> = {
 
 export default function PatientMedicineOrdersPage() {
   const [orders, setOrders] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  useEffect(() => {
+  const loadOrders = () => {
+    setLoading(true)
+    setError('')
     authedFetch('/api/patient/pharmacy-orders')
       .then(async (res) => {
         const payload = await res.json()
@@ -31,6 +34,11 @@ export default function PatientMedicineOrdersPage() {
         setOrders(payload.orders || [])
       })
       .catch((err) => setError(err instanceof Error ? err.message : 'Unable to load treatment package deliveries.'))
+      .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    loadOrders()
   }, [])
 
   return (
@@ -41,9 +49,27 @@ export default function PatientMedicineOrdersPage() {
           Track treatment package fulfillment and dispatch updates covered by your 8LIV care subscription.
         </p>
       </div>
-      {error && <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700">{error}</p>}
+      {error && (
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-700 flex items-center justify-between">
+          <span>{error}</span>
+          <button
+            onClick={loadOrders}
+            className="px-3 py-1 bg-red-700 text-white rounded-lg text-xs font-bold hover:bg-red-800 transition-colors cursor-pointer"
+          >
+            Retry
+          </button>
+        </div>
+      )}
       <div className="grid gap-4">
-        {orders.length === 0 ? (
+        {loading ? (
+          [1, 2].map((i) => (
+            <div key={i} className="dash-card p-6 animate-pulse space-y-3" aria-busy="true">
+              <div className="h-5 w-48 bg-slate-100 rounded-lg" />
+              <div className="h-4 w-72 bg-slate-100 rounded-md" />
+              <div className="h-3 w-36 bg-slate-100 rounded-md" />
+            </div>
+          ))
+        ) : orders.length === 0 ? (
           <div className="dash-card p-8 text-center">
             <Package className="mx-auto mb-3 h-10 w-10 text-[#8896A4]" />
             <h3 className="font-black">No treatment package dispatches yet</h3>

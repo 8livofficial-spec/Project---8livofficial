@@ -8,6 +8,9 @@ import { creditCompletedConsultation } from '@/lib/walletLedger';
 import { getAuthenticatedUser, assertDoctor } from '@/lib/apiSecurity';
 import { patientSearchOrFilter } from '@/lib/queryFilters';
 import { normalizePhoneNumber } from '@/lib/phone';
+import { invalidateDoctorAvailabilityCache } from '@/lib/patientAppointmentBooking';
+import { invalidateSlotsCache } from '@/lib/appointmentAvailability';
+import { invalidatePatientApiDashboardCache } from '@/lib/patientDashboardCache';
 
 type ConsultationRow = {
   id: string;
@@ -810,6 +813,11 @@ export async function PATCH(req: Request) {
         .eq('provider_role', 'doctor')
         .eq('available_date', consultation.booking_date)
         .eq('start_time', consultation.booking_time);
+      invalidateDoctorAvailabilityCache();
+      invalidateSlotsCache();
+      if (consultation.patient_id) {
+        invalidatePatientApiDashboardCache(consultation.patient_id);
+      }
     }
 
     if (consultation.patient_id) {

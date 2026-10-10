@@ -2,13 +2,14 @@
 
 import React, { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
-import { Bell, Search, User, Settings, LogOut, Menu, X, ChevronRight } from 'lucide-react'
+import { Bell, Search, User, Settings, LogOut, Menu, X, ChevronRight, ChevronDown } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
 interface TopbarProps {
   pageTitle: string
   breadcrumbs: string[]
   initials: string
+  patientName?: string
   notificationsCount?: number
   onMenuToggle?: () => void
   notifications?: any[]
@@ -20,6 +21,7 @@ export default function Topbar({
   pageTitle,
   breadcrumbs,
   initials,
+  patientName = 'JK',
   notificationsCount = 0,
   onMenuToggle,
   notifications = [],
@@ -40,6 +42,9 @@ export default function Topbar({
       if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
         setShowResults(false)
       }
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setDropdownOpen(false)
+      }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
@@ -50,11 +55,35 @@ export default function Topbar({
     setShowResults(val.trim() !== '')
   }
 
-  // Filter logic across notifications, appointments, and prescriptions
+  // Filter logic across quick modules, appointments, prescriptions, and notifications
   const getSearchResults = () => {
     if (!searchQuery.trim()) return []
-    const q = searchQuery.toLowerCase()
+    const q = searchQuery.toLowerCase().trim()
     const results: { category: string; title: string; subtitle: string; link: string }[] = []
+
+    // 0. Quick Navigation & Intent Matching
+    const quickLinks = [
+      { keywords: ['weight', 'progress', 'log', 'scale', 'loss', 'kg', 'trend'], category: 'Progress', title: 'Weight & Progress History', subtitle: 'View weight trend logs and metrics', link: '/patient/progress' },
+      { keywords: ['appointment', 'doctor', 'visit', 'schedule', 'booking', 'slot', 'calendar', 'consult'], category: 'Appointments', title: 'Appointments & Schedule', subtitle: 'View or book doctor consultations', link: '/patient/appointments' },
+      { keywords: ['prescription', 'medicine', 'medication', 'refill', 'dose', 'drug', 'glp'], category: 'Prescriptions', title: 'Prescriptions & Refills', subtitle: 'View current medications and e-prescriptions', link: '/patient/prescriptions' },
+      { keywords: ['delivery', 'deliveries', 'order', 'orders', 'package', 'tracking', 'pharmacy', 'dispatch', 'shipment'], category: 'Deliveries', title: 'Treatment Deliveries', subtitle: 'Track medication dispatch and shipments', link: '/patient/medicine-orders' },
+      { keywords: ['consultation', 'consult', 'call', 'video', 'meeting'], category: 'Consultations', title: 'Doctor Consultations', subtitle: 'View past consultation history and notes', link: '/patient/consultation' },
+      { keywords: ['bill', 'billing', 'invoice', 'payment', 'receipt', 'charge', 'money'], category: 'Billing', title: 'Billing & Invoices', subtitle: 'Download receipts and invoices', link: '/patient/billing' },
+      { keywords: ['profile', 'account', 'phone', 'address', 'email', 'name'], category: 'Profile', title: 'Patient Profile', subtitle: 'Manage personal details and delivery address', link: '/patient/profile' },
+      { keywords: ['setting', 'settings', 'password', 'security'], category: 'Settings', title: 'Account Settings', subtitle: 'Security and communication preferences', link: '/patient/settings' },
+      { keywords: ['support', 'help', 'care team', 'message', 'chat'], category: 'Support', title: 'Contact Care Team', subtitle: 'Message your assigned health care team', link: '/patient/messages' },
+    ]
+
+    quickLinks.forEach(item => {
+      if (item.keywords.some(k => q.includes(k)) || item.title.toLowerCase().includes(q)) {
+        results.push({
+          category: item.category,
+          title: item.title,
+          subtitle: item.subtitle,
+          link: item.link
+        })
+      }
+    })
 
     // 1. Search Appointments
     const docName = consultation?.doctor_profiles?.full_name || ''
@@ -67,7 +96,7 @@ export default function Topbar({
     ) {
       results.push({
         category: 'Appointments',
-        title: `Consultation with ${docName || 'Care Specialist'}`,
+        title: `Consultation with ${docName || 'Doctor'}`,
         subtitle: `Scheduled: ${bookingDate} at ${bookingTime}`,
         link: '/patient/appointments'
       })
@@ -85,7 +114,7 @@ export default function Topbar({
     }
 
     // 3. Search Notifications & Messages
-    if (notifications) {
+    if (notifications && Array.isArray(notifications)) {
       notifications.forEach(n => {
         if ((n.title && n.title.toLowerCase().includes(q)) || (n.message && n.message.toLowerCase().includes(q))) {
           results.push({
@@ -103,16 +132,6 @@ export default function Topbar({
 
   const searchResults = getSearchResults()
 
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
-  }, [])
-
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut()
@@ -124,47 +143,36 @@ export default function Topbar({
   }
 
   return (
-    <header className="sticky top-0 z-20 bg-white border-b border-[rgba(26,31,54,0.07)]">
+    <header className="sticky top-0 z-20 bg-white border-b border-slate-200/80 shadow-[0_1px_3px_rgba(0,0,0,0.02)]">
       <div className="flex items-center justify-between h-16 px-6 gap-4">
         
-        {/* Left: breadcrumb + hamburger on mobile */}
-        <div className="flex items-center gap-3 min-w-0">
+        {/* Left: Mobile hamburger + search bar */}
+        <div className="flex items-center gap-3 flex-1 min-w-0 max-w-xl">
           {onMenuToggle && (
             <button 
               onClick={onMenuToggle}
-              className="md:hidden p-1.5 text-[#1A1F36] hover:bg-[#F5F0EB] rounded-xl transition-all flex-shrink-0"
+              className="lg:hidden p-1.5 text-slate-700 hover:bg-slate-100 rounded-xl transition-all flex-shrink-0"
+              aria-label="Toggle Navigation Menu"
             >
               <Menu className="w-5 h-5" />
             </button>
           )}
-          <div className="min-w-0">
-            <h1 className="text-[#1A1F36] font-bold text-lg font-[Sora] leading-tight truncate">
-              {pageTitle}
-            </h1>
-            <p className="text-[#8896A4] text-xs mt-0.5 truncate">
-              {breadcrumbs.join(' / ')}
-            </p>
-          </div>
-        </div>
 
-        {/* Right: actions — use flex-shrink-0 to prevent overlap */}
-        <div className="flex items-center gap-3 flex-shrink-0">
-          
-          {/* Search — hidden on small screens */}
-          <div className="hidden md:block relative" ref={searchRef}>
-            <div className="flex items-center gap-2 bg-[#F5F0EB] rounded-xl px-3 py-2 w-48 lg:w-64">
-              <Search size={15} className="text-[#8896A4] flex-shrink-0" />
+          {/* Search Bar matching screenshot */}
+          <div className="relative w-full max-w-md" ref={searchRef}>
+            <div className="flex items-center gap-2.5 bg-slate-50 hover:bg-white focus-within:bg-white border border-slate-200/80 focus-within:border-teal-500 rounded-full px-4 py-2 transition-all shadow-xs">
+              <Search size={16} className="text-slate-400 flex-shrink-0" />
               <input 
-                placeholder="Search portal..." 
+                placeholder="Search anything..." 
                 value={searchQuery}
                 onChange={e => handleSearchChange(e.target.value)}
                 onFocus={() => searchQuery.trim() !== '' && setShowResults(true)}
-                className="bg-transparent outline-none text-sm text-[#1A1F36] placeholder:text-[#8896A4] w-full min-w-0 font-medium"
+                className="bg-transparent outline-none text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 w-full min-w-0 font-medium"
               />
               {searchQuery && (
                 <button 
                   onClick={() => { setSearchQuery(''); setShowResults(false); }}
-                  className="p-0.5 hover:bg-[#1A1F36]/8 rounded-full text-[#8896A4] transition-colors cursor-pointer"
+                  className="p-0.5 hover:bg-slate-200 rounded-full text-slate-400 transition-colors cursor-pointer"
                 >
                   <X size={12} />
                 </button>
@@ -173,16 +181,16 @@ export default function Topbar({
 
             {/* Universal Search Dropdown Overlay */}
             {showResults && (
-              <div className="absolute right-0 mt-2 w-72 lg:w-80 bg-white border border-[#1A1F36]/8 rounded-2xl shadow-xl p-4 z-50 max-h-96 overflow-y-auto animate-fade-in-up custom-scrollbar">
+              <div className="absolute left-0 mt-2 w-full min-w-[280px] bg-white border border-slate-200 rounded-2xl shadow-xl p-3.5 z-50 max-h-96 overflow-y-auto animate-fade-in-up custom-scrollbar">
                 {searchResults.length > 0 ? (
-                  <div className="space-y-4">
-                    {['Appointments', 'Prescriptions', 'Messages', 'Notifications'].map(cat => {
+                  <div className="space-y-3">
+                    {['Progress', 'Appointments', 'Prescriptions', 'Deliveries', 'Consultations', 'Billing', 'Profile', 'Settings', 'Support', 'Messages', 'Notifications'].map(cat => {
                       const items = searchResults.filter(r => r.category === cat)
                       if (items.length === 0) return null
 
                       return (
-                        <div key={cat} className="space-y-1.5">
-                          <p className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] px-1">{cat}</p>
+                        <div key={cat} className="space-y-1">
+                          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 px-2">{cat}</p>
                           {items.map((item, idx) => (
                             <button
                               key={idx}
@@ -191,13 +199,13 @@ export default function Topbar({
                                 setShowResults(false)
                                 router.push(item.link)
                               }}
-                              className="w-full text-left px-3 py-2 rounded-xl hover:bg-[#F5F0EB] transition-colors flex items-center justify-between group cursor-pointer"
+                              className="w-full text-left px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors flex items-center justify-between group cursor-pointer"
                             >
                               <div className="min-w-0 pr-2">
-                                <p className="text-xs font-bold text-[#1A1F36] truncate group-hover:text-[#C4622D] transition-colors">{item.title}</p>
-                                <p className="text-[10px] text-[#8896A4] truncate mt-0.5">{item.subtitle}</p>
+                                <p className="text-xs font-semibold text-slate-800 truncate group-hover:text-teal-600 transition-colors">{item.title}</p>
+                                <p className="text-[10px] text-slate-500 truncate mt-0.5">{item.subtitle}</p>
                               </div>
-                              <ChevronRight size={12} className="text-[#8896A4] opacity-0 group-hover:opacity-100 transition-all shrink-0" />
+                              <ChevronRight size={12} className="text-slate-400 opacity-0 group-hover:opacity-100 transition-all shrink-0" />
                             </button>
                           ))}
                         </div>
@@ -205,60 +213,68 @@ export default function Topbar({
                     })}
                   </div>
                 ) : (
-                  <div className="text-center py-6 space-y-2">
-                    <p className="text-xs font-bold text-[#1A1F36]">No matches found</p>
-                    <p className="text-[10px] text-[#8896A4]">Try searching for 'weight', 'plan', 'meeting', or medicine names.</p>
+                  <div className="text-center py-6 space-y-1.5">
+                    <p className="text-xs font-semibold text-slate-700">No results found for &ldquo;{searchQuery}&rdquo;</p>
+                    <p className="text-[10px] text-slate-400">Search for &lsquo;weight&rsquo;, &lsquo;doctor&rsquo;, &lsquo;refill&rsquo;, &lsquo;orders&rsquo;, or &lsquo;billing&rsquo;.</p>
                   </div>
                 )}
               </div>
             )}
           </div>
+        </div>
 
-          {/* Notifications */}
+        {/* Right side: Bell icon + User profile pill */}
+        <div className="flex items-center gap-3.5 flex-shrink-0">
+          
+          {/* Notifications Bell with dot */}
           <button 
             onClick={() => router.push('/patient/notifications')}
-            className="relative p-2.5 rounded-xl hover:bg-[#F5F0EB] transition-colors flex-shrink-0 cursor-pointer"
+            className="relative p-2 rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors flex-shrink-0 cursor-pointer"
+            aria-label="View notifications"
           >
-            <Bell size={18} className="text-[#1A1F36]" />
-            {notificationsCount > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-4 h-4 bg-[#C4622D] text-white 
-                               text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">
-                {notificationsCount}
-              </span>
-            )}
+            <Bell size={19} />
+            <span className="absolute top-2 right-2 w-2 h-2 bg-rose-500 rounded-full ring-2 ring-white" />
           </button>
 
-          {/* Avatar Dropdown */}
+          {/* Avatar Dropdown matching screenshot */}
           <div className="relative" ref={dropdownRef}>
             <button 
               onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="w-9 h-9 rounded-full bg-gradient-to-br from-[#C4622D] to-[#A8522A] 
-                          text-white font-bold text-sm flex items-center justify-center 
-                          cursor-pointer flex-shrink-0 select-none hover:scale-105 active:scale-95 transition-all"
+              className="flex items-center gap-2.5 p-1 pr-2 rounded-full hover:bg-slate-100 transition-all cursor-pointer group"
             >
-              {initials}
+              <div className="w-9 h-9 rounded-full bg-[#00A884] text-white font-bold text-xs flex items-center justify-center shrink-0 shadow-sm shadow-[#00A884]/30 select-none">
+                {initials || 'JK'}
+              </div>
+              <div className="hidden sm:flex flex-col text-left">
+                <span className="text-xs font-bold text-[#1A1F36] leading-tight">
+                  {patientName || 'JK'}
+                </span>
+                <span className="text-[11px] text-[#8896A4] font-medium flex items-center gap-0.5 leading-tight mt-0.5">
+                  Patient <ChevronDown size={11} className="text-[#8896A4] group-hover:text-[#1A1F36] transition-colors" />
+                </span>
+              </div>
             </button>
 
             {dropdownOpen && (
-              <div className="absolute right-0 mt-2.5 w-48 bg-white border border-[#1A1F36]/8 rounded-2xl shadow-xl py-2 z-50 animate-fade-in-up">
+              <div className="absolute right-0 mt-2 w-48 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50 animate-fade-in-up">
                 <button 
                   onClick={() => { setDropdownOpen(false); router.push('/patient/profile'); }}
-                  className="w-full text-left px-4 py-2.5 hover:bg-[#F5F0EB] text-[#1A1F36] text-sm font-medium transition-all flex items-center gap-2"
+                  className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-slate-700 text-xs font-medium transition-all flex items-center gap-2"
                 >
-                  <User className="w-4 h-4" /> My Profile
+                  <User className="w-3.5 h-3.5" /> My Profile
                 </button>
                 <button 
                   onClick={() => { setDropdownOpen(false); router.push('/patient/settings'); }}
-                  className="w-full text-left px-4 py-2.5 hover:bg-[#F5F0EB] text-[#1A1F36] text-sm font-medium transition-all flex items-center gap-2"
+                  className="w-full text-left px-4 py-2.5 hover:bg-slate-50 text-slate-700 text-xs font-medium transition-all flex items-center gap-2"
                 >
-                  <Settings className="w-4 h-4" /> Account Settings
+                  <Settings className="w-3.5 h-3.5" /> Account Settings
                 </button>
-                <hr className="border-[#1A1F36]/8 my-1" />
+                <hr className="border-slate-100 my-1" />
                 <button 
                   onClick={handleLogout}
-                  className="w-full text-left px-4 py-2.5 hover:bg-rose-50 text-rose-600 text-sm font-medium transition-all flex items-center gap-2"
+                  className="w-full text-left px-4 py-2.5 hover:bg-rose-50 text-rose-600 text-xs font-medium transition-all flex items-center gap-2"
                 >
-                  <LogOut className="w-4 h-4" /> Sign Out
+                  <LogOut className="w-3.5 h-3.5" /> Sign Out
                 </button>
               </div>
             )}

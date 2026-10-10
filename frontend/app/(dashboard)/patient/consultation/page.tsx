@@ -3,9 +3,10 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Video, PhoneCall, Lock, Shield, CheckCircle, MapPin, Users, CreditCard, Smartphone, Building2, AlertCircle, CalendarPlus, Sun, CloudSun, Moon, Clock, CalendarDays, ArrowLeft } from 'lucide-react'
+import { Video, Lock, Shield, CheckCircle, MapPin, Users, CreditCard, Smartphone, Building2, AlertCircle, CalendarPlus, Sun, CloudSun, Moon, Clock, CalendarDays, ArrowLeft } from 'lucide-react'
 import { usePatientData } from '@/hooks/usePatientData'
 import { supabase, syncSupabaseAuthCookie } from '@/lib/supabaseClient'
+import ConsultationSkeleton from '@/components/patient/ConsultationSkeleton'
 
 const CONSULTATION_FEE = 499
 const SESSION_EXPIRED = 'SESSION_EXPIRED'
@@ -166,7 +167,8 @@ export default function ConsultationSchedulingPage() {
   const searchParams = useSearchParams()
   const { reloadData, user, profile, assessment, careTeam, onboardingState, loading: patientDataLoading } = usePatientData()
   const reusePaymentFromBookingId = searchParams.get('rescheduleFrom') || ''
-  const isActiveMemberFollowUp = onboardingState.membershipStatus === 'ACTIVE' && onboardingState.firstConsultationCompleted === true
+  const isPatientDataReady = !patientDataLoading
+  const isActiveMemberFollowUp = isPatientDataReady && onboardingState.membershipStatus === 'ACTIVE' && onboardingState.firstConsultationCompleted === true
   const isBookingPending = onboardingState.appointmentStatus === 'BOOKING_PENDING' || onboardingState.consultationPaymentStatus === 'PAID'
   const appointmentType = isActiveMemberFollowUp ? DOCTOR_FOLLOW_UP : INITIAL_DOCTOR_CONSULTATION
 
@@ -184,8 +186,8 @@ export default function ConsultationSchedulingPage() {
   const [assignment, setAssignment] = useState<AssignmentDetails | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<AvailableDoctorSlot | null>(null)
 
-  // Real-time calling alert state
-  const [doctorCallingAlert, setDoctorCallingAlert] = useState<{ roomUrl: string; consultationId: string } | null>(null)
+  const abortControllerRef = React.useRef<AbortController | null>(null)
+  const dateAbortControllerRef = React.useRef<AbortController | null>(null)
 
   const selectableDates = useMemo(() => {
     return [...availableDates].sort((a, b) => a.localeCompare(b))
@@ -218,10 +220,18 @@ export default function ConsultationSchedulingPage() {
       return
     }
 
+    if (dateAbortControllerRef.current) {
+      dateAbortControllerRef.current.abort()
+    }
+    const controller = new AbortController()
+    dateAbortControllerRef.current = controller
+
     setDateSlotsLoading(true)
     try {
       const params = new URLSearchParams({ appointmentType, date })
-      const res = await patientFetch(`/api/patient/appointments/availability?${params.toString()}`)
+      const res = await patientFetch(`/api/patient/appointments/availability?${params.toString()}`, {
+        signal: controller.signal,
+      })
       const data = await res.json()
       if (!res.ok || data.error) {
         throw new Error(data.error || 'Failed to load slots for selected date')
@@ -243,6 +253,9 @@ export default function ConsultationSchedulingPage() {
       slotCacheRef.current.set(date, slotsList)
       setSelectedDateSlots(slotsList)
     } catch (err) {
+      if (err instanceof Error && (err.name === 'AbortError' || controller.signal.aborted)) {
+        return
+      }
       if (err instanceof Error && err.message === SESSION_EXPIRED) {
         router.replace('/login')
         return
@@ -250,17 +263,29 @@ export default function ConsultationSchedulingPage() {
       console.error('Failed to load slots for selected date:', err)
       setSelectedDateSlots([])
     } finally {
-      setDateSlotsLoading(false)
+      if (!controller.signal.aborted) {
+        setDateSlotsLoading(false)
+      }
     }
   }, [appointmentType, isActiveMemberFollowUp, router])
 
   const loadAvailableSlots = useCallback(async () => {
+    if (patientDataLoading) return
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
     setSlotsLoading(true)
     setSlotsError('')
     slotCacheRef.current.clear()
     try {
       const params = new URLSearchParams({ appointmentType })
-      const res = await patientFetch(`/api/patient/appointments/availability?${params.toString()}`)
+      const res = await patientFetch(`/api/patient/appointments/availability?${params.toString()}`, {
+        signal: controller.signal,
+      })
       const data = await res.json()
       if (!res.ok || data.error) {
         throw new Error(data.error || 'Failed to load available slots')
@@ -311,6 +336,9 @@ export default function ConsultationSchedulingPage() {
         setSelectedDateSlots([])
       }
     } catch (err) {
+      if (err instanceof Error && (err.name === 'AbortError' || controller.signal.aborted)) {
+        return
+      }
       if (err instanceof Error && err.message === SESSION_EXPIRED) {
         router.replace('/login')
         return
@@ -318,77 +346,33 @@ export default function ConsultationSchedulingPage() {
       console.error('Failed to load available doctor slots:', err)
       setSlotsError(err instanceof Error ? err.message : 'Failed to load available doctor slots.')
     } finally {
-      setSlotsLoading(false)
+      if (!controller.signal.aborted) {
+        setSlotsLoading(false)
+      }
     }
-  }, [appointmentType, loadSlotsForDate, router])
+  }, [appointmentType, isActiveMemberFollowUp, loadSlotsForDate, patientDataLoading, router])
 
   useEffect(() => {
+    if (patientDataLoading) return
+
     const timer = window.setTimeout(() => {
       void loadAvailableSlots()
     }, 0)
 
     return () => window.clearTimeout(timer)
-  }, [loadAvailableSlots])
+  }, [loadAvailableSlots, patientDataLoading])
 
-  // Real-time: Listen for doctor calling
   useEffect(() => {
-    let channel: ReturnType<typeof supabase.channel> | null = null
-    let active = true
-
-    const setupRealtime = async () => {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (!session || !active) return
-
-      const patientId = session.user.id
-      const channelName = `patient-call-alert-${patientId}`
-
-      const existingChannel = supabase.getChannels().find((channel) => {
-        const cachedChannel = channel as { topic?: string; name?: string }
-        return cachedChannel.topic === channelName || cachedChannel.name === channelName
-      })
-      if (existingChannel) {
-        await supabase.removeChannel(existingChannel)
-      }
-
-      if (!active) return
-
-      channel = supabase
-        .channel(channelName)
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'doctor_consultations',
-            filter: `patient_id=eq.${patientId}`,
-          },
-          (payload) => {
-            const updated = payload.new as { id?: string; status?: string }
-            if (updated.status === 'calling' && updated.id) {
-              setDoctorCallingAlert({ roomUrl: updated.id, consultationId: updated.id })
-            } else if (updated.status === 'attended' || updated.status === 'completed') {
-              setDoctorCallingAlert(null)
-            }
-          }
-        )
-
-      channel.subscribe()
-    }
-
-    setupRealtime()
-
     return () => {
-      active = false
-      if (channel) supabase.removeChannel(channel)
+      if (abortControllerRef.current) abortControllerRef.current.abort()
+      if (dateAbortControllerRef.current) dateAbortControllerRef.current.abort()
     }
   }, [])
 
+
+
   if (patientDataLoading) {
-    return (
-      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
-        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
+    return <ConsultationSkeleton />
   }
 
   // Strict Onboarding Guard: Patient must have completed the assessment before choosing slots
@@ -631,53 +615,7 @@ export default function ConsultationSchedulingPage() {
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: designTokens.colors.background }}>
-      {/* Real-time Doctor Calling Alert */}
-      {doctorCallingAlert && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDoctorCallingAlert(null)} />
-          <div
-            className="relative bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl animate-in fade-in zoom-in-95"
-            style={{ backgroundColor: designTokens.colors.surface }}
-          >
-            <div className="absolute top-0 right-0 w-32 h-32 bg-[#C4622D]/10 rounded-full blur-3xl" />
-            <div className="relative space-y-6 text-center">
-              <div className="w-20 h-20 mx-auto rounded-full flex items-center justify-center animate-pulse" style={{ backgroundColor: `${designTokens.colors.primary}15` }}>
-                <PhoneCall className="w-10 h-10" style={{ color: designTokens.colors.primary }} />
-              </div>
-              <div>
-                <span className="text-xs font-semibold uppercase tracking-wider px-3 py-1 rounded-full inline-block" style={{ backgroundColor: `${designTokens.colors.primary}10`, color: designTokens.colors.primary }}>
-                  Incoming Call
-                </span>
-                <h3 className="text-2xl font-bold mt-4" style={{ color: designTokens.colors.textPrimary }}>
-                  Your Doctor is Ready
-                </h3>
-                <p className="text-sm mt-2" style={{ color: designTokens.colors.textSecondary }}>
-                  Your consultation session is starting now. Click below to join.
-                </p>
-              </div>
-              <div className="flex flex-col gap-3 pt-4">
-                <button
-                  onClick={() => {
-                    router.push(`/patient/consultation/room?id=${encodeURIComponent(doctorCallingAlert.consultationId)}`)
-                    setDoctorCallingAlert(null)
-                  }}
-                  className="w-full py-3 px-4 rounded-lg font-semibold text-white transition-all flex items-center justify-center gap-2"
-                  style={{ backgroundColor: designTokens.colors.primary }}
-                >
-                  <Video className="w-5 h-5" /> Join Now
-                </button>
-                <button
-                  onClick={() => setDoctorCallingAlert(null)}
-                  className="text-sm font-medium"
-                  style={{ color: designTokens.colors.textSecondary }}
-                >
-                  I&apos;ll join in a moment
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {paymentOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -905,9 +843,20 @@ export default function ConsultationSchedulingPage() {
                   </div>
 
                   {slotsLoading ? (
-                    <div className="flex items-center justify-center py-12 gap-3">
-                      <div className="w-7 h-7 border-3 border-teal-200 border-t-[#0D9488] rounded-full animate-spin" />
-                      <span className="text-sm font-semibold text-slate-600 font-sora">Loading available slots...</span>
+                    <div className="space-y-6 py-4 animate-in fade-in duration-200">
+                      <div>
+                        <div className="w-28 h-4 bg-slate-200 rounded mb-3 animate-pulse" />
+                        <div className="flex gap-2.5 overflow-x-auto pb-2">
+                          {[1, 2, 3, 4, 5].map((i) => (
+                            <div key={i} className="min-w-22 h-20 rounded-2xl border border-slate-200 bg-slate-50 animate-pulse" />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 pt-2">
+                        {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                          <div key={i} className="h-11 rounded-xl bg-slate-100 border border-slate-200 animate-pulse" />
+                        ))}
+                      </div>
                     </div>
                   ) : selectableDates.length > 0 ? (
                     <div className="space-y-6">
@@ -1217,11 +1166,17 @@ export default function ConsultationSchedulingPage() {
               </div>
 
               {slotsLoading ? (
-                <div className="flex items-center gap-3 rounded-xl p-5 border" style={{ borderColor: designTokens.colors.border }}>
-                  <div className="w-8 h-8 border-4 border-[#F5F0EB] border-t-[#C4622D] rounded-full animate-spin" />
-                  <p className="text-sm font-semibold" style={{ color: designTokens.colors.textSecondary }}>
-                    Checking available consultation dates...
-                  </p>
+                <div className="space-y-6 py-4 animate-in fade-in duration-200">
+                  <div className="flex gap-3 overflow-x-auto pb-2">
+                    {[1, 2, 3, 4, 5].map((i) => (
+                      <div key={i} className="min-w-24 h-20 rounded-2xl border-2 border-slate-200 bg-slate-50 animate-pulse" />
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-2">
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
+                      <div key={i} className="h-12 rounded-xl bg-slate-100 border border-slate-200 animate-pulse" />
+                    ))}
+                  </div>
                 </div>
               ) : selectableDates.length > 0 ? (
                 <div className="space-y-6">

@@ -96,7 +96,7 @@ function DashboardLayoutContent({
       active = false
       if (channel) supabase.removeChannel(channel)
     }
-  }, [])
+  }, [user?.id])
 
   // Onboarding gate: redirect if the user hasn't completed required flow steps
   const isStandaloneFlowPage = pathname.startsWith('/patient/onboarding') || pathname.startsWith('/patient/consultation')
@@ -410,6 +410,7 @@ function DashboardLayoutContent({
           pageTitle={title}
           breadcrumbs={crumbs}
           initials={initials}
+          patientName={patientName}
           notificationsCount={notificationsCount}
           onMenuToggle={() => setMobileSidebarOpen(true)}
           notifications={notifications}

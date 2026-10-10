@@ -3,7 +3,19 @@
 import { Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { AlertCircle, RefreshCw } from 'lucide-react'
-import StreamConsultationCall from '@/components/video/StreamConsultationCall'
+import dynamic from 'next/dynamic'
+
+const StreamConsultationCall = dynamic(
+  () => import('@/components/video/StreamConsultationCall'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full min-h-[500px] items-center justify-center text-white">
+        <RefreshCw className="h-6 w-6 animate-spin text-[#C4622D]" />
+      </div>
+    ),
+  }
+)
 
 function VideoRoomContent() {
   const router = useRouter()

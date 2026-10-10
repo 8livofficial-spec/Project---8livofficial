@@ -4,9 +4,9 @@ import React, { useState } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { 
-  LayoutDashboard, Calendar, TrendingDown, Package,
-  Pill, Video, CreditCard, Settings, LogOut, User,
-  ChevronLeft, ChevronRight
+  Home, Calendar, TrendingDown, Package,
+  Pill, MessageSquare, CreditCard, Settings, LogOut, User,
+  ChevronLeft, ChevronRight, Headphones, ArrowRight
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -41,11 +41,11 @@ export default function Sidebar({
   }
 
   const navLinks: NavLink[] = [
-    { icon: LayoutDashboard, label: 'Overview', href: '/patient' },
+    { icon: Home, label: 'Overview', href: '/patient' },
     { icon: Calendar, label: 'Appointments', href: '/patient/appointments' },
     { icon: Pill, label: 'Prescriptions', href: '/patient/prescriptions' },
     { icon: Package, label: 'Treatment Deliveries', href: '/patient/medicine-orders' },
-    { icon: Video, label: 'Consultations', href: '/patient/consultation' },
+    { icon: MessageSquare, label: 'Consultations', href: '/patient/consultation' },
     { icon: CreditCard, label: 'Billing', href: '/patient/billing' },
     { icon: User, label: 'Profile', href: '/patient/profile' },
     { icon: Settings, label: 'Settings', href: '/patient/settings' },
@@ -60,9 +60,6 @@ export default function Sidebar({
       console.error("Sign out error:", err)
     }
   }
-
-  const weekProgressPercent = Math.min(100, Math.round((programWeek / totalWeeks) * 100)) || 0
-  const weeksRemaining = Math.max(0, totalWeeks - programWeek)
 
   return (
     <aside className={`bg-[#0B132B] h-screen flex flex-col shrink-0 overflow-y-auto overflow-x-hidden border-r border-white/10 transition-all duration-300 relative group ${isCollapsed ? 'w-20' : 'w-64'}`}>
@@ -128,22 +125,30 @@ export default function Sidebar({
         })}
       </nav>
 
-      {/* Bottom section: Progress & logout */}
-      <div className={`mt-auto mb-4 space-y-4 ${isCollapsed ? 'mx-2' : 'mx-4'}`}>
-        {/* Week progress bar */}
+      {/* Bottom section: Help & logout */}
+      <div className={`mt-auto mb-4 space-y-3 ${isCollapsed ? 'mx-2' : 'mx-4'}`}>
+        {/* Support Help Card */}
         {!isCollapsed && (
-          <div className="p-3 bg-white/5 rounded-2xl border border-white/10">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-slate-400 text-[10px] uppercase tracking-wider font-bold">Program</span>
-              <span className="text-white text-[11px] font-semibold">Week {programWeek}/{totalWeeks}</span>
+          <div className="p-3.5 bg-white/5 rounded-2xl border border-white/10 text-white">
+            <div className="flex items-center gap-2.5 mb-1">
+              <div className="w-7 h-7 rounded-lg bg-teal-500/20 text-[#2DD4BF] flex items-center justify-center shrink-0">
+                <Headphones size={15} />
+              </div>
+              <p className="text-xs font-bold leading-tight">Need help?</p>
             </div>
-            <div className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-              <div 
-                className="h-1.5 bg-gradient-to-r from-[#00A884] to-[#2DD4BF] rounded-full transition-all duration-700" 
-                style={{ width: `${weekProgressPercent}%` }}
-              />
-            </div>
-            <p className="text-slate-400 text-[10px] mt-2 text-center">{weeksRemaining} weeks remaining</p>
+            <p className="text-[11px] text-slate-400 mb-2.5 leading-snug">
+              Our care team is here for you.
+            </p>
+            <button
+              onClick={() => {
+                onCloseMobile?.()
+                router.push('/patient/messages')
+              }}
+              className="w-full py-2 px-3 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+            >
+              <span>Contact Support</span>
+              <ArrowRight size={12} />
+            </button>
           </div>
         )}
 

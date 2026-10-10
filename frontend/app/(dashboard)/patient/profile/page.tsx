@@ -47,8 +47,25 @@ export default function PatientProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
-        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
+      <div className="space-y-6 max-w-4xl font-sans text-[#1A1F36] animate-pulse" aria-busy="true">
+        <div className="h-8 w-44 bg-slate-200/80 rounded-xl" />
+        <div className="dash-card p-6 sm:p-8 space-y-6 bg-white border border-slate-200/70 rounded-2xl">
+          <div className="flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-slate-100" />
+            <div className="space-y-2">
+              <div className="h-5 w-40 bg-slate-100 rounded-lg" />
+              <div className="h-3 w-56 bg-slate-100 rounded-md" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+            {[1, 2, 3, 4].map((i) => (
+              <div key={i} className="space-y-2">
+                <div className="h-3 w-24 bg-slate-100 rounded" />
+                <div className="h-10 bg-slate-50 border border-slate-100 rounded-xl" />
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     )
   }

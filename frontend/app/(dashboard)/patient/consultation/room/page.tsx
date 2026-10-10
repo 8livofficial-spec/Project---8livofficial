@@ -6,7 +6,22 @@ import { Video, Mic, MicOff, Camera, CameraOff, PhoneOff, Calendar, FileText, Ch
 import { usePatientData } from '@/hooks/usePatientData'
 import { supabase } from '@/lib/supabaseClient'
 import Link from 'next/link'
-import StreamConsultationCall from '@/components/video/StreamConsultationCall'
+import dynamic from 'next/dynamic'
+
+const StreamConsultationCall = dynamic(
+  () => import('@/components/video/StreamConsultationCall'),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="h-full min-h-[500px] flex items-center justify-center bg-slate-900 rounded-3xl text-white">
+        <div className="text-center space-y-3">
+          <div className="w-10 h-10 border-4 border-emerald-400 border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-sm font-semibold text-slate-300">Connecting to encrypted video room...</p>
+        </div>
+      </div>
+    ),
+  }
+)
 
 export default function ConsultationRoomPage() {
   return (
