@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { getAuthenticatedUser } from '@/lib/apiSecurity'
-import { invalidatePatientApiDashboardCache } from '@/app/api/patient/dashboard/route'
+import { invalidatePatientApiDashboardCache } from '@/lib/patientDashboardCache'
 
 export async function GET(request: Request) {
   try {

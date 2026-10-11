@@ -1,34 +1,54 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { 
   Bell, Video, CreditCard, Scale, Lock, 
-  MessageSquare, Inbox, MailOpen
+  MessageSquare, Inbox, MailOpen, ChevronLeft, ChevronRight
 } from 'lucide-react'
 import { usePatientData } from '@/hooks/usePatientData'
 import { motion, AnimatePresence } from 'framer-motion'
 import { supabase } from '@/lib/supabaseClient'
 
 export default function PatientNotificationsPage() {
-  const { user, notifications, reloadData, loading } = usePatientData()
+  const { user, reloadData } = usePatientData()
+  const [notificationsList, setNotificationsList] = useState<any[]>([])
+  const [unreadCount, setUnreadCount] = useState<number>(0)
   const [filter, setFilter] = useState<'all' | 'unread'>('all')
+  const [page, setPage] = useState<number>(1)
+  const [totalPages, setTotalPages] = useState<number>(1)
+  const [totalCount, setTotalCount] = useState<number>(0)
+  const [isLoading, setIsLoading] = useState<boolean>(true)
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
 
-  if (loading) {
-    return (
-      <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
-        <div className="w-10 h-10 border-4 border-current border-t-transparent rounded-full animate-spin" />
-      </div>
-    )
-  }
+  const fetchNotifications = useCallback(async (targetPage = 1, currentFilter = filter) => {
+    if (!user?.id) return
+    setIsLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const url = `/api/patient/notifications?patientId=${user.id}&page=${targetPage}&limit=15${currentFilter === 'unread' ? '&unreadOnly=true' : ''}`
+      const res = await fetch(url, {
+        headers: session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setNotificationsList(data.notifications || [])
+        setUnreadCount(data.unreadCount ?? 0)
+        setTotalPages(data.pagination?.totalPages || 1)
+        setTotalCount(data.pagination?.totalCount || 0)
+        setPage(targetPage)
+      }
+    } catch (err) {
+      console.error('Failed to load notifications:', err)
+    } finally {
+      setIsLoading(false)
+    }
+  }, [user?.id, filter])
 
-  // Filter notifications
-  const displayedNotifications = notifications.filter(n => {
-    if (filter === 'unread') return !n.is_read
-    return true
-  })
-
-  const unreadCount = notifications.filter(n => !n.is_read).length
+  useEffect(() => {
+    if (user?.id) {
+      fetchNotifications(page, filter)
+    }
+  }, [user?.id, page, filter, fetchNotifications])
 
   const getNotificationIcon = (type?: string) => {
     switch (type) {
@@ -65,6 +85,7 @@ export default function PatientNotificationsPage() {
       })
       if (res.ok) {
         reloadData()
+        fetchNotifications(page, filter)
       }
     } catch (err) {
       console.error('Failed to mark notification as read:', err)
@@ -91,6 +112,7 @@ export default function PatientNotificationsPage() {
       })
       if (res.ok) {
         reloadData()
+        fetchNotifications(page, filter)
       }
     } catch (err) {
       console.error('Failed to mark all as read:', err)
@@ -122,13 +144,16 @@ export default function PatientNotificationsPage() {
       {/* Filter Tabs */}
       <div className="flex gap-2 border-b border-[#1A1F36]/6 pb-px">
         {[
-          { key: 'all' as const, label: 'All Activity' },
+          { key: 'all' as const, label: `All Activity (${totalCount})` },
           { key: 'unread' as const, label: `Unread (${unreadCount})` }
         ].map(tab => (
           <button
             key={tab.key}
-            onClick={() => setFilter(tab.key)}
-            className={`py-3 px-4 text-xs font-bold transition-all relative ${
+            onClick={() => {
+              setFilter(tab.key)
+              setPage(1)
+            }}
+            className={`py-3 px-4 text-xs font-bold transition-all relative cursor-pointer ${
               filter === tab.key
                 ? 'text-[#C4622D]'
                 : 'text-[#8896A4] hover:text-[#1A1F36]'
@@ -147,71 +172,105 @@ export default function PatientNotificationsPage() {
 
       {/* Notifications List */}
       <div className="space-y-3">
-        <AnimatePresence mode="popLayout">
-          {displayedNotifications.length > 0 ? (
-            displayedNotifications.map(notif => (
+        {isLoading && notificationsList.length === 0 ? (
+          <div className="min-h-[30vh] flex items-center justify-center text-[#C4622D]">
+            <div className="w-8 h-8 border-3 border-current border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : (
+          <AnimatePresence mode="popLayout">
+            {notificationsList.length > 0 ? (
+              notificationsList.map(notif => (
+                <motion.div
+                  key={notif.id}
+                  layout
+                  initial={{ opacity: 0, y: 12 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  onClick={() => !notif.is_read && markAsRead(notif.id)}
+                  className={`bg-white border rounded-2xl p-4 flex gap-4 transition-all duration-200 shadow-[0_2px_8px_rgba(26,31,54,0.01)] ${
+                    notif.is_read 
+                      ? 'border-[#1A1F36]/6 opacity-75' 
+                      : 'border-[#C4622D]/20 bg-gradient-to-r from-[#C4622D]/2 to-transparent cursor-pointer hover:border-[#C4622D]/40'
+                  }`}
+                >
+                  {/* Icon wrapper */}
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                    notif.is_read ? 'bg-[#F5F0EB]' : 'bg-[#C4622D]/10'
+                  }`}>
+                    {getNotificationIcon(notif.type)}
+                  </div>
+
+                  {/* Message Content */}
+                  <div className="flex-grow min-w-0 space-y-1">
+                    <div className="flex justify-between items-start gap-4">
+                      <p className={`text-sm font-bold text-[#1A1F36] ${notif.is_read ? '' : 'font-extrabold'}`}>
+                        {notif.title}
+                      </p>
+                      <span className="text-[10px] text-[#8896A4] shrink-0 font-medium">
+                        {new Date(notif.created_at).toLocaleDateString('en-US', {
+                          month: 'short',
+                          day: 'numeric',
+                          hour: 'numeric',
+                          minute: '2-digit'
+                        })}
+                      </span>
+                    </div>
+                    <p className="text-xs text-[#8896A4] leading-relaxed break-words">{notif.message}</p>
+                  </div>
+
+                  {/* Unread Indicator dot */}
+                  {!notif.is_read && (
+                    <div className="flex items-center shrink-0">
+                      <span className="w-2.5 h-2.5 rounded-full bg-[#C4622D] animate-pulse" />
+                    </div>
+                  )}
+                </motion.div>
+              ))
+            ) : (
               <motion.div
-                key={notif.id}
-                layout
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
-                onClick={() => !notif.is_read && markAsRead(notif.id)}
-                className={`bg-white border rounded-2xl p-4 flex gap-4 transition-all duration-200 shadow-[0_2px_8px_rgba(26,31,54,0.01)] ${
-                  notif.is_read 
-                    ? 'border-[#1A1F36]/6 opacity-75' 
-                    : 'border-[#C4622D]/20 bg-gradient-to-r from-[#C4622D]/2 to-transparent cursor-pointer hover:border-[#C4622D]/40'
-                }`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="bg-white rounded-3xl p-12 text-center border border-[#1A1F36]/6 shadow-sm space-y-4"
               >
-                {/* Icon wrapper */}
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
-                  notif.is_read ? 'bg-[#F5F0EB]' : 'bg-[#C4622D]/10'
-                }`}>
-                  {getNotificationIcon(notif.type)}
+                <div className="w-14 h-14 bg-[#F5F0EB] rounded-full flex items-center justify-center mx-auto text-[#8896A4]">
+                  <Inbox size={24} />
                 </div>
-
-                {/* Message Content */}
-                <div className="flex-grow min-w-0 space-y-1">
-                  <div className="flex justify-between items-start gap-4">
-                    <p className={`text-sm font-bold text-[#1A1F36] ${notif.is_read ? '' : 'font-extrabold'}`}>
-                      {notif.title}
-                    </p>
-                    <span className="text-[10px] text-[#8896A4] shrink-0 font-medium">
-                      {new Date(notif.created_at).toLocaleDateString('en-US', {
-                        month: 'short',
-                        day: 'numeric',
-                        hour: 'numeric',
-                        minute: '2-digit'
-                      })}
-                    </span>
-                  </div>
-                  <p className="text-xs text-[#8896A4] leading-relaxed break-words">{notif.message}</p>
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-[#1A1F36]">No Notifications</p>
+                  <p className="text-xs text-[#8896A4]">You are completely caught up with your wellness plan updates.</p>
                 </div>
-
-                {/* Unread Indicator dot */}
-                {!notif.is_read && (
-                  <div className="flex items-center shrink-0">
-                    <span className="w-2.5 h-2.5 rounded-full bg-[#C4622D] animate-pulse" />
-                  </div>
-                )}
               </motion.div>
-            ))
-          ) : (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="bg-white rounded-3xl p-12 text-center border border-[#1A1F36]/6 shadow-sm space-y-4"
-            >
-              <div className="w-14 h-14 bg-[#F5F0EB] rounded-full flex items-center justify-center mx-auto text-[#8896A4]">
-                <Inbox size={24} />
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-bold text-[#1A1F36]">No Notifications</p>
-                <p className="text-xs text-[#8896A4]">You are completely caught up with your wellness plan updates.</p>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            )}
+          </AnimatePresence>
+        )}
+
+        {/* Pagination Controls */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between pt-4 border-t border-[#1A1F36]/6">
+            <p className="text-xs text-slate-500 font-medium">
+              Showing page {page} of {totalPages} ({totalCount} total)
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page <= 1 || isLoading}
+                className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                aria-label="Previous page"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="text-xs font-bold text-slate-700 px-2">{page}</span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page >= totalPages || isLoading}
+                className="p-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                aria-label="Next page"
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

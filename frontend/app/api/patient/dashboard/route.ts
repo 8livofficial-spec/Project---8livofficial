@@ -43,8 +43,7 @@ function getCurrentJourneyStep(state: {
   return 'DASHBOARD'
 }
 
-import { getCachedPatientDashboard, setCachedPatientDashboard, invalidatePatientApiDashboardCache } from '@/lib/patientDashboardCache'
-export { invalidatePatientApiDashboardCache }
+import { getCachedPatientDashboard, setCachedPatientDashboard } from '@/lib/patientDashboardCache'
 
 export async function GET(request: Request) {
   try {
@@ -152,11 +151,11 @@ export async function GET(request: Request) {
         .limit(10),
       supabaseAdmin
         .from('patient_notifications')
-        .select('*')
+        .select('*', { count: 'exact' })
         .eq('patient_id', patientId)
         .eq('is_read', false)
         .order('created_at', { ascending: false })
-        .limit(25),
+        .limit(20),
       supabaseAdmin
         .from('diet_plans')
         .select('*')
@@ -197,6 +196,7 @@ export async function GET(request: Request) {
     const consultations = consultationsRes.data || []
 
     // Merge unread notifications with recent notifications to ensure unread alerts are never hidden
+    const unreadNotificationCount = unreadNotifsRes.count ?? (unreadNotifsRes.data || []).length
     const notifMap = new Map<string, any>()
     for (const n of unreadNotifsRes.data || []) notifMap.set(n.id, n)
     for (const n of notificationsRes.data || []) {
@@ -204,7 +204,7 @@ export async function GET(request: Request) {
     }
     let notifications = Array.from(notifMap.values())
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .slice(0, 20)
+      .slice(0, 15)
     const dietPlan = dietPlanRes.data || null
     const fitnessPlan = fitnessPlanRes.data || null
 
@@ -384,6 +384,7 @@ export async function GET(request: Request) {
       totalWeightLogsCount,
       weightLogs,
       consultations,
+      unreadNotificationCount,
       notifications,
       dietPlan,
       fitnessPlan,

@@ -2,7 +2,7 @@
 
 import React, { useState } from 'react'
 import dynamic from 'next/dynamic'
-import { TrendingDown, Award, Flame, Zap } from 'lucide-react'
+import { TrendingDown, TrendingUp, Award, Flame, Zap } from 'lucide-react'
 import { usePatientData } from '@/hooks/usePatientData'
 
 const WeightAnalysisChart = dynamic(
@@ -35,13 +35,16 @@ export default function ProgressPage() {
     : assessment?.weight_kg || 80
   const startWeight = assessment?.weight_kg || 82
   const goalWeight = assessment?.goal_weight_kg || 60
-  const totalChange = startWeight - currentWeight
+  const weightDiff = Number((startWeight - currentWeight).toFixed(1))
+  const isLoss = weightDiff > 0
+  const isGain = weightDiff < 0
+  const absDiff = Math.abs(weightDiff)
 
   // Calculated BMI
   const heightM = assessment?.height_cm ? assessment.height_cm / 100 : 1.7
   const startBmi = startWeight / (heightM * heightM)
   const currentBmi = currentWeight / (heightM * heightM)
-  const bmiChange = startBmi - currentBmi
+  const bmiDiff = Number((currentBmi - startBmi).toFixed(1))
 
 
   const getMilestones = () => {
@@ -150,8 +153,10 @@ export default function ProgressPage() {
       <div className="bg-white rounded-2xl p-6 shadow-[0_2px_12px_rgba(26,31,54,0.08)] border border-[#1A1F36]/6">
         <div className="flex justify-between items-center mb-6">
           <h3 className="font-bold text-base font-sora">Weight Analysis</h3>
-          <span className="bg-[#5C7A6B]/10 text-[#5C7A6B] text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">
-            {totalChange > 0 ? `-${totalChange.toFixed(1)} kg lost` : 'Starting weight logged'}
+          <span className={`text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider ${
+            isLoss ? 'bg-[#5C7A6B]/10 text-[#5C7A6B]' : isGain ? 'bg-amber-100 text-amber-800' : 'bg-slate-100 text-slate-600'
+          }`}>
+            {isLoss ? `-${absDiff.toFixed(1)} kg lost` : isGain ? `+${absDiff.toFixed(1)} kg gained` : 'Starting weight logged'}
           </span>
         </div>
         <WeightAnalysisChart data={displayWeightData} hasLogs={weightLogs.length > 0} />
@@ -160,12 +165,16 @@ export default function ProgressPage() {
       {/* Stats Cards Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="bg-white rounded-2xl p-5 border border-[#1A1F36]/6 shadow-sm flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-[#5C7A6B]/10 text-[#5C7A6B] flex items-center justify-center shrink-0">
-            <TrendingDown className="w-5 h-5" />
+          <div className={`w-10 h-10 rounded-xl ${isGain ? 'bg-amber-50 text-amber-600' : 'bg-[#5C7A6B]/10 text-[#5C7A6B]'} flex items-center justify-center shrink-0`}>
+            {isGain ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
           </div>
           <div>
-            <p className="text-[10px] font-bold text-[#8896A4] uppercase tracking-wider">Total Loss</p>
-            <p className="text-lg font-bold font-sora mt-0.5">{totalChange.toFixed(1)} kg</p>
+            <p className="text-[10px] font-bold text-[#8896A4] uppercase tracking-wider">
+              {isGain ? 'Total Gain' : isLoss ? 'Total Loss' : 'Weight Change'}
+            </p>
+            <p className="text-lg font-bold font-sora mt-0.5">
+              {isGain ? `+${absDiff.toFixed(1)}` : isLoss ? `-${absDiff.toFixed(1)}` : '0.0'} kg
+            </p>
           </div>
         </div>
 
@@ -175,7 +184,9 @@ export default function ProgressPage() {
           </div>
           <div>
             <p className="text-[10px] font-bold text-[#8896A4] uppercase tracking-wider">BMI Change</p>
-            <p className="text-lg font-bold font-sora mt-0.5">{bmiChange > 0 ? `-${bmiChange.toFixed(1)}` : '0.0'}</p>
+            <p className="text-lg font-bold font-sora mt-0.5">
+              {bmiDiff < 0 ? `-${Math.abs(bmiDiff).toFixed(1)}` : bmiDiff > 0 ? `+${bmiDiff.toFixed(1)}` : '0.0'}
+            </p>
           </div>
         </div>
 
@@ -184,8 +195,10 @@ export default function ProgressPage() {
             <Flame className="w-5 h-5" />
           </div>
           <div>
-            <p className="text-[10px] font-bold text-[#8896A4] uppercase tracking-wider">Weekly Average</p>
-            <p className="text-lg font-bold font-sora mt-0.5">{(totalChange / 4).toFixed(1)} kg</p>
+            <p className="text-[10px] font-bold text-[#8896A4] uppercase tracking-wider">Weekly Rate</p>
+            <p className="text-lg font-bold font-sora mt-0.5">
+              {isGain ? `+${(absDiff / 4).toFixed(1)}` : isLoss ? `-${(absDiff / 4).toFixed(1)}` : '0.0'} kg
+            </p>
           </div>
         </div>
 

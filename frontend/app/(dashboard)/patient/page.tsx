@@ -52,14 +52,17 @@ export default function PatientDashboardHome() {
       const parsed = parseFloat(latest.weight_kg as any)
       if (!Number.isNaN(parsed) && parsed > 0) return parsed
     }
-    return startWeight > 70 ? 70.0 : startWeight
+    return startWeight
   }, [weightLogs, startWeight])
 
-  const totalLost = Math.max(0, Number((startWeight - currentWeight).toFixed(1))) || 14.0
-  const toGo = Math.max(0, Number((currentWeight - goalWeight).toFixed(1))) || 2.0
-  const progressPercent = startWeight > goalWeight 
+  const weightDiff = Number((startWeight - currentWeight).toFixed(1))
+  const isLoss = weightDiff > 0
+  const isGain = weightDiff < 0
+  const absChange = Math.abs(weightDiff)
+  const toGo = Math.max(0, Number((currentWeight - goalWeight).toFixed(1)))
+  const progressPercent = startWeight > goalWeight && startWeight !== goalWeight
     ? Math.min(100, Math.max(0, Math.round(((startWeight - currentWeight) / (startWeight - goalWeight)) * 100))) 
-    : 88
+    : 0
 
   // Next Upcoming Appointment logic
   const upcomingAppointment = useMemo(() => {
@@ -233,9 +236,21 @@ export default function PatientDashboardHome() {
             </div>
           </div>
           <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
-            <span className="font-bold text-emerald-600 flex items-center gap-0.5">
-              ↓ {totalLost.toFixed(1)} kg lost
-            </span>
+            {isLoss && (
+              <span className="font-bold text-emerald-600 flex items-center gap-0.5">
+                ↓ {absChange.toFixed(1)} kg lost
+              </span>
+            )}
+            {isGain && (
+              <span className="font-bold text-amber-600 flex items-center gap-0.5">
+                ↑ {absChange.toFixed(1)} kg gained
+              </span>
+            )}
+            {!isLoss && !isGain && (
+              <span className="font-bold text-slate-500 flex items-center gap-0.5">
+                0.0 kg change
+              </span>
+            )}
             <span className="text-slate-400 text-[11px]">
               Started at {startWeight.toFixed(1)} kg
             </span>
@@ -269,22 +284,24 @@ export default function PatientDashboardHome() {
           </div>
         </div>
 
-        {/* Card 3: Weight Lost */}
+        {/* Card 3: Weight Change */}
         <div className="bg-white rounded-[22px] p-5 border border-slate-200/70 shadow-[0_2px_12px_rgba(0,0,0,0.02)] flex flex-col justify-between hover:shadow-sm transition-all">
           <div className="flex items-start gap-3.5 mb-3">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <div className={`w-10 h-10 rounded-xl ${isGain ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'} flex items-center justify-center shrink-0`}>
               <BarChart3 className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-xs font-semibold text-slate-500">Weight Lost</p>
+              <p className="text-xs font-semibold text-slate-500">
+                {isGain ? 'Weight Gained' : isLoss ? 'Weight Lost' : 'Weight Change'}
+              </p>
               <h3 className="text-2xl font-black text-[#1A1F36] tracking-tight mt-0.5">
-                {totalLost.toFixed(1)} kg
+                {isGain ? `+${absChange.toFixed(1)}` : isLoss ? `-${absChange.toFixed(1)}` : '0.0'} kg
               </h3>
             </div>
           </div>
           <div className="pt-2 border-t border-slate-100">
             <p className="text-xs text-slate-400">
-              Since starting your program
+              {isGain ? 'Net increase since baseline' : isLoss ? 'Net decrease since baseline' : 'Maintaining initial baseline'}
             </p>
           </div>
         </div>
@@ -342,8 +359,12 @@ export default function PatientDashboardHome() {
             {/* 3 Stats horizontal tiles */}
             <div className="grid grid-cols-3 gap-3">
               <div className="bg-slate-50/80 rounded-2xl p-3 text-center border border-slate-100 flex flex-col justify-center">
-                <p className="text-base font-black text-emerald-600">↓ {totalLost.toFixed(1)} kg</p>
-                <p className="text-[10px] text-slate-500 font-medium mt-0.5">Total weight lost</p>
+                <p className={`text-base font-black ${isGain ? 'text-amber-600' : isLoss ? 'text-emerald-600' : 'text-slate-600'}`}>
+                  {isGain ? `↑ ${absChange.toFixed(1)} kg` : isLoss ? `↓ ${absChange.toFixed(1)} kg` : '0.0 kg'}
+                </p>
+                <p className="text-[10px] text-slate-500 font-medium mt-0.5">
+                  {isGain ? 'Weight gained' : isLoss ? 'Total weight lost' : 'Weight change'}
+                </p>
               </div>
               <div className="bg-slate-50/80 rounded-2xl p-3 text-center border border-slate-100 flex flex-col justify-center">
                 <p className="text-base font-black text-[#1A1F36] flex items-center justify-center gap-1">

@@ -234,6 +234,7 @@ export interface PatientDataContextValue {
   consultations: Consultation[]
   consultation: Consultation | null
   notifications: Notification[]
+  unreadNotificationCount?: number
   careTeam: any
   staffConsultations: StaffConsultation[]
   onboardingState: PatientOnboardingState
@@ -272,6 +273,7 @@ function usePatientDataInternal() {
   const [consultations, setConsultations] = useState<Consultation[]>([])
   const [consultation, setConsultation] = useState<Consultation | null>(null) // Latest doctor consult for meds
   const [notifications, setNotifications] = useState<Notification[]>([])
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState<number>(0)
   const [onboardingState, setOnboardingState] = useState<PatientOnboardingState>({
     onboardingCompleted: false,
     appointmentBooked: false,
@@ -359,6 +361,11 @@ function usePatientDataInternal() {
           setConsultation(dashboardData.consultations[0])
         }
         setNotifications(dashboardData.notifications || [])
+        setUnreadNotificationCount(
+          typeof dashboardData.unreadNotificationCount === 'number'
+            ? dashboardData.unreadNotificationCount
+            : (dashboardData.notifications || []).filter((n: any) => !n.is_read).length
+        )
         setDietPlan(dashboardData.dietPlan || null)
         setFitnessPlan(dashboardData.fitnessPlan || null)
         if (dashboardData.activePrescription) {
@@ -566,6 +573,7 @@ function usePatientDataInternal() {
     consultations,
     consultation,
     notifications,
+    unreadNotificationCount,
     careTeam,
     staffConsultations,
     onboardingState,

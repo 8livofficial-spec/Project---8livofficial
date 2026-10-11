@@ -8,6 +8,10 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const patientId = searchParams.get('patientId')
 
+    const pageParam = searchParams.get('page')
+    const limitParam = searchParams.get('limit')
+    const unreadOnly = searchParams.get('unreadOnly') === 'true'
+
     if (!patientId) {
       return NextResponse.json({ error: 'Missing patientId' }, { status: 400 })
     }
@@ -15,18 +19,55 @@ export async function GET(request: Request) {
     await assertPatientOrAssignedProvider(request, patientId)
     await ensureMembershipExpiryNotification(patientId)
 
-    const { data, error } = await supabaseAdmin
+    const page = Math.max(1, parseInt(pageParam || '1', 10) || 1)
+    const limit = Math.min(100, Math.max(1, parseInt(limitParam || '20', 10) || 20))
+    const from = (page - 1) * limit
+    const to = from + limit - 1
+
+    let query = supabaseAdmin
       .from('patient_notifications')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('patient_id', patientId)
       .order('created_at', { ascending: false })
-      .limit(100)
+      .range(from, to)
 
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
+    if (unreadOnly) {
+      query = query.eq('is_read', false)
     }
 
-    return NextResponse.json({ notifications: data || [] })
+    const [paginatedRes, unreadCountRes] = await Promise.all([
+      query,
+      supabaseAdmin
+        .from('patient_notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('patient_id', patientId)
+        .eq('is_read', false),
+    ])
+
+    if (paginatedRes.error) {
+      return NextResponse.json({ error: paginatedRes.error.message }, { status: 500 })
+    }
+
+    const notifications = paginatedRes.data || []
+    const totalCount = paginatedRes.count ?? notifications.length
+    const totalPages = Math.max(1, Math.ceil(totalCount / limit))
+    const hasMore = page < totalPages
+
+    return NextResponse.json({
+      notifications,
+      unreadCount: unreadCountRes.count ?? 0,
+      pagination: {
+        page,
+        limit,
+        totalCount,
+        totalPages,
+        hasMore,
+      },
+    }, {
+      headers: {
+        'Cache-Control': 'private, no-cache, no-store, must-revalidate',
+      }
+    })
   } catch (err: unknown) {
     console.error('API Error in GET /api/patient/notifications:', err)
     const message = err instanceof Error ? err.message : 'Internal Server Error'
