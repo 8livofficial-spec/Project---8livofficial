@@ -95,9 +95,7 @@ export async function POST(request: Request) {
       if (paymentType === 'membership') {
         amount = selectedPricing.finalPrice
       } else {
-        const subtotal = selectedPricing.finalPrice + 499
-        const gst = Math.round(subtotal * 0.18)
-        amount = subtotal + gst
+        amount = selectedPricing.finalPrice + 499
       }
     }
 

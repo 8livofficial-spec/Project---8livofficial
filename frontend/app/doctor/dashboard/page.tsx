@@ -491,6 +491,8 @@ type Consultation = {
   patient_eligibility_status?: string | null;
   patient_medical_risk_flags?: string | null;
   patient_medication_proof_url?: string | null;
+  patient_lab_preference?: string | null;
+  patient_lab_report_url?: string | null;
   patient_phone?: string | null;
   patient_phone_e164?: string | null;
   patient_whatsapp_phone?: string | null;
@@ -2866,7 +2868,7 @@ export default function DoctorDashboard() {
                                 </div>
                               ))}
                             </div>
-                            {(c.patient_history || c.patient_extra_info || c.patient_medical_risk_flags || c.patient_medication_proof_url) && (
+                            {(c.patient_history || c.patient_extra_info || c.patient_medical_risk_flags || c.patient_medication_proof_url || c.patient_lab_preference || c.patient_lab_report_url) && (
                               <div className="mt-4 rounded-2xl bg-white border border-[#1A1F36]/8 p-4 space-y-2">
                                 <p className="text-[10px] font-black uppercase tracking-widest text-[#8896A4]">Patient Case Review</p>
                                 {c.patient_history && <p className="text-xs font-semibold text-[#40516A]"><span className="font-black text-[#1A1F36]">Assessment:</span> {safeDisplayValue(c.patient_history)}</p>}
@@ -2879,6 +2881,14 @@ export default function DoctorDashboard() {
                                 {c.patient_medication_proof_url && (
                                   <a href={c.patient_medication_proof_url} target="_blank" rel="noreferrer" className="inline-flex text-xs font-black text-[#C4622D] hover:text-[#A8522A]">
                                     View uploaded medication proof
+                                  </a>
+                                )}
+                                {c.patient_lab_preference && (
+                                  <p className="text-xs font-semibold text-[#40516A]"><span className="font-black text-[#1A1F36]">Blood report:</span> {c.patient_lab_preference === 'third_party' ? 'Home collection requested' : c.patient_lab_preference}</p>
+                                )}
+                                {c.patient_lab_report_url && (
+                                  <a href={c.patient_lab_report_url} target="_blank" rel="noreferrer" className="ml-3 inline-flex text-xs font-black text-[#0D9488] hover:text-[#0F766E]">
+                                    View blood report
                                   </a>
                                 )}
                               </div>
@@ -3813,6 +3823,19 @@ export default function DoctorDashboard() {
                           <a href={selectedPatient.medication_proof_url} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-full bg-[#FFF4EC] px-4 py-2 text-xs font-black text-[#C4622D]">
                             View uploaded medication proof
                           </a>
+                        )}
+                        {(selectedPatient.lab_preference || selectedPatient.lab_report_url) && (
+                          <div className="mt-4 rounded-2xl border border-[#0D9488]/20 bg-[#0D9488]/8 p-4">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#0D9488]">Blood Report</p>
+                            <p className="mt-2 text-sm font-bold text-[#40516A]">
+                              {selectedPatient.lab_preference === 'third_party' ? 'Home collection requested' : selectedPatient.lab_preference || 'Report available'}
+                            </p>
+                            {selectedPatient.lab_report_url && (
+                              <a href={selectedPatient.lab_report_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-full bg-white px-4 py-2 text-xs font-black text-[#0D9488] shadow-sm">
+                                View blood report
+                              </a>
+                            )}
+                          </div>
                         )}
                       </ClinicalCard>
 

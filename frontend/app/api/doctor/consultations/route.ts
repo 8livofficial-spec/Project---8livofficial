@@ -51,6 +51,8 @@ type HealthAssessmentRow = {
   is_eligible?: boolean | null;
   medication_proof_url?: string | null;
   medication_proof?: string | null;
+  patient_lab_preference?: string | null;
+  patient_lab_report_url?: string | null;
   [key: string]: unknown;
 };
 
@@ -397,6 +399,7 @@ export async function POST(req: Request) {
       const lastName = assess.last_name || prof.last_name || '';
       const fullName = `${firstName} ${lastName}`.trim();
       const normalizedPhone = normalizePhoneNumber(assess.phone_number || prof.phone_number || '');
+      const labWork = (assess?.medical_history as any)?.lab_work || {};
 
       return {
         ...c,
@@ -425,6 +428,8 @@ export async function POST(req: Request) {
         patient_eligibility_status: getEligibilityStatus(assess),
         patient_medical_risk_flags: getRiskFlags(assess),
         patient_medication_proof_url: (assess?.medical_history as any)?.medication_proof_url || (assess?.medical_history as any)?.medication_proof || (assess as any)?.medication_proof_url || (assess as any)?.medication_proof || null,
+        patient_lab_preference: labWork?.preference || null,
+        patient_lab_report_url: labWork?.report_url || null,
       };
     };
 

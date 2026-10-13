@@ -3,8 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  ShieldCheck, Lock, CreditCard, Smartphone, Building2,
-  ChevronRight, CheckCircle2, ArrowLeft, AlertCircle, QrCode
+  ShieldCheck, Lock, CreditCard, CheckCircle2, ArrowLeft, AlertCircle
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { authedFetch } from '@/lib/apiClient'
@@ -63,7 +62,7 @@ export default function OnboardingPaymentPage() {
   const [processingMsg, setProcessingMsg] = useState('Initiating payment...')
   const [txnId, setTxnId] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const progressRef = useRef<any>(null)
+  const selectedPlanIdRef = useRef<string>('')
 
 
   useEffect(() => {
@@ -74,7 +73,7 @@ export default function OnboardingPaymentPage() {
       // Fetch the latest assessment safely via backend API (bypassing RLS select policies)
       const res = await authedFetch(`/api/patient/status?patientId=${session.user.id}`)
       if (!res.ok) {
-        router.replace('/plans')
+        router.replace('/patient/onboarding/plan')
         return
       }
       const statusData = await res.json()
@@ -82,7 +81,7 @@ export default function OnboardingPaymentPage() {
 
       // No assessment row or no plan chosen yet → go back to plan selection
       if (!data || !data.membership_tier) {
-        router.replace('/plans')
+        router.replace('/patient/onboarding/plan')
         return
       }
       // Already paid → go straight to dashboard
@@ -93,7 +92,6 @@ export default function OnboardingPaymentPage() {
 
       setAssessment(data)
       setProfile(statusData.profile)
-      setLoading(false)
     }
     load()
   }, [router])
@@ -102,16 +100,22 @@ export default function OnboardingPaymentPage() {
   const [selectedPlan, setSelectedPlan] = useState<any>(null)
 
   useEffect(() => {
+    if (!assessment?.membership_tier) return
     fetch('/api/subscriptions/pricing')
       .then(r => r.json())
       .then(d => {
         if (d.plans && d.plans.length > 0) {
+          const matched = d.plans.find((p: any) => p.name === assessment.membership_tier)
+            || d.plans.find((p: any) => String(p.durationMonths) === String(parseInt(String(assessment.membership_tier))))
+            || d.plans[0]
           setPlans(d.plans)
-          setSelectedPlan(d.plans[0])
+          setSelectedPlan(matched)
+          selectedPlanIdRef.current = matched?.id || ''
         }
       })
       .catch(e => console.warn('Failed to load plans:', e))
-  }, [])
+      .finally(() => setLoading(false))
+  }, [assessment?.membership_tier])
 
   // ── Authoritative Database-Driven Pricing ───────────────────────────────────
   const durationMonths = selectedPlan ? Number(selectedPlan.durationMonths) : (assessment?.membership_tier ? parseInt(String(assessment.membership_tier)) : 1)
@@ -119,9 +123,7 @@ export default function OnboardingPaymentPage() {
   const basePrice = selectedPlan ? Number(selectedPlan.basePrice) : 1999
   const discountAmount = selectedPlan ? Number(selectedPlan.discountAmount || 0) : 0
   const consultFee = 499 // Initial consultation is ₹499 PAID (intentional, client-approved)
-  const subtotal = planPrice + consultFee
-  const gst = Math.round(subtotal * 0.18)
-  const total = subtotal + gst
+  const total = planPrice + consultFee
 
   // ── Real Razorpay Checkout ────────────────────────────────────────────────
   const loadRazorpayScript = () => {
@@ -171,7 +173,7 @@ export default function OnboardingPaymentPage() {
           amount: amountInRupees,
           currency: 'INR',
           paymentType: 'combined',
-          planId: selectedPlan?.id,
+          planId: selectedPlanIdRef.current || selectedPlan?.id,
           durationMonths: selectedPlan?.durationMonths || 1,
         }),
       })
@@ -232,7 +234,7 @@ export default function OnboardingPaymentPage() {
               body: JSON.stringify({
                 patientId: session.user.id,
                 paymentType: 'combined',
-                planId: selectedPlan?.id,
+                planId: selectedPlanIdRef.current || selectedPlan?.id,
                 durationMonths: selectedPlan?.durationMonths || 1,
                 amount: total,
                 shippingState: assessment?.shipping_state || '',
@@ -251,6 +253,10 @@ export default function OnboardingPaymentPage() {
             setTxnId(response.razorpay_payment_id)
             setProgress(100)
             setStep('success')
+            window.setTimeout(() => {
+              document.cookie = 'user_role=patient; path=/; max-age=86400; SameSite=Lax'
+              window.location.href = '/patient?force=true'
+            }, 900)
             resolve()
           } catch (vErr) {
             reject(vErr)
@@ -305,31 +311,10 @@ export default function OnboardingPaymentPage() {
             </h2>
           </div>
 
-          {/* Duration Selector in Sidebar */}
-          <div className="space-y-2">
-            <p className="text-white/40 text-[10px] font-black uppercase tracking-wider font-sora">Select Treatment Program</p>
-            <div className="grid grid-cols-2 gap-2">
-              {plans.map((p) => {
-                const isSelected = selectedPlan?.id === p.id
-                return (
-                  <button
-                    key={p.id || p.durationMonths}
-                    type="button"
-                    onClick={() => setSelectedPlan(p)}
-                    className={`rounded-xl p-2.5 text-left transition border ${
-                      isSelected
-                        ? 'bg-[#5EEAD4]/15 border-[#5EEAD4] text-white'
-                        : 'bg-white/5 border-white/10 text-white/70 hover:bg-white/10'
-                    }`}
-                  >
-                    <p className="text-xs font-bold font-sora truncate">{p.name}</p>
-                    <p className="text-[10px] text-[#5EEAD4] font-semibold">
-                      {p.discountPercentage > 0 ? `${p.discountPercentage}% OFF` : `${p.durationMonths} ${p.durationMonths === 1 ? 'Cycle' : 'Cycles'}`}
-                    </p>
-                  </button>
-                )
-              })}
-            </div>
+          <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+            <p className="text-white/40 text-[10px] font-black uppercase tracking-wider font-sora">Selected Treatment Program</p>
+            <p className="mt-2 text-sm font-bold text-white font-sora">{selectedPlan?.name || assessment?.membership_tier}</p>
+            <p className="mt-1 text-xs font-semibold text-[#5EEAD4]">{durationMonths} {durationMonths === 1 ? 'cycle' : 'cycles'} included</p>
           </div>
 
           {/* Order lines */}
@@ -339,7 +324,6 @@ export default function OnboardingPaymentPage() {
               { label: `${selectedPlan?.name || 'Care Program'} (${selectedPlan?.durationMonths || 1} Cycles)`, amount: basePrice },
               ...(discountAmount > 0 ? [{ label: `${selectedPlan?.discountPercentage}% Bulk Discount Applied`, amount: -discountAmount }] : []),
               { label: 'Initial Doctor Consultation', amount: consultFee },
-              { label: 'GST (18%)', amount: gst },
             ].map(line => (
               <div key={line.label} className="flex justify-between items-center">
                 <span className={`text-xs font-medium ${line.amount < 0 ? 'text-[#5EEAD4]' : 'text-white/70'}`}>{line.label}</span>
@@ -412,12 +396,8 @@ export default function OnboardingPaymentPage() {
                     <span className="text-[#475569]">Initial Consultation Fee</span>
                     <span className="font-bold text-[#0F172A] font-sora">₹{consultFee.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[#475569]">GST (18%)</span>
-                    <span className="font-bold text-[#0F172A] font-sora">₹{gst.toLocaleString('en-IN')}</span>
-                  </div>
                   <div className="flex justify-between text-sm border-t border-slate-200 pt-3">
-                    <span className="text-[#0F172A] font-bold font-sora">Total (incl. GST)</span>
+                    <span className="text-[#0F172A] font-bold font-sora">Total Payable</span>
                     <span className="font-extrabold text-xl text-[#0D9488] font-sora">₹{total.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
@@ -438,7 +418,7 @@ export default function OnboardingPaymentPage() {
                   <Lock size={15} /> {isSubmitting ? 'Processing Payment...' : `Pay ₹${total.toLocaleString('en-IN')} with Razorpay`}
                 </button>
                 <button
-                  onClick={() => router.replace('/plans')}
+                  onClick={() => router.replace('/patient/onboarding/plan')}
                   className="w-full mt-3 text-xs text-[#475569] hover:text-[#0F172A] flex items-center justify-center gap-1.5 py-2 transition-colors font-semibold font-sora cursor-pointer"
                 >
                   <ArrowLeft size={13} /> Change plan

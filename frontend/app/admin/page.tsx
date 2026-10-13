@@ -58,6 +58,7 @@ function AdminDashboardContent() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [assessments, setAssessments] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
+  const [labReportUploading, setLabReportUploading] = useState(false);
   const [patientLogs, setPatientLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCall, setActiveCall] = useState<string | null>(null);
@@ -1201,6 +1202,46 @@ function AdminDashboardContent() {
 
   const hasLocalFood = selectedPatient?.local_food && selectedPatient.local_food.trim().length > 0;
   const hasWorkoutPref = selectedPatient?.workout_preference && selectedPatient.workout_preference.trim().length > 0;
+  const selectedLabWork = selectedPatient?.medical_history?.lab_work || {};
+  const selectedLabPreference = selectedLabWork.preference || selectedPatient?.lab_preference || 'none';
+  const selectedLabReportUrl = selectedLabWork.report_url || selectedPatient?.lab_report_url || '';
+
+  const handleAdminLabReportUpload = async (event: any) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !selectedPatient?.patient_id) return;
+
+    setLabReportUploading(true);
+    try {
+      const payload = new FormData();
+      payload.append('patientId', selectedPatient.patient_id);
+      payload.append('file', file);
+
+      const res = await adminFetch('/api/admin/patients/lab-report', {
+        method: 'POST',
+        body: payload,
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Unable to upload lab report.');
+
+      const updatedMedicalHistory = {
+        ...(selectedPatient.medical_history || {}),
+        lab_work: data.labWork,
+      };
+      const updatedPatient = {
+        ...selectedPatient,
+        medical_history: updatedMedicalHistory,
+        lab_preference: data.labWork?.preference || selectedLabPreference,
+        lab_report_url: data.reportUrl,
+      };
+      setSelectedPatient(updatedPatient);
+      setAssessments(current => current.map(patient => patient.patient_id === selectedPatient.patient_id ? updatedPatient : patient));
+    } catch (err: any) {
+      alert(err.message || 'Unable to upload lab report.');
+    } finally {
+      setLabReportUploading(false);
+    }
+  };
   const hasDietFitnessData = hasLocalFood || hasWorkoutPref;
   const activeView: AdminView =
     adminTab === 'dashboard' || adminTab === 'analytics' ? 'dashboard' :
@@ -4427,6 +4468,46 @@ function AdminDashboardContent() {
                 </div>
 
                 {/* ── APPOINTMENT ALERT ── */}
+                <div className="bg-white rounded-[2rem] p-6 border border-slate-100 shadow-sm mb-10">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.2em] text-[#0D9488]">Lab Report</p>
+                      <h3 className="mt-1 text-2xl font-black text-slate-900">Blood test coordination</h3>
+                      <p className="mt-2 text-sm font-bold text-slate-500">
+                        {selectedLabPreference === 'third_party'
+                          ? 'Patient requested doorstep blood sample collection.'
+                          : selectedLabPreference === 'upload'
+                            ? 'Patient chose to upload their own blood report.'
+                            : selectedLabPreference === 'skip'
+                              ? 'Patient skipped blood report for now.'
+                              : 'No blood report preference recorded.'}
+                      </p>
+                      <div className="mt-4 grid gap-3 text-sm font-bold text-slate-700 md:grid-cols-2">
+                        <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Collection address</p>
+                          <p className="mt-2">{selectedPatient.address || 'Address not recorded'}</p>
+                        </div>
+                        <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Contact</p>
+                          <p className="mt-2">{selectedPatient.phone_number || selectedPatient.phone || 'Phone not recorded'}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row lg:flex-col">
+                      {selectedLabReportUrl && (
+                        <a href={selectedLabReportUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#0D9488]/10 px-5 py-3 text-xs font-black text-[#0D9488] border border-[#0D9488]/20">
+                          <FileText className="w-4 h-4" /> View Report
+                        </a>
+                      )}
+                      <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-xs font-black text-white shadow-sm hover:bg-slate-800">
+                        <ArrowDownToLine className="w-4 h-4" />
+                        {labReportUploading ? 'Uploading...' : selectedLabReportUrl ? 'Replace Report' : 'Upload Report'}
+                        <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" disabled={labReportUploading} onChange={handleAdminLabReportUpload} />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
                 {(selectedPatient.booking_date || selectedPatient.booking_time) && (
                   <div className="bg-gradient-to-r from-amber-50 to-white border border-amber-200/60 p-8 rounded-[2.5rem] shadow-sm mb-10 flex items-center justify-between relative overflow-hidden group hover:shadow-md transition-all">
                     <div className="absolute top-0 left-0 w-3 h-full bg-gradient-to-b from-amber-400 to-orange-500"></div>

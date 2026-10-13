@@ -9,6 +9,7 @@ import { APP_CONFIG } from '@/lib/appConfig'
 import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/authSecurity'
 import { activateSubscriptionForPatient, getAuthoritativeSubscriptionPricing } from '@/lib/subscriptionService'
 import { findRazorpayTransaction, verifyRazorpayPaymentSignature } from '@/lib/payments/razorpayServer'
+import { invalidatePatientApiDashboardCache } from '@/lib/patientDashboardCache'
 
 export async function POST(request: Request) {
   const ip = getClientIp(request)
@@ -109,8 +110,7 @@ export async function POST(request: Request) {
     } else if (paymentType === 'membership') {
       expectedMinAmount = pricing.finalPrice
     } else if (paymentType === 'combined') {
-      const subtotal = pricing.finalPrice + 499
-      expectedMinAmount = subtotal + Math.round(subtotal * 0.18)
+      expectedMinAmount = pricing.finalPrice + 499
     }
 
     const orderRecordedAmount = Number(existingTxn.amount || 0)
@@ -247,8 +247,11 @@ export async function POST(request: Request) {
       })
     }
 
-    // 9. Send Receipt & Activation Emails
-    try {
+    invalidatePatientApiDashboardCache(patientId)
+
+    Promise.resolve().then(async () => {
+      // Send receipts and assign care team after the payment response is durable.
+      try {
       const [{ data: userData }, { data: profile }] = await Promise.all([
         supabaseAdmin.auth.admin.getUserById(patientId),
         supabaseAdmin
@@ -297,27 +300,28 @@ export async function POST(request: Request) {
           planOrType: programName || (paymentType === 'membership' ? '8LIV Membership Program' : '8LIV Healthcare Services'),
         }).catch(waErr => console.warn('[WhatsApp] Payment receipt dispatch notice:', waErr))
       }
-    } catch (notificationError) {
-      console.error('Failed to send payment notifications:', notificationError)
-    }
-
-    // 10. Auto Smart Care Team Assignment for Membership
-    if (paymentType === 'membership' || paymentType === 'combined') {
-      try {
-        await assignMembershipCareTeam(patientId, programName)
-      } catch (assignmentError) {
-        console.error('Smart care team assignment error in verification:', assignmentError)
-        await supabaseAdmin
-          .from('patient_notifications')
-          .insert({
-            patient_id: patientId,
-            type: 'care_team',
-            title: 'Care team assignment pending',
-            message: 'Your membership is active. We are finalizing your care team assignment and will notify you shortly.',
-            is_read: false,
-          })
+      } catch (notificationError) {
+        console.error('Failed to send payment notifications:', notificationError)
       }
-    }
+
+      if (paymentType === 'membership' || paymentType === 'combined') {
+        try {
+          await assignMembershipCareTeam(patientId, programName)
+          invalidatePatientApiDashboardCache(patientId)
+        } catch (assignmentError) {
+          console.error('Smart care team assignment error in verification:', assignmentError)
+          await supabaseAdmin
+            .from('patient_notifications')
+            .insert({
+              patient_id: patientId,
+              type: 'care_team',
+              title: 'Care team assignment pending',
+              message: 'Your membership is active. We are finalizing your care team assignment and will notify you shortly.',
+              is_read: false,
+            })
+        }
+      }
+    })
 
     return NextResponse.json({ success: true, transaction_id: razorpay_payment_id })
   } catch (err: any) {

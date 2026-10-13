@@ -333,6 +333,7 @@ export async function POST(req: Request) {
       const goalWeightKg = assess.goal_weight_kg ? Number(assess.goal_weight_kg) : null;
       const age = assess.age ? Number(assess.age) : null;
       const gender = assess.gender || (typeof assess.medical_history === 'object' ? assess.medical_history?.gender : null) || null;
+      const labWork = typeof assess.medical_history === 'object' ? assess.medical_history?.lab_work || null : null;
       const calculatedBmi = heightCm && weightKg
         ? Number((weightKg / Math.pow(heightCm / 100, 2)).toFixed(1))
         : (assess.bmi ? Number(parseFloat(assess.bmi).toFixed(1)) : null);
@@ -388,6 +389,9 @@ export async function POST(req: Request) {
         current_medications: assess.current_medications || assess.medications || getAssessmentField(assess, 'medication_history') || null,
         medication_history: assess.medication_history || getAssessmentField(assess, 'medication_history') || null,
         medication_proof_url: getAssessmentField(assess, 'medication_proof_url') || getAssessmentField(assess, 'medication_proof') || assess.medication_proof_url || assess.medication_proof || null,
+        lab_preference: labWork?.preference || null,
+        lab_report_url: labWork?.report_url || null,
+        lab_report_uploaded_at: labWork?.uploaded_at || null,
         local_food: assess.local_food || null,
         workout_preference: assess.workout_preference || null,
         diagnosis_summary: assess.diagnosis_summary || completedConsultations[0]?.prescription_notes || null,
