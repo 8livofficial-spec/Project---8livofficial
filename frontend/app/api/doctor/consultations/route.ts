@@ -11,6 +11,7 @@ import { normalizePhoneNumber } from '@/lib/phone';
 import { invalidateDoctorAvailabilityCache } from '@/lib/patientAppointmentBooking';
 import { invalidateSlotsCache } from '@/lib/appointmentAvailability';
 import { invalidatePatientApiDashboardCache } from '@/lib/patientDashboardCache';
+import { createStreamMeeting } from '@/services/video/meeting.service';
 
 type ConsultationRow = {
   id: string;
@@ -327,13 +328,32 @@ export async function POST(req: Request) {
 
     if (ownErr) throw ownErr;
 
-    // Doctors must only see consultations assigned to them. Unassigned/other-doctor
-    // scheduled requests are handled by admin auto-assignment, not exposed here.
-    const availableRequests: ConsultationRow[] = [];
+    let availableRequestsQuery = supabaseAdmin
+      .from('doctor_consultations')
+      .select('id, doctor_id, patient_id, booking_date, booking_time, status, room_url, is_completed, consultation_notes, prescription_type, created_at, call_started_at, call_ended_at, prescription_text, prescription_notes, updated_at, appointment_type, meeting_provider, meeting_room, meeting_url, completed_at')
+      .is('doctor_id', null)
+      .in('status', ['booking_pending'])
+      .gte('booking_date', new Date().toISOString().slice(0, 10));
+
+    if (search.trim()) {
+      if (matchingPatientIds.length > 0) {
+        availableRequestsQuery = availableRequestsQuery.in('patient_id', matchingPatientIds);
+      } else {
+        availableRequestsQuery = availableRequestsQuery.in('patient_id', ['00000000-0000-0000-0000-000000000000']);
+      }
+    }
+
+    const { data: availableRequests, error: requestsErr } = await availableRequestsQuery
+      .order('booking_date', { ascending: true })
+      .order('booking_time', { ascending: true })
+      .limit(50);
+
+    if (requestsErr) throw requestsErr;
 
     // Get patient IDs to fetch profiles, health assessments, and prescriptions
     const allPatientIds = Array.from(new Set([
       ...(ownConsultations || []).map(c => c.patient_id),
+      ...(availableRequests || []).map(c => c.patient_id),
     ]));
 
     // Fetch profiles, assessments, and prescriptions using admin client (bypassing RLS)
@@ -454,12 +474,13 @@ export async function PATCH(req: Request) {
 
     const targetDoctorId = isAdminAction ? (doctorId || authUser.user.id) : authUser.user.id;
 
+    const isClaimAction = action === 'claim_open_request';
     let lookupQuery = supabaseAdmin
       .from('doctor_consultations')
       .select('id, doctor_id, patient_id, booking_date, booking_time, status, call_started_at, call_ended_at, appointment_type, is_completed')
       .eq('id', consultationId);
 
-    if (!isAdminAction) {
+    if (!isAdminAction && !isClaimAction) {
       lookupQuery = lookupQuery.eq('doctor_id', targetDoctorId);
     }
 
@@ -468,6 +489,161 @@ export async function PATCH(req: Request) {
     if (lookupErr) throw lookupErr;
     if (!consultation) {
       return NextResponse.json({ error: 'Scheduled consultation not found for this doctor.' }, { status: 404 });
+    }
+
+    if (isClaimAction) {
+      const currentStatus = String(consultation.status || '').trim().toLowerCase();
+      if (consultation.doctor_id) {
+        return NextResponse.json({ error: 'This request has already been accepted by another doctor.' }, { status: 409 });
+      }
+      if (currentStatus !== 'booking_pending') {
+        return NextResponse.json({ error: 'Only open consultation requests can be accepted.' }, { status: 409 });
+      }
+      if (!consultation.patient_id || !consultation.booking_date || !consultation.booking_time) {
+        return NextResponse.json({ error: 'This request is missing patient or slot details.' }, { status: 400 });
+      }
+
+      const startMs = getSlotTimestamp(consultation.booking_date, consultation.booking_time);
+      if (!startMs || Date.now() >= startMs) {
+        return NextResponse.json({ error: 'This requested time is no longer available.' }, { status: 409 });
+      }
+
+      const { data: existingDoctorConsultations, error: existingErr } = await supabaseAdmin
+        .from('doctor_consultations')
+        .select('booking_date, booking_time')
+        .eq('doctor_id', targetDoctorId)
+        .eq('status', 'scheduled');
+      if (existingErr) throw existingErr;
+
+      const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+      for (const existing of existingDoctorConsultations || []) {
+        const existingMs = getSlotTimestamp(existing.booking_date, existing.booking_time);
+        if (existingMs !== null && Math.abs(startMs - existingMs) < TWO_HOURS_MS) {
+          return NextResponse.json({ error: 'This request conflicts with another scheduled consultation within the required 2-hour gap.' }, { status: 409 });
+        }
+      }
+
+      const formattedTime = String(consultation.booking_time).includes(':') && String(consultation.booking_time).split(':').length === 2
+        ? `${consultation.booking_time}:00`
+        : String(consultation.booking_time);
+      const startMatch = formattedTime.match(/^(\d{1,2}):(\d{2})/);
+      const startMin = startMatch ? Number(startMatch[1]) * 60 + Number(startMatch[2]) : 0;
+      const endMin = startMin + 30;
+      const formattedEndTime = `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}:00`;
+
+      const { data: existingSlot, error: slotLookupErr } = await supabaseAdmin
+        .from('provider_availability')
+        .select('id')
+        .eq('provider_id', targetDoctorId)
+        .eq('provider_role', 'doctor')
+        .eq('available_date', consultation.booking_date)
+        .eq('start_time', formattedTime)
+        .maybeSingle();
+      if (slotLookupErr) throw slotLookupErr;
+
+      let slotId: string | null = existingSlot?.id || null;
+      if (slotId) {
+        const { error: slotUpdateErr } = await supabaseAdmin
+          .from('provider_availability')
+          .update({ status: 'BOOKED', is_available: false, updated_at: new Date().toISOString() })
+          .eq('id', slotId);
+        if (slotUpdateErr) throw slotUpdateErr;
+      } else {
+        const { data: createdSlot, error: createSlotErr } = await supabaseAdmin
+          .from('provider_availability')
+          .insert({
+            provider_id: targetDoctorId,
+            provider_role: 'doctor',
+            available_date: consultation.booking_date,
+            start_time: formattedTime,
+            end_time: formattedEndTime,
+            slot_duration: 30,
+            status: 'BOOKED',
+            is_available: false,
+            source: 'MANUAL'
+          })
+          .select('id')
+          .single();
+        if (createSlotErr) throw createSlotErr;
+        slotId = createdSlot.id;
+      }
+
+      const meeting = createStreamMeeting({
+        appointmentId: consultation.id,
+        providerRole: 'doctor',
+        patientId: consultation.patient_id,
+        providerId: targetDoctorId,
+        createdBy: targetDoctorId,
+      });
+
+      const { data: claimed, error: claimErr } = await supabaseAdmin
+        .from('doctor_consultations')
+        .update({
+          doctor_id: targetDoctorId,
+          status: 'scheduled',
+          meeting_provider: meeting.meetingProvider,
+          call_id: meeting.callId,
+          call_type: meeting.callType,
+          created_by: meeting.createdBy,
+          meeting_status: meeting.meetingStatus,
+          slot_id: slotId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', consultationId)
+        .is('doctor_id', null)
+        .eq('status', 'booking_pending')
+        .select('*')
+        .maybeSingle();
+
+      if (claimErr && claimErr.code === 'PGRST204') {
+        const { data: fallbackClaim, error: fallbackErr } = await supabaseAdmin
+          .from('doctor_consultations')
+          .update({
+            doctor_id: targetDoctorId,
+            status: 'scheduled',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', consultationId)
+          .is('doctor_id', null)
+          .eq('status', 'booking_pending')
+          .select('*')
+          .maybeSingle();
+        if (fallbackErr) throw fallbackErr;
+        if (!fallbackClaim) return NextResponse.json({ error: 'This request has already been accepted by another doctor.' }, { status: 409 });
+      } else if (claimErr) {
+        throw claimErr;
+      } else if (!claimed) {
+        return NextResponse.json({ error: 'This request has already been accepted by another doctor.' }, { status: 409 });
+      }
+
+      await supabaseAdmin
+        .from('health_assessments')
+        .update({ booking_date: consultation.booking_date, booking_time: consultation.booking_time, updated_at: new Date().toISOString() })
+        .eq('patient_id', consultation.patient_id);
+
+      await supabaseAdmin
+        .from('patient_notifications')
+        .insert({
+          patient_id: consultation.patient_id,
+          doctor_id: targetDoctorId,
+          type: 'doctor_assigned',
+          title: 'Your Doctor Has Accepted',
+          message: `Your consultation request has been accepted and confirmed for ${consultation.booking_date} at ${String(consultation.booking_time).slice(0, 5)}.`,
+          is_read: false
+        });
+
+      await updatePatientJourneyState(consultation.patient_id, {
+        appointmentStatus: 'SCHEDULED',
+        consultationStatus: 'PENDING',
+        bookingId: consultation.id,
+        currentJourneyStep: 'INITIAL_CONSULTATION_BOOKED',
+        lastCompletedStep: 'APPOINTMENT_BOOKED',
+      });
+
+      invalidateDoctorAvailabilityCache();
+      invalidateSlotsCache();
+      invalidatePatientApiDashboardCache(consultation.patient_id);
+      return NextResponse.json({ success: true, consultation: claimed || { ...consultation, doctor_id: targetDoctorId, status: 'scheduled' } });
     }
 
     if (action === 'start_call') {

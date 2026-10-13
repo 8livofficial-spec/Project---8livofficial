@@ -768,9 +768,11 @@ export default function DoctorDashboard() {
   }, [router]);
 
   const rxSearchRef = useRef(rxSearch);
-  rxSearchRef.current = rxSearch;
   const rxStatusFilterRef = useRef(rxStatusFilter);
-  rxStatusFilterRef.current = rxStatusFilter;
+  useEffect(() => {
+    rxSearchRef.current = rxSearch;
+    rxStatusFilterRef.current = rxStatusFilter;
+  }, [rxSearch, rxStatusFilter]);
 
   const loadDoctorPrescriptions = useCallback(async (searchQuery?: string, statusFilter?: string, showSkeleton = false) => {
     try {
@@ -1505,110 +1507,17 @@ export default function DoctorDashboard() {
   const handleClaimRequest = async (req: Consultation) => {
     if (!doctor) return;
     try {
-      // 1. Verify availability of request and check if already claimed
-      const { data: latestReq } = await supabase
-        .from('doctor_consultations')
-        .select('doctor_id, status')
-        .eq('id', req.id)
-        .maybeSingle();
-
-      if (!latestReq || latestReq.doctor_id) {
-        alert('This request has already been claimed by another doctor! ⏳');
-        loadConsultations(doctor.id);
-        return;
-      }
-
-      // 1b. Check for 2-hour gap conflict against doctor's existing scheduled consultations
-      const { data: docCons } = await supabase
-        .from('doctor_consultations')
-        .select('booking_date, booking_time')
-        .eq('doctor_id', doctor.id)
-        .eq('status', 'scheduled');
-
-      if (docCons && docCons.length > 0) {
-        const newReqTime = getParsedTime(req.booking_date, req.booking_time);
-        if (newReqTime !== null) {
-          const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
-          for (const existing of docCons) {
-            const existingTime = getParsedTime(existing.booking_date, existing.booking_time);
-            if (existingTime !== null) {
-              const diff = Math.abs(newReqTime - existingTime);
-              if (diff < TWO_HOURS_MS) {
-                alert(`Conflict detected! You already have an appointment scheduled at ${existing.booking_date} ${existing.booking_time}. Doctors must maintain at least a 2-hour gap between appointments. ⏳`);
-                return;
-              }
-            }
-          }
-        }
-      }
-
-      // 2. Lock/Claim the availability slot in provider_availability
-      const formattedTime = req.booking_time.includes(':') && req.booking_time.split(':').length === 2 ? `${req.booking_time}:00` : req.booking_time;
-      const { data: existingSlot } = await supabase
-        .from('provider_availability')
-        .select('id')
-        .eq('provider_id', doctor.id)
-        .eq('provider_role', 'doctor')
-        .eq('available_date', req.booking_date)
-        .eq('start_time', formattedTime)
-        .maybeSingle();
-
-      if (existingSlot) {
-        await supabase.from('provider_availability')
-          .update({ status: 'BOOKED', is_available: false })
-          .eq('id', existingSlot.id);
-      } else {
-        // Compute end time based on 30 min duration
-        let startMin = 0;
-        const match = String(req.booking_time || '').trim().match(/^(\d{1,2}):(\d{2})/);
-        if (match) {
-          startMin = Number(match[1]) * 60 + Number(match[2]);
-        }
-        const endMin = startMin + 30;
-        const endH = Math.floor(endMin / 60);
-        const endM = endMin % 60;
-        const formattedEndTime = `${String(endH).padStart(2, '0')}:${String(endM).padStart(2, '0')}:00`;
-
-        await supabase.from('provider_availability').insert({
-          provider_id: doctor.id,
-          provider_role: 'doctor',
-          available_date: req.booking_date,
-          start_time: formattedTime,
-          end_time: formattedEndTime,
-          slot_duration: 30,
-          status: 'BOOKED',
-          is_available: false,
-          source: 'MANUAL'
-        });
-      }
-
-
-      // 3. Update consultation doctor_id
-      const { error } = await supabase
-        .from('doctor_consultations')
-        .update({
-          doctor_id: doctor.id,
-          updated_at: new Date().toISOString()
+      const res = await authedFetch('/api/doctor/consultations', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          consultationId: req.id,
+          action: 'claim_open_request',
         })
-        .eq('id', req.id);
-
-      if (error) throw error;
-
-      // 4. Get doctor display info for rich notification
-      const doctorDisplayId = doctor.user_metadata?.display_id || `DOC-${doctor.id.slice(0, 4).toUpperCase()}`;
-      const doctorSpecialty = doctorProfile?.specialty || 'Endocrinologist';
-      const doctorFullName = doctorProfile?.full_name || doctorDisplayId;
-
-      // 5. Notify patient with professional message
-      await supabase.from('patient_notifications').insert({
-        patient_id: req.patient_id,
-        doctor_id: doctor.id,
-        type: 'doctor_assigned',
-        title: `🩺 Your Doctor Has Been Assigned!`,
-        message: `Great news! ${doctorDisplayId} (${doctorSpecialty}) has accepted your consultation request and will be your dedicated health guide. Your session is confirmed for ${req.booking_date} at ${req.booking_time}. Please be ready to join the video call at the scheduled time. Your doctor will guide you through your personalised treatment plan.`,
       });
-
-      alert('Patient request successfully claimed and confirmed! 🎉');
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || 'Unable to accept request.');
+      alert('Patient request successfully accepted and confirmed.');
+      loadConsultations(doctor.id);
       loadConsultations(doctor.id);
     } catch (err: any) {
       alert('Failed to claim request: ' + err.message);

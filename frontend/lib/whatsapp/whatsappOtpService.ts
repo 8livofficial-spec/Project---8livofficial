@@ -7,11 +7,14 @@
  */
 
 import crypto from 'crypto'
+import { createClient } from '@supabase/supabase-js'
 import { supabaseAdmin } from '../supabaseServer'
 import { WHATSAPP_CONFIG } from './whatsappConfig'
 import { WhatsAppClient } from './whatsappClient'
 import { normalizePhoneNumber } from '../phone'
-import { getUserRole, writeAuthAudit } from '../authSecurity'
+import { findUserByEmail, getUserRole, writeAuthAudit } from '../authSecurity'
+import { loadPatientJourneyState } from '../patientJourneyServer'
+import { getPatientJourneyTarget } from '../patientJourney'
 
 export type OtpPurpose = 'LOGIN' | 'SIGNUP' | 'VERIFY_PHONE' | 'RESET_PASSWORD' | 'SENSITIVE_ACTION'
 
@@ -36,6 +39,7 @@ export type OtpVerificationResult = {
   message: string
   userId?: string
   role?: string
+  target?: string
   session?: {
     access_token: string
     refresh_token: string
@@ -358,9 +362,9 @@ export class WhatsAppOtpService {
       userEmail = syntheticEmail
 
       // Look up auth user by email
-      const { data: existingAuth } = await supabaseAdmin.auth.admin.getUserById(syntheticEmail).catch(() => ({ data: null }))
-      if (existingAuth?.user?.id) {
-        userId = existingAuth.user.id
+      const existingUser = await findUserByEmail(syntheticEmail)
+      if (existingUser?.id) {
+        userId = existingUser.id
       } else {
         // Create user in Supabase auth
         const tempPassword = crypto.randomBytes(24).toString('hex')
@@ -405,20 +409,53 @@ export class WhatsAppOtpService {
     // Generate authenticated Supabase session tokens
     let sessionTokens: { access_token: string; refresh_token: string } | undefined
     try {
+      const emailForLink = userEmail || `wa_${normalized.whatsapp}@auth.8liv.in`
       const { data: linkData, error: linkErr } = await supabaseAdmin.auth.admin.generateLink({
         type: 'magiclink',
-        email: userEmail || `wa_${normalized.whatsapp}@auth.8liv.in`,
+        email: emailForLink,
       })
 
       if (!linkErr && linkData?.properties?.hashed_token) {
-        // Exchange or return token context
-        sessionTokens = {
-          access_token: linkData.properties.hashed_token,
-          refresh_token: linkData.properties.hashed_token,
+        const supabaseAnon = createClient(
+          process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://owagvhvypehvvxwdecjn.supabase.co',
+          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+        )
+        const verificationType = (linkData.properties.verification_type as any) || 'magiclink'
+        const { data: sessionData, error: sessionErr } = await supabaseAnon.auth.verifyOtp({
+          token_hash: linkData.properties.hashed_token,
+          type: verificationType,
+        })
+
+        if (!sessionErr && sessionData?.session) {
+          sessionTokens = {
+            access_token: sessionData.session.access_token,
+            refresh_token: sessionData.session.refresh_token,
+          }
         }
       }
-    } catch {
-      // Fallback
+    } catch (sessionExchangeErr) {
+      console.warn('[WhatsAppOtpService] Session exchange notice:', sessionExchangeErr)
+    }
+
+    // Resolve landing target according to role and patient clinical journey
+    let target = '/patient'
+    if (role === 'admin') {
+      target = '/admin'
+    } else if (role === 'doctor') {
+      target = '/doctor/dashboard'
+    } else if (['dietitian', 'trainer', 'fitness_coach', 'nutritionist'].includes(role)) {
+      target = '/provider/dashboard'
+    } else if (['PHARMACY', 'PHARMACY_ADMIN', 'PHARMACY_STAFF', 'DELIVERY_PARTNER', 'PHARMACIST'].includes(String(role).toUpperCase())) {
+      target = '/pharmacy'
+    } else {
+      try {
+        const journeyState = await loadPatientJourneyState(userId)
+        if (journeyState) {
+          target = getPatientJourneyTarget(journeyState)
+        }
+      } catch (err) {
+        console.warn('[WhatsAppOtpService] Error resolving patient journey target:', err)
+      }
     }
 
     writeAuthAudit({
@@ -436,6 +473,7 @@ export class WhatsAppOtpService {
       message: 'WhatsApp verification successful.',
       userId,
       role,
+      target,
       session: sessionTokens,
       user: {
         id: userId,

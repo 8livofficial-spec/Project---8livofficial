@@ -346,7 +346,7 @@ export async function bookPatientDoctorAppointment(params: {
     if (!activeDoctors.has(slot.provider_id)) return { error: 'Selected doctor is not active.', status: 409 as const }
   }
 
-  let { data: reservedSlot, error: reserveError } = await supabaseAdmin
+  const reserveResult = await supabaseAdmin
     .from('provider_availability')
     .update({ status: 'BOOKED', is_available: false, updated_at: new Date().toISOString() })
     .eq('id', slot.id)
@@ -354,6 +354,8 @@ export async function bookPatientDoctorAppointment(params: {
     .eq('is_available', true)
     .select('id, provider_id, provider_role, available_date, start_time, end_time')
     .maybeSingle()
+  let reservedSlot = reserveResult.data
+  const reserveError = reserveResult.error
   if (reserveError) throw reserveError
 
   if (!reservedSlot && params.appointmentType === INITIAL_DOCTOR_CONSULTATION && !context.primaryDoctorId) {
@@ -592,6 +594,184 @@ export async function bookPatientDoctorAppointment(params: {
       bookingTime: reservedSlot.start_time,
       meetingType: 'Video Consultation',
       meetingProvider: meeting.meetingProvider,
+    },
+  }
+}
+
+function normalizeManualTime(value: string) {
+  const match = String(value || '').trim().match(/^(\d{1,2}):(\d{2})(?::\d{2})?$/)
+  if (!match) return null
+  const hour = Number(match[1])
+  const minute = Number(match[2])
+  if (!Number.isInteger(hour) || !Number.isInteger(minute) || hour < 0 || hour > 23 || minute < 0 || minute > 59) {
+    return null
+  }
+  return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`
+}
+
+export async function requestPatientManualDoctorAppointment(params: {
+  patientId: string
+  appointmentType: AppointmentType
+  selectedDate: string
+  selectedTime: string
+  idempotencyKey: string
+  paymentMethod?: string | null
+}) {
+  const context = await getPatientBookingContext(params.patientId)
+  const eligibilityError = validateBookingEligibility(context, params.appointmentType)
+  if (eligibilityError) return { error: eligibilityError, status: 403 as const }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(params.selectedDate)) {
+    return { error: 'Select a valid consultation date.', status: 400 as const }
+  }
+
+  const normalizedTime = normalizeManualTime(params.selectedTime)
+  if (!normalizedTime) {
+    return { error: 'Select a valid consultation time.', status: 400 as const }
+  }
+
+  if (!isFutureIndiaSlot(params.selectedDate, normalizedTime)) {
+    return { error: 'Selected consultation time must be in the future.', status: 409 as const }
+  }
+
+  const { data: existingActive, error: activeError } = await supabaseAdmin
+    .from('doctor_consultations')
+    .select('id')
+    .eq('patient_id', params.patientId)
+    .in('status', ['scheduled', 'calling', 'attended', 'booking_pending'])
+    .limit(1)
+    .maybeSingle()
+  if (activeError) throw activeError
+  if (existingActive?.id) {
+    return { error: 'You already have an active consultation booking or request.', status: 409 as const }
+  }
+
+  const feeAlreadyPaid = Boolean(context.assessment?.consultation_fee_paid)
+  const paymentRequired = params.appointmentType === INITIAL_DOCTOR_CONSULTATION && !feeAlreadyPaid
+  if (paymentRequired && !APP_CONFIG.payment.allowMock) {
+    return { error: 'Verified consultation payment is required before requesting a manual slot.', status: 402 as const }
+  }
+
+  const appointmentId = randomUUID()
+  const payload: Record<string, unknown> = {
+    id: appointmentId,
+    patient_id: params.patientId,
+    doctor_id: null,
+    booking_date: params.selectedDate,
+    booking_time: normalizedTime,
+    status: 'booking_pending',
+    appointment_type: params.appointmentType === INITIAL_DOCTOR_CONSULTATION ? 'INITIAL_CONSULTATION' : 'FOLLOW_UP_CONSULTATION',
+    is_completed: false,
+  }
+
+  let consultation: any = null
+  let insertError: any = null
+  while (!consultation) {
+    const result = await supabaseAdmin
+      .from('doctor_consultations')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (!result.error) {
+      consultation = result.data
+      break
+    }
+
+    const missingColumn = result.error.code === 'PGRST204'
+      ? result.error.message.match(/Could not find the '([^']+)' column/)?.[1]
+      : null
+    if (missingColumn && missingColumn in payload) {
+      delete payload[missingColumn]
+      continue
+    }
+    if (result.error.code === '23514' && String(result.error.message).includes('appointment_type_check')) {
+      if (payload.appointment_type === 'INITIAL_CONSULTATION') {
+        payload.appointment_type = 'INITIAL_DOCTOR_CONSULTATION'
+        continue
+      }
+      if (payload.appointment_type === 'FOLLOW_UP_CONSULTATION') {
+        payload.appointment_type = 'DOCTOR_FOLLOW_UP'
+        continue
+      }
+      delete payload.appointment_type
+      continue
+    }
+
+    insertError = result.error
+    break
+  }
+
+  if (insertError || !consultation) throw insertError || new Error('Failed to create consultation request.')
+
+  const txnId = (paymentRequired || feeAlreadyPaid) ? generateTxnId() : ''
+  if (paymentRequired) {
+    await supabaseAdmin
+      .from('health_assessments')
+      .update({ consultation_fee_paid: true, booking_date: params.selectedDate, booking_time: normalizedTime })
+      .eq('patient_id', params.patientId)
+
+    await supabaseAdmin
+      .from('payment_transactions')
+      .insert({
+        patient_id: params.patientId,
+        amount: CONSULTATION_FEE,
+        currency: 'INR',
+        payment_method: params.paymentMethod || 'booking_portal',
+        payment_provider: 'razorpay_sim',
+        transaction_id: txnId,
+        status: 'success',
+        membership_tier: null,
+        payment_type: 'consultation',
+        metadata: {
+          booking_id: consultation.id,
+          consultation_id: consultation.id,
+          appointment_type: params.appointmentType,
+          manual_slot_request: true,
+          appointment_status: 'BOOKING_PENDING',
+          recorded_at: new Date().toISOString(),
+        },
+      })
+  } else if (params.appointmentType === DOCTOR_FOLLOW_UP) {
+    await recordCycleConsultationUsage(params.patientId, consultation.id)
+  }
+
+  await supabaseAdmin
+    .from('patient_notifications')
+    .insert({
+      patient_id: params.patientId,
+      type: 'booking_pending',
+      title: 'Consultation Request Sent',
+      message: `Your preferred consultation time request for ${params.selectedDate} at ${normalizedTime.slice(0, 5)} is open for doctors to accept.`,
+      is_read: false,
+    })
+
+  invalidateDoctorAvailabilityCache()
+  invalidateSlotsCache()
+  invalidatePatientApiDashboardCache(params.patientId)
+
+  return {
+    success: true,
+    consultation,
+    bookingId: consultation.id,
+    paymentId: txnId,
+    transaction_id: txnId,
+    appointmentType: params.appointmentType,
+    paymentStatus: paymentRequired ? 'PAID' : 'NOT_REQUIRED',
+    appointmentStatus: 'BOOKING_PENDING',
+    assignment: {
+      consultationId: consultation.id,
+      bookingId: consultation.id,
+      paymentId: txnId,
+      paymentAmount: paymentRequired ? CONSULTATION_FEE : 0,
+      paymentStatus: paymentRequired ? 'PAID' : 'NOT_REQUIRED',
+      appointmentStatus: 'BOOKING_PENDING',
+      consultationStatus: 'WAITING_FOR_DOCTOR',
+      doctorName: 'Open request',
+      specialty: 'Doctor will accept',
+      bookingDate: params.selectedDate,
+      bookingTime: normalizedTime,
+      meetingType: 'Video Consultation',
     },
   }
 }

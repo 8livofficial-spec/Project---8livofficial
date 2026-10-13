@@ -3,7 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 import { getAuthenticatedPatient } from '@/lib/appointmentAvailability'
 import { APP_CONFIG } from '@/lib/appConfig'
 import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/authSecurity'
-import { bookPatientDoctorAppointment, parsePatientAppointmentType } from '@/lib/patientAppointmentBooking'
+import { bookPatientDoctorAppointment, parsePatientAppointmentType, requestPatientManualDoctorAppointment } from '@/lib/patientAppointmentBooking'
 
 export async function GET(request: Request) {
   try {
@@ -81,24 +81,34 @@ export async function POST(request: Request) {
     const appointmentType = parsePatientAppointmentType(body?.appointmentType)
     const slotId = String(body?.slotId || '').trim()
     const idempotencyKey = String(body?.idempotencyKey || '').trim()
+    const bookingMode = String(body?.bookingMode || 'slot')
 
     if (!appointmentType) {
       return NextResponse.json({ error: 'A supported appointmentType is required.' }, { status: 400 })
     }
-    if (!slotId) {
+    if (bookingMode !== 'manual' && !slotId) {
       return NextResponse.json({ error: 'A slotId is required.' }, { status: 400 })
     }
     if (!idempotencyKey || idempotencyKey.length < 12 || idempotencyKey.length > 120) {
       return NextResponse.json({ error: 'A valid idempotencyKey is required.' }, { status: 400 })
     }
 
-    const result = await bookPatientDoctorAppointment({
-      patientId,
-      appointmentType,
-      slotId,
-      idempotencyKey,
-      paymentMethod: typeof body?.paymentMethod === 'string' ? body.paymentMethod : null,
-    })
+    const result = bookingMode === 'manual'
+      ? await requestPatientManualDoctorAppointment({
+          patientId,
+          appointmentType,
+          selectedDate: String(body?.selectedDate || '').trim(),
+          selectedTime: String(body?.selectedTime || '').trim(),
+          idempotencyKey,
+          paymentMethod: typeof body?.paymentMethod === 'string' ? body.paymentMethod : null,
+        })
+      : await bookPatientDoctorAppointment({
+          patientId,
+          appointmentType,
+          slotId,
+          idempotencyKey,
+          paymentMethod: typeof body?.paymentMethod === 'string' ? body.paymentMethod : null,
+        })
 
     if ('error' in result) {
       return NextResponse.json({ error: result.error }, { status: result.status })

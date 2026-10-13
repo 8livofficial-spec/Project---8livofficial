@@ -58,6 +58,7 @@ type AvailableDoctorSlot = {
 
 type PaymentMethod = 'upi' | 'card' | 'netbanking'
 type PaymentStage = 'method' | 'assigning' | 'confirmed'
+type BookingMode = 'slot' | 'manual'
 type AssignmentDetails = {
   consultationId: string
   bookingId?: string
@@ -185,6 +186,9 @@ export default function ConsultationSchedulingPage() {
   const [paymentError, setPaymentError] = useState('')
   const [assignment, setAssignment] = useState<AssignmentDetails | null>(null)
   const [selectedSlot, setSelectedSlot] = useState<AvailableDoctorSlot | null>(null)
+  const [bookingMode, setBookingMode] = useState<BookingMode>('slot')
+  const [manualDate, setManualDate] = useState('')
+  const [manualTime, setManualTime] = useState('')
 
   const abortControllerRef = React.useRef<AbortController | null>(null)
   const dateAbortControllerRef = React.useRef<AbortController | null>(null)
@@ -408,10 +412,15 @@ export default function ConsultationSchedulingPage() {
     reusePaymentFromBookingId ||
     isBookingPending
   )
+  const selectedManualDateTime = Boolean(bookingMode === 'manual' && manualDate && manualTime)
 
   const handleConfirmBooking = async () => {
-    if (!selectedSlot) {
+    if (bookingMode === 'slot' && !selectedSlot) {
       alert("Please select a consultation time first.")
+      return
+    }
+    if (bookingMode === 'manual' && !selectedManualDateTime) {
+      alert("Please choose your preferred consultation date and time.")
       return
     }
     setPaymentError('')
@@ -443,8 +452,12 @@ export default function ConsultationSchedulingPage() {
   }
 
   const handlePaidBooking = async () => {
-    if (!selectedSlot) {
+    if (bookingMode === 'slot' && !selectedSlot) {
       setPaymentError('Please select a consultation time before payment.')
+      return
+    }
+    if (bookingMode === 'manual' && !selectedManualDateTime) {
+      setPaymentError('Please choose your preferred consultation date and time.')
       return
     }
 
@@ -557,7 +570,10 @@ export default function ConsultationSchedulingPage() {
         },
         body: JSON.stringify({
           appointmentType,
-          slotId: selectedSlot.slotId,
+          bookingMode,
+          slotId: selectedSlot?.slotId,
+          selectedDate: bookingMode === 'manual' ? manualDate : undefined,
+          selectedTime: bookingMode === 'manual' ? manualTime : undefined,
           idempotencyKey,
           paymentMethod: isActiveMemberFollowUp ? undefined : paymentMethod,
           reusePaymentFromBookingId: reusePaymentFromBookingId || (isBookingPending ? 'pending' : undefined),
@@ -1165,7 +1181,86 @@ export default function ConsultationSchedulingPage() {
                 <Clock className="w-6 h-6 shrink-0" style={{ color: designTokens.colors.secondary }} />
               </div>
 
-              {slotsLoading ? (
+              <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {[
+                  { key: 'slot' as const, title: 'Choose available slot', copy: 'Instantly reserve a doctor-published time.' },
+                  { key: 'manual' as const, title: 'Request my own time', copy: 'Send your preferred time to all eligible doctors.' },
+                ].map((item) => {
+                  const selected = bookingMode === item.key
+                  return (
+                    <button
+                      key={item.key}
+                      type="button"
+                      onClick={() => {
+                        setBookingMode(item.key)
+                        setPaymentError('')
+                      }}
+                      className="rounded-2xl border-2 p-4 text-left transition-all duration-200 hover:-translate-y-0.5"
+                      style={{
+                        borderColor: selected ? designTokens.colors.primary : designTokens.colors.border,
+                        backgroundColor: selected ? `${designTokens.colors.primary}08` : designTokens.colors.surface,
+                        boxShadow: selected ? designTokens.shadows.md : 'none',
+                      }}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                        {item.key === 'slot' ? <Clock className="h-4 w-4" /> : <CalendarPlus className="h-4 w-4" />}
+                        {item.title}
+                      </span>
+                      <span className="mt-1 block text-xs font-semibold" style={{ color: designTokens.colors.textSecondary }}>
+                        {item.copy}
+                      </span>
+                    </button>
+                  )
+                })}
+              </div>
+
+              {bookingMode === 'manual' ? (
+                <div className="rounded-2xl border p-5" style={{ borderColor: designTokens.colors.border, backgroundColor: `${designTokens.colors.background}70` }}>
+                  <div className="mb-5">
+                    <h3 className="text-lg font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                      Request a Preferred Consultation Time
+                    </h3>
+                    <p className="mt-1 text-sm" style={{ color: designTokens.colors.textSecondary }}>
+                      This request is visible to all eligible doctors. The first doctor who accepts it will confirm your appointment.
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-bold uppercase tracking-wider" style={{ color: designTokens.colors.textSecondary }}>
+                        Preferred Date
+                      </span>
+                      <input
+                        type="date"
+                        value={manualDate}
+                        min={new Date().toISOString().slice(0, 10)}
+                        onChange={(event) => setManualDate(event.target.value)}
+                        className="w-full rounded-xl border-2 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-[#1A1F36]"
+                        style={{ borderColor: designTokens.colors.border, color: designTokens.colors.textPrimary }}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className="mb-2 block text-xs font-bold uppercase tracking-wider" style={{ color: designTokens.colors.textSecondary }}>
+                        Preferred Time
+                      </span>
+                      <input
+                        type="time"
+                        value={manualTime}
+                        onChange={(event) => setManualTime(event.target.value)}
+                        className="w-full rounded-xl border-2 bg-white px-4 py-3 text-sm font-semibold outline-none transition focus:border-[#1A1F36]"
+                        style={{ borderColor: designTokens.colors.border, color: designTokens.colors.textPrimary }}
+                      />
+                    </label>
+                  </div>
+                  <div className="mt-5 rounded-xl border p-4" style={{ borderColor: `${designTokens.colors.secondary}30`, backgroundColor: `${designTokens.colors.secondary}08` }}>
+                    <p className="text-sm font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                      Open doctor request
+                    </p>
+                    <p className="mt-1 text-xs font-semibold" style={{ color: designTokens.colors.textSecondary }}>
+                      Your payment stays attached to this request. You do not pay again when a doctor accepts it.
+                    </p>
+                  </div>
+                </div>
+              ) : slotsLoading ? (
                 <div className="space-y-6 py-4 animate-in fade-in duration-200">
                   <div className="flex gap-3 overflow-x-auto pb-2">
                     {[1, 2, 3, 4, 5].map((i) => (
@@ -1356,10 +1451,14 @@ export default function ConsultationSchedulingPage() {
                       Selected Consultation
                     </p>
                     <p className="text-base font-bold mt-2" style={{ color: designTokens.colors.textPrimary }}>
-                      {selectedSlot ? formatSlotDate(selectedSlot.available_date, true) : 'Not selected'}
+                      {bookingMode === 'manual'
+                        ? (manualDate ? formatSlotDate(manualDate, true) : 'Not selected')
+                        : (selectedSlot ? formatSlotDate(selectedSlot.available_date, true) : 'Not selected')}
                     </p>
                     <p className="text-sm mt-1" style={{ color: designTokens.colors.textSecondary }}>
-                      {selectedSlot ? formatSlotTime(selectedSlot.time_slot) : 'Choose an available time'}
+                      {bookingMode === 'manual'
+                        ? (manualTime ? `${formatSlotTime(manualTime)} - open doctor request` : 'Choose your preferred time')
+                        : (selectedSlot ? formatSlotTime(selectedSlot.time_slot) : 'Choose an available time')}
                     </p>
                   </div>
 
@@ -1380,7 +1479,7 @@ export default function ConsultationSchedulingPage() {
                       Healthcare Professional
                     </p>
                     <p className="font-semibold mt-2" style={{ color: designTokens.colors.textPrimary }}>
-                      Automatically Assigned
+                      {bookingMode === 'manual' ? 'Open to eligible doctors' : 'Automatically Assigned'}
                     </p>
                   </div>
 
@@ -1406,10 +1505,10 @@ export default function ConsultationSchedulingPage() {
                 {/* CTA Button */}
                 <button
                   onClick={handleConfirmBooking}
-                  disabled={!selectedSlot || loading || patientDataLoading}
+                  disabled={(bookingMode === 'slot' ? !selectedSlot : !selectedManualDateTime) || loading || patientDataLoading}
                   className="w-full py-4 px-6 rounded-xl font-bold text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg cursor-pointer"
                   style={{
-                    backgroundColor: selectedSlot ? designTokens.colors.primary : designTokens.colors.textTertiary,
+                    backgroundColor: (bookingMode === 'slot' ? selectedSlot : selectedManualDateTime) ? designTokens.colors.primary : designTokens.colors.textTertiary,
                   }}
                 >
                   {loading ? 'Processing...' : isAlreadyPaid ? 'Confirm Appointment (₹0)' : 'Pay & Confirm Appointment'}

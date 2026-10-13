@@ -239,6 +239,8 @@ function DashboardLayoutContent({
       isConsultationRoomPage ||
       flowStep === 'ready' ||
       flowStep === 'needs_consultation' ||
+      (isOnboardingPlanPage && flowStep === 'needs_plan') ||
+      (isOnboardingPaymentPage && flowStep === 'needs_payment') ||
       (isConsultationBookingPage && flowStep === 'appointment_scheduled')
 
     if (error && !loading) {
