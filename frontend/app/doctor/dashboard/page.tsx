@@ -23,6 +23,7 @@ const RevokePrescriptionModal = dynamic(() => import('@/components/doctor/Revoke
 const ReferDietitianModal = dynamic(() => import('@/components/doctor/ReferDietitianModal'), { ssr: false });
 const ProviderProfileEditor = dynamic(() => import('@/components/provider/ProviderProfileEditor'), { ssr: false });
 const PatientProfileSidebar = dynamic(() => import('@/components/doctor/PatientProfileSidebar'), { ssr: false });
+const DoctorPatientTableView = dynamic(() => import('@/components/doctor/DoctorPatientTableView'), { ssr: false });
 
 const StreamConsultationCall = dynamic(
   () => import('@/components/video/StreamConsultationCall'),
@@ -590,6 +591,7 @@ export default function DoctorDashboard() {
 
   const [patientsPage, setPatientsPage] = useState(1);
   const [patientsTotalPages, setPatientsTotalPages] = useState(1);
+  const [patientsTotalCount, setPatientsTotalCount] = useState<number>(0);
   const [patientsSearch, setPatientsSearch] = useState('');
 
   // Video call
@@ -1085,6 +1087,7 @@ export default function DoctorDashboard() {
         }
       }
       if (data.totalPages !== undefined) setPatientsTotalPages(data.totalPages);
+      if (data.totalCount !== undefined) setPatientsTotalCount(data.totalCount);
     } catch (err) {
       console.error('Failed to load patients:', err);
     }
@@ -3623,332 +3626,44 @@ export default function DoctorDashboard() {
           {/* Patients Tab */}
           {activeTab === 'patients' && (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[20px] border border-[#1A1F36]/8 bg-white lg:h-[calc(100vh-64px)] lg:flex-row"
+              className="flex min-w-0 flex-1 flex-col"
             >
-              {/* Patient List Sidebar */}
-              <div className="max-h-[42vh] w-full shrink-0 overflow-y-auto border-b border-[#1A1F36]/8 bg-white p-4 space-y-3 custom-scrollbar sm:p-5 lg:max-h-none lg:w-80 lg:border-b-0 lg:border-r lg:p-6 lg:space-y-4">
-                <div className="px-2 mb-4">
-                  <h3 className="text-xs font-black text-[#8896A4] uppercase tracking-widest mb-3">Assigned Patients</h3>
-                  <input
-                    type="text"
-                    placeholder="Search patients..."
-                    value={patientsSearch}
-                    onChange={(e) => {
-                      setPatientsSearch(e.target.value);
-                      setPatientsPage(1);
-                    }}
-                    className={`${inputCls} text-xs p-2.5 rounded-xl`}
-                  />
-                </div>
-                {patients.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center text-center py-12">
-                    <Users className="w-12 h-12 text-[#8896A4] mb-4" />
-                    <h3 className="text-base font-semibold text-[#40516A] mb-1">No patients</h3>
-                    <p className="text-sm text-[#8896A4] max-w-xs mx-auto">No patients assigned yet.</p>
-                  </div>
-                ) : (
-                  patients.map((p) => (
-                    <div
-                      key={p.id}
-                      onClick={() => setSelectedPatient(p)}
-                      className={`p-4 rounded-2xl cursor-pointer border-2 transition-all duration-300 ${selectedPatient?.id === p.id ? 'border-[#C4622D] bg-[#F5F0EB]/70 shadow-sm lg:scale-[1.01]' : 'border-transparent bg-[#F5F0EB]/35 hover:bg-[#F5F0EB]/65 hover:border-[#C4622D]/30'}`}
-                    >
-                      <h4 className="font-black text-[#1A1F36] text-sm leading-tight mb-1">{patientName(p)}</h4>
-                      <div className="flex justify-between items-start gap-3 text-[10px] text-[#8896A4] font-bold">
-                        <span>Goal: {p.goal_weight_kg || '—'} kg</span>
-                        <p className={`text-[10px] font-black mt-1 ${(p.status_color || '').replace('bg-', 'text-').split(' ')[0]}`}>
-                          {p.status_label}
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                )}
-
-                {/* Pagination Controls */}
-                {patientsTotalPages > 1 && (
-                  <div className="flex items-center justify-between pt-4 border-t border-[#1A1F36]/8">
-                    <button
-                      disabled={patientsPage === 1}
-                      onClick={() => setPatientsPage((prev) => Math.max(prev - 1, 1))}
-                      className="px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg border border-[#1A1F36]/15 hover:bg-[#F5F0EB] disabled:opacity-50 transition-colors cursor-pointer"
-                    >
-                      Prev
-                    </button>
-                    <span className="text-[10px] font-bold text-[#40516A]">
-                      Page {patientsPage} / {patientsTotalPages}
-                    </span>
-                    <button
-                      disabled={patientsPage === patientsTotalPages}
-                      onClick={() => setPatientsPage((prev) => Math.min(prev + 1, patientsTotalPages))}
-                      className="px-2.5 py-1.5 text-[10px] font-black uppercase tracking-wider rounded-lg border border-[#1A1F36]/15 hover:bg-[#F5F0EB] disabled:opacity-50 transition-colors cursor-pointer"
-                    >
-                      Next
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Patient Details Pane */}
-              <div className="min-w-0 flex-1 overflow-y-auto bg-[#F5F0EB] p-4 custom-scrollbar sm:p-6 md:p-8 lg:p-10">
-                {selectedPatient ? (
-                  <div className="max-w-6xl space-y-6 sm:space-y-8">
-
-                    {/* Header info */}
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <h2 
-                            onClick={() => setShowPatientProfileSidebar(true)}
-                            className="break-words text-2xl font-black tracking-tight text-[#1A1F36] sm:text-3xl hover:text-[#C4622D] cursor-pointer transition-colors"
-                            title="Click to view full patient profile sidebar"
-                          >
-                            {patientName(selectedPatient)}
-                          </h2>
-                          {selectedPatient?.display_id && selectedPatient.display_id !== patientName(selectedPatient) && (
-                            <span className="rounded-lg bg-[#1A1F36]/5 text-[#40516A] text-xs font-bold px-2.5 py-0.5 border border-[#1A1F36]/10">
-                              ID: {selectedPatient.display_id}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2.5 mt-1.5 text-xs text-[#8896A4] flex-wrap">
-                          <span className="font-bold uppercase tracking-wider flex items-center gap-1.5 text-[#C4622D]">
-                            <Stethoscope className="w-3.5 h-3.5" /> Endocrinology case file
-                          </span>
-                          {selectedPatient?.email && (
-                            <span className="font-medium text-[#40516A] truncate max-w-xs sm:max-w-md">
-                              • {selectedPatient.email}
-                            </span>
-                          )}
-                          {selectedPatient?.phone && selectedPatient.phone !== 'No Phone' && (
-                            <span className="font-medium text-[#40516A]">
-                              • {selectedPatient.phone}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex w-full items-center gap-2.5 sm:w-auto flex-wrap sm:flex-nowrap">
-                        <button
-                          onClick={() => setShowPatientProfileSidebar(true)}
-                          className="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl border border-[#1A1F36]/15 bg-white hover:bg-[#F5F0EB] text-[#1A1F36] px-4 py-2 text-xs font-black shadow-xs transition-all cursor-pointer"
-                        >
-                          <User className="w-3.5 h-3.5 text-[#C4622D]" /> Patient Profile
-                        </button>
-                        <button
-                          onClick={() => {
-                            setReferDietitianPatient(selectedPatient);
-                            setShowReferDietitianModal(true);
-                          }}
-                          className="flex w-full sm:w-auto items-center justify-center gap-1.5 rounded-xl border border-[#0D9488]/30 bg-[#0D9488]/10 hover:bg-[#0D9488]/20 text-[#0D9488] px-4 py-2 text-xs font-black shadow-xs transition-all cursor-pointer"
-                          title="Refer to clinical dietitian"
-                        >
-                          <Apple className="w-3.5 h-3.5" /> Refer to Dietitian
-                        </button>
-                        {(() => {
-                          const matchingRx = (selectedPatient as any)?.prescription || doctorPrescriptions.find(p => p.patient_id === selectedPatient?.id && !['DRAFT', 'REVOKED', 'CANCELLED', 'REPLACED'].includes(p.status));
-                          if (matchingRx) {
-                            return (
-                              <button
-                                onClick={() => setOfficialRxView(matchingRx)}
-                                className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 px-4 py-2 text-xs font-black shadow-sm transition-all sm:w-auto cursor-pointer"
-                              >
-                                <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> View Issued Rx ({matchingRx.prescription_number || 'Official Rx'})
-                              </button>
-                            );
-                          }
-                          return (
-                            <button
-                              onClick={() => {
-                                setBuilderConsultation(null);
-                                setBuilderPatient(selectedPatient);
-                                setShowRxBuilderModal(true);
-                              }}
-                              className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-[#0D9488] to-[#0F766E] hover:from-[#0B7A6F] hover:to-[#0D625C] px-4 py-2 text-xs font-black text-white shadow-sm transition-all sm:w-auto cursor-pointer"
-                            >
-                              <Pill className="w-3.5 h-3.5" /> Issue E-Prescription
-                            </button>
-                          );
-                        })()}
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-3">
-                      <span className={`rounded-full border px-4 py-2 text-xs font-black uppercase tracking-wide ${statusTone(selectedPatient.eligibility_status)}`}>
-                        Eligibility: {safeDisplayValue(selectedPatient.eligibility_status)}
-                      </span>
-                      <span className={`rounded-full border px-4 py-2 text-xs font-black uppercase tracking-wide ${statusTone(selectedPatient.latest_consultation_status)}`}>
-                        Latest consultation: {consultationLabel(selectedPatient.latest_consultation_status)}
-                      </span>
-                      <span className="rounded-full border border-[#1A1F36]/8 bg-white px-4 py-2 text-xs font-black text-[#40516A]">
-                        Next appointment: {selectedPatient.next_appointment ? formatClinicalDate(selectedPatient.next_appointment.booking_date, selectedPatient.next_appointment.booking_time) : 'Not scheduled'}
-                      </span>
-                    </div>
-
-                    {/* Telemetry metrics */}
-                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
-                      <div className="bg-white p-5 rounded-2xl border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.06)] hover:shadow-[0_18px_40px_rgba(26,31,54,0.10)] transition-shadow duration-300 text-center">
-                        <p className="text-[10px] font-black text-[#8896A4] uppercase tracking-widest">Height</p>
-                        <p className="text-xl font-black text-[#1A1F36] mt-1">{selectedPatient.height_cm ? `${selectedPatient.height_cm} cm` : '—'}</p>
-                      </div>
-                      <div className="bg-white p-5 rounded-2xl border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.06)] hover:shadow-[0_18px_40px_rgba(26,31,54,0.10)] transition-shadow duration-300 text-center">
-                        <p className="text-[10px] font-black text-[#8896A4] uppercase tracking-widest">Current Weight</p>
-                        <p className="text-xl font-black text-[#1A1F36] mt-1">{selectedPatient.weight_kg ? `${selectedPatient.weight_kg} kg` : '—'}</p>
-                      </div>
-                      <div className="bg-white p-5 rounded-2xl border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.06)] hover:shadow-[0_18px_40px_rgba(26,31,54,0.10)] transition-shadow duration-300 text-center">
-                        <p className="text-[10px] font-black text-[#8896A4] uppercase tracking-widest">Target Weight</p>
-                        <p className="text-xl font-black text-[#C4622D] mt-1">{selectedPatient.goal_weight_kg ? `${selectedPatient.goal_weight_kg} kg` : '—'}</p>
-                      </div>
-                      <div className="bg-white p-5 rounded-2xl border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.06)] hover:shadow-[0_18px_40px_rgba(26,31,54,0.10)] transition-shadow duration-300 text-center">
-                        <p className="text-[10px] font-black text-[#8896A4] uppercase tracking-widest">BMI</p>
-                        <p className="text-xl font-black text-[#5C7A6B] mt-1">
-                          {patientBmi(selectedPatient)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="grid gap-6 xl:grid-cols-2">
-                      <ClinicalCard title="Assessment Summary" icon={<FileText className="w-4 h-4 text-[#C4622D]" />}>
-                        <ClinicalText value={selectedPatient.assessment_summary || selectedPatient.medical_history || selectedPatient.extra_medical_info} empty="No assessment summary available." />
-                        {selectedPatient.eligibility_reason && (
-                          <div className="mt-4 rounded-2xl border border-[#D89A3D]/18 bg-[#D89A3D]/8 p-4">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-[#B7792F]">Eligibility rationale</p>
-                            <p className="mt-2 text-sm font-bold leading-relaxed text-[#40516A]">{safeDisplayValue(selectedPatient.eligibility_reason)}</p>
-                          </div>
-                        )}
-                      </ClinicalCard>
-
-                      <ClinicalCard title="Medical Risk Flags" icon={<AlertCircle className="w-4 h-4 text-[#B94D4D]" />}>
-                        <MedicalRiskFlagList value={selectedPatient.medical_risk_flags} />
-                        {selectedPatient.medication_proof_url && (
-                          <a href={selectedPatient.medication_proof_url} target="_blank" rel="noreferrer" className="mt-4 inline-flex rounded-full bg-[#FFF4EC] px-4 py-2 text-xs font-black text-[#C4622D]">
-                            View uploaded medication proof
-                          </a>
-                        )}
-                        {(selectedPatient.lab_preference || selectedPatient.lab_report_url) && (
-                          <div className="mt-4 rounded-2xl border border-[#0D9488]/20 bg-[#0D9488]/8 p-4">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-[#0D9488]">Blood Report</p>
-                            <p className="mt-2 text-sm font-bold text-[#40516A]">
-                              {selectedPatient.lab_preference === 'third_party' ? 'Home collection requested' : selectedPatient.lab_preference || 'Report available'}
-                            </p>
-                            {selectedPatient.lab_report_url && (
-                              <a href={selectedPatient.lab_report_url} target="_blank" rel="noreferrer" className="mt-3 inline-flex rounded-full bg-white px-4 py-2 text-xs font-black text-[#0D9488] shadow-sm">
-                                View blood report
-                              </a>
-                            )}
-                          </div>
-                        )}
-                      </ClinicalCard>
-
-                      <ClinicalCard title="Current Medications" icon={<Pill className="w-4 h-4 text-[#C4622D]" />}>
-                        <ClinicalText value={selectedPatient.current_medications || selectedPatient.medication_history} empty="No current medication history recorded." />
-                      </ClinicalCard>
-
-                      <ClinicalCard title="Diagnosis Summary" icon={<Stethoscope className="w-4 h-4 text-[#5C7A6B]" />}>
-                        <ClinicalText value={selectedPatient.diagnosis_summary} empty="No diagnosis summary saved yet." />
-                      </ClinicalCard>
-
-                      <ClinicalCard title="Follow-up Notes" icon={<FileText className="w-4 h-4 text-[#5C7A6B]" />}>
-                        <ClinicalText value={selectedPatient.follow_up_notes} empty="No follow-up notes saved yet." />
-                      </ClinicalCard>
-
-                      <ClinicalCard title="Prescription History" icon={<Pill className="w-4 h-4 text-[#C4622D]" />}>
-                        {selectedPatient.prescription_history?.length ? (
-                          <div className="space-y-3">
-                            {selectedPatient.prescription_history.slice(0, 4).map((item: Consultation) => (
-                              <div key={item.id} className="rounded-2xl border border-[#1A1F36]/8 bg-white p-4 shadow-sm">
-                                <p className="text-xs font-black uppercase tracking-widest text-[#8896A4]">{formatClinicalDate(item.booking_date, item.booking_time)}</p>
-                                <p className="mt-2 text-sm font-black text-[#1A1F36]">{safeDisplayValue(item.prescription_type || 'Medication recommendation')}</p>
-                                <p className="mt-1 text-xs font-semibold leading-relaxed text-[#40516A]">{safeDisplayValue(item.prescription_text || item.prescription_notes)}</p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <ClinicalText value={null} empty="No prescription history yet." />
-                        )}
-                      </ClinicalCard>
-                    </div>
-
-                    <ClinicalCard title="Previous Consultations" icon={<Calendar className="w-4 h-4 text-[#C4622D]" />}>
-                      {selectedPatient.previous_consultations?.length ? (
-                        <div className="grid gap-3 md:grid-cols-2">
-                          {selectedPatient.previous_consultations.slice(0, 6).map((consultation: Consultation) => (
-                            <div key={consultation.id} className="min-w-0 rounded-2xl border border-[#1A1F36]/8 bg-[#F5F0EB]/45 p-4">
-                              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                <div className="min-w-0">
-                                  <p className="text-sm font-black text-[#1A1F36]">{formatClinicalDate(consultation.booking_date, consultation.booking_time)}</p>
-                                  <p className="mt-1 text-xs font-bold text-[#8896A4]">{consultationLabel(consultation.status)}</p>
-                                </div>
-                                <span className={`w-fit rounded-full border px-3 py-1 text-[10px] font-black uppercase ${statusTone(consultation.status)}`}>{consultationLabel(consultation.status)}</span>
-                              </div>
-                              {consultation.prescription_notes && (
-                                <p className="mt-3 break-words text-xs font-semibold leading-relaxed text-[#40516A]">{safeDisplayValue(consultation.prescription_notes)}</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <ClinicalText value={null} empty="No previous consultations found." />
-                      )}
-                    </ClinicalCard>
-
-                    {/* Patient Progress Summary */}
-                    <div className="bg-white p-6 rounded-[20px] border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.08)]">
-                      <h3 className="text-xs font-black text-[#8896A4] uppercase tracking-widest mb-6 flex items-center gap-1.5">
-                        <Activity className="w-4 h-4 text-[#C4622D]" /> Patient Progress Summary
-                      </h3>
-                      <DoctorPatientWeightChart weightLogs={selectedPatient.weight_logs} />
-                    </div>
-
-                    {/* Secondary Health Intake */}
-                    {selectedPatient.medical_history && (
-                      <div className="bg-white p-6 rounded-[20px] border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.08)]">
-                        <h3 className="text-xs font-black text-[#8896A4] uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                          <FileText className="w-4 h-4 text-[#C4622D]" /> Secondary Health Intake
-                        </h3>
-                        <p className="text-sm font-bold text-[#1A1F36] bg-[#F5F0EB]/50 p-4.5 rounded-2xl border border-[#1A1F36]/8 leading-relaxed shadow-inner">
-                          {safeDisplayValue(selectedPatient.medical_history)}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Additional Clinical Notes */}
-                    {selectedPatient.extra_medical_info && (
-                      <div className="bg-white p-6 rounded-[20px] border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.08)]">
-                        <h3 className="text-xs font-black text-[#8896A4] uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                          <FileText className="w-4 h-4 text-[#5C7A6B]" /> Additional Clinical Notes
-                        </h3>
-                        <p className="text-sm font-bold text-[#1A1F36] bg-[#F5F0EB]/50 p-4.5 rounded-2xl border border-[#1A1F36]/8 leading-relaxed shadow-inner">
-                          {safeDisplayValue(selectedPatient.extra_medical_info)}
-                        </p>
-                      </div>
-                    )}
-
-                    {/* Care Team Context */}
-                    {selectedPatient.local_food && (
-                      <div className="bg-white p-6 rounded-[20px] border border-[#1A1F36]/8 shadow-[0_12px_32px_rgba(26,31,54,0.08)]">
-                        <h3 className="text-xs font-black text-[#8896A4] uppercase tracking-widest mb-3 flex items-center gap-1.5">
-                          <FileText className="w-4 h-4 text-[#D89A3D]" /> Care Team Context
-                        </h3>
-                        <p className="text-sm font-bold text-[#1A1F36] bg-[#F5F0EB]/50 p-4.5 rounded-2xl border border-[#F5F0EB] leading-relaxed shadow-inner">
-                          {safeDisplayValue(selectedPatient.local_food)}
-                        </p>
-                      </div>
-                    )}
-
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center text-center p-8 h-64">
-                    <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center shadow-sm border border-[#1A1F36]/8 mb-6">
-                      <Users className="w-10 h-10 text-[#8896A4]" />
-                    </div>
-                    <h3 className="text-base font-black text-[#40516A]">Select a patient</h3>
-                    <p className="text-xs text-[#8896A4] font-semibold mt-2 max-w-xs">
-                      Choose a patient from the roster to review their assessment, risks, medications, consultations, prescriptions, and follow-up plan.
-                    </p>
-                  </div>
-                )}
-              </div>
+              <DoctorPatientTableView
+                patients={patients}
+                totalCount={patientsTotalCount || patients.length}
+                totalPages={patientsTotalPages}
+                currentPage={patientsPage}
+                searchQuery={patientsSearch}
+                onSearchChange={(search) => {
+                  setPatientsSearch(search);
+                  setPatientsPage(1);
+                }}
+                onPageChange={(page) => setPatientsPage(page)}
+                onViewProfile={(patient) => {
+                  setSelectedPatient(patient);
+                  setShowPatientProfileSidebar(true);
+                }}
+                onIssueRx={(patient) => {
+                  setSelectedPatient(patient);
+                  setBuilderConsultation(null);
+                  setBuilderPatient(patient);
+                  setShowRxBuilderModal(true);
+                }}
+                onViewRx={(rx) => {
+                  setOfficialRxView(rx);
+                }}
+                onReferDietitian={(patient) => {
+                  setSelectedPatient(patient);
+                  setReferDietitianPatient(patient);
+                  setShowReferDietitianModal(true);
+                }}
+                doctorPrescriptions={doctorPrescriptions}
+                onRefresh={() => {
+                  if (doctor) loadPatients(doctor.id, patientsPage, patientsSearch);
+                }}
+              />
             </motion.div>
           )}
 
