@@ -2,6 +2,31 @@ import { supabaseAdmin } from './supabaseServer'
 import { checkRateLimit, getClientIp, normalizeEmail, rateLimitResponse, getUserRole } from './authSecurity'
 import { getAssignedProviderForRole } from './providerConsultations'
 
+type CachedAuth = {
+  user: any
+  role: string | null
+  expiresAt: number
+}
+
+const globalForAuth = globalThis as typeof globalThis & {
+  __8liv_auth_token_cache__?: Map<string, CachedAuth>
+}
+const authTokenCache = globalForAuth.__8liv_auth_token_cache__ ?? new Map<string, CachedAuth>()
+if (!globalForAuth.__8liv_auth_token_cache__) {
+  globalForAuth.__8liv_auth_token_cache__ = authTokenCache
+}
+
+function decodeJwtPayload(token: string): { sub?: string; email?: string; exp?: number; app_metadata?: any; user_metadata?: any } | null {
+  try {
+    const parts = token.split('.')
+    if (parts.length !== 3) return null
+    const payload = Buffer.from(parts[1], 'base64url').toString('utf8')
+    return JSON.parse(payload)
+  } catch {
+    return null
+  }
+}
+
 export async function getAuthenticatedUser(request: Request) {
   const authHeader = request.headers.get('authorization') || ''
   let token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : ''
@@ -34,6 +59,14 @@ export async function getAuthenticatedUser(request: Request) {
   if (!token) return null
 
   const now = Date.now()
+
+  // Fast check: If token JWT exp is in the past, return null without network call
+  const jwt = decodeJwtPayload(token)
+  if (jwt?.exp && jwt.exp * 1000 < now) {
+    authTokenCache.delete(token)
+    return null
+  }
+
   const cached = authTokenCache.get(token)
   if (cached && cached.expiresAt > now) {
     return { user: cached.user, role: cached.role }
@@ -60,14 +93,6 @@ export async function getAuthenticatedUser(request: Request) {
 
   return null
 }
-
-type CachedAuth = {
-  user: any
-  role: string | null
-  expiresAt: number
-}
-
-const authTokenCache = new Map<string, CachedAuth>()
 
 export async function assertAdmin(request: Request) {
   const auth = await getAuthenticatedUser(request)

@@ -31,54 +31,32 @@ class MemoryServerCache {
   public async getOrSet<T>(
     key: string,
     fetcher: () => Promise<T>,
-    ttlMs = 5000,
+    ttlMs = 15000,
     tags: string[] = [],
-    swrMs = 300000 // 5 minutes stale-while-revalidate window
+    _swrMs?: number
   ): Promise<{ value: T; etag: string; isHit: boolean; isStale?: boolean }> {
     const now = Date.now()
     const cached = this.cache.get(key)
 
-    if (cached) {
-      if (cached.expiresAt > now) {
-        return { value: cached.value as T, etag: cached.etag, isHit: true }
-      }
-
-      // SWR: serve stale data immediately in 0ms, and refresh in background
-      if (swrMs > 0 && (now - cached.expiresAt < swrMs)) {
-        if (!this.inFlight.has(key)) {
-          const bgPromise = (async () => {
-            try {
-              const freshValue = await fetcher()
-              const freshEtag = this.generateETag(freshValue)
-              this.cache.set(key, {
-                value: freshValue,
-                etag: freshEtag,
-                expiresAt: Date.now() + ttlMs,
-                tags,
-              })
-            } catch (bgErr) {
-              console.warn(`[serverCache] SWR background update error for ${key}:`, bgErr)
-            } finally {
-              this.inFlight.delete(key)
-            }
-          })()
-          this.inFlight.set(key, bgPromise)
-        }
-        return { value: cached.value as T, etag: cached.etag, isHit: true, isStale: true }
-      }
+    if (cached && cached.expiresAt > now) {
+      return { value: cached.value as T, etag: cached.etag, isHit: true }
     }
 
-    // Coalesce in-flight requests to the same key to avoid duplicate DB queries
+    // Coalesce in-flight requests in the same tick with strict 8s timeout safeguard
     if (this.inFlight.has(key)) {
       try {
-        const val = await this.inFlight.get(key)
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('In-flight cache timeout')), 8000)
+        )
+        const val = await Promise.race([this.inFlight.get(key)!, timeoutPromise])
         const current = this.cache.get(key)
         if (current) {
           return { value: current.value as T, etag: current.etag, isHit: true }
         }
         return { value: val as T, etag: this.generateETag(val), isHit: false }
       } catch (err) {
-        // Fallback to independent execution if in-flight failed
+        this.inFlight.delete(key)
+        // Fallback to fresh execution if in-flight failed or timed out
       }
     }
 

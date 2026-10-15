@@ -13,15 +13,16 @@ import {
   ShieldCheck, FileCheck, Sparkles, Truck, Search, Filter, Hash, AlertTriangle, Copy,
   RefreshCw, User, PenTool, Apple,
 } from 'lucide-react';
-import StaffChat from '@/components/StaffChat';
 import ProviderAvailabilityScheduler, { GeneratedSlot, AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler';
 import dynamic from 'next/dynamic';
-import DoctorPrescriptionBuilderModal from '@/components/doctor/DoctorPrescriptionBuilderModal';
-import OfficialPrescriptionModal from '@/components/doctor/OfficialPrescriptionModal';
-import RevokePrescriptionModal from '@/components/doctor/RevokePrescriptionModal';
-import ReferDietitianModal from '@/components/doctor/ReferDietitianModal';
-import ProviderProfileEditor from '@/components/provider/ProviderProfileEditor';
-import PatientProfileSidebar from '@/components/doctor/PatientProfileSidebar';
+
+const StaffChat = dynamic(() => import('@/components/StaffChat'), { ssr: false });
+const DoctorPrescriptionBuilderModal = dynamic(() => import('@/components/doctor/DoctorPrescriptionBuilderModal'), { ssr: false });
+const OfficialPrescriptionModal = dynamic(() => import('@/components/doctor/OfficialPrescriptionModal'), { ssr: false });
+const RevokePrescriptionModal = dynamic(() => import('@/components/doctor/RevokePrescriptionModal'), { ssr: false });
+const ReferDietitianModal = dynamic(() => import('@/components/doctor/ReferDietitianModal'), { ssr: false });
+const ProviderProfileEditor = dynamic(() => import('@/components/provider/ProviderProfileEditor'), { ssr: false });
+const PatientProfileSidebar = dynamic(() => import('@/components/doctor/PatientProfileSidebar'), { ssr: false });
 
 const StreamConsultationCall = dynamic(
   () => import('@/components/video/StreamConsultationCall'),

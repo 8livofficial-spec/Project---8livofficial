@@ -36,19 +36,35 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Invalid search identifier' }, { status: 400 });
     }
 
-    // 1. Search in doctor_consultations
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(searchTarget);
+
+    // 1. Concurrently search doctor_consultations and staff_consultations
     let docQuery = supabaseAdmin
       .from('doctor_consultations')
       .select('*, doctor_profiles(full_name, specialty)');
 
+    let staffQuery = supabaseAdmin
+      .from('staff_consultations')
+      .select('*');
+
     if (searchTarget.startsWith('https://')) {
       docQuery = docQuery.or(`room_url.eq.${searchTarget},meeting_url.eq.${searchTarget}`);
+      staffQuery = staffQuery.or(`room_url.eq.${searchTarget},meeting_url.eq.${searchTarget}`);
+    } else if (isUuid) {
+      docQuery = docQuery.or(`id.eq.${searchTarget},call_id.eq.${searchTarget},meeting_room.eq.${searchTarget}`);
+      staffQuery = staffQuery.or(`id.eq.${searchTarget},call_id.eq.${searchTarget},meeting_room.eq.${searchTarget}`);
     } else {
       docQuery = docQuery.or(`id.eq.${searchTarget},call_id.eq.${searchTarget},meeting_room.eq.${searchTarget}`);
+      staffQuery = staffQuery.or(`id.eq.${searchTarget},call_id.eq.${searchTarget},meeting_room.eq.${searchTarget}`);
     }
 
-    const { data: docConsult, error: docErr } = await docQuery.maybeSingle();
+    const [{ data: docConsult, error: docErr }, { data: staffConsult, error: staffErr }] = await Promise.all([
+      docQuery.maybeSingle(),
+      staffQuery.maybeSingle()
+    ]);
+
     if (docErr) throw docErr;
+    if (staffErr && !docConsult) throw staffErr;
 
     if (docConsult) {
       // Authorization Check: Must be patient, assigned doctor, or admin
@@ -84,20 +100,6 @@ export async function POST(req: Request) {
       });
     }
 
-    // 2. Search in staff_consultations
-    let staffQuery = supabaseAdmin
-      .from('staff_consultations')
-      .select('*');
-
-    if (searchTarget.startsWith('https://')) {
-      staffQuery = staffQuery.or(`room_url.eq.${searchTarget},meeting_url.eq.${searchTarget}`);
-    } else {
-      staffQuery = staffQuery.or(`id.eq.${searchTarget},call_id.eq.${searchTarget},meeting_room.eq.${searchTarget}`);
-    }
-
-    const { data: staffConsult, error: staffErr } = await staffQuery.maybeSingle();
-    if (staffErr) throw staffErr;
-
     if (staffConsult) {
       // Authorization Check: Must be patient, assigned staff, or admin
       const isAuthorized =
@@ -109,17 +111,18 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
       }
 
-      const { data: staffProfile } = await supabaseAdmin
-        .from('profiles')
-        .select('first_name, last_name, role')
-        .eq('id', staffConsult.staff_id)
-        .maybeSingle();
-
-      const { data: patientProfile } = await supabaseAdmin
-        .from('profiles')
-        .select('first_name, last_name')
-        .eq('id', staffConsult.patient_id)
-        .maybeSingle();
+      const [{ data: staffProfile }, { data: patientProfile }] = await Promise.all([
+        supabaseAdmin
+          .from('profiles')
+          .select('first_name, last_name, role')
+          .eq('id', staffConsult.staff_id)
+          .maybeSingle(),
+        supabaseAdmin
+          .from('profiles')
+          .select('first_name, last_name')
+          .eq('id', staffConsult.patient_id)
+          .maybeSingle()
+      ]);
 
       const roleLabel = labelForRole(normalizeProviderRole(staffConsult.staff_role));
       const providerName = staffProfile 
