@@ -2198,10 +2198,10 @@ export default function DoctorDashboard() {
 
               {/* Wallet quick view */}
               <div className="p-3.5 border-t border-white/10 bg-white/[0.02]">
-                {wallet.balance > 0 ? (
+                {Math.max(0, (wallet?.balance ?? 0) - (wallet?.pending_payout ?? 0)) > 0 ? (
                   <div className="bg-white/[0.06] backdrop-blur-md rounded-2xl p-3.5 text-white border border-white/10 shadow-sm">
                     <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mb-0.5">Available Balance</p>
-                    <p className="text-lg font-black font-sora text-white">₹{Number(wallet?.balance ?? 0).toLocaleString('en-IN')}</p>
+                    <p className="text-lg font-black font-sora text-white">₹{Number(Math.max(0, (wallet?.balance ?? 0) - (wallet?.pending_payout ?? 0))).toLocaleString('en-IN')}</p>
                     <button onClick={() => { setActiveTab('wallet'); setMobileSidebarOpen(false); }}
                       className="mt-2 w-full bg-[#0D9488] hover:bg-[#0A7066] text-white text-[11px] font-bold py-1.5 rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer">
                       <ArrowDownToLine className="w-3 h-3" /> Withdraw Funds

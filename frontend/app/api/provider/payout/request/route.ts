@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import { NextResponse } from 'next/server'
 import { getAuthenticatedProvider } from '@/lib/providerServer'
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { serverCache } from '@/lib/serverCache'
 
 export async function POST(request: Request) {
   try {
@@ -64,9 +65,11 @@ export async function POST(request: Request) {
       if (v2Error) {
         return NextResponse.json({ error: v2Error.message }, { status: 400 })
       }
+      serverCache.invalidate(`wallet:${provider.user.id}`)
       return NextResponse.json({ payout: v2Data, success: true }, { status: 201 })
     }
 
+    serverCache.invalidate(`wallet:${provider.user.id}`)
     return NextResponse.json({ payout: rpcData, success: true }, { status: 201 })
   } catch (error: unknown) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to request payout.' }, { status: 500 })

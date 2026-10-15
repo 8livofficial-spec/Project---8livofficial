@@ -3,6 +3,7 @@ import { getAuthenticatedProvider } from '@/lib/providerServer'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { loadAssignedProviderPatients } from '@/lib/providerAssignedPatients'
 import { serverCache, jsonWithETag, isETagFresh } from '@/lib/serverCache'
+import { getUnifiedProviderWallet } from '@/lib/providerWalletService'
 
 const terminalStatuses = ['completed', 'cancelled', 'missed', 'MISSED_BY_PATIENT', 'CANCELLED_BY_DOCTOR', 'CANCELLED_BY_PATIENT']
 
@@ -142,19 +143,14 @@ export async function GET(request: Request) {
       const { value: doctorPayload, etag } = await serverCache.getOrSet(
         `dashboard:doctor:${userId}`,
         async () => {
-          // 1. Fetch doctor's consultations, wallet, available requests, and completed count concurrently
-          const [consultationsRes, walletRes, availableRequestsRes, completedCountRes] = await Promise.all([
+          // 1. Fetch doctor's consultations, available requests, and completed count concurrently
+          const [consultationsRes, availableRequestsRes, completedCountRes] = await Promise.all([
             supabaseAdmin
               .from('doctor_consultations')
               .select('id, doctor_id, patient_id, booking_date, booking_time, status, room_url, is_completed, prescription_type, created_at, call_started_at, call_ended_at, appointment_type, meeting_provider, meeting_room, meeting_url, completed_at')
               .eq('doctor_id', userId)
               .order('created_at', { ascending: false })
               .limit(20),
-            supabaseAdmin
-              .from('doctor_wallet')
-              .select('doctor_id, balance, total_earned, total_withdrawn, updated_at')
-              .eq('doctor_id', userId)
-              .maybeSingle(),
             // Get unclaimed requests (where status is scheduled and no doctor is assigned yet)
             supabaseAdmin
               .from('doctor_consultations')
@@ -255,22 +251,10 @@ export async function GET(request: Request) {
           const completedCount = typeof completedConsultsCount === 'number'
             ? completedConsultsCount
             : ownConsultations.filter((c: any) => ['approved', 'completed', 'attended'].includes(String(c.status || '').toLowerCase()) || c.is_completed).length
-          const dynamicEarned = completedCount * 300
-          const recordedEarned = Number(walletRes.data?.total_earned || 0)
-          const recordedWithdrawn = Number(walletRes.data?.total_withdrawn || 0)
-          const totalEarned = Math.max(recordedEarned, dynamicEarned)
-          const balance = Math.max(0, totalEarned - recordedWithdrawn)
 
-          const walletPayload = {
-            doctor_id: userId,
-            balance,
-            total_earned: totalEarned,
-            total_withdrawn: recordedWithdrawn,
-            pending_payout: 0,
-            completed_payout: recordedWithdrawn,
-            lifetime_earnings: totalEarned,
-            updated_at: walletRes.data?.updated_at || new Date().toISOString()
-          }
+          // Fetch unified wallet using single source of truth (guarantees consistency with /api/provider/wallet)
+          const unifiedWalletResult = await getUnifiedProviderWallet(userId, undefined, completedCount)
+          const walletPayload = unifiedWalletResult.wallet
 
           const enrichedOwn = ownConsultations.map(enrich)
           const enrichedAvailable = availableRequests.map(enrich)
@@ -294,7 +278,7 @@ export async function GET(request: Request) {
           }
         },
         60000,
-        [`dashboard:doctor:${userId}`, `user:${userId}`],
+        [`dashboard:doctor:${userId}`, `user:${userId}`, `wallet:${userId}`],
         600000 // 10 minutes SWR window
       )
 
@@ -306,7 +290,7 @@ export async function GET(request: Request) {
       `dashboard:provider:${userId}`,
       async () => {
         // Parallelize all primary provider queries in a single concurrent batch
-        const [consultationsRes, assignedResult, v2ProfileRes, v2WalletRes, legacyWalletRes] = await Promise.all([
+        const [consultationsRes, assignedResult, unifiedWalletResult] = await Promise.all([
           supabaseAdmin
             .from('staff_consultations')
             .select('id, staff_id, staff_role, patient_id, booking_date, booking_time, status, meeting_url, meeting_provider, appointment_type, created_at')
@@ -315,51 +299,12 @@ export async function GET(request: Request) {
             .order('booking_time', { ascending: true })
             .limit(8),
           loadAssignedProviderPatients(userId, role, { page: 1, limit: 4 }),
-          supabaseAdmin
-            .from('provider_profiles_v2')
-            .select('id')
-            .or(`id.eq.${userId},user_id.eq.${userId}`)
-            .maybeSingle(),
-          supabaseAdmin
-            .from('provider_wallets')
-            .select('eligible_balance, processing_balance, paid_total, pending_balance, on_hold_balance')
-            .or(`provider_id.eq.${userId}`)
-            .eq('currency', 'INR')
-            .maybeSingle(),
-          supabaseAdmin
-            .from('wallet_accounts')
-            .select('current_balance, pending_balance, total_paid, total_earned')
-            .eq('provider_id', userId)
-            .maybeSingle(),
+          getUnifiedProviderWallet(userId)
         ])
 
         const rawConsultations = consultationsRes.data || []
         const { patients, summary } = assignedResult || { patients: [], summary: {} }
-
-        let walletPayload = { balance: 0, pending_payout: 0, completed_payout: 0, lifetime_earnings: 0 }
-        const v2Wallet = v2WalletRes?.data
-
-        if (v2Wallet) {
-          const eligible = Number(v2Wallet.eligible_balance || 0)
-          const processing = Number(v2Wallet.processing_balance || 0)
-          const paid = Number(v2Wallet.paid_total || 0)
-          const pending = Number(v2Wallet.pending_balance || 0)
-          const onHold = Number(v2Wallet.on_hold_balance || 0)
-          walletPayload = {
-            balance: eligible,
-            pending_payout: processing,
-            completed_payout: paid,
-            lifetime_earnings: eligible + processing + paid + pending + onHold,
-          }
-        } else if (legacyWalletRes?.data) {
-          const legacyWallet = legacyWalletRes.data
-          walletPayload = {
-            balance: Number(legacyWallet.current_balance || 0),
-            pending_payout: Number(legacyWallet.pending_balance || 0),
-            completed_payout: Number(legacyWallet.total_paid || 0),
-            lifetime_earnings: Number(legacyWallet.total_earned || 0),
-          }
-        }
+        const walletPayload = unifiedWalletResult.wallet
 
         const patientIds = Array.from(new Set(rawConsultations.map((row: any) => row.patient_id).filter(Boolean))) as string[]
         const profilesRes = patientIds.length
@@ -394,7 +339,7 @@ export async function GET(request: Request) {
         }
       },
       60000,
-      [`dashboard:provider:${userId}`, `user:${userId}`],
+      [`dashboard:provider:${userId}`, `user:${userId}`, `wallet:${userId}`],
       600000 // 10 minutes SWR window
     )
 
