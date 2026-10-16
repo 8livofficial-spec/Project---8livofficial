@@ -5,6 +5,7 @@ import JsonLd from '@/components/seo/JsonLd'
 import { breadcrumbSchema, webPageSchema } from '@/lib/seo/schema'
 import { absoluteUrl } from '@/lib/seo/site'
 import { pagePath, publicPageMap, publicPageOgImage, publicPages } from '@/lib/seo/publicPages'
+import Footer from '@/components/landing/Footer'
 
 type PageProps = {
   params: Promise<{ slug: string }>
@@ -134,6 +135,8 @@ export default async function PublicSeoPage({ params }: PageProps) {
           </nav>
         </div>
       </section>
+
+      <Footer />
     </main>
   )
 }

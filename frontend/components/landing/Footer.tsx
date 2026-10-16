@@ -12,7 +12,12 @@ export default function Footer() {
               className="mb-4 h-12 w-auto object-contain opacity-90"
             />
 
-
+            <p className="mb-2 text-sm font-semibold text-[#0F172A]">
+              8Liv — The digital healthcare platform by{' '}
+              <Link href="/about" className="text-[#0D9488] transition-colors hover:text-[#0F766E] hover:underline">
+                Infinity Liv
+              </Link>
+            </p>
 
             <p className="mb-6 leading-relaxed text-[#475569]">
               Secure online metabolic care with doctor consultations, treatment review, progress tracking, and follow-up support.
@@ -50,9 +55,18 @@ export default function Footer() {
         </div>
 
         <div className="flex flex-col items-center justify-between gap-5 border-t border-[#D46E53]/10 pt-8 text-center md:flex-row md:text-left">
-          <p className="text-sm text-[#475569]">
-            &copy; {new Date().getFullYear()} 8Liv. All rights reserved.
-          </p>
+          <div className="space-y-1">
+            <p className="text-sm text-[#475569]">
+              &copy; {new Date().getFullYear()} 8Liv. All rights reserved.
+            </p>
+            <p className="text-xs text-[#64748B]">
+              8Liv is operated under the{' '}
+              <Link href="/about" className="font-medium text-[#0D9488] hover:underline">
+                Infinity Liv
+              </Link>{' '}
+              brand.
+            </p>
+          </div>
           <div className="flex flex-wrap justify-center gap-x-5 gap-y-3 text-sm md:justify-end">
             <Link href="/privacy" className="text-[#475569] transition-colors hover:text-[#D46E53]">Privacy Policy</Link>
             <Link href="/terms" className="text-[#475569] transition-colors hover:text-[#D46E53]">Terms of Service</Link>

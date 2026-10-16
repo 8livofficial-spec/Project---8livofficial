@@ -11,7 +11,7 @@ const faqs = [
   {
     question: 'What is 8Liv and how does it work?',
     answer:
-      '8Liv is an online medical metabolic health clinic. We connect you with board-certified physicians, clinical dietitians, and dedicated health coaches—all from home. We combine 1-on-1 doctor video consultations, personalized Indian meal plans, and ongoing clinical monitoring with doorstep delivery of medications if prescribed.',
+      '8Liv is a digital healthcare platform operated under the Infinity Liv brand. We connect you with board-certified physicians, clinical dietitians, and dedicated health coaches—all from home. We combine 1-on-1 doctor video consultations, personalized Indian meal plans, and ongoing clinical monitoring with doorstep delivery of medications if prescribed.',
   },
   {
     question: 'How does the 3-minute health assessment work?',
