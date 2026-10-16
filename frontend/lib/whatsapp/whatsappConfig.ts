@@ -9,7 +9,7 @@ export const WHATSAPP_CONFIG = {
   phoneNumberId: process.env.WHATSAPP_PHONE_NUMBER_ID || '',
   businessAccountId: process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || '',
   accessToken: process.env.WHATSAPP_ACCESS_TOKEN || '',
-  appSecret: process.env.WHATSAPP_APP_SECRET || '',
+  appSecret: process.env.META_APP_SECRET || process.env.WHATSAPP_APP_SECRET || '',
   webhookVerifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || '8liv_whatsapp_webhook_verify_secure_2026',
   apiVersion: process.env.WHATSAPP_API_VERSION || 'v21.0',
   graphApiBaseUrl: 'https://graph.facebook.com',

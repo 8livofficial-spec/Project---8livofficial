@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "seo:audit": "node scripts/seo-audit.mjs"
+    "seo:audit": "node scripts/seo-audit.mjs",
+    "test:whatsapp": "tsx scripts/test-whatsapp-webhook.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.2.6",

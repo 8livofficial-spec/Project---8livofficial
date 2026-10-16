@@ -7,37 +7,68 @@ import { normalizePhoneNumber } from '@/lib/phone'
 export const dynamic = 'force-dynamic'
 
 /**
- * Validates Meta X-Hub-Signature-256 against raw payload.
+ * Validates Meta X-Hub-Signature-256 against the raw incoming request body.
+ * Uses constant-time comparison to protect against timing attacks.
  */
-function verifyMetaSignature(rawBody: string, signatureHeader: string | null): boolean {
-  if (!WHATSAPP_CONFIG.appSecret) {
-    console.warn('[WhatsAppWebhook] appSecret is not configured. Webhook verification skipped in sandbox/dev.')
-    return true
+export function verifyMetaSignature(
+  rawBody: string,
+  signatureHeader: string | null,
+  appSecret: string
+): boolean {
+  if (!appSecret) {
+    console.error('[WhatsAppWebhook] Verification rejected: META_APP_SECRET is not configured.')
+    return false
   }
 
   if (!signatureHeader || !signatureHeader.startsWith('sha256=')) {
     return false
   }
 
-  const expectedSignature = signatureHeader.slice(7)
-  const computedSignature = crypto
-    .createHmac('sha256', WHATSAPP_CONFIG.appSecret)
+  const expectedSignatureHex = signatureHeader.slice(7).trim()
+  const computedSignatureHex = crypto
+    .createHmac('sha256', appSecret)
     .update(rawBody, 'utf8')
     .digest('hex')
 
   try {
-    return crypto.timingSafeEqual(
-      Buffer.from(computedSignature, 'hex'),
-      Buffer.from(expectedSignature, 'hex')
-    )
+    const expectedBuf = Buffer.from(expectedSignatureHex, 'hex')
+    const computedBuf = Buffer.from(computedSignatureHex, 'hex')
+
+    if (expectedBuf.length !== computedBuf.length || expectedBuf.length === 0) {
+      return false
+    }
+
+    return crypto.timingSafeEqual(expectedBuf, computedBuf)
   } catch {
     return false
   }
 }
 
 /**
+ * Resolves current verify token and app secret from environment or centralized config.
+ */
+function getWebhookSecrets() {
+  const verifyToken =
+    process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN ||
+    process.env.META_WEBHOOK_VERIFY_TOKEN ||
+    WHATSAPP_CONFIG.webhookVerifyToken
+
+  const appSecret =
+    process.env.META_APP_SECRET ||
+    process.env.WHATSAPP_APP_SECRET ||
+    WHATSAPP_CONFIG.appSecret
+
+  return { verifyToken, appSecret }
+}
+
+/**
  * GET /api/webhooks/whatsapp
  * Meta Webhook Verification Handshake
+ *
+ * Meta sends GET request with:
+ * - hub.mode=subscribe
+ * - hub.verify_token=<token>
+ * - hub.challenge=<challenge_code>
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -45,16 +76,24 @@ export async function GET(request: Request) {
   const token = searchParams.get('hub.verify_token')
   const challenge = searchParams.get('hub.challenge')
 
-  if (mode === 'subscribe' && token === WHATSAPP_CONFIG.webhookVerifyToken) {
+  const { verifyToken } = getWebhookSecrets()
+
+  if (mode === 'subscribe' && token && verifyToken && token === verifyToken) {
     console.log('[WhatsAppWebhook] Handshake verified successfully with challenge:', challenge)
     return new Response(challenge || '', {
       status: 200,
-      headers: { 'Content-Type': 'text/plain' },
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      },
     })
   }
 
-  console.warn('[WhatsAppWebhook] Handshake rejected. Invalid verify token or mode.')
-  return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  console.warn('[WhatsAppWebhook] Handshake rejected: invalid mode or verify token')
+  return new Response('Forbidden', {
+    status: 403,
+    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+  })
 }
 
 /**
@@ -66,28 +105,39 @@ export async function POST(request: Request) {
   try {
     rawBody = await request.text()
   } catch (err: any) {
-    return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
+    return NextResponse.json({ error: 'Failed to read request body' }, { status: 400 })
   }
 
+  const { appSecret } = getWebhookSecrets()
   const signature = request.headers.get('x-hub-signature-256')
-  if (!verifyMetaSignature(rawBody, signature)) {
-    console.error('[WhatsAppWebhook] Rejected: Invalid HMAC-SHA256 signature.')
-    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 })
+
+  if (!verifyMetaSignature(rawBody, signature, appSecret)) {
+    console.error('[WhatsAppWebhook] Request rejected: Invalid or missing X-Hub-Signature-256.')
+    return NextResponse.json({ error: 'Invalid or missing signature' }, { status: 401 })
   }
 
   let payload: any
   try {
     payload = JSON.parse(rawBody)
   } catch {
-    return NextResponse.json({ error: 'Malformed JSON' }, { status: 400 })
+    console.error('[WhatsAppWebhook] Request rejected: Malformed JSON payload.')
+    return NextResponse.json({ error: 'Malformed JSON payload' }, { status: 400 })
   }
 
-  // Meta ping or verify test
-  if (!payload || !payload.entry) {
-    return NextResponse.json({ status: 'ok' })
+  if (!payload || typeof payload !== 'object') {
+    return NextResponse.json({ error: 'Invalid payload structure' }, { status: 400 })
   }
 
-  // Process asynchronously or within 200 OK handler
+  // Meta sends object = 'whatsapp_business_account'
+  if (payload.object && payload.object !== 'whatsapp_business_account') {
+    console.warn(`[WhatsAppWebhook] Ignored unexpected object type: ${payload.object}`)
+    return NextResponse.json({ status: 'ignored' }, { status: 200 })
+  }
+
+  if (!Array.isArray(payload.entry)) {
+    return NextResponse.json({ status: 'ok' }, { status: 200 })
+  }
+
   try {
     for (const entry of payload.entry) {
       for (const change of entry.changes || []) {
@@ -95,28 +145,50 @@ export async function POST(request: Request) {
         const value = change.value
         if (!value) continue
 
-        // 1. Process delivery / read statuses
+        // 1. Process delivery / read / failure statuses (OTP & notification delivery tracking)
         if (Array.isArray(value.statuses)) {
           for (const statusObj of value.statuses) {
             const wamid = statusObj.id
+            if (!wamid) continue
+
             const statusRaw = String(statusObj.status || '').toLowerCase()
             const eventId = `status_${wamid}_${statusRaw}`
 
-            // Deduplicate event
+            // Privacy: Store ONLY operational delivery metadata. Zero patient messages, OTPs, or access tokens.
+            const sanitizedStatusPayload = {
+              wamid,
+              status: statusRaw,
+              timestamp: statusObj.timestamp,
+              recipient_id: statusObj.recipient_id,
+              conversation_id: statusObj.conversation?.id,
+              conversation_origin: statusObj.conversation?.origin?.type,
+              pricing_category: statusObj.pricing?.category,
+              pricing_model: statusObj.pricing?.pricing_model,
+              errors: statusObj.errors?.map((e: any) => ({
+                code: e.code,
+                title: e.title || e.message,
+              })),
+            }
+
+            // Durable idempotency check
             const { error: dedupErr } = await supabaseAdmin
               .from('whatsapp_webhook_events')
               .insert({
                 event_id: eventId,
                 event_type: 'MESSAGE_STATUS',
-                payload: statusObj,
+                payload: sanitizedStatusPayload,
               })
 
-            if (dedupErr && dedupErr.code === '23505') {
-              // Already processed
-              continue
+            if (dedupErr) {
+              if (dedupErr.code === '23505') {
+                // Already processed, skip to avoid duplicate mutations
+                continue
+              }
+              console.error(`[WhatsAppWebhook] Error recording status event ${eventId}:`, dedupErr)
+              throw new Error(`Database error saving status event: ${dedupErr.message}`)
             }
 
-            // Map status
+            // Map status enum
             const statusMap: Record<string, string> = {
               sent: 'SENT',
               delivered: 'DELIVERED',
@@ -132,13 +204,18 @@ export async function POST(request: Request) {
 
             if (mappedStatus === 'FAILED' && statusObj.errors?.[0]) {
               updatePayload.error_code = String(statusObj.errors[0].code || '')
-              updatePayload.error_message = statusObj.errors[0].message || statusObj.errors[0].title || 'Delivery failed'
+              updatePayload.error_message =
+                statusObj.errors[0].message || statusObj.errors[0].title || 'Delivery failed'
             }
 
-            await supabaseAdmin
+            const { error: updateErr } = await supabaseAdmin
               .from('whatsapp_messages')
               .update(updatePayload)
               .eq('meta_message_id', wamid)
+
+            if (updateErr) {
+              console.warn(`[WhatsAppWebhook] Warning updating message ${wamid} status:`, updateErr.message)
+            }
           }
         }
 
@@ -146,27 +223,47 @@ export async function POST(request: Request) {
         if (Array.isArray(value.messages)) {
           for (const msg of value.messages) {
             const wamid = msg.id
+            if (!wamid) continue
+
             const fromDigits = msg.from
             const eventId = `msg_${wamid}`
 
-            // Deduplicate message
+            const normalized = normalizePhoneNumber(fromDigits)
+            const recipientPhone = normalized.e164 || `+${fromDigits}`
+            const textBody = (msg.text?.body || '').trim()
+
+            const lowerText = textBody.toLowerCase()
+            const isOptOutTrigger = ['stop', 'unsubscribe', 'optout', 'cancel'].includes(lowerText)
+            const isOptInTrigger = ['start', 'unstop', 'optin', 'yes'].includes(lowerText)
+
+            // Privacy: Store ONLY event metadata. Never store raw medical messages or secrets.
+            const sanitizedInboundPayload = {
+              wamid,
+              from: recipientPhone,
+              message_type: msg.type || 'text',
+              timestamp: msg.timestamp,
+              is_opt_out: isOptOutTrigger,
+              is_opt_in: isOptInTrigger,
+            }
+
+            // Durable idempotency check
             const { error: dedupErr } = await supabaseAdmin
               .from('whatsapp_webhook_events')
               .insert({
                 event_id: eventId,
                 event_type: 'INBOUND_MESSAGE',
-                payload: msg,
+                payload: sanitizedInboundPayload,
               })
 
-            if (dedupErr && dedupErr.code === '23505') {
-              continue
+            if (dedupErr) {
+              if (dedupErr.code === '23505') {
+                continue
+              }
+              console.error(`[WhatsAppWebhook] Error recording inbound event ${eventId}:`, dedupErr)
+              throw new Error(`Database error saving inbound event: ${dedupErr.message}`)
             }
 
-            const normalized = normalizePhoneNumber(fromDigits)
-            const recipientPhone = normalized.e164 || `+${fromDigits}`
-            const textBody = msg.text?.body?.trim() || ''
-
-            // Lookup existing profile
+            // Lookup profile safely
             const { data: profile } = await supabaseAdmin
               .from('profiles')
               .select('id, first_name, last_name')
@@ -177,12 +274,7 @@ export async function POST(request: Request) {
               ? [profile.first_name, profile.last_name].filter(Boolean).join(' ')
               : value.contacts?.[0]?.profile?.name || recipientPhone
 
-            // Check opt-out / opt-in triggers
-            const lowerText = textBody.toLowerCase()
-            const isOptOutTrigger = ['stop', 'unsubscribe', 'optout', 'cancel'].includes(lowerText)
-            const isOptInTrigger = ['start', 'unstop', 'optin', 'yes'].includes(lowerText)
-
-            // Upsert conversation thread
+            // Upsert conversation thread & compliance status
             const { data: conv } = await supabaseAdmin
               .from('whatsapp_conversations')
               .select('id, is_opted_out')
@@ -203,7 +295,11 @@ export async function POST(request: Request) {
                   user_id: profile?.id || null,
                   last_customer_message_at: new Date().toISOString(),
                   is_opted_out: isOptedOut,
-                  opted_out_at: isOptOutTrigger ? new Date().toISOString() : (isOptInTrigger ? null : undefined),
+                  opted_out_at: isOptOutTrigger
+                    ? new Date().toISOString()
+                    : isOptInTrigger
+                    ? null
+                    : undefined,
                   updated_at: new Date().toISOString(),
                 })
                 .eq('id', conversationId)
@@ -225,7 +321,13 @@ export async function POST(request: Request) {
               conversationId = newConv?.id
             }
 
-            // Log inbound message
+            // Log inbound delivery metadata without logging sensitive patient health messages or OTPs
+            const safeContent = isOptOutTrigger
+              ? '[OPT_OUT_REQUEST: STOP]'
+              : isOptInTrigger
+              ? '[OPT_IN_REQUEST: START]'
+              : `[Inbound message: ${msg.type || 'text'}]`
+
             await supabaseAdmin
               .from('whatsapp_messages')
               .insert({
@@ -234,12 +336,11 @@ export async function POST(request: Request) {
                 recipient_phone: recipientPhone,
                 direction: 'INBOUND',
                 message_type: msg.type || 'text',
-                content: textBody || `[Interactive/Media: ${msg.type}]`,
-                raw_payload: msg,
+                content: safeContent,
                 status: 'DELIVERED',
                 metadata: {
                   conversation_id: conversationId,
-                  contact_profile: value.contacts?.[0]?.profile || null,
+                  message_timestamp: msg.timestamp,
                 },
               })
           }
@@ -247,9 +348,10 @@ export async function POST(request: Request) {
       }
     }
   } catch (procErr: any) {
-    console.error('[WhatsAppWebhook] Error processing event payload:', procErr)
+    console.error('[WhatsAppWebhook] Unhandled error processing webhook events:', procErr)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 
-  // Always return 200 OK to Meta to avoid webhook disablement
-  return NextResponse.json({ status: 'ok' })
+  // Return 200 OK after events are safely persisted
+  return NextResponse.json({ status: 'ok' }, { status: 200 })
 }
