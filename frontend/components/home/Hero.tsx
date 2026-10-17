@@ -100,34 +100,23 @@ export default function Hero() {
 
             {/* Bottom Glassmorphism Dietitian Widget */}
             <div className="absolute bottom-4 inset-x-3 sm:inset-x-4 z-30 pointer-events-auto">
-              <div className="bg-[#040f08]/90 backdrop-blur-2xl border border-white/25 rounded-2xl p-4 sm:p-4.5 text-white shadow-2xl">
-                <div className="flex justify-between items-baseline mb-2.5">
-                  <span className="text-sm sm:text-base font-sans font-bold text-white">Clinical Dietitian</span>
-                  <span className="text-xs font-sans font-bold text-[#00A884] bg-emerald-950/80 px-2.5 py-0.5 rounded-md border border-[#00A884]/40">
-                    Indian Diet Adapted
-                  </span>
+              <div className="bg-[#040f08]/92 backdrop-blur-2xl border border-white/25 rounded-2xl p-4 sm:p-4.5 text-white shadow-2xl">
+                <div className="mb-2.5">
+                  <span className="font-sans font-bold text-sm sm:text-base tracking-tight text-white">Clinical Dietitian</span>
                 </div>
 
-                <div className="space-y-2 mb-3">
-                  <div className="flex justify-between text-xs sm:text-sm text-slate-200">
-                    <span>Blood Sugar Stability</span>
-                    <span className="font-mono font-bold text-white">96.4%</span>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-xs sm:text-sm">
+                    <span className="font-sans text-[11px] sm:text-xs font-medium text-slate-300 uppercase tracking-wide">Blood Sugar Stability</span>
+                    <span className="font-mono text-xs sm:text-sm font-bold text-teal-300">96.4%</span>
                   </div>
                   <div className="h-2 rounded-full bg-slate-800/80 overflow-hidden">
                     <div className="h-full rounded-full bg-gradient-to-r from-[#00A884] to-teal-300 w-[96%] shadow-[0_0_8px_rgba(0,168,132,0.6)]" />
                   </div>
-                  <div className="flex justify-between text-xs sm:text-sm text-slate-200">
-                    <span>Zero Starvation Protocol</span>
-                    <span className="font-mono font-bold text-emerald-300">Optimal Satiety</span>
+                  <div className="flex justify-between items-center text-xs sm:text-sm">
+                    <span className="font-sans text-[11px] sm:text-xs font-medium text-slate-300 uppercase tracking-wide">Diet Strategy</span>
+                    <span className="font-sans text-xs sm:text-sm font-semibold text-slate-100">Zero Starvation · Indian Meals</span>
                   </div>
-                </div>
-
-                <div className="flex items-center justify-between text-xs sm:text-sm text-slate-200 border-t border-white/15 pt-2.5">
-                  <span>1-on-1 Meal Plans</span>
-                  <span className="font-mono font-bold text-white flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4 text-[#00A884]" />
-                    Customized Daily
-                  </span>
                 </div>
               </div>
             </div>
@@ -160,19 +149,18 @@ export default function Hero() {
             {/* Bottom Glassmorphism Doctor Widget */}
             <div className="absolute bottom-4 inset-x-3 sm:inset-x-4 z-30 pointer-events-auto">
               <div className="bg-[#040f08]/92 backdrop-blur-2xl border border-white/30 border-t-white/50 rounded-2xl p-4 sm:p-4.5 text-white shadow-2xl">
-                <div className="flex justify-between items-baseline mb-2.5">
-                  <span className="text-sm sm:text-base font-sans font-bold text-white">Dedicated Doctor</span>
-                  <span className="text-xs sm:text-sm font-sans font-extrabold text-emerald-300 tracking-tight">GLP-1 Protocol</span>
+                <div className="mb-2.5">
+                  <span className="font-sans font-bold text-sm sm:text-base tracking-tight text-white">Dedicated Doctor</span>
                 </div>
 
                 {/* Dosage Calibration Ramp */}
-                <div className="flex items-end justify-between h-11 sm:h-12 gap-1.5 px-1 mb-2.5">
+                <div className="flex items-end justify-between h-11 sm:h-12 gap-1.5 px-1">
                   <div className="w-3 sm:w-3.5 rounded-full bg-white/30 h-[40%]" />
                   <div className="w-3 sm:w-3.5 rounded-full bg-white/50 h-[65%]" />
                   <div className="w-3 sm:w-3.5 rounded-full bg-white/70 h-[85%]" />
                   
                   <div className="relative w-4 sm:w-4.5 rounded-full bg-gradient-to-t from-[#00A884] to-teal-300 h-[100%] shadow-[0_0_16px_rgba(0,168,132,0.9)]">
-                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-white text-slate-950 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md whitespace-nowrap">
+                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-white text-slate-950 font-mono text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md whitespace-nowrap">
                       Dosage
                     </div>
                   </div>
@@ -180,14 +168,6 @@ export default function Hero() {
                   <div className="w-3 sm:w-3.5 rounded-full bg-white/70 h-[75%]" />
                   <div className="w-3 sm:w-3.5 rounded-full bg-white/50 h-[55%]" />
                   <div className="w-3 sm:w-3.5 rounded-full bg-white/30 h-[40%]" />
-                </div>
-
-                <div className="pt-2.5 border-t border-white/15 flex justify-between items-center text-xs sm:text-sm text-slate-200">
-                  <span>Baseline Calibration</span>
-                  <span className="font-semibold text-emerald-300 flex items-center gap-1.5">
-                    <ShieldCheck className="w-4 h-4 text-[#00A884]" />
-                    100% Supervised
-                  </span>
                 </div>
               </div>
             </div>
@@ -214,27 +194,20 @@ export default function Hero() {
               />
             </div>
 
-            {/* Bottom Glassmorphism Fitness Widget */}
+            {/* Bottom Glassmorphism Fitness Widget (Text alone, no bullet points) */}
             <div className="absolute bottom-4 inset-x-3 sm:inset-x-4 z-30 pointer-events-auto">
-              <div className="bg-[#040f08]/90 backdrop-blur-2xl border border-white/25 rounded-2xl p-4 sm:p-4.5 text-white shadow-2xl flex items-center justify-between">
-                <div>
-                  <span className="text-sm sm:text-base font-sans font-bold text-white block mb-1.5">
-                    Fitness Coach
-                  </span>
-                  <div className="space-y-1.5 text-xs sm:text-sm font-sans">
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-[#00A884]" />
-                      <span className="text-slate-100 font-medium">Lean Muscle Retention</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-white" />
-                      <span className="text-slate-100 font-medium">Guided Resistance</span>
-                    </div>
+              <div className="bg-[#040f08]/92 backdrop-blur-2xl border border-white/25 rounded-2xl p-4 sm:p-4.5 text-white shadow-2xl flex items-center justify-between gap-3">
+                <div className="flex-1 pr-1">
+                  <div className="mb-1.5">
+                    <span className="font-sans font-bold text-sm sm:text-base tracking-tight text-white">Fitness Coach</span>
                   </div>
+                  <p className="font-sans text-xs sm:text-sm text-slate-200 leading-snug">
+                    Lean muscle retention & guided resistance routines tailored to your pace.
+                  </p>
                 </div>
 
                 {/* Radial Progress Ring with Dumbbell */}
-                <div className="relative w-15 h-15 sm:w-16 sm:h-16 flex items-center justify-center shrink-0">
+                <div className="relative w-14 h-14 sm:w-15 sm:h-15 flex items-center justify-center shrink-0">
                   <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
                     <path
                       className="text-white/20"

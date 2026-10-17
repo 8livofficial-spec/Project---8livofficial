@@ -66,9 +66,6 @@ export default function RealStories() {
         
         {/* Centered Header */}
         <div className="text-center max-w-2xl mx-auto">
-          <span className="text-xs sm:text-sm font-sans font-bold tracking-wider uppercase text-[#00A884] block mb-2.5">
-            Clinical Milestones & Vitality
-          </span>
           <KineticText
             as="h2"
             className="font-sans text-[28px] xs:text-[34px] sm:text-4xl lg:text-5xl font-extrabold text-[#11241A] tracking-tight leading-tight mb-5"

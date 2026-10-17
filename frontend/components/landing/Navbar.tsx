@@ -95,8 +95,8 @@ export default function Navbar() {
       <div
         className={`pointer-events-auto flex w-full max-w-[1140px] items-center justify-between rounded-full transition-all duration-300 px-3.5 sm:px-6 py-2 ${
           scrolled
-            ? 'bg-slate-950/80 backdrop-blur-xl border border-white/20 shadow-[0_12px_40px_rgba(0,0,0,0.4)] transform-gpu will-change-transform'
-            : 'bg-black/30 backdrop-blur-xl border border-white/15 shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] transform-gpu will-change-transform'
+            ? 'bg-white/80 backdrop-blur-2xl border border-white/70 shadow-[0_12px_40px_rgba(0,0,0,0.08),0_2px_6px_rgba(0,0,0,0.04)] transform-gpu will-change-transform'
+            : 'bg-white/12 backdrop-blur-2xl border border-white/20 shadow-[0_8px_32px_0_rgba(0,0,0,0.25)] transform-gpu will-change-transform'
         }`}
       >
         {/* LEFT: Authentic Official 8LIV Logo */}
@@ -117,9 +117,9 @@ export default function Navbar() {
           <PillNav
             items={navItems}
             baseColor="#00A884"
-            pillColor="rgba(255, 255, 255, 0.12)"
+            pillColor={scrolled ? 'rgba(0, 0, 0, 0.05)' : 'rgba(255, 255, 255, 0.15)'}
             hoveredPillTextColor="#FFFFFF"
-            pillTextColor="#FFFFFF"
+            pillTextColor={scrolled ? '#0F172A' : '#FFFFFF'}
             ease="power3.easeOut"
             initialLoadAnimation={false}
           />
@@ -131,14 +131,18 @@ export default function Navbar() {
             <>
               <Link
                 href={resolveDashboardUrl(role)}
-                className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-sans font-semibold text-xs px-4 py-2 rounded-full border border-slate-700 shadow-sm transition-all"
+                className={`inline-flex items-center gap-1.5 font-sans font-semibold text-xs px-4 py-2 rounded-full border shadow-xs transition-all ${
+                  scrolled
+                    ? 'bg-slate-100 hover:bg-slate-200 text-slate-900 border-slate-300'
+                    : 'bg-white/15 hover:bg-white/25 text-white border-white/25'
+                }`}
               >
                 <User size={13} className="text-[#00A884]" />
                 <span>My Portal</span>
               </Link>
               <button
                 onClick={handleSignOut}
-                className="font-semibold text-xs px-3.5 py-2 rounded-full border backdrop-blur-md transition-all flex items-center gap-1.5 cursor-pointer font-sans shadow-xs bg-white/10 hover:bg-rose-500 text-white hover:text-white border-white/20"
+                className="font-semibold text-xs px-3.5 py-2 rounded-full border backdrop-blur-md transition-all flex items-center gap-1.5 cursor-pointer font-sans shadow-xs bg-white/10 hover:bg-rose-500 text-slate-700 hover:text-white border-slate-200"
               >
                 <LogOut size={13} />
                 <span>Sign Out</span>
@@ -149,9 +153,13 @@ export default function Navbar() {
               {/* Clean, Simple & Convenient Log In */}
               <Link
                 href="/login"
-                className="inline-flex items-center gap-2 font-sans font-bold text-sm px-5 py-2.5 rounded-full transition-all cursor-pointer text-white bg-white/15 hover:bg-white/25 border border-white/25 shadow-sm hover:scale-102 active:scale-98"
+                className={`inline-flex items-center gap-2 font-sans font-bold text-sm px-5 py-2.5 rounded-full transition-all cursor-pointer shadow-xs hover:scale-102 active:scale-98 backdrop-blur-md ${
+                  scrolled
+                    ? 'text-slate-900 bg-slate-900/5 hover:bg-slate-900/10 border border-slate-900/15'
+                    : 'text-white bg-white/15 hover:bg-white/25 border border-white/25'
+                }`}
               >
-                <User size={16} className="text-white" />
+                <User size={16} className={scrolled ? 'text-[#00A884]' : 'text-white'} />
                 <span>Log In</span>
               </Link>
 
@@ -172,9 +180,13 @@ export default function Navbar() {
           {!user && (
             <Link
               href="/login"
-              className="text-slate-900 bg-white/90 hover:bg-white border border-white/70 font-sans font-bold text-sm px-4.5 py-2 rounded-full flex items-center gap-2 shadow-sm backdrop-blur-md transition-all active:scale-95"
+              className={`font-sans font-bold text-sm px-4.5 py-2 rounded-full flex items-center gap-2 shadow-sm backdrop-blur-md transition-all active:scale-95 ${
+                scrolled
+                  ? 'text-slate-900 bg-slate-900/5 hover:bg-slate-900/10 border border-slate-900/15'
+                  : 'text-white bg-white/20 hover:bg-white/30 border border-white/30'
+              }`}
             >
-              <User size={16} className="text-[#00A884]" />
+              <User size={16} className={scrolled ? 'text-[#00A884]' : 'text-white'} />
               <span>Log In</span>
             </Link>
           )}

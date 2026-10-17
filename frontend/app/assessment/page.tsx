@@ -106,27 +106,37 @@ export default function AssessmentPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 py-8 sm:py-12 px-4 flex flex-col items-center justify-center">
+    <main className="min-h-screen bg-[#FAFBF9] py-6 sm:py-10 px-4 relative flex flex-col items-center justify-start overflow-hidden">
+      {/* Ambient Atmospheric Glow */}
+      <div className="absolute top-0 inset-x-0 h-96 bg-[radial-gradient(ellipse_at_top,rgba(0,168,132,0.1),transparent_70%)] pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-96 h-96 bg-[radial-gradient(circle,rgba(0,168,132,0.05),transparent_70%)] pointer-events-none" />
+
       {/* Top Header */}
-      <div className="w-full max-w-[460px] md:max-w-[760px] lg:max-w-[980px] mb-4 flex items-center justify-between">
+      <div className="w-full max-w-[580px] mb-6 flex items-center justify-between relative z-10">
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 transition-colors"
+          className="inline-flex items-center gap-2 text-xs sm:text-sm font-sans font-semibold text-slate-600 hover:text-[#00A884] bg-white/80 hover:bg-white backdrop-blur-md px-3.5 py-1.5 rounded-full border border-slate-200/80 shadow-2xs transition-all"
         >
-          <ArrowLeft className="w-3.5 h-3.5" />
-          Back to 8Liv
+          <ArrowLeft className="w-4 h-4 text-[#00A884]" />
+          <span>Back to 8Liv</span>
         </Link>
-        <span className="text-xs text-slate-400 font-medium">8Liv Clinical Telehealth</span>
+        
+        <div className="flex items-center gap-2 text-xs font-sans font-medium text-slate-500 bg-white/60 backdrop-blur-md px-3 py-1 rounded-full border border-slate-200/60">
+          <span className="w-2 h-2 rounded-full bg-[#00A884]" />
+          <span>Clinical Telehealth Assessment</span>
+        </div>
       </div>
 
       {resumeNotice && (
-        <div className="w-full max-w-[460px] md:max-w-[760px] lg:max-w-[980px] mb-4 p-3 bg-amber-50 border border-amber-200 text-amber-900 text-xs rounded-xl">
+        <div className="w-full max-w-[580px] mb-4 p-3.5 bg-amber-50/90 border border-amber-200/80 text-amber-900 text-xs rounded-2xl shadow-xs relative z-10 font-sans">
           {resumeNotice}
         </div>
       )}
 
       {/* Common Unified Assessment Funnel */}
-      <UnifiedAssessmentFunnel />
+      <div className="w-full relative z-10 flex justify-center">
+        <UnifiedAssessmentFunnel />
+      </div>
     </main>
   )
 }

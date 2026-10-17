@@ -10,49 +10,24 @@ import ScrollRevealBox from '@/components/ui/ScrollRevealBox'
 
 const faqs = [
   {
-    question: 'What is 8Liv and how does it work?',
+    question: 'What is 8Liv and how does doctor-supervised care work?',
     answer:
-      '8Liv is a digital healthcare platform connecting you with licensed physicians, clinical dietitians, and dedicated fitness coaches through telehealth. We combine 1-on-1 doctor video consultations, personalized Indian meal plans, ongoing metabolic lab monitoring, and certified digital prescriptions when clinically appropriate.',
-  },
-  {
-    question: 'How does the 3-minute health assessment work?',
-    answer:
-      'Our confidential online assessment gathers basic information about your health history, previous weight attempts, routine, and lifestyle. This helps our medical team evaluate whether you qualify for metabolic treatment before your doctor consultation. Completing the assessment is 100% confidential with zero obligation.',
+      '8Liv is a modern telehealth platform connecting you with licensed physicians, clinical dietitians, and dedicated fitness coaches. We combine 1-on-1 doctor video consultations, personalized Indian meal plans, continuous metabolic monitoring, and authenticated digital GLP-1 e-prescriptions when clinically appropriate.',
   },
   {
     question: 'Who is the 8Liv program designed for?',
     answer:
-      'The 8Liv program is designed for adults struggling with stubborn weight, sluggish metabolism, pre-diabetes, insulin resistance, or PCOS who want evidence-based, doctor-supervised medical care rather than unsustainable crash diets. A licensed doctor reviews every patient individually before recommending any treatment.',
+      'The 8Liv program is designed for adults struggling with stubborn weight, sluggish metabolism, pre-diabetes, insulin resistance, or PCOS who want evidence-based, doctor-supervised medical care rather than crash diets. A licensed doctor reviews every patient individually before recommending any treatment.',
   },
   {
-    question: 'What role do GLP-1 medications play in weight loss?',
+    question: 'How are prescriptions and GLP-1 medications handled?',
     answer:
-      'GLP-1 receptor agonists are modern, clinically approved prescription medications that regulate natural hunger hormones and quiet continuous food noise. When clinically appropriate, a doctor may prescribe them to help reset your metabolic set-point. Medication is always paired with high-protein nutrition and movement for long-term health.',
+      'When clinically appropriate, your licensed 8Liv physician issues an authenticated digital e-prescription after your comprehensive assessment. You can conveniently fulfill your prescription at any registered or licensed pharmacy of your choice across India.',
   },
   {
     question: 'How does Indian meal planning work? Do I have to starve?',
     answer:
-      'Never. Our registered clinical dietitians adapt your meal blueprint around authentic Indian home cooking—incorporating paneer, dal, household spices, and family dinners. We do not rely on punitive calorie restriction or generic Western meal templates.',
-  },
-  {
-    question: 'Will I regain the weight once I stop treatment?',
-    answer:
-      'Our clinical focus is preventing the rebound effect by locking in a healthy metabolic set-point. Through muscle-preserving movement guidance from your personal fitness coach and gradual dietary stabilization, your body adapts to maintain its new, lower weight permanently.',
-  },
-  {
-    question: 'How are prescriptions and medications handled?',
-    answer:
-      'When clinically appropriate, your licensed 8Liv physician issues an authenticated digital prescription. You can conveniently fulfill your prescription at any registered or licensed pharmacy of your choice across India.',
-  },
-  {
-    question: 'Is my personal and medical data kept private?',
-    answer:
-      'Yes, 100%. All consultations, medical notes, and personal data are strictly confidential and protected with enterprise-grade encryption. We never share your health records with third parties without your explicit permission.',
-  },
-  {
-    question: 'How do I get started?',
-    answer:
-      'Start by completing the free 3-minute health assessment at 8liv.in/assessment. Our medical team will review your profile and match you with a doctor for your video consultation. Everything happens online—no waiting rooms or clinic commutes.',
+      'Never. Our registered clinical dietitians adapt your meal blueprint around authentic Indian home cooking—incorporating paneer, dal, household spices, and family dinners. We focus on continuous metabolic satiety and blood sugar stability with zero starvation.',
   },
 ]
 
