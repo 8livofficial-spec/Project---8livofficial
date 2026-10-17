@@ -16,21 +16,21 @@ export default function Dashboard() {
         <div className="text-center max-w-3xl mx-auto mb-12 sm:mb-16">
           <h2 className="font-sora text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900 leading-tight mb-4">
             Visible progress with{' '}
-            <span className="bg-gradient-to-r from-[#00A884] via-[#0D9488] to-[#0F766E] bg-clip-text text-transparent">
+            <span className="text-[#0F766E]">
               physician-guided metabolic care.
             </span>
           </h2>
 
-          <p className="text-sm sm:text-base md:text-lg text-slate-600 font-light max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base md:text-lg text-slate-600 font-normal max-w-2xl mx-auto leading-relaxed">
             Drag the handle to compare real body composition and metabolic health markers before and after doctor-supervised treatment.
           </p>
         </div>
 
-        {/* Biometric Transformation Comparison Area with Alt Text Placeholders */}
+        {/* Biometric Transformation Comparison Area */}
         <div className="max-w-4xl mx-auto mb-12">
           <ComparisonSlider
-            beforeImage=""
-            afterImage=""
+            beforeImage="/images/reality_setpoint_glow.jpg"
+            afterImage="/images/reality_food_bowl.jpg"
             beforeLabel="Initial Baseline"
             afterLabel="Clinical Protocol Outcome"
             beforeTagline="Initial Weight & Visceral Fat Baseline"
@@ -39,34 +39,34 @@ export default function Dashboard() {
           />
         </div>
 
-        {/* 3 Evidence-Based Metric Cards */}
+        {/* 3 Evidence-Based Metric Cards (Proper h3 hierarchy) */}
         <div className="max-w-4xl mx-auto grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-          <div className="bg-[#FDFBF7] rounded-2xl p-6 border border-slate-200/80 text-center">
-            <div className="font-sora text-3xl sm:text-4xl font-black text-[#00A884] mb-1">
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs text-center">
+            <div className="font-sora text-3xl sm:text-4xl font-extrabold text-[#0F766E] mb-1 tabular-nums">
               <CountUp to={15} duration={1.5} />%+
             </div>
-            <h4 className="text-sm font-bold text-slate-900 font-sora">Average Weight Loss</h4>
-            <p className="text-xs text-slate-600 mt-1 font-light">
+            <h3 className="text-base font-bold text-slate-900 font-sora">Average Weight Loss</h3>
+            <p className="text-sm text-slate-600 mt-1 font-normal">
               Clinically supported outcomes when paired with lifestyle guidance
             </p>
           </div>
 
-          <div className="bg-[#FDFBF7] rounded-2xl p-6 border border-slate-200/80 text-center">
-            <div className="font-sora text-3xl sm:text-4xl font-black text-[#00A884] mb-1">
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs text-center">
+            <div className="font-sora text-3xl sm:text-4xl font-extrabold text-[#0F766E] mb-1 tabular-nums">
               <CountUp to={85} duration={1.8} />%
             </div>
-            <h4 className="text-sm font-bold text-slate-900 font-sora">Metabolic Health Marker Shift</h4>
-            <p className="text-xs text-slate-600 mt-1 font-light">
+            <h3 className="text-base font-bold text-slate-900 font-sora">Metabolic Marker Shift</h3>
+            <p className="text-sm text-slate-600 mt-1 font-normal">
               Significant improvements in fasting insulin and blood glucose
             </p>
           </div>
 
-          <div className="bg-[#FDFBF7] rounded-2xl p-6 border border-slate-200/80 text-center">
-            <div className="font-sora text-3xl sm:text-4xl font-black text-[#00A884] mb-1">
+          <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs text-center">
+            <div className="font-sora text-3xl sm:text-4xl font-extrabold text-[#0F766E] mb-1 tabular-nums">
               <CountUp to={92} duration={2} />%
             </div>
-            <h4 className="text-sm font-bold text-slate-900 font-sora">Care Adherence Rate</h4>
-            <p className="text-xs text-slate-600 mt-1 font-light">
+            <h3 className="text-base font-bold text-slate-900 font-sora">Care Adherence Rate</h3>
+            <p className="text-sm text-slate-600 mt-1 font-normal">
               Supported by continuous dietitian and fitness coach check-ins
             </p>
           </div>

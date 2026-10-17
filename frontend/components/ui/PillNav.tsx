@@ -301,7 +301,7 @@ const PillNav: React.FC<PillNavProps> = ({
                 'relative overflow-hidden inline-flex items-center justify-center h-full no-underline rounded-full box-border font-semibold text-xs uppercase tracking-[0.3px] whitespace-nowrap cursor-pointer px-0 font-sora shadow-2xs border border-white/40 backdrop-blur-md transition-all duration-200 hover:shadow-sm'
 
               return (
-                <li key={item.href} role="none" className="flex h-full">
+                <li key={`pill-${item.label}-${item.href}-${i}`} role="none" className="flex h-full">
                   {isExternalLink(item.href) ? (
                     <a
                       role="menuitem"
@@ -362,7 +362,7 @@ const PillNav: React.FC<PillNavProps> = ({
         className="md:hidden absolute top-[3.4em] left-0 right-0 rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.12)] z-[998] origin-top border border-white/70 backdrop-blur-2xl bg-white/85 p-2"
       >
         <ul className="list-none m-0 p-1 flex flex-col gap-1.5 font-sora">
-          {items.map((item) => {
+          {items.map((item, i) => {
             const defaultStyle: React.CSSProperties = {
               background: 'rgba(255, 255, 255, 0.75)',
               color: '#0F172A',
@@ -380,7 +380,7 @@ const PillNav: React.FC<PillNavProps> = ({
               'block py-3 px-4 text-xs font-semibold rounded-2xl transition-all duration-200 ease-out border border-white/50 backdrop-blur-md'
 
             return (
-              <li key={item.href}>
+              <li key={`pill-mobile-${item.label}-${item.href}-${i}`}>
                 {isExternalLink(item.href) ? (
                   <a
                     href={item.href}

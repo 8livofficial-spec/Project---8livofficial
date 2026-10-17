@@ -73,22 +73,14 @@ export default function Recognition() {
           
           {/* LEFT COLUMN: HERO COPY & PRIMARY CTA */}
           <div className="lg:col-span-6 flex flex-col items-start text-left">
-            {/* Elegant Category Eyebrow with Line Accent */}
-            <div className="inline-flex items-center gap-2.5 mb-4 sm:mb-5">
-              <span className="w-7 sm:w-9 h-[2px] bg-[#00A884] rounded-full" />
-              <p className="text-xs sm:text-[13px] font-bold uppercase tracking-[0.22em] text-[#00A884] font-sora">
-                THE METABOLIC REALITY
-              </p>
-            </div>
-
-            {/* High-Impact Brand Headline */}
+            {/* High-Impact Brand Headline (Direct without kicker) */}
             <h2 className="font-sora text-3xl xs:text-4xl sm:text-5xl lg:text-[3.25rem] font-extrabold text-[#0F172A] leading-[1.12] tracking-tight mb-4 sm:mb-6">
               Weight is biology,<br />
-              <span className="text-[#00A884]">not willpower.</span>
+              <span className="text-[#0F766E]">not willpower.</span>
             </h2>
 
-            {/* Breathable, Empathetic Subtext */}
-            <p className="text-sm sm:text-base lg:text-lg text-[#64748B] font-light leading-relaxed max-w-lg mb-7 sm:mb-9">
+            {/* Breathable, Empathetic Subtext (Calibrated to 55ch reading measure) */}
+            <p className="text-base sm:text-lg text-slate-600 font-normal leading-relaxed max-w-[55ch] mb-7 sm:mb-9">
               Crash diets fail because your body’s hormones fight to regain lost weight. We combine clinical medicine with everyday Indian nutrition to reset your metabolism naturally.
             </p>
 
@@ -97,7 +89,7 @@ export default function Recognition() {
               <Link
                 href="/assessment"
                 id="metabolic-reality-cta"
-                className="inline-flex items-center justify-center gap-2.5 px-6 sm:px-7 py-3.5 rounded-full bg-[#00A884] hover:bg-[#009272] text-white font-sora font-semibold text-xs sm:text-sm shadow-lg shadow-[#00A884]/25 hover:shadow-xl hover:shadow-[#00A884]/35 transition-all duration-200 active:scale-[0.98] group cursor-pointer"
+                className="inline-flex items-center justify-center gap-2.5 px-6 sm:px-7 py-3.5 rounded-full bg-[#0F766E] hover:bg-[#0D655E] text-white font-sora font-semibold text-sm shadow-lg shadow-[#0F766E]/20 hover:shadow-xl hover:shadow-[#0F766E]/30 transition-all duration-200 active:scale-[0.98] group cursor-pointer"
               >
                 <span>Start Your Journey</span>
                 <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
@@ -216,9 +208,6 @@ export default function Recognition() {
                   >
                     {item.icon}
                   </div>
-                  <span className="font-sora font-bold text-xs text-slate-400 tracking-wider">
-                    {item.badgeText}
-                  </span>
                 </div>
 
                 {/* Card Title & Description */}
@@ -226,7 +215,7 @@ export default function Recognition() {
                   {item.title}
                 </h3>
 
-                <p className="text-xs sm:text-sm text-[#64748B] font-light leading-relaxed max-w-[210px] sm:max-w-[230px]">
+                <p className="text-sm text-slate-600 font-normal leading-relaxed max-w-[210px] sm:max-w-[230px]">
                   {item.description}
                 </p>
               </div>
@@ -235,10 +224,10 @@ export default function Recognition() {
               <div className="pt-5 mt-auto z-10">
                 <Link
                   href={item.link}
-                  className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0F172A] group-hover:text-[#00A884] transition-colors"
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F766E] group-hover:text-[#00A884] transition-colors"
                 >
                   <span>Learn More</span>
-                  <ArrowRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-1 text-[#00A884]" />
+                  <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1 text-[#0F766E]" />
                 </Link>
               </div>
 

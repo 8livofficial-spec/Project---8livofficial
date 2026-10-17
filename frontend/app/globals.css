@@ -42,10 +42,11 @@
 }
 
 :root {
-  --font-primary: var(--font-plus-jakarta), 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-primary: 'Aptos', 'Aptos Display', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-inter: var(--font-primary);
   --font-sora: var(--font-primary);
-  --font-aptos: var(--font-primary);
+  --font-aptos: 'Aptos', sans-serif;
+  --font-serif: var(--font-cormorant), 'Playfair Display', Georgia, serif;
   --bg: #FFFFFF; /* Clean White Background */
   --bg-cream: #F8FAFC; /* Clean Light Surface */
   --bg-card: rgba(255,255,255,0.95); /* Crisp white card */
@@ -62,6 +63,9 @@
 }
 
 @layer utilities {
+  .font-editorial {
+    font-family: var(--font-serif);
+  }
   .glass-card {
     background: rgba(255,255,255,0.9);
     backdrop-filter: blur(12px);
@@ -83,6 +87,27 @@
   .journey-stream-beam {
     animation: journeyStream 14s linear infinite;
   }
+}
+
+/* ─── Continuous Smooth Infinite Marquee Carousel ─── */
+@keyframes marqueeScroll {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.infinite-marquee-track {
+  display: flex;
+  width: max-content;
+  will-change: transform;
+  animation: marqueeScroll 28s linear infinite;
+}
+
+.infinite-marquee-track:hover {
+  animation-play-state: paused;
 }
 
 @keyframes journeyStream {
@@ -206,6 +231,15 @@ body {
 @keyframes fadeInUp {
   from { opacity: 0; transform: translateY(30px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.35s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* ─── Pillars: Cinematic image slide-in on pillar switch ─── */
@@ -472,6 +506,36 @@ html, body {
   max-width: 100%;
   overflow-x: clip;
   -webkit-overflow-scrolling: touch;
+}
+
+/* ─── Themed Browser Surfaces (Craft Floor) ─── */
+::selection {
+  background: rgba(0, 168, 132, 0.2);
+  color: #0F172A;
+}
+
+input, textarea {
+  caret-color: #00A884;
+}
+
+/* Custom Healthcare Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: #F8FAFC;
+}
+::-webkit-scrollbar-thumb {
+  background: #CBD5E1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94A3B8;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ============================================================

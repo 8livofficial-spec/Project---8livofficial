@@ -196,14 +196,13 @@ export default function UnifiedAssessmentFunnel({
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // Silent session restore & auto-save (NO draft save badge displayed on screen)
+  // Silent progress restore & auto-save (NO draft save badge displayed on screen)
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem(STORAGE_KEY)
+      sessionStorage.removeItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
-        if (parsed.screenerInputs) setScreenerInputs(parsed.screenerInputs)
-        if (parsed.formData) setFormData((prev) => ({ ...prev, ...parsed.formData }))
         if (parsed.stage && initialStage === 'screener') setStage(parsed.stage)
       }
     } catch {
@@ -221,17 +220,14 @@ export default function UnifiedAssessmentFunnel({
     })
   }, [initialStage])
 
-  // Silent save whenever values change
+  // Save only non-sensitive progress metadata
   useEffect(() => {
     try {
-      sessionStorage.setItem(
-        STORAGE_KEY,
-        JSON.stringify({ screenerInputs, formData, stage })
-      )
+      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ stage }))
     } catch {
       // Silent error
     }
-  }, [screenerInputs, formData, stage])
+  }, [stage])
 
   // Results screen sequential reveal stagger
   useEffect(() => {

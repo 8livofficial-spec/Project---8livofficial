@@ -97,7 +97,7 @@ function StepCard({ item }: { item: typeof steps[0] }) {
       ref={cardRef}
       className="p-4 sm:p-7 md:p-8 rounded-2xl sm:rounded-[2rem] bg-white border border-slate-200/90 shadow-[0_6px_24px_rgba(0,0,0,0.03)] hover:border-[#00A884]/40 hover:shadow-md transition-all will-change-transform"
     >
-      <span className="inline-block px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full text-xs font-semibold text-[#00A884] border border-[#00A884]/30 bg-emerald-50/50 font-sora">
+      <span className="inline-block px-3 py-1 rounded-full text-xs font-semibold text-[#065F46] border border-emerald-200 bg-emerald-50 font-sora">
         {item.tag}
       </span>
 
@@ -105,12 +105,12 @@ function StepCard({ item }: { item: typeof steps[0] }) {
         {item.title}
       </h3>
 
-      <p className="card-desc text-xs sm:text-sm md:text-base text-[#64748B] font-light leading-relaxed mb-3 sm:mb-4">
+      <p className="card-desc text-sm md:text-base text-slate-600 font-normal leading-relaxed mb-3 sm:mb-4">
         {item.description}
       </p>
 
-      <div className="card-bullet flex items-center gap-2 text-xs sm:text-sm font-semibold text-[#00A884]">
-        <span className="w-2 h-2 rounded-full bg-[#00A884] shrink-0 animate-pulse" />
+      <div className="card-bullet flex items-center gap-2 text-sm font-semibold text-[#0F766E]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#0F766E] shrink-0" />
         <span>{item.bullet}</span>
       </div>
     </div>
@@ -122,11 +122,8 @@ export default function HowItWorks() {
     <section id="how-it-works" className="relative z-10 py-20 sm:py-28 bg-transparent border-b border-slate-200/50 overflow-hidden">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
 
-        {/* Section Header */}
+        {/* Section Header (Confident without kicker) */}
         <div className="text-center max-w-3xl mx-auto mb-16 sm:mb-20">
-          <p className="text-xs sm:text-sm font-bold uppercase tracking-[0.25em] text-[#00A884] font-sora mb-3">
-            YOUR CARE JOURNEY
-          </p>
           <ScrollReveal
             baseOpacity={0}
             enableBlur={true}
@@ -137,7 +134,7 @@ export default function HowItWorks() {
           >
             How 8liv works: Simple, transparent, doctor-led.
           </ScrollReveal>
-          <p className="text-base sm:text-lg text-[#64748B] font-light max-w-xl mx-auto leading-relaxed">
+          <p className="text-base sm:text-lg text-slate-600 font-normal max-w-xl mx-auto leading-relaxed">
             Everything happens online with discretion, clinical safety, and genuine support every step of the way.
           </p>
         </div>
@@ -175,10 +172,10 @@ export default function HowItWorks() {
 
                   {/* CENTRAL NODE */}
                   <div className="absolute left-3.5 sm:left-5 md:left-1/2 -translate-x-1/2 flex flex-col items-center z-10">
-                    <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white border-2 border-[#00A884]/40 shadow-xs flex items-center justify-center text-[#00A884] hover:scale-105 transition-transform">
+                    <div className="w-8 h-8 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white border-2 border-[#0F766E]/30 shadow-xs flex items-center justify-center text-[#0F766E] hover:scale-105 transition-transform">
                       {item.icon}
                     </div>
-                    <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 font-sora mt-1">
+                    <span className="text-xs font-bold text-slate-600 font-sora mt-1 tabular-nums">
                       {item.step}
                     </span>
                   </div>
@@ -194,12 +191,12 @@ export default function HowItWorks() {
         <div className="text-center pt-16 sm:pt-20">
           <Link
             href="/assessment"
-            className="inline-flex items-center gap-2.5 px-8 sm:px-10 py-4 rounded-full bg-[#00A884] hover:bg-[#0F766E] text-white font-sora font-bold text-sm sm:text-base shadow-lg shadow-[#00A884]/20 transition-all active:scale-[0.98] cursor-pointer"
+            className="inline-flex items-center gap-2.5 px-8 sm:px-10 py-4 rounded-full bg-[#0F766E] hover:bg-[#0D655E] text-white font-sora font-bold text-sm sm:text-base shadow-lg shadow-[#0F766E]/20 transition-all active:scale-[0.98] cursor-pointer"
           >
-            <span>START YOUR HEALTH CHECK</span>
+            <span>Start Your Health Check</span>
             <ArrowRight size={16} />
           </Link>
-          <p className="text-xs text-slate-400 mt-3 font-light">
+          <p className="text-xs text-slate-500 mt-3 font-normal">
             Confidential · No obligation · Direct doctor consultation
           </p>
         </div>

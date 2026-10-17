@@ -82,10 +82,11 @@ export default function Navbar() {
   }, [])
 
   const navItems = [
-    { label: 'How It Works', href: '#how-it-works' },
-    { label: 'Medical Care', href: '#pillars' },
-    { label: 'Treatment Plans', href: '#pricing' },
-    { label: 'FAQ', href: '#faq' },
+    { label: 'Home', href: '#hero' },
+    { label: 'About', href: '#results-and-science' },
+    { label: 'Treatments', href: '#treatments' },
+    { label: 'Care', href: '#telehealth-care' },
+    { label: 'Results', href: '#testimonials' },
   ]
 
   return (
@@ -94,8 +95,8 @@ export default function Navbar() {
       <div
         className={`pointer-events-auto flex w-full max-w-[1140px] items-center justify-between rounded-full transition-all duration-300 px-3.5 sm:px-6 py-2 ${
           scrolled
-            ? 'bg-white/80 backdrop-blur-lg border border-white/70 shadow-[0_12px_40px_rgba(15,23,42,0.08),inset_0_1px_1px_rgba(255,255,255,0.6)] transform-gpu will-change-transform'
-            : 'bg-white/20 backdrop-blur-lg border border-white/35 shadow-[0_8px_32px_0_rgba(15,23,42,0.12),inset_0_1px_1px_rgba(255,255,255,0.4)] transform-gpu will-change-transform'
+            ? 'bg-slate-950/80 backdrop-blur-xl border border-white/20 shadow-[0_12px_40px_rgba(0,0,0,0.4)] transform-gpu will-change-transform'
+            : 'bg-black/30 backdrop-blur-xl border border-white/15 shadow-[0_8px_32px_0_rgba(0,0,0,0.35)] transform-gpu will-change-transform'
         }`}
       >
         {/* LEFT: Authentic Official 8LIV Logo */}
@@ -111,14 +112,14 @@ export default function Navbar() {
           />
         </Link>
 
-        {/* CENTER: Desktop Nav Pills powered by React Bits PillNav */}
+        {/* CENTER: Desktop Nav Pills */}
         <div className="hidden md:flex items-center">
           <PillNav
             items={navItems}
             baseColor="#00A884"
-            pillColor={scrolled ? 'rgba(241, 245, 249, 0.85)' : 'rgba(255, 255, 255, 0.35)'}
+            pillColor="rgba(255, 255, 255, 0.12)"
             hoveredPillTextColor="#FFFFFF"
-            pillTextColor="#0F172A"
+            pillTextColor="#FFFFFF"
             ease="power3.easeOut"
             initialLoadAnimation={false}
           />
@@ -130,14 +131,14 @@ export default function Navbar() {
             <>
               <Link
                 href={resolveDashboardUrl(role)}
-                className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-sora font-semibold text-xs px-4 py-2 rounded-full border border-slate-700 shadow-sm transition-all"
+                className="inline-flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-sans font-semibold text-xs px-4 py-2 rounded-full border border-slate-700 shadow-sm transition-all"
               >
-                <User size={13} className="text-emerald-400" />
+                <User size={13} className="text-[#00A884]" />
                 <span>My Portal</span>
               </Link>
               <button
                 onClick={handleSignOut}
-                className="bg-white/40 hover:bg-rose-500 text-slate-700 hover:text-white font-semibold text-xs px-3.5 py-2 rounded-full border border-white/50 backdrop-blur-md transition-all flex items-center gap-1.5 cursor-pointer font-sora shadow-xs"
+                className="font-semibold text-xs px-3.5 py-2 rounded-full border backdrop-blur-md transition-all flex items-center gap-1.5 cursor-pointer font-sans shadow-xs bg-white/10 hover:bg-rose-500 text-white hover:text-white border-white/20"
               >
                 <LogOut size={13} />
                 <span>Sign Out</span>
@@ -148,41 +149,41 @@ export default function Navbar() {
               {/* Clean, Simple & Convenient Log In */}
               <Link
                 href="/login"
-                className="inline-flex items-center gap-1.5 text-slate-700 hover:text-slate-950 hover:bg-white/60 font-sora font-semibold text-xs px-3.5 py-2 rounded-full transition-colors cursor-pointer"
+                className="inline-flex items-center gap-2 font-sans font-bold text-sm px-5 py-2.5 rounded-full transition-all cursor-pointer text-white bg-white/15 hover:bg-white/25 border border-white/25 shadow-sm hover:scale-102 active:scale-98"
               >
-                <User size={13} className="text-slate-600" />
+                <User size={16} className="text-white" />
                 <span>Log In</span>
               </Link>
 
-              {/* Primary Eligibility CTA */}
+              {/* Primary Eligibility CTA with Brand Logo Teal */}
               <Link
                 href="/assessment"
-                className="inline-flex items-center gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-sora font-semibold text-xs px-4.5 py-2 rounded-full shadow-[0_4px_14px_rgba(0,168,132,0.3)] hover:shadow-[0_6px_20px_rgba(0,168,132,0.45)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
+                className="inline-flex items-center gap-2 bg-[#00A884] hover:bg-[#008f70] text-white font-sans font-bold text-sm px-5 py-2.5 rounded-full shadow-md shadow-[#00A884]/25 hover:shadow-lg hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer"
               >
                 <span>Check Eligibility</span>
-                <ArrowRight size={13} />
+                <ArrowRight size={15} />
               </Link>
             </>
           )}
         </div>
 
         {/* Mobile Action + Hamburger Toggle */}
-        <div className="flex md:hidden items-center gap-2">
+        <div className="flex md:hidden items-center gap-2.5">
           {!user && (
             <Link
               href="/login"
-              className="text-slate-800 bg-white/50 border border-white/60 font-sora font-semibold text-[11px] px-3 py-1.5 rounded-full flex items-center gap-1 shadow-2xs"
+              className="text-slate-900 bg-white/90 hover:bg-white border border-white/70 font-sans font-bold text-sm px-4.5 py-2 rounded-full flex items-center gap-2 shadow-sm backdrop-blur-md transition-all active:scale-95"
             >
-              <User size={11} className="text-slate-600" />
+              <User size={16} className="text-[#00A884]" />
               <span>Log In</span>
             </Link>
           )}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 rounded-full border border-white/60 bg-white/60 text-slate-800 backdrop-blur-md cursor-pointer transition-colors hover:bg-white/80"
+            className="p-2.5 rounded-full border border-white/60 bg-white/70 text-slate-900 backdrop-blur-md cursor-pointer transition-colors hover:bg-white/90 active:scale-95"
             aria-label="Toggle Navigation Menu"
           >
-            {mobileMenuOpen ? <X size={18} /> : <Menu size={18} />}
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
         </div>
       </div>
@@ -196,13 +197,13 @@ export default function Navbar() {
               <Link
                 href="/login"
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex items-center justify-between p-3 rounded-2xl bg-white/80 hover:bg-white border border-white/80 text-slate-900 shadow-xs transition-all"
+                className="flex items-center justify-between p-3.5 rounded-2xl bg-white hover:bg-white/95 border border-slate-200/80 text-slate-900 shadow-sm transition-all"
               >
-                <div className="flex items-center gap-2">
-                  <User size={15} className="text-emerald-600" />
-                  <span className="text-xs font-semibold">Log In to Portal</span>
+                <div className="flex items-center gap-2.5">
+                  <User size={18} className="text-[#00A884]" />
+                  <span className="text-sm font-bold text-slate-900">Log In to Portal</span>
                 </div>
-                <span className="text-xs font-bold text-emerald-600">&rarr;</span>
+                <span className="text-sm font-bold text-[#00A884]">&rarr;</span>
               </Link>
             ) : (
               <Link
@@ -222,7 +223,7 @@ export default function Navbar() {
             <div className="flex flex-col space-y-1 pt-1">
               {navItems.map((item) => (
                 <Link
-                  key={item.href}
+                  key={`mobile-nav-${item.label}`}
                   href={item.href}
                   onClick={() => setMobileMenuOpen(false)}
                   className="py-2.5 px-3 rounded-xl text-xs font-semibold text-slate-800 hover:bg-white/70 hover:text-emerald-700 transition-colors border-b border-slate-100 last:border-0"

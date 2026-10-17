@@ -38,9 +38,9 @@ const pillars = [
     ],
     stat: '94%',
     statLabel: 'patient retention after 6 months',
-    accent: '#00A884',
-    accentMuted: 'rgba(0,168,132,0.10)',
-    accentGlow: 'rgba(0,168,132,0.22)',
+    accent: '#0F766E',
+    accentMuted: 'rgba(15,118,110,0.10)',
+    accentGlow: 'rgba(15,118,110,0.22)',
   },
   {
     num: '02',
@@ -192,7 +192,7 @@ function PillarsHeadline({
           creaseShading={0.35}
           fontSize="inherit"
           fontWeight={600}
-          color="#94A3B8"
+          color="#64748B"
           className="inline-block font-sora"
         />
       </span>
@@ -471,24 +471,24 @@ export default function PillarsOfCare() {
                       <div className="flex flex-col min-w-0">
                         <span
                           className={`font-sora text-xs lg:text-sm font-semibold truncate transition-colors duration-200 ${
-                            isActive ? 'text-slate-900 font-bold' : 'text-slate-500 group-hover:text-slate-800'
+                            isActive ? 'text-slate-900 font-bold' : 'text-slate-600 group-hover:text-slate-800'
                           }`}
                         >
                           {p.seoTitle}
                         </span>
-                        <span className="text-[10px] text-slate-400 font-medium truncate">{p.tag}</span>
+                        <span className="text-xs text-slate-600 font-medium truncate">{p.tag}</span>
                       </div>
                     </div>
 
-                    {/* Active Live Pulse Indicator */}
+                    {/* Active Indicator (Clean without pulse) */}
                     <div className="relative z-10 flex items-center gap-1 shrink-0 pr-1">
                       {isActive ? (
                         <span
-                          className="w-2 h-2 rounded-full animate-pulse shadow-sm"
+                          className="w-2 h-2 rounded-full shadow-sm"
                           style={{ background: p.accent }}
                         />
                       ) : (
-                        <span className="text-[11px] text-slate-300 group-hover:text-slate-400 transition-colors">
+                        <span className="text-xs text-slate-600 group-hover:text-slate-900 transition-colors font-bold">
                           →
                         </span>
                       )}
@@ -509,7 +509,7 @@ export default function PillarsOfCare() {
                 <span>See If GLP-1 Is Right For You</span>
                 <ArrowRight className="w-4 h-4 transition-transform duration-200 group-hover:translate-x-1" />
               </Link>
-              <p className="text-[10px] text-slate-400 mt-2 pl-1 font-medium">
+              <p className="text-xs text-slate-500 mt-2 pl-1 font-medium">
                 3 mins • 100% confidential • No commitment
               </p>
             </div>
@@ -553,7 +553,7 @@ export default function PillarsOfCare() {
                     {/* Part badge */}
                     <div className="absolute top-4 left-4 flex items-center gap-2">
                       <span
-                        className="font-sora font-bold text-[11px] px-3 py-1 rounded-full text-white shadow-md backdrop-blur-sm"
+                        className="font-sora font-bold text-xs px-3 py-1 rounded-full text-white shadow-md backdrop-blur-sm"
                         style={{ background: pillar.accent }}
                       >
                         Part {pillar.num}
@@ -562,58 +562,56 @@ export default function PillarsOfCare() {
 
                     {/* Tag pill */}
                     <div className="absolute top-4 right-4">
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold font-sora bg-white/95 text-slate-700 shadow-sm border border-slate-200/70 backdrop-blur-sm">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold font-sora bg-white/95 text-slate-800 shadow-sm border border-slate-200 backdrop-blur-sm">
                         <span className="w-1.5 h-1.5 rounded-full" style={{ background: pillar.accent }} />
                         {pillar.tag}
                       </span>
-                    </div>
-
-                    {/* Stat floating on image */}
-                    <div className="absolute bottom-4 right-4">
-                      <div className="flex flex-col items-end bg-white/90 backdrop-blur-sm rounded-2xl px-3 py-2 shadow-sm border border-white/60">
-                        <span className="font-sora font-black text-xl" style={{ color: pillar.accent }}>
-                          {pillar.stat}
-                        </span>
-                        <span className="text-[10px] text-slate-500 font-medium text-right leading-tight max-w-[100px]">
-                          {pillar.statLabel}
-                        </span>
-                      </div>
                     </div>
                   </div>
 
                   {/* ── Card Content ── */}
                   <div className="p-6 lg:p-7 flex-1 flex flex-col justify-between">
                     <div>
-                      {/* Hook line — emotional anchor */}
+                      {/* Power title & Integrated Metric Stat */}
+                      <div className="flex items-start justify-between gap-4 mb-2">
+                        <h3 className="font-sora text-xl lg:text-2xl font-bold text-slate-900 tracking-tight leading-snug">
+                          {pillar.title.split('\n').map((line, li) => (
+                            <span key={li} className="block">{line}</span>
+                          ))}
+                        </h3>
+                        <div className="text-right shrink-0">
+                          <span className="font-sora font-extrabold text-2xl tabular-nums block" style={{ color: pillar.accent }}>
+                            {pillar.stat}
+                          </span>
+                          <span className="text-xs text-slate-500 font-medium leading-tight block max-w-[90px]">
+                            {pillar.statLabel}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Emotional Subtitle Hook */}
                       <p
-                        className="font-sora text-xs font-semibold uppercase tracking-widest mb-1.5"
+                        className="font-sora text-sm font-semibold mb-2"
                         style={{ color: pillar.accent }}
                       >
                         {pillar.hook.split('\n')[0]}
                       </p>
 
-                      {/* Power title */}
-                      <h3 className="font-sora text-xl lg:text-2xl font-bold text-slate-900 tracking-tight mb-3 leading-snug">
-                        {pillar.title.split('\n').map((line, li) => (
-                          <span key={li} className="block">{line}</span>
-                        ))}
-                      </h3>
-
-                      <p className="text-xs lg:text-sm text-slate-500 font-light leading-relaxed">
+                      <p className="text-sm text-slate-600 font-normal leading-relaxed">
                         {pillar.description}
                       </p>
                     </div>
 
                     {/* Highlights */}
-                    <div className="pt-4 border-t border-slate-100/80 space-y-0">
-                      <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 font-sora mb-2">
+                    <div className="pt-4 border-t border-slate-100 space-y-0">
+                      <p className="text-xs font-bold uppercase tracking-wider text-slate-500 font-sora mb-2">
                         What this covers
                       </p>
-                      <div className="grid grid-cols-2 gap-1.5">
+                      <div className="grid grid-cols-2 gap-2">
                         {pillar.highlights.map((h, hIdx) => (
-                          <div key={hIdx} className="flex items-start gap-1.5 text-[11px] lg:text-xs text-slate-700 font-medium">
+                          <div key={hIdx} className="flex items-start gap-1.5 text-xs text-slate-800 font-medium">
                             <CheckCircle2
-                              className="w-3.5 h-3.5 shrink-0 mt-0.5"
+                              className="w-4 h-4 shrink-0 mt-0.5"
                               style={{ color: pillar.accent }}
                             />
                             <span className="leading-snug">{h}</span>
@@ -658,13 +656,13 @@ export default function PillarsOfCare() {
                   className={`relative overflow-hidden py-2 px-1 rounded-xl text-center font-sora text-xs font-bold transition-all cursor-pointer ${
                     isActive
                       ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-400 hover:text-slate-700'
+                      : 'text-slate-600 hover:text-slate-900 font-semibold'
                   }`}
                   style={{
                     color: isActive ? p.accent : undefined,
                   }}
                 >
-                  <span className="block text-[9px] text-slate-400 font-normal">Part</span>
+                  <span className="block text-xs text-slate-500 font-normal">Part</span>
                   {p.num}
                   {isActive && (
                     <span
@@ -709,40 +707,39 @@ export default function PillarsOfCare() {
 
               <div className="absolute top-3 left-3">
                 <span
-                  className="font-sora font-bold text-[11px] px-2.5 py-0.5 rounded-full text-white shadow-sm"
+                  className="font-sora font-bold text-xs px-2.5 py-0.5 rounded-full text-white shadow-sm"
                   style={{ background: currentPillar.accent }}
                 >
                   Part {currentPillar.num}
                 </span>
               </div>
-
-              {/* Stat chip on image */}
-              <div className="absolute bottom-3 right-3">
-                <div className="flex flex-col items-end bg-white/90 backdrop-blur-sm rounded-xl px-2.5 py-1.5 shadow-sm">
-                  <span className="font-sora font-black text-lg" style={{ color: currentPillar.accent }}>
-                    {currentPillar.stat}
-                  </span>
-                  <span className="text-[9px] text-slate-500 font-medium text-right leading-tight max-w-[90px]">
-                    {currentPillar.statLabel}
-                  </span>
-                </div>
-              </div>
             </div>
 
             {/* Body */}
             <div className="p-5 sm:p-6">
-              {/* Hook */}
-              <p className="font-sora text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: currentPillar.accent }}>
+              <div className="flex items-start justify-between gap-3 mb-2">
+                {/* Power Title (Leading without kicker) */}
+                <h3 className="font-sora text-lg sm:text-xl font-bold text-slate-900 tracking-tight leading-snug">
+                  {currentPillar.title.split('\n').map((line, li) => (
+                    <span key={li} className="block">{line}</span>
+                  ))}
+                </h3>
+                <div className="text-right shrink-0">
+                  <span className="font-sora font-extrabold text-xl tabular-nums block" style={{ color: currentPillar.accent }}>
+                    {currentPillar.stat}
+                  </span>
+                  <span className="text-xs text-slate-500 font-medium leading-tight block max-w-[80px]">
+                    {currentPillar.statLabel}
+                  </span>
+                </div>
+              </div>
+
+              {/* Subtitle Hook */}
+              <p className="font-sora text-xs font-semibold mb-2" style={{ color: currentPillar.accent }}>
                 {currentPillar.hook.split('\n')[0]}
               </p>
 
-              <h3 className="font-sora text-lg sm:text-xl font-bold text-slate-900 tracking-tight mb-2.5 leading-snug">
-                {currentPillar.title.split('\n').map((line, li) => (
-                  <span key={li} className="block">{line}</span>
-                ))}
-              </h3>
-
-              <p className="text-xs sm:text-sm text-slate-500 font-light leading-relaxed mb-4">
+              <p className="text-sm text-slate-600 font-normal leading-relaxed mb-4">
                 {currentPillar.description}
               </p>
 
@@ -788,7 +785,7 @@ export default function PillarsOfCare() {
           </div>
 
           {/* Swipe hint */}
-          <p className="text-center text-[10px] text-slate-400 mt-3 font-medium">
+          <p className="text-center text-xs text-slate-500 mt-3 font-medium">
             ← Swipe to explore all 4 parts →
           </p>
         </div>

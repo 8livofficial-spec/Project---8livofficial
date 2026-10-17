@@ -57,7 +57,7 @@ export default function TrustStrip() {
           <span className="text-xs sm:text-sm font-bold font-sora text-slate-900 leading-tight whitespace-nowrap">
             {item.label}
           </span>
-          <span className="text-[10px] sm:text-[11px] text-slate-500 font-medium mt-0.5 whitespace-nowrap">
+          <span className="text-xs text-slate-600 font-medium mt-0.5 whitespace-nowrap">
             {item.detail}
           </span>
         </div>
@@ -66,7 +66,7 @@ export default function TrustStrip() {
   }))
 
   return (
-    <section aria-label="Clinical Trust Pillars" className="w-full bg-white border-y border-slate-200/80 py-4 sm:py-6 overflow-hidden">
+    <section aria-label="Clinical Trust Pillars" className="w-full bg-white border-b border-slate-200/80 py-6 sm:py-8 overflow-hidden relative z-0">
       <div className="w-full">
         <LogoLoop
           logos={trustLogos}

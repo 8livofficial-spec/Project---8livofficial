@@ -156,7 +156,7 @@ export default function PricingShaderCards() {
   return (
     <section
       id="pricing"
-      className="relative z-10 py-16 sm:py-24 bg-[#FDFBF7]/80 backdrop-blur-[2px] text-slate-900 overflow-hidden border-b border-slate-200/80"
+      className="relative z-10 py-16 sm:py-24 bg-[#F8FAFC] text-slate-900 overflow-hidden border-b border-slate-200"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         
@@ -164,12 +164,12 @@ export default function PricingShaderCards() {
         <div className="text-center max-w-3xl mx-auto mb-12 sm:mb-16">
           <h2 className="font-sora text-3xl sm:text-4xl md:text-5xl font-bold text-slate-900 leading-tight mb-4">
             Doctor-led treatment plans,{' '}
-            <span className="bg-gradient-to-r from-[#00A884] via-[#0D9488] to-[#0F766E] bg-clip-text text-transparent">
+            <span className="text-[#0F766E]">
               tailored to your goals.
             </span>
           </h2>
 
-          <p className="text-sm sm:text-base md:text-lg text-slate-600 font-light max-w-2xl mx-auto leading-relaxed">
+          <p className="text-base md:text-lg text-slate-600 font-normal max-w-2xl mx-auto leading-relaxed">
             All plans include licensed doctor video consultations, personalized Indian meal plans, dedicated coach support, and doorstep delivery coordination.
           </p>
         </div>
@@ -184,13 +184,13 @@ export default function PricingShaderCards() {
                 key={plan.id}
                 className={`relative flex flex-col justify-between rounded-3xl p-6 sm:p-7 transition-all duration-200 ${
                   isPopular
-                    ? 'bg-white border-2 border-[#00A884] shadow-lg ring-4 ring-[#00A884]/10'
+                    ? 'bg-white border-2 border-[#0F766E] shadow-lg ring-4 ring-[#0F766E]/10'
                     : 'bg-white border border-slate-200 shadow-xs hover:border-slate-300'
                 }`}
               >
                 {/* Popular Pill */}
                 {isPopular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full bg-[#00A884] text-white text-[11px] font-bold font-sora tracking-wide shadow-sm uppercase">
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3.5 py-1 rounded-full bg-[#0F766E] text-white text-xs font-bold font-sora tracking-wide shadow-sm uppercase">
                     Most Recommended
                   </div>
                 )}
@@ -201,31 +201,31 @@ export default function PricingShaderCards() {
                     {plan.name}
                   </h3>
 
-                  <p className="text-xs text-slate-500 font-light leading-relaxed mb-6 min-h-[36px]">
+                  <p className="text-sm text-slate-600 font-normal leading-relaxed mb-6 min-h-[40px]">
                     {plan.description}
                   </p>
 
                   {/* Price Block */}
                   <div className="mb-6 pb-6 border-b border-slate-100">
                     <div className="flex items-baseline gap-1">
-                      <span className="font-sora text-3xl sm:text-4xl font-black text-slate-900">
+                      <span className="font-sora text-3xl sm:text-4xl font-extrabold text-slate-900 tabular-nums">
                         ₹{plan.finalPrice.toLocaleString('en-IN')}
                       </span>
                       {plan.durationMonths > 1 && (
-                        <span className="text-xs text-slate-500 font-medium">
+                        <span className="text-xs text-slate-600 font-medium">
                           / {plan.durationMonths} months
                         </span>
                       )}
                     </div>
 
                     {plan.durationMonths > 1 && (
-                      <p className="text-xs text-[#00A884] font-semibold mt-1">
+                      <p className="text-xs text-[#0F766E] font-semibold mt-1 tabular-nums">
                         ≈ ₹{plan.monthlyEquivalent.toLocaleString('en-IN')}/month
                       </p>
                     )}
 
                     {plan.discountPercentage > 0 && (
-                      <p className="text-[11px] text-amber-700 font-medium mt-0.5">
+                      <p className="text-xs text-amber-800 font-medium mt-0.5 tabular-nums">
                         Includes {plan.discountPercentage}% savings (₹{plan.discountAmount.toLocaleString('en-IN')})
                       </p>
                     )}
@@ -234,8 +234,8 @@ export default function PricingShaderCards() {
                   {/* Features List */}
                   <div className="space-y-2.5 mb-8">
                     {(plan.features || []).map((feat, i) => (
-                      <div key={i} className="flex items-start gap-2.5 text-xs text-slate-700">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-[#00A884] shrink-0 mt-0.5" />
+                      <div key={i} className="flex items-start gap-2.5 text-sm text-slate-700">
+                        <CheckCircle2 className="w-4 h-4 text-[#0F766E] shrink-0 mt-0.5" />
                         <span className="leading-snug">{feat}</span>
                       </div>
                     ))}
@@ -246,9 +246,9 @@ export default function PricingShaderCards() {
                 <div>
                   <Link
                     href={`/assessment?plan=${plan.id}`}
-                    className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-sora font-bold text-xs sm:text-sm transition-all cursor-pointer ${
+                    className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-xl font-sora font-bold text-sm transition-all cursor-pointer ${
                       isPopular
-                        ? 'bg-[#00A884] hover:bg-[#0F766E] text-white shadow-md'
+                        ? 'bg-[#0F766E] hover:bg-[#0D655E] text-white shadow-md'
                         : 'bg-slate-900 hover:bg-slate-800 text-white shadow-xs'
                     }`}
                   >
@@ -256,7 +256,7 @@ export default function PricingShaderCards() {
                     <ArrowRight size={14} />
                   </Link>
 
-                  <p className="text-[10px] text-slate-400 text-center mt-2.5 font-light">
+                  <p className="text-xs text-slate-500 text-center mt-2.5 font-normal">
                     Doctor evaluation required prior to prescription
                   </p>
                 </div>

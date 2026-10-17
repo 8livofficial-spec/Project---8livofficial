@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getAuthenticatedUser } from '@/lib/apiSecurity'
+import { assertDietitianPatientAccess, getAuthenticatedUser } from '@/lib/apiSecurity'
 import { generateNutritionPlanPdf } from '@/lib/nutritionPlanPdfService'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 
@@ -25,13 +25,18 @@ export async function GET(
       return new NextResponse('Nutrition plan not found', { status: 404 })
     }
 
-    // Enforce authorization: Dietitian, Admin, or the Patient themselves
+    // Enforce authorization: assigned Dietitian/Nutritionist, Admin, or the Patient themselves
     const isPatient = auth.user.id === plan.patient_id
-    const isDietitian = auth.user.id === plan.dietitian_id || auth.role === 'dietitian' || auth.role === 'nutritionist'
     const isAdmin = auth.role === 'admin'
 
-    if (!isPatient && !isDietitian && !isAdmin) {
-      return new NextResponse('Forbidden', { status: 403 })
+    if (!isPatient && !isAdmin) {
+      try {
+        await assertDietitianPatientAccess(request, plan.patient_id)
+      } catch (error: any) {
+        return new NextResponse(error.message === 'Unauthorized' ? 'Unauthorized' : 'Forbidden', {
+          status: error.message === 'Unauthorized' ? 401 : 403,
+        })
+      }
     }
 
     // Fetch details for PDF
