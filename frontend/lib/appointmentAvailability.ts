@@ -106,16 +106,22 @@ export function isFutureIndiaSlot(date: string, time: string) {
 
 async function authorizeRequestedProvider(patientId: string, role: BookableRole, providerId?: string | null) {
   const requestedProviderId = String(providerId || '').trim()
-  if (role !== 'doctor' && !requestedProviderId) {
-    return { error: 'Assigned providerId is required for care-team booking.', status: 400 as const }
-  }
   if (requestedProviderId) {
     const assignedProvider = await getAssignedProviderForRole(patientId, role)
-    if (assignedProvider !== requestedProviderId) {
+    if (assignedProvider && assignedProvider !== requestedProviderId) {
       return { error: 'This provider is not assigned to the patient.', status: 403 as const }
     }
+    return { providerId: requestedProviderId }
   }
-  return { providerId: requestedProviderId || null }
+
+  // If no specific provider requested, check if patient has an assigned provider for this role
+  const assignedProvider = await getAssignedProviderForRole(patientId, role)
+  if (assignedProvider) {
+    return { providerId: assignedProvider }
+  }
+
+  // Patient does not have an assigned provider yet; allow booking with any active provider of this role
+  return { providerId: null }
 }
 
 function isMissingAvailabilityFunction(error: { code?: string; message?: string } | null) {

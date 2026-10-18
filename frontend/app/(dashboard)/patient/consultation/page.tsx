@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Video, Lock, Shield, CheckCircle, MapPin, Users, CreditCard, Smartphone, Building2, AlertCircle, CalendarPlus, Sun, CloudSun, Moon, Clock, CalendarDays, ArrowLeft } from 'lucide-react'
+import { Video, Lock, Shield, CheckCircle, MapPin, Users, CreditCard, Smartphone, Building2, AlertCircle, CalendarPlus, Sun, CloudSun, Moon, Clock, CalendarDays, ArrowLeft, Stethoscope, Utensils, Dumbbell } from 'lucide-react'
 import { usePatientData } from '@/hooks/usePatientData'
 import { supabase, syncSupabaseAuthCookie } from '@/lib/supabaseClient'
 import ConsultationSkeleton from '@/components/patient/ConsultationSkeleton'
@@ -164,6 +164,50 @@ const periodMeta = {
   evening: { label: 'Evening', icon: Moon },
 }
 
+export type ProviderRoleTab = 'doctor' | 'dietitian' | 'trainer'
+
+export const PROVIDER_TABS = [
+  {
+    id: 'doctor' as const,
+    label: 'Doctor',
+    sublabel: 'Physician',
+    icon: Stethoscope,
+    roleName: 'Doctor',
+    defaultName: 'Primary Care Physician',
+    defaultSpecialty: 'Metabolic Health Specialist',
+    avatarInitials: 'MD',
+    badgeText: '1-on-1 Physician Video Session',
+    description: 'Review your GLP-1 therapy, discuss lab reports, adjust dosing, or get clinical answers directly from your physician.',
+    benefits: ['Dosage titration & safety review', 'Lab biomarker evaluation', 'Medical prescription review'],
+  },
+  {
+    id: 'dietitian' as const,
+    label: 'Dietitian',
+    sublabel: 'Nutritionist',
+    icon: Utensils,
+    roleName: 'Clinical Dietitian',
+    defaultName: 'Clinical Dietitian',
+    defaultSpecialty: 'Clinical Nutrition & Metabolic Diet',
+    avatarInitials: 'RD',
+    badgeText: '1-on-1 Nutritionist Video Session',
+    description: 'Calibrate your daily calorie & protein targets, customize your personalized Indian meal plan, and manage dietary symptoms.',
+    benefits: ['Personalized meal blueprints', 'Macro & protein optimization', 'Anti-nausea & satiety strategies'],
+  },
+  {
+    id: 'trainer' as const,
+    label: 'Gym Trainer',
+    sublabel: 'Fitness Coach',
+    icon: Dumbbell,
+    roleName: 'Fitness Coach',
+    defaultName: 'Certified Fitness Coach',
+    defaultSpecialty: 'Metabolic Conditioning & Strength Coach',
+    avatarInitials: 'HC',
+    badgeText: '1-on-1 Fitness Video Session',
+    description: 'Build lean muscle mass, protect metabolic rate during weight loss, and implement progressive home or gym strength routines.',
+    benefits: ['Muscle preservation protocols', 'Progressive resistance training plan', 'Home or gym guided routines'],
+  },
+]
+
 export default function ConsultationSchedulingPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -174,6 +218,7 @@ export default function ConsultationSchedulingPage() {
   const isBookingPending = onboardingState.appointmentStatus === 'BOOKING_PENDING' || onboardingState.consultationPaymentStatus === 'PAID'
   const appointmentType = isActiveMemberFollowUp ? DOCTOR_FOLLOW_UP : INITIAL_DOCTOR_CONSULTATION
 
+  const [activeProviderTab, setActiveProviderTab] = useState<ProviderRoleTab>('doctor')
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [selectedDateSlots, setSelectedDateSlots] = useState<AvailableDoctorSlot[]>([])
   const [selectedDate, setSelectedDate] = useState('')
@@ -193,6 +238,20 @@ export default function ConsultationSchedulingPage() {
 
   const abortControllerRef = React.useRef<AbortController | null>(null)
   const dateAbortControllerRef = React.useRef<AbortController | null>(null)
+
+  const currentTabMeta = useMemo(() => {
+    return PROVIDER_TABS.find(t => t.id === activeProviderTab) || PROVIDER_TABS[0]
+  }, [activeProviderTab])
+
+  const activeProviderName = useMemo(() => {
+    if (activeProviderTab === 'doctor') {
+      return careTeam?.doctor?.name ? `Dr. ${careTeam.doctor.name}` : currentTabMeta.defaultName
+    }
+    if (activeProviderTab === 'dietitian') {
+      return careTeam?.dietitian?.name ? careTeam.dietitian.name : currentTabMeta.defaultName
+    }
+    return (careTeam?.fitness_coach?.name || (careTeam as any)?.trainer?.name) || currentTabMeta.defaultName
+  }, [activeProviderTab, careTeam, currentTabMeta])
 
   const selectableDates = useMemo(() => {
     return [...availableDates].sort((a, b) => a.localeCompare(b))
@@ -214,14 +273,30 @@ export default function ConsultationSchedulingPage() {
 
   const slotCacheRef = React.useRef<Map<string, AvailableDoctorSlot[]>>(new Map())
 
+  const handleTabSwitch = useCallback((tabId: ProviderRoleTab) => {
+    if (activeProviderTab === tabId) return
+    if (abortControllerRef.current) abortControllerRef.current.abort()
+    if (dateAbortControllerRef.current) dateAbortControllerRef.current.abort()
+
+    setActiveProviderTab(tabId)
+    setSelectedSlot(null)
+    setSelectedDateSlots([])
+    setAvailableDates([])
+    setSelectedDate('')
+    setSlotsLoading(true)
+    setSlotsError('')
+    slotCacheRef.current.clear()
+  }, [activeProviderTab])
+
   const loadSlotsForDate = useCallback(async (date: string) => {
     if (!date) {
       setSelectedDateSlots([])
       return
     }
 
-    if (slotCacheRef.current.has(date)) {
-      setSelectedDateSlots(slotCacheRef.current.get(date) || [])
+    const cacheKey = `${activeProviderTab}-${date}`
+    if (slotCacheRef.current.has(cacheKey)) {
+      setSelectedDateSlots(slotCacheRef.current.get(cacheKey) || [])
       return
     }
 
@@ -233,7 +308,11 @@ export default function ConsultationSchedulingPage() {
 
     setDateSlotsLoading(true)
     try {
-      const params = new URLSearchParams({ appointmentType, date })
+      const activeRole = activeProviderTab === 'trainer' ? 'fitness_coach' : activeProviderTab
+      const params = new URLSearchParams({ role: activeRole, date })
+      if (activeProviderTab === 'doctor') {
+        params.set('appointmentType', appointmentType)
+      }
       const res = await patientFetch(`/api/patient/appointments/availability?${params.toString()}`, {
         signal: controller.signal,
       })
@@ -244,6 +323,10 @@ export default function ConsultationSchedulingPage() {
 
       const uniqueTimes = new Map<string, AvailableDoctorSlot>()
       for (const slot of (data.slots || []).filter(Boolean)) {
+        // Strict role isolation guarantee: reject any slot that belongs to a different role
+        const slotRole = String(slot.providerRole || slot.provider_role || '').toLowerCase()
+        if (slotRole && slotRole !== activeRole.toLowerCase()) continue
+
         const timeSlot = slot.startTime || slot.time_slot || slot.start_time || ''
         if (!timeSlot) continue
         const mapped: AvailableDoctorSlot = {
@@ -251,11 +334,11 @@ export default function ConsultationSchedulingPage() {
           available_date: slot.date || slot.available_date || date || '',
           time_slot: timeSlot,
         }
-        const key = isActiveMemberFollowUp ? `${mapped.slotId || mapped.providerId || 'doc'}-${mapped.time_slot}` : mapped.time_slot
+        const key = `${mapped.slotId || mapped.providerId || activeRole}-${mapped.time_slot}`
         if (!uniqueTimes.has(key)) uniqueTimes.set(key, mapped)
       }
       const slotsList = Array.from(uniqueTimes.values())
-      slotCacheRef.current.set(date, slotsList)
+      slotCacheRef.current.set(cacheKey, slotsList)
       setSelectedDateSlots(slotsList)
     } catch (err) {
       if (err instanceof Error && (err.name === 'AbortError' || controller.signal.aborted)) {
@@ -272,7 +355,7 @@ export default function ConsultationSchedulingPage() {
         setDateSlotsLoading(false)
       }
     }
-  }, [appointmentType, isActiveMemberFollowUp, router])
+  }, [activeProviderTab, appointmentType, router])
 
   const loadAvailableSlots = useCallback(async () => {
     if (patientDataLoading) return
@@ -287,7 +370,11 @@ export default function ConsultationSchedulingPage() {
     setSlotsError('')
     slotCacheRef.current.clear()
     try {
-      const params = new URLSearchParams({ appointmentType })
+      const activeRole = activeProviderTab === 'trainer' ? 'fitness_coach' : activeProviderTab
+      const params = new URLSearchParams({ role: activeRole })
+      if (activeProviderTab === 'doctor') {
+        params.set('appointmentType', appointmentType)
+      }
       const res = await patientFetch(`/api/patient/appointments/availability?${params.toString()}`, {
         signal: controller.signal,
       })
@@ -301,10 +388,15 @@ export default function ConsultationSchedulingPage() {
       })
       setAvailableDates(dates)
 
-      // Pre-populate slotCacheRef with all slots from initial response so tab and date switching is instant (0ms)
+      // Pre-populate slotCacheRef with slots strictly filtered by activeRole
       if (Array.isArray(data.slots) && data.slots.length > 0) {
         const slotsByDate = new Map<string, AvailableDoctorSlot[]>()
         for (const slot of data.slots) {
+          if (!slot) continue
+          // Strict role isolation guarantee: reject any slot that belongs to a different role
+          const slotRole = String(slot.providerRole || slot.provider_role || '').toLowerCase()
+          if (slotRole && slotRole !== activeRole.toLowerCase()) continue
+
           const timeSlot = slot.startTime || slot.time_slot || slot.start_time || ''
           if (!timeSlot) continue
           const slotDate = slot.date || slot.available_date || ''
@@ -316,13 +408,13 @@ export default function ConsultationSchedulingPage() {
           }
           if (!slotsByDate.has(slotDate)) slotsByDate.set(slotDate, [])
           const existing = slotsByDate.get(slotDate)!
-          const key = isActiveMemberFollowUp ? `${mapped.slotId || mapped.providerId || 'doc'}-${mapped.time_slot}` : mapped.time_slot
-          if (!existing.some(s => (isActiveMemberFollowUp ? `${s.slotId || s.providerId || 'doc'}-${s.time_slot}` : s.time_slot) === key)) {
+          const key = `${mapped.slotId || mapped.providerId || activeRole}-${mapped.time_slot}`
+          if (!existing.some(s => `${s.slotId || s.providerId || activeRole}-${s.time_slot}` === key)) {
             existing.push(mapped)
           }
         }
         for (const [d, sList] of slotsByDate) {
-          slotCacheRef.current.set(d, sList)
+          slotCacheRef.current.set(`${activeProviderTab}-${d}`, sList)
         }
       }
 
@@ -330,8 +422,9 @@ export default function ConsultationSchedulingPage() {
         const nextDate = dates[0]
         setSelectedSlot(null)
         setSelectedDate(nextDate)
-        if (slotCacheRef.current.has(nextDate)) {
-          setSelectedDateSlots(slotCacheRef.current.get(nextDate) || [])
+        const cached = slotCacheRef.current.get(`${activeProviderTab}-${nextDate}`)
+        if (cached && cached.length > 0) {
+          setSelectedDateSlots(cached)
         } else {
           await loadSlotsForDate(nextDate)
         }
@@ -348,14 +441,14 @@ export default function ConsultationSchedulingPage() {
         router.replace('/login')
         return
       }
-      console.error('Failed to load available doctor slots:', err)
-      setSlotsError(err instanceof Error ? err.message : 'Failed to load available doctor slots.')
+      console.error('Failed to load available slots:', err)
+      setSlotsError(err instanceof Error ? err.message : 'Failed to load available slots.')
     } finally {
       if (!controller.signal.aborted) {
         setSlotsLoading(false)
       }
     }
-  }, [appointmentType, isActiveMemberFollowUp, loadSlotsForDate, patientDataLoading, router])
+  }, [activeProviderTab, appointmentType, loadSlotsForDate, patientDataLoading, router])
 
   useEffect(() => {
     if (patientDataLoading) return
@@ -367,12 +460,14 @@ export default function ConsultationSchedulingPage() {
     return () => window.clearTimeout(timer)
   }, [loadAvailableSlots, patientDataLoading])
 
+
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) abortControllerRef.current.abort()
       if (dateAbortControllerRef.current) dateAbortControllerRef.current.abort()
     }
   }, [])
+
 
 
 
@@ -463,6 +558,52 @@ export default function ConsultationSchedulingPage() {
     setPaymentError('')
 
     try {
+      // Direct booking for Dietitian and Gym Trainer (covered in program membership)
+      if (activeProviderTab !== 'doctor') {
+        setPaymentStage('assigning')
+        const patientId = user?.id || profile?.id || assessment?.patient_id
+        const providerRole = activeProviderTab === 'trainer' ? 'fitness_coach' : 'dietitian'
+        const bookingDate = selectedSlot?.available_date || selectedSlot?.date
+        const bookingTime = selectedSlot?.time_slot || selectedSlot?.startTime
+
+        const res = await patientFetch('/api/patient/provider-consultations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            patientId,
+            role: providerRole,
+            bookingDate,
+            bookingTime,
+          }),
+        })
+
+        const data = await res.json()
+        if (!res.ok || data.error) {
+          throw new Error(data.error || `Failed to book ${currentTabMeta.label} consultation.`)
+        }
+
+        const consult = data.consultation
+        setAssignment({
+          consultationId: consult.id,
+          bookingId: consult.id,
+          paymentAmount: 0,
+          paymentStatus: 'COVERED',
+          appointmentStatus: 'SCHEDULED',
+          doctorName: activeProviderName,
+          specialty: currentTabMeta.defaultSpecialty,
+          bookingDate: consult.booking_date,
+          bookingTime: consult.booking_time,
+          meetingType: '1-on-1 Video Session',
+        })
+        setPaymentStage('confirmed')
+        const { data: { session: activeSession } } = await supabase.auth.getSession()
+        syncSupabaseAuthCookie(activeSession)
+        await reloadData()
+        await loadAvailableSlots()
+        router.replace(`/patient/appointments/${consult.id}`)
+        return
+      }
+
       const needsPayment = !isAlreadyPaid
 
       if (needsPayment) {
@@ -806,32 +947,86 @@ export default function ConsultationSchedulingPage() {
           </div>
 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+            {/* 3-Tab Care Specialist Switcher */}
+            <div className="mb-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
+                <div>
+                  <h2 className="text-base sm:text-lg font-extrabold text-slate-900 font-sora tracking-tight flex items-center gap-2">
+                    <span>Select Specialist to Consult</span>
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Switch between your dedicated care team members to schedule your session
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-1.5 bg-slate-200/70 rounded-2xl border border-slate-200/90 shadow-inner">
+                {PROVIDER_TABS.map((tab) => {
+                  const Icon = tab.icon
+                  const isActive = activeProviderTab === tab.id
+                  return (
+                    <button
+                      key={tab.id}
+                      type="button"
+                      onClick={() => handleTabSwitch(tab.id)}
+                      className={`py-3 px-3.5 rounded-xl flex items-center gap-3 transition-all cursor-pointer font-sora text-left ${
+                        isActive
+                          ? 'bg-[#061810] text-white shadow-md shadow-emerald-950/20 ring-1 ring-emerald-500/40 scale-[1.01]'
+                          : 'bg-white/80 hover:bg-white text-slate-700 hover:text-slate-900 shadow-xs'
+                      }`}
+                    >
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                        isActive ? 'bg-[#00A884] text-white shadow-sm' : 'bg-slate-100 text-slate-600'
+                      }`}>
+                        <Icon className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-xs sm:text-sm font-bold truncate">{tab.label}</p>
+                          {isActive && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#00A884] animate-pulse shrink-0" />
+                          )}
+                        </div>
+                        <p className={`text-[10px] truncate ${isActive ? 'text-teal-300 font-medium' : 'text-slate-400'}`}>
+                          {tab.sublabel}
+                        </p>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
             {/* Header Hero Banner */}
             <div className="bg-gradient-to-br from-[#0B1120] via-[#0F172A] to-[#0D9488]/90 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-slate-900/10 mb-8">
               <div className="absolute top-0 right-0 w-80 h-80 bg-[#5EEAD4]/10 rounded-full blur-3xl pointer-events-none" />
               <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div>
                   <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 backdrop-blur-md text-[10px] font-extrabold uppercase tracking-widest text-[#5EEAD4] font-sora mb-3">
-                    <Video className="w-3.5 h-3.5" /> 1-on-1 Doctor Video Session
+                    <currentTabMeta.icon className="w-3.5 h-3.5" /> {currentTabMeta.badgeText}
                   </div>
                   <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold font-sora tracking-tight">
-                    Book Your Follow-up Consultation
+                    Book Your {currentTabMeta.label} Consultation
                   </h1>
                   <p className="text-white/70 text-xs sm:text-sm mt-2 max-w-xl font-light leading-relaxed">
-                    Review your GLP-1 therapy, discuss lab reports, adjust dosing, or get clinical answers directly from your assigned 8Liv physician.
+                    {currentTabMeta.description}
                   </p>
                 </div>
 
                 <div className="bg-white/10 border border-white/15 rounded-2xl p-4 backdrop-blur-md flex items-center gap-4 shrink-0">
                   <div className="w-12 h-12 rounded-xl bg-[#0D9488] flex items-center justify-center font-bold text-white text-lg font-sora shadow-sm">
-                    {careTeam?.doctor?.name ? careTeam.doctor.name.slice(0, 2).toUpperCase() : 'MD'}
+                    {currentTabMeta.avatarInitials}
                   </div>
                   <div>
-                    <p className="text-[10px] uppercase font-bold text-white/60 tracking-wider">Assigned Physician</p>
-                    <p className="text-sm font-bold font-sora text-white">
-                      {careTeam?.doctor?.name ? `Dr. ${careTeam.doctor.name}` : 'Your Primary Doctor'}
+                    <p className="text-[10px] uppercase font-bold text-white/60 tracking-wider">
+                      {currentTabMeta.roleName}
                     </p>
-                    <p className="text-[11px] text-[#5EEAD4] font-medium">Metabolic Health Specialist</p>
+                    <p className="text-sm font-bold font-sora text-white">
+                      {activeProviderName}
+                    </p>
+                    <p className="text-[11px] text-[#5EEAD4] font-medium">
+                      {currentTabMeta.defaultSpecialty}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -848,7 +1043,7 @@ export default function ConsultationSchedulingPage() {
                         Choose Date & Time
                       </h2>
                       <p className="text-slate-500 text-xs sm:text-sm mt-1">
-                        Select an available slot with your doctor. Times are in Indian Standard Time (IST).
+                        Select an available slot with your {currentTabMeta.label.toLowerCase()}. Times are in Indian Standard Time (IST).
                       </p>
                     </div>
                     <div className="w-10 h-10 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-[#0D9488] shrink-0">
@@ -1005,7 +1200,7 @@ export default function ConsultationSchedulingPage() {
                     <div className="text-center py-10 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
                       <p className="text-sm font-bold text-slate-800 font-sora">No consultation slots currently open</p>
                       <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                        Your doctor will open new schedule availability shortly. You can also request an urgent callback from support.
+                        Your {currentTabMeta.label.toLowerCase()} will open new schedule availability shortly. You can also request an urgent callback from support.
                       </p>
                       <button
                         type="button"
@@ -1025,15 +1220,21 @@ export default function ConsultationSchedulingPage() {
                   <h3 className="font-extrabold text-base font-sora text-slate-900 mb-4 flex items-center justify-between">
                     <span>Session Summary</span>
                     <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 font-bold border border-emerald-200">
-                      Follow-up
+                      {currentTabMeta.label}
                     </span>
                   </h3>
 
                   <div className="space-y-3.5 text-xs text-slate-600 pb-4 border-b border-slate-100">
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-500">Doctor</span>
+                      <span className="text-slate-500">Provider</span>
                       <span className="font-bold text-slate-900 font-sora">
-                        {careTeam?.doctor?.name ? `Dr. ${careTeam.doctor.name}` : 'Assigned Physician'}
+                        {activeProviderName}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-500">Specialty</span>
+                      <span className="font-semibold text-slate-700 text-[11px]">
+                        {currentTabMeta.roleName}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
@@ -1081,7 +1282,7 @@ export default function ConsultationSchedulingPage() {
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                       ) : (
                         <>
-                          <span>Confirm Doctor Appointment</span>
+                          <span>Confirm {currentTabMeta.label} Appointment</span>
                           <span className="text-base leading-none">→</span>
                         </>
                       )}
@@ -1129,9 +1330,48 @@ export default function ConsultationSchedulingPage() {
                 <p className="text-base mt-2" style={{ color: designTokens.colors.textSecondary }}>
                   {reusePaymentFromBookingId
                     ? 'Choose a new consultation slot. Your eligible consultation payment will be reused.'
-                    : 'Select a consultation time that fits your schedule. We will reserve your chosen time with an eligible doctor.'}
+                    : `Select a consultation time that fits your schedule. We will reserve your chosen time with an eligible ${currentTabMeta.label.toLowerCase()}.`}
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* 3-Tab Care Specialist Switcher */}
+          <div className="mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-1.5 bg-slate-200/70 rounded-2xl border border-slate-200/90 shadow-inner">
+              {PROVIDER_TABS.map((tab) => {
+                const Icon = tab.icon
+                const isActive = activeProviderTab === tab.id
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => handleTabSwitch(tab.id)}
+                    className={`py-3 px-3.5 rounded-xl flex items-center gap-3 transition-all cursor-pointer font-sora text-left ${
+                      isActive
+                        ? 'bg-[#061810] text-white shadow-md shadow-emerald-950/20 ring-1 ring-emerald-500/40 scale-[1.01]'
+                        : 'bg-white/80 hover:bg-white text-slate-700 hover:text-slate-900 shadow-xs'
+                    }`}
+                  >
+                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                      isActive ? 'bg-[#00A884] text-white shadow-sm' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <p className="text-xs sm:text-sm font-bold truncate">{tab.label}</p>
+                        {isActive && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-[#00A884] animate-pulse shrink-0" />
+                        )}
+                      </div>
+                      <p className={`text-[10px] truncate ${isActive ? 'text-teal-300 font-medium' : 'text-slate-400'}`}>
+                        {tab.sublabel}
+                      </p>
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
@@ -1140,26 +1380,26 @@ export default function ConsultationSchedulingPage() {
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
               <div>
                 <div className="flex items-center gap-3 mb-3">
-                  <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white" style={{ backgroundColor: designTokens.colors.primary }}>
-                    AD
+                  <div className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white bg-[#061810] shadow-sm">
+                    {currentTabMeta.avatarInitials}
                   </div>
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-wider" style={{ color: designTokens.colors.textTertiary }}>
-                      Initial Doctor Assignment
+                      {currentTabMeta.roleName} Consultation
                     </p>
                     <h3 className="text-lg font-bold" style={{ color: designTokens.colors.textPrimary }}>
-                      You choose the time
+                      {currentTabMeta.label} Appointment
                     </h3>
                   </div>
                 </div>
                 <p className="text-sm" style={{ color: designTokens.colors.textSecondary }}>
-                  Doctor names and photos are hidden during booking. Once you confirm a time, 8Liv reserves that slot with an eligible healthcare professional.
+                  {currentTabMeta.description}
                 </p>
               </div>
 
-              <div className="text-center">
-                  <Video className="w-6 h-6 mx-auto mb-1" style={{ color: designTokens.colors.primary }} />
-                  <p className="text-xs" style={{ color: designTokens.colors.textSecondary }}>Video Call</p>
+              <div className="text-center shrink-0">
+                <Video className="w-6 h-6 mx-auto mb-1 text-[#00A884]" />
+                <p className="text-xs font-semibold text-slate-700">1:1 Video Call</p>
               </div>
             </div>
           </div>
@@ -1181,8 +1421,8 @@ export default function ConsultationSchedulingPage() {
 
               <div className="mb-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {[
-                  { key: 'slot' as const, title: 'Choose available slot', copy: 'Instantly reserve a doctor-published time.' },
-                  { key: 'manual' as const, title: 'Request my own time', copy: 'Send your preferred time to all eligible doctors.' },
+                  { key: 'slot' as const, title: 'Choose available slot', copy: `Instantly reserve a ${currentTabMeta.label.toLowerCase()}-published time.` },
+                  { key: 'manual' as const, title: 'Request my own time', copy: `Send your preferred time to all eligible ${currentTabMeta.label.toLowerCase()}s.` },
                 ].map((item) => {
                   const selected = bookingMode === item.key
                   return (
@@ -1219,7 +1459,7 @@ export default function ConsultationSchedulingPage() {
                       Request a Preferred Consultation Time
                     </h3>
                     <p className="mt-1 text-sm" style={{ color: designTokens.colors.textSecondary }}>
-                      This request is visible to all eligible doctors. The first doctor who accepts it will confirm your appointment.
+                      {`This request is visible to all eligible ${currentTabMeta.label.toLowerCase()}s. The first ${currentTabMeta.label.toLowerCase()} who accepts it will confirm your appointment.`}
                     </p>
                   </div>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1251,10 +1491,10 @@ export default function ConsultationSchedulingPage() {
                   </div>
                   <div className="mt-5 rounded-xl border p-4" style={{ borderColor: `${designTokens.colors.secondary}30`, backgroundColor: `${designTokens.colors.secondary}08` }}>
                     <p className="text-sm font-bold" style={{ color: designTokens.colors.textPrimary }}>
-                      Open doctor request
+                      {`Open ${currentTabMeta.label.toLowerCase()} request`}
                     </p>
                     <p className="mt-1 text-xs font-semibold" style={{ color: designTokens.colors.textSecondary }}>
-                      Your payment stays attached to this request. You do not pay again when a doctor accepts it.
+                      {`Your payment stays attached to this request. You do not pay again when a ${currentTabMeta.label.toLowerCase()} accepts it.`}
                     </p>
                   </div>
                 </div>
@@ -1388,7 +1628,7 @@ export default function ConsultationSchedulingPage() {
                   <p className="text-xs mt-1.5 max-w-md mx-auto text-slate-500">
                     {slotsError.toLowerCase().includes('assessment')
                       ? 'Please complete your health intake assessment before proceeding to book your initial physician consultation.'
-                      : 'Please check your status or try reloading the latest doctor schedules.'}
+                      : `Please check your status or try reloading the latest ${currentTabMeta.label.toLowerCase()} schedules.`}
                   </p>
                   <div className="mt-5 flex items-center justify-center gap-3">
                     {slotsError.toLowerCase().includes('assessment') ? (
@@ -1471,7 +1711,7 @@ export default function ConsultationSchedulingPage() {
                       Healthcare Professional
                     </p>
                     <p className="font-semibold mt-2" style={{ color: designTokens.colors.textPrimary }}>
-                      {bookingMode === 'manual' ? 'Open to eligible doctors' : 'Automatically Assigned'}
+                      {bookingMode === 'manual' ? `Open to eligible ${currentTabMeta.label.toLowerCase()}s` : activeProviderName}
                     </p>
                   </div>
 
@@ -1480,8 +1720,10 @@ export default function ConsultationSchedulingPage() {
                       <p className="text-xs font-semibold uppercase" style={{ color: designTokens.colors.textTertiary }}>
                         Consultation Fee
                       </p>
-                      <p className="font-bold" style={{ color: isAlreadyPaid ? '#0D9488' : designTokens.colors.textPrimary }}>
-                        {isAlreadyPaid ? (isActiveMemberFollowUp ? '₹0 (Member Benefit)' : '₹0 (Paid ✓)') : `INR ${CONSULTATION_FEE}`}
+                      <p className="font-bold" style={{ color: (activeProviderTab !== 'doctor' || isAlreadyPaid) ? '#0D9488' : designTokens.colors.textPrimary }}>
+                        {activeProviderTab !== 'doctor'
+                          ? '₹0 (Care Program Benefit)'
+                          : (isAlreadyPaid ? (isActiveMemberFollowUp ? '₹0 (Member Benefit)' : '₹0 (Paid ✓)') : `INR ${CONSULTATION_FEE}`)}
                       </p>
                     </div>
                   </div>
@@ -1501,7 +1743,11 @@ export default function ConsultationSchedulingPage() {
                   disabled={(bookingMode === 'slot' ? !selectedSlot : !selectedManualDateTime) || loading || patientDataLoading}
                   className="w-full py-4 px-6 rounded-2xl font-bold text-white transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg cursor-pointer bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] shadow-md shadow-[#00A884]/25 hover:scale-[1.01] active:scale-[0.99]"
                 >
-                  {loading ? 'Processing...' : isAlreadyPaid ? 'Confirm Appointment (₹0)' : 'Pay & Confirm Appointment'}
+                  {loading
+                    ? 'Processing...'
+                    : activeProviderTab !== 'doctor'
+                    ? `Confirm ${currentTabMeta.label} Appointment (₹0)`
+                    : (isAlreadyPaid ? 'Confirm Appointment (₹0)' : 'Pay & Confirm Appointment')}
                 </button>
 
                 <p className="text-xs text-center text-slate-400 font-medium">
@@ -1535,7 +1781,7 @@ export default function ConsultationSchedulingPage() {
                 },
                 {
                   title: 'Clear appointment card',
-                  description: 'Your dashboard will show the doctor, date, time, status, and countdown once the appointment is assigned.'
+                  description: `Your dashboard will show the ${currentTabMeta.label.toLowerCase()}, date, time, status, and countdown once the appointment is assigned.`
                 },
                 {
                   title: 'Join window',

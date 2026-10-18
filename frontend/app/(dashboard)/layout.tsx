@@ -325,23 +325,24 @@ function DashboardLayoutContent({
   }
 
   return (
-    <div className="min-h-screen bg-[#F5F0EB] flex flex-col lg:flex-row overflow-hidden text-[#1A1F36] font-sans selection:bg-[#C4622D]/20 selection:text-[#C4622D]">
+    <div className="min-h-screen bg-[#F8FAF7] flex flex-col lg:flex-row overflow-hidden text-[#11241A] font-sans selection:bg-[#00A884]/20 selection:text-[#00A884]">
       {/* ── GLOBAL REAL-TIME CALLING ALERT (fixed, any page) ── */}
       {globalCallAlert && (
-        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/70 backdrop-blur-md">
-          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center space-y-5">
+        <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fade-in">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-stone-200/90 text-center space-y-5">
             <div className="relative">
-              <div className="w-24 h-24 bg-gradient-to-tr from-[#C4622D] to-orange-300 rounded-full flex items-center justify-center mx-auto shadow-xl animate-pulse">
+              <div className="w-24 h-24 bg-gradient-to-tr from-[#00A884] to-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-xl shadow-[#00A884]/30 animate-pulse">
                 <PhoneCall className="w-12 h-12 text-white" />
               </div>
-              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 rounded-full animate-ping inline-block mx-auto" style={{left: 'calc(50% + 28px)'}} />
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-rose-500 rounded-full animate-ping inline-block mx-auto" style={{left: 'calc(50% + 28px)'}} />
             </div>
             <div>
-              <span className="text-[10px] font-black uppercase tracking-wider text-[#C4622D] bg-[#C4622D]/10 px-3 py-1 rounded-full inline-block">🟢 Live Call
+              <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#00A884] bg-emerald-50 border border-emerald-200/80 px-3 py-1 rounded-full inline-block">
+                🟢 Live Video Session
               </span>
-              <h3 className="text-2xl font-bold text-[#1A1F36] mt-3">Your Doctor is Calling!</h3>
-              <p className="text-xs text-[#8896A4] font-medium mt-2 leading-relaxed">
-                Your physician has started your video consultation. Join now before the session times out.
+              <h3 className="text-2xl font-extrabold text-[#11241A] mt-3 tracking-tight">Your Doctor is Calling!</h3>
+              <p className="text-xs text-slate-500 font-medium mt-2 leading-relaxed">
+                Your assigned physician has initiated your clinical video consultation. Join now to enter the secure room.
               </p>
             </div>
             <div className="flex flex-col gap-3">
@@ -350,13 +351,13 @@ function DashboardLayoutContent({
                   router.push(`/patient/consultation/room?id=${encodeURIComponent(globalCallAlert.consultationId)}`)
                   setGlobalCallAlert(null)
                 }}
-                className="w-full bg-[#C4622D] hover:bg-[#A8522A] text-white font-bold py-4 rounded-2xl text-sm transition-all shadow-lg shadow-[#C4622D]/30 flex items-center justify-center gap-2"
+                className="w-full bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white font-bold py-3.5 rounded-2xl text-sm transition-all shadow-lg shadow-[#00A884]/25 flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
               >
                 <Video className="w-5 h-5" /> Join Consultation Now
               </button>
               <button
                 onClick={() => setGlobalCallAlert(null)}
-                className="text-xs text-[#8896A4] hover:text-[#1A1F36] font-semibold transition-colors"
+                className="text-xs text-slate-400 hover:text-slate-700 font-semibold transition-colors cursor-pointer py-1"
               >
                 Dismiss
               </button>

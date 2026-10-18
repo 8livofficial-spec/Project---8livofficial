@@ -17,8 +17,11 @@ import {
   Video,
   VideoOff,
   PhoneOff,
+  ShieldCheck,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+
+import InCallProtocolsDrawer from './InCallProtocolsDrawer'
 
 type VideoTokenResponse = {
   apiKey: string
@@ -35,7 +38,15 @@ type Props = {
   onLeave: () => void
 }
 
-function CustomCallControls({ onLeave }: { onLeave: () => void }) {
+function CustomCallControls({
+  onLeave,
+  onToggleProtocols,
+  showProtocols,
+}: {
+  onLeave: () => void
+  onToggleProtocols: () => void
+  showProtocols: boolean
+}) {
   const { useMicrophoneState, useCameraState } = useCallStateHooks()
   const { microphone, isMute: isMicMuted } = useMicrophoneState()
   const { camera, isMute: isCamMuted } = useCameraState()
@@ -57,20 +68,20 @@ function CustomCallControls({ onLeave }: { onLeave: () => void }) {
   }
 
   return (
-    <div className="flex items-center gap-3 sm:gap-4 px-5 py-3 rounded-2xl bg-slate-950/75 border border-white/15 shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
+    <div className="flex items-center gap-2 sm:gap-3 px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl bg-slate-950/80 border border-white/15 shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
       {/* Microphone Toggle Button */}
       <button
         type="button"
         onClick={toggleMic}
         title={isMicMuted ? 'Unmute microphone' : 'Mute microphone'}
-        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm ${
+        className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm ${
           isMicMuted
             ? 'bg-red-600/90 hover:bg-red-600 text-white shadow-red-600/20'
             : 'bg-white/10 hover:bg-white/20 text-white border border-white/10'
         }`}
       >
         {isMicMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-        <span>{isMicMuted ? 'Unmute' : 'Mute'}</span>
+        <span className="hidden sm:inline">{isMicMuted ? 'Unmute' : 'Mute'}</span>
       </button>
 
       {/* Camera Toggle Button */}
@@ -78,14 +89,31 @@ function CustomCallControls({ onLeave }: { onLeave: () => void }) {
         type="button"
         onClick={toggleCam}
         title={isCamMuted ? 'Turn on camera' : 'Turn off camera'}
-        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm ${
+        className={`flex items-center gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm ${
           isCamMuted
             ? 'bg-red-600/90 hover:bg-red-600 text-white shadow-red-600/20'
             : 'bg-white/10 hover:bg-white/20 text-white border border-white/10'
         }`}
       >
         {isCamMuted ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
-        <span>{isCamMuted ? 'Start Video' : 'Stop Video'}</span>
+        <span className="hidden sm:inline">{isCamMuted ? 'Start Video' : 'Stop Video'}</span>
+      </button>
+
+      <div className="w-px h-6 bg-white/15 mx-1" />
+
+      {/* Care Protocols Drawer Toggle Button */}
+      <button
+        type="button"
+        onClick={onToggleProtocols}
+        title={showProtocols ? 'Hide care protocols drawer' : 'Open care protocols & instructions'}
+        className={`flex items-center gap-2 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm ${
+          showProtocols
+            ? 'bg-[#00A884] text-white shadow-emerald-500/20 ring-1 ring-emerald-400/40'
+            : 'bg-white/10 hover:bg-white/20 text-white border border-white/10'
+        }`}
+      >
+        <ShieldCheck className="w-4 h-4 text-emerald-300" />
+        <span>Protocols &amp; Rx</span>
       </button>
 
       <div className="w-px h-6 bg-white/15 mx-1 hidden sm:block" />
@@ -95,7 +123,7 @@ function CustomCallControls({ onLeave }: { onLeave: () => void }) {
         type="button"
         onClick={onLeave}
         title="Leave consultation call"
-        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/30 transition-all active:scale-95 cursor-pointer"
+        className="flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/30 transition-all active:scale-95 cursor-pointer"
       >
         <PhoneOff className="w-4 h-4" />
         <span>End Call</span>
@@ -108,6 +136,7 @@ export default function StreamConsultationCall({ appointmentId, onLeave }: Props
   const [tokenData, setTokenData] = useState<VideoTokenResponse | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
+  const [showProtocolsDrawer, setShowProtocolsDrawer] = useState(false)
 
   useEffect(() => {
     let active = true
@@ -225,13 +254,23 @@ export default function StreamConsultationCall({ appointmentId, onLeave }: Props
   return (
     <StreamVideo client={client}>
       <StreamCall call={call}>
-        <div className="str-video str-video__theme-dark str-video__call-layout flex h-full w-full flex-col bg-[#0A0D18] text-white relative">
+        <div className="str-video str-video__theme-dark str-video__call-layout flex h-full w-full flex-col bg-[#0A0D18] text-white relative overflow-hidden">
           <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(0,168,132,0.1),_transparent_70%)] z-0" />
-          <div className="min-h-0 flex-1 relative w-full h-full z-10">
-            <SpeakerLayout />
+          <div className="min-h-0 flex-1 relative w-full h-full z-10 flex">
+            <div className="flex-1 w-full h-full relative">
+              <SpeakerLayout />
+            </div>
+            <InCallProtocolsDrawer
+              isOpen={showProtocolsDrawer}
+              onClose={() => setShowProtocolsDrawer(false)}
+            />
           </div>
-          <div className="shrink-0 border-t border-white/10 bg-[#0B0F1D]/80 backdrop-blur-xl p-3.5 flex items-center justify-center z-10">
-            <CustomCallControls onLeave={onLeave} />
+          <div className="shrink-0 border-t border-white/10 bg-[#0B0F1D]/80 backdrop-blur-xl p-3.5 flex items-center justify-center z-20">
+            <CustomCallControls
+              onLeave={onLeave}
+              onToggleProtocols={() => setShowProtocolsDrawer((prev) => !prev)}
+              showProtocols={showProtocolsDrawer}
+            />
           </div>
         </div>
       </StreamCall>
