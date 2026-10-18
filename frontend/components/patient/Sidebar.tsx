@@ -44,7 +44,6 @@ export default function Sidebar({
     { icon: Home, label: 'Overview', href: '/patient' },
     { icon: Calendar, label: 'Appointments', href: '/patient/appointments' },
     { icon: Pill, label: 'Prescriptions', href: '/patient/prescriptions' },
-    { icon: Package, label: 'Treatment Deliveries', href: '/patient/medicine-orders' },
     { icon: MessageSquare, label: 'Consultations', href: '/patient/consultation' },
     { icon: CreditCard, label: 'Billing', href: '/patient/billing' },
     { icon: User, label: 'Profile', href: '/patient/profile' },

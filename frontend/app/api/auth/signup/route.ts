@@ -3,6 +3,7 @@ import { EmailService } from '@/lib/emailService'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { updatePatientJourneyState } from '@/lib/patientJourneyServer'
 import { APP_CONFIG } from '@/lib/appConfig'
+import { normalizePhoneNumber } from '@/lib/phone'
 import {
   checkRateLimit,
   createToken,
@@ -25,6 +26,8 @@ export async function POST(request: Request) {
     const password = String(body.password || '')
     const firstName = String(body.firstName || '').trim()
     const lastName = String(body.lastName || '').trim()
+    const rawPhone = String(body.phoneNumber || body.phone || '').trim()
+    const normalizedPhone = rawPhone ? normalizePhoneNumber(rawPhone) : null
     const role = 'patient'
 
     const rate = checkRateLimit(`signup:${ip}:${email}`, APP_CONFIG.rateLimits.signup)
@@ -59,6 +62,7 @@ export async function POST(request: Request) {
         verification_token_hash: tokenHash,
         verification_expires_at: expiresAt,
         verification_purpose: 'EMAIL_VERIFICATION',
+        phone_number: normalizedPhone?.isValid ? normalizedPhone.e164 : null,
       },
     })
     if (error || !data.user) {
@@ -73,6 +77,7 @@ export async function POST(request: Request) {
       first_name: firstName,
       last_name: lastName,
       display_id: `${firstName} ${lastName}`.trim(),
+      phone_number: normalizedPhone?.isValid ? normalizedPhone.e164 : null,
     })
 
     await updatePatientJourneyState(data.user.id, {

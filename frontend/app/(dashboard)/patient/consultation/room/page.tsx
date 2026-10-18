@@ -331,18 +331,18 @@ function ConsultationRoomContent() {
 
       {/* ────────────────── PHASE 2: LIVE CALL VIEWPORT ────────────────── */}
       {phase === 'call' && (
-        <div className="w-full h-full min-h-[calc(100vh-6rem)] flex flex-col bg-[#0A0D18] rounded-2xl sm:rounded-3xl overflow-hidden border border-slate-800 shadow-2xl relative">
+        <div className="w-full h-full min-h-[calc(100vh-6rem)] flex flex-col bg-[#0A0D18] rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10 shadow-2xl relative">
           
-          {/* Header Controls Overlay */}
-          <div className="bg-[#0B0F1D]/90 backdrop-blur-xl border-b border-white/10 px-4 sm:px-6 py-3.5 flex items-center justify-between text-white select-none shrink-0 z-10">
+          {/* Header Controls Overlay with Glassmorphism */}
+          <div className="bg-slate-900/85 backdrop-blur-2xl border-b border-white/10 px-4 sm:px-6 py-3.5 flex items-center justify-between text-white select-none shrink-0 z-10 shadow-xl">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#0D9488] to-[#10B981] text-white font-black text-sm flex items-center justify-center shadow-lg shadow-[#0D9488]/30">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#00A884] to-[#10B981] text-white font-black text-sm flex items-center justify-center shadow-lg shadow-[#00A884]/30">
                 {doctorName.split(' ').pop()?.[0] || 'D'}
               </div>
               <div>
                 <div className="flex items-center gap-2">
                   <h3 className="text-sm font-bold font-sora text-white">{doctorName}</h3>
-                  <span className="text-[10px] text-[#2DD4BF] font-bold bg-[#0D9488]/20 px-2.5 py-0.5 rounded-full border border-[#0D9488]/30">
+                  <span className="text-[10px] text-emerald-300 font-bold bg-[#00A884]/20 px-2.5 py-0.5 rounded-full border border-[#00A884]/30">
                     {doctorRole}
                   </span>
                 </div>
@@ -359,7 +359,7 @@ function ConsultationRoomContent() {
               </span>
               <button
                 onClick={leaveCall}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 text-xs transition-all shadow-md cursor-pointer"
+                className="bg-red-600/90 hover:bg-red-600 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 text-xs transition-all shadow-md cursor-pointer"
                 title="Leave Consultation"
               >
                 <PhoneOff className="w-4 h-4" /> End Call
@@ -367,73 +367,85 @@ function ConsultationRoomContent() {
             </div>
           </div>
 
-          <div className="flex-1 w-full bg-[#0A0D18] relative overflow-hidden">
-            {appointmentId ? (
-              <StreamConsultationCall appointmentId={appointmentId} onLeave={leaveCall} />
-            ) : (
-              <div className="flex h-full items-center justify-center p-6 text-white">
-                <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
-                  <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-300" />
-                  <p className="text-sm font-semibold">Missing consultation identifier. Please return to appointments and join again.</p>
+          {/* Telehealth Comfort Assurance Sub-strip */}
+          <div className="bg-emerald-950/40 border-b border-emerald-500/15 px-4 sm:px-6 py-2 flex items-center justify-between text-[11px] text-emerald-300 font-medium z-10 shrink-0">
+            <div className="flex items-center gap-2">
+              <span className="text-emerald-400">🔒</span>
+              <span>Private 1-on-1 Consultation • Your physician has access to your medical history &amp; health goals.</span>
+            </div>
+            <span className="hidden sm:inline text-emerald-400/80 text-[10px] font-semibold">HD Audio &amp; Video</span>
+          </div>
+
+          <div className="flex-1 w-full bg-[#0A0D18] relative overflow-hidden flex flex-col">
+            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(0,168,132,0.12),_transparent_75%)] z-0" />
+            <div className="relative z-10 flex-1 w-full h-full flex flex-col">
+              {appointmentId ? (
+                <StreamConsultationCall appointmentId={appointmentId} onLeave={leaveCall} />
+              ) : (
+                <div className="flex h-full items-center justify-center p-6 text-white">
+                  <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+                    <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-300" />
+                    <p className="text-sm font-semibold">Missing consultation identifier. Please return to appointments and join again.</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       )}
 
       {/* ────────────────── PHASE 3: POST-CALL SUMMARY ────────────────── */}
       {phase === 'post-summary' && (
-        <div className="w-full max-w-2xl bg-white rounded-3xl p-6 sm:p-8 shadow-[0_4px_24px_rgba(26,31,54,0.06)] border border-[#1A1F36]/6 space-y-6">
+        <div className="w-full max-w-2xl bg-white rounded-3xl p-6 sm:p-8 shadow-sm border border-slate-200/80 space-y-6">
           <div className="flex flex-col items-center text-center space-y-3">
-            <div className="w-16 h-16 bg-[#5C7A6B]/10 rounded-full flex items-center justify-center text-[#5C7A6B]">
+            <div className="w-16 h-16 bg-emerald-50 text-[#00A884] rounded-full flex items-center justify-center border border-emerald-100">
               <CheckCircle className="w-8 h-8" />
             </div>
             <div>
-              <span className="text-[9px] font-black uppercase tracking-wider text-[#5C7A6B] bg-[#5C7A6B]/8 px-3 py-1 rounded-full">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 bg-emerald-50 border border-emerald-200 px-3 py-1 rounded-full">
                 Session Completed
               </span>
-              <h2 className="text-2xl font-bold font-sora text-[#1A1F36] mt-3">Consultation Concluded</h2>
-              <p className="text-xs text-[#8896A4] font-medium max-w-md mt-1">
+              <h2 className="text-2xl font-bold font-sora text-slate-900 mt-3">Consultation Concluded</h2>
+              <p className="text-xs text-slate-500 font-medium max-w-md mt-1 leading-relaxed">
                 Your medical session with {doctorName} has ended. Any prescription modifications or lifestyle plans discussed have been updated in your dashboard.
               </p>
             </div>
           </div>
 
-          <hr className="border-[#1A1F36]/8" />
+          <hr className="border-slate-100" />
 
           {/* Next Actions */}
           <div className="space-y-4">
-            <h3 className="font-bold text-sm font-sora text-[#1A1F36]">Recommended Next Steps</h3>
+            <h3 className="font-bold text-sm font-sora text-slate-900">Recommended Next Steps</h3>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="p-4 bg-[#F5F0EB] border border-[#1A1F36]/5 rounded-2xl space-y-2.5">
-                <div className="flex items-center gap-2 text-[#C4622D]">
+              <div className="p-4 bg-slate-50 border border-slate-200/70 rounded-2xl space-y-2.5">
+                <div className="flex items-center gap-2 text-[#00A884]">
                   <FileText className="w-4 h-4" />
-                  <h4 className="text-xs font-bold font-sora">Verify Prescriptions</h4>
+                  <h4 className="text-xs font-bold font-sora text-slate-900">Verify Prescriptions</h4>
                 </div>
-                <p className="text-[10px] text-[#8896A4] font-medium leading-relaxed">
+                <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
                   Review updated GLP-1 dosage parameters, refill schedules, or clinician guidelines left by your physician.
                 </p>
                 <Link
                   href="/patient/prescriptions"
-                  className="inline-block text-[10px] font-extrabold uppercase text-[#C4622D] hover:underline tracking-wider mt-1.5"
+                  className="inline-block text-[10px] font-bold uppercase text-[#00A884] hover:text-[#008f70] tracking-wider mt-1.5"
                 >
                   Go to Prescriptions →
                 </Link>
               </div>
 
-              <div className="p-4 bg-[#F5F0EB] border border-[#1A1F36]/5 rounded-2xl space-y-2.5">
-                <div className="flex items-center gap-2 text-[#5C7A6B]">
+              <div className="p-4 bg-slate-50 border border-slate-200/70 rounded-2xl space-y-2.5">
+                <div className="flex items-center gap-2 text-[#00A884]">
                   <Calendar className="w-4 h-4" />
-                  <h4 className="text-xs font-bold font-sora">Schedule Next Slot</h4>
+                  <h4 className="text-xs font-bold font-sora text-slate-900">Schedule Next Slot</h4>
                 </div>
-                <p className="text-[10px] text-[#8896A4] font-medium leading-relaxed">
+                <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
                   Avoid plan gaps by scheduling your follow-up progress review or diet check-in early.
                 </p>
                 <Link
                   href="/patient/consultation"
-                  className="inline-block text-[10px] font-extrabold uppercase text-[#5C7A6B] hover:underline tracking-wider mt-1.5"
+                  className="inline-block text-[10px] font-bold uppercase text-[#00A884] hover:text-[#008f70] tracking-wider mt-1.5"
                 >
                   Book Next Slot →
                 </Link>

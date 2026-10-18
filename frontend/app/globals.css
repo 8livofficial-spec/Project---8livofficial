@@ -701,3 +701,46 @@ input[type='range'].luxury-slider::-moz-range-thumb:active {
   transform: scale(1.22);
   box-shadow: 0 8px 26px rgba(0, 168, 132, 0.52), 0 4px 10px rgba(0, 0, 0, 0.16);
 }
+
+/* ─── Google Places Autocomplete Luxury Dropdown ─── */
+.pac-container {
+  z-index: 999999 !important;
+  border-radius: 16px !important;
+  margin-top: 6px !important;
+  border: 1px solid #E2E8F0 !important;
+  box-shadow: 0 16px 36px -4px rgba(15, 23, 42, 0.15), 0 6px 14px -2px rgba(15, 23, 42, 0.08) !important;
+  font-family: inherit !important;
+  overflow: hidden !important;
+  background-color: #FFFFFF !important;
+}
+
+.pac-item {
+  padding: 10px 14px !important;
+  font-size: 13px !important;
+  cursor: pointer !important;
+  border-top: 1px solid #F1F5F9 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  transition: background-color 0.15s ease !important;
+}
+
+.pac-item:hover, .pac-item-selected {
+  background-color: #ECFDF5 !important;
+}
+
+.pac-item-query {
+  font-weight: 600 !important;
+  color: #0F172A !important;
+  font-size: 13px !important;
+}
+
+.pac-matched {
+  color: #00A884 !important;
+  font-weight: 700 !important;
+}
+
+.pac-icon {
+  margin-top: 0 !important;
+}
+

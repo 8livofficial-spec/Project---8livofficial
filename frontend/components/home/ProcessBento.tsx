@@ -129,7 +129,7 @@ export default function ProcessBento() {
                 Start Treatment: Receive safe, effective medication.
               </h3>
               <p className="text-xs text-slate-500 font-sans leading-relaxed">
-                Discreet cold-chain delivery straight to your doorstep with continuous ongoing medical chat & refills.
+                Official digital e-prescription issued by your licensed physician with continuous medical monitoring & doctor check-ins.
               </p>
             </div>
             <div className="flex flex-wrap gap-2 pt-6 border-t border-slate-100 mt-6">

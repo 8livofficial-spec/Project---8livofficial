@@ -57,29 +57,20 @@ function CustomCallControls({ onLeave }: { onLeave: () => void }) {
   }
 
   return (
-    <div className="flex items-center gap-3 sm:gap-4 px-4 py-2.5 rounded-2xl bg-[#14192B]/95 border border-white/15 shadow-2xl backdrop-blur-md">
+    <div className="flex items-center gap-3 sm:gap-4 px-5 py-3 rounded-2xl bg-slate-950/75 border border-white/15 shadow-[0_12px_40px_rgba(0,0,0,0.55)] backdrop-blur-2xl">
       {/* Microphone Toggle Button */}
       <button
         type="button"
         onClick={toggleMic}
         title={isMicMuted ? 'Unmute microphone' : 'Mute microphone'}
-        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm ${
+        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm ${
           isMicMuted
-            ? 'bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30'
-            : 'bg-white/10 border border-white/15 text-white hover:bg-white/20'
+            ? 'bg-red-600/90 hover:bg-red-600 text-white shadow-red-600/20'
+            : 'bg-white/10 hover:bg-white/20 text-white border border-white/10'
         }`}
       >
-        {isMicMuted ? (
-          <>
-            <MicOff className="w-4 h-4 text-red-400" />
-            <span>Unmute</span>
-          </>
-        ) : (
-          <>
-            <Mic className="w-4 h-4 text-emerald-400" />
-            <span>Mute</span>
-          </>
-        )}
+        {isMicMuted ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+        <span>{isMicMuted ? 'Unmute' : 'Mute'}</span>
       </button>
 
       {/* Camera Toggle Button */}
@@ -87,33 +78,24 @@ function CustomCallControls({ onLeave }: { onLeave: () => void }) {
         type="button"
         onClick={toggleCam}
         title={isCamMuted ? 'Turn on camera' : 'Turn off camera'}
-        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-sm ${
+        className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-sm ${
           isCamMuted
-            ? 'bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30'
-            : 'bg-white/10 border border-white/15 text-white hover:bg-white/20'
+            ? 'bg-red-600/90 hover:bg-red-600 text-white shadow-red-600/20'
+            : 'bg-white/10 hover:bg-white/20 text-white border border-white/10'
         }`}
       >
-        {isCamMuted ? (
-          <>
-            <VideoOff className="w-4 h-4 text-red-400" />
-            <span>Start Video</span>
-          </>
-        ) : (
-          <>
-            <Video className="w-4 h-4 text-emerald-400" />
-            <span>Stop Video</span>
-          </>
-        )}
+        {isCamMuted ? <VideoOff className="w-4 h-4" /> : <Video className="w-4 h-4" />}
+        <span>{isCamMuted ? 'Start Video' : 'Stop Video'}</span>
       </button>
 
-      <div className="w-px h-6 bg-white/10 mx-1 hidden sm:block" />
+      <div className="w-px h-6 bg-white/15 mx-1 hidden sm:block" />
 
       {/* End Call Button */}
       <button
         type="button"
         onClick={onLeave}
         title="Leave consultation call"
-        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/30 transition-all active:scale-95 cursor-pointer"
+        className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/30 transition-all active:scale-95 cursor-pointer"
       >
         <PhoneOff className="w-4 h-4" />
         <span>End Call</span>
@@ -243,11 +225,12 @@ export default function StreamConsultationCall({ appointmentId, onLeave }: Props
   return (
     <StreamVideo client={client}>
       <StreamCall call={call}>
-        <div className="str-video str-video__theme-dark str-video__call-layout flex h-full w-full flex-col bg-[#0A0D18] text-white">
-          <div className="min-h-0 flex-1 relative w-full h-full">
+        <div className="str-video str-video__theme-dark str-video__call-layout flex h-full w-full flex-col bg-[#0A0D18] text-white relative">
+          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(0,168,132,0.1),_transparent_70%)] z-0" />
+          <div className="min-h-0 flex-1 relative w-full h-full z-10">
             <SpeakerLayout />
           </div>
-          <div className="shrink-0 border-t border-white/10 bg-[#0B0F1D]/90 backdrop-blur-md p-3.5 flex items-center justify-center">
+          <div className="shrink-0 border-t border-white/10 bg-[#0B0F1D]/80 backdrop-blur-xl p-3.5 flex items-center justify-center z-10">
             <CustomCallControls onLeave={onLeave} />
           </div>
         </div>

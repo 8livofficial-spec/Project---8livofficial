@@ -73,19 +73,20 @@ type AssignmentDetails = {
   meetingType: string
 }
 
-// Design System Tokens
+// Design System Tokens - Harmonized with 8liv Emerald Green & Clean Slate System
 const designTokens = {
   colors: {
-    primary: '#1A1F36',
-    primaryHover: '#0D101C',
-    secondary: '#C4622D',
-    success: '#5C7A6B',
-    background: '#F5F0EB',
+    primary: '#0F172A',
+    primaryHover: '#1E293B',
+    secondary: '#00A884',
+    secondaryHover: '#0A8F70',
+    success: '#00A884',
+    background: '#F8FAFC',
     surface: '#FFFFFF',
-    border: 'rgba(26, 31, 54, 0.08)',
-    textPrimary: '#1A1F36',
-    textSecondary: '#40516A',
-    textTertiary: '#8896A4',
+    border: '#E2E8F0',
+    textPrimary: '#0F172A',
+    textSecondary: '#475569',
+    textTertiary: '#94A3B8',
   },
   borderRadius: {
     sm: '0.5rem',
@@ -391,12 +392,9 @@ export default function ConsultationSchedulingPage() {
     (assessment as any)?.created_at ||
     onboardingState.assessmentStatus === 'COMPLETED'
   )
-  const isNotEligible = rawEligibility === 'NOT_ELIGIBLE'
-  const isEligible = rawEligibility === 'ELIGIBLE' || rawEligibility === 'REVIEW_REQUIRED' || Boolean((assessment as any)?.is_eligible)
-
-  if (!assessmentCompleted || isNotEligible || !isEligible) {
+  if (!assessmentCompleted) {
     if (typeof window !== 'undefined') {
-      router.replace(isNotEligible ? '/not-eligible' : '/assessment')
+      router.replace('/assessment')
     }
     return (
       <div className="min-h-[50vh] flex items-center justify-center text-[#C4622D]">
@@ -1295,37 +1293,35 @@ export default function ConsultationSchedulingPage() {
                               setSelectedDate(date)
                               void loadSlotsForDate(date)
                             }}
-                            className="min-w-24 rounded-2xl border-2 px-4 py-3 text-center transition-all duration-200 hover:-translate-y-0.5"
-                            style={{
-                              borderColor: selected ? designTokens.colors.primary : designTokens.colors.border,
-                              backgroundColor: selected ? designTokens.colors.primary : designTokens.colors.surface,
-                              color: selected ? '#FFFFFF' : designTokens.colors.textPrimary,
-                              boxShadow: selected ? designTokens.shadows.md : 'none'
-                            }}
+                            className={`min-w-24 rounded-2xl border-2 px-4 py-3 text-center transition-all duration-200 hover:-translate-y-0.5 cursor-pointer ${
+                              selected
+                                ? 'border-[#00A884] bg-[#00A884] text-white shadow-md shadow-[#00A884]/20'
+                                : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300'
+                            }`}
                           >
                             <span className="block text-xs font-bold">{getDateHeading(date)}</span>
                             <span className="block text-2xl font-bold leading-tight mt-1">{parts.day}</span>
-                            <span className="block text-[11px] font-semibold opacity-75">{parts.weekday}</span>
+                            <span className="block text-[11px] font-semibold opacity-80">{parts.weekday}</span>
                           </button>
                         )
                       })}
                     </div>
                   </div>
 
-                  <div className="rounded-2xl border p-5" style={{ borderColor: designTokens.colors.border, backgroundColor: `${designTokens.colors.background}70` }}>
+                  <div className="rounded-2xl border border-slate-200 p-5 bg-slate-50/60">
                     <div className="mb-5">
-                      <h3 className="text-lg font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                      <h3 className="text-lg font-bold text-slate-900">
                         {selectedDate ? getDateHeading(selectedDate) : 'Selected Date'}
                       </h3>
-                      <p className="text-xs font-semibold mt-1" style={{ color: designTokens.colors.textTertiary }}>
+                      <p className="text-xs font-semibold mt-1 text-slate-500">
                         {selectedDate ? formatSlotDate(selectedDate, true) : 'Choose a date above'}
                       </p>
                     </div>
 
                     {dateSlotsLoading ? (
-                      <div className="flex items-center gap-3 rounded-xl p-5 border bg-white" style={{ borderColor: designTokens.colors.border }}>
-                        <div className="w-7 h-7 border-4 border-[#F5F0EB] border-t-[#C4622D] rounded-full animate-spin" />
-                        <p className="text-sm font-semibold" style={{ color: designTokens.colors.textSecondary }}>
+                      <div className="flex items-center gap-3 rounded-xl p-5 border border-slate-200 bg-white">
+                        <div className="w-6 h-6 border-3 border-emerald-100 border-t-[#00A884] rounded-full animate-spin" />
+                        <p className="text-sm font-semibold text-slate-600">
                           Loading available slots for this date...
                         </p>
                       </div>
@@ -1338,8 +1334,8 @@ export default function ConsultationSchedulingPage() {
                           return (
                             <div key={period}>
                               <div className="flex items-center gap-2 mb-3">
-                                <Icon className="w-4 h-4" style={{ color: designTokens.colors.secondary }} />
-                                <p className="text-xs font-bold uppercase tracking-wider" style={{ color: designTokens.colors.textSecondary }}>
+                                <Icon className="w-4 h-4 text-[#00A884]" />
+                                <p className="text-xs font-bold uppercase tracking-wider text-slate-600">
                                   {periodMeta[period].label}
                                 </p>
                               </div>
@@ -1351,16 +1347,14 @@ export default function ConsultationSchedulingPage() {
                                       key={`${slot.available_date}-${slot.time_slot}`}
                                       type="button"
                                       onClick={() => setSelectedSlot(slot)}
-                                      className="rounded-2xl border-2 px-4 py-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md"
-                                      style={{
-                                        borderColor: selected ? designTokens.colors.primary : designTokens.colors.border,
-                                        backgroundColor: selected ? `${designTokens.colors.primary}10` : designTokens.colors.surface,
-                                        color: selected ? designTokens.colors.primary : designTokens.colors.textPrimary,
-                                        boxShadow: selected ? designTokens.shadows.md : 'none'
-                                      }}
+                                      className={`rounded-2xl border-2 px-4 py-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-pointer ${
+                                        selected
+                                          ? 'border-[#00A884] bg-emerald-50/70 text-[#00A884] shadow-md shadow-[#00A884]/15'
+                                          : 'border-slate-200 bg-white text-slate-800 hover:border-slate-300'
+                                      }`}
                                     >
                                       <span className="block text-base font-bold">{formatSlotTime(slot.time_slot)}</span>
-                                      <span className="block text-[11px] font-semibold mt-1" style={{ color: designTokens.colors.textTertiary }}>
+                                      <span className="block text-[11px] font-semibold mt-1 text-slate-400">
                                         Video consultation
                                       </span>
                                     </button>
@@ -1372,11 +1366,11 @@ export default function ConsultationSchedulingPage() {
                         })}
                       </div>
                     ) : (
-                      <div className="rounded-xl p-5 border border-dashed text-center bg-white" style={{ borderColor: designTokens.colors.border }}>
-                        <h3 className="text-base font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                      <div className="rounded-xl p-5 border border-dashed border-slate-200 text-center bg-white">
+                        <h3 className="text-base font-bold text-slate-800">
                           No slots available on this date.
                         </h3>
-                        <p className="text-sm mt-2" style={{ color: designTokens.colors.textSecondary }}>
+                        <p className="text-sm mt-2 text-slate-500">
                           Please choose another available date above.
                         </p>
                       </div>
@@ -1384,14 +1378,14 @@ export default function ConsultationSchedulingPage() {
                   </div>
                 </div>
               ) : slotsError ? (
-                <div className="rounded-2xl border p-8 text-center bg-[#FFF8F3]" style={{ borderColor: 'rgba(196, 98, 45, 0.25)' }}>
-                  <div className="w-12 h-12 rounded-full bg-[#C4622D]/10 text-[#C4622D] flex items-center justify-center mx-auto mb-3">
+                <div className="rounded-2xl border border-slate-200 p-8 text-center bg-slate-50/70">
+                  <div className="w-12 h-12 rounded-full bg-emerald-50 text-[#00A884] flex items-center justify-center mx-auto mb-3 border border-emerald-100">
                     <AlertCircle className="w-6 h-6" />
                   </div>
-                  <h3 className="text-base font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                  <h3 className="text-base font-bold text-slate-900">
                     {slotsError}
                   </h3>
-                  <p className="text-xs mt-1.5 max-w-md mx-auto" style={{ color: designTokens.colors.textSecondary }}>
+                  <p className="text-xs mt-1.5 max-w-md mx-auto text-slate-500">
                     {slotsError.toLowerCase().includes('assessment')
                       ? 'Please complete your health intake assessment before proceeding to book your initial physician consultation.'
                       : 'Please check your status or try reloading the latest doctor schedules.'}
@@ -1401,8 +1395,7 @@ export default function ConsultationSchedulingPage() {
                       <button
                         type="button"
                         onClick={() => router.push('/patient/assessment')}
-                        className="px-5 py-2.5 rounded-xl font-bold text-xs text-white transition-all cursor-pointer"
-                        style={{ backgroundColor: designTokens.colors.secondary }}
+                        className="px-5 py-2.5 rounded-xl font-bold text-xs text-white bg-[#00A884] hover:bg-[#0A8F70] transition-all cursor-pointer shadow-sm"
                       >
                         Complete Health Assessment
                       </button>
@@ -1410,8 +1403,7 @@ export default function ConsultationSchedulingPage() {
                       <button
                         type="button"
                         onClick={() => void loadAvailableSlots()}
-                        className="px-5 py-2.5 rounded-xl font-bold text-xs text-white transition-all cursor-pointer"
-                        style={{ backgroundColor: designTokens.colors.primary }}
+                        className="px-5 py-2.5 rounded-xl font-bold text-xs text-white bg-slate-900 hover:bg-slate-800 transition-all cursor-pointer shadow-sm"
                       >
                         Refresh Availability
                       </button>
@@ -1419,7 +1411,7 @@ export default function ConsultationSchedulingPage() {
                   </div>
                 </div>
               ) : (
-                <div className="rounded-xl p-5 border border-dashed text-center" style={{ borderColor: designTokens.colors.border }}>
+                <div className="rounded-xl p-5 border border-dashed border-slate-200 text-center bg-white">
                   <h3 className="text-base font-bold" style={{ color: designTokens.colors.textPrimary }}>
                     No consultation times are currently available.
                   </h3>
@@ -1504,17 +1496,15 @@ export default function ConsultationSchedulingPage() {
 
                 {/* CTA Button */}
                 <button
+                  type="button"
                   onClick={handleConfirmBooking}
                   disabled={(bookingMode === 'slot' ? !selectedSlot : !selectedManualDateTime) || loading || patientDataLoading}
-                  className="w-full py-4 px-6 rounded-xl font-bold text-white transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-lg cursor-pointer"
-                  style={{
-                    backgroundColor: (bookingMode === 'slot' ? selectedSlot : selectedManualDateTime) ? designTokens.colors.primary : designTokens.colors.textTertiary,
-                  }}
+                  className="w-full py-4 px-6 rounded-2xl font-bold text-white transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg cursor-pointer bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] shadow-md shadow-[#00A884]/25 hover:scale-[1.01] active:scale-[0.99]"
                 >
                   {loading ? 'Processing...' : isAlreadyPaid ? 'Confirm Appointment (₹0)' : 'Pay & Confirm Appointment'}
                 </button>
 
-                <p className="text-xs text-center" style={{ color: designTokens.colors.textTertiary }}>
+                <p className="text-xs text-center text-slate-400 font-medium">
                   You can reschedule anytime in your account
                 </p>
               </div>
@@ -1522,14 +1512,16 @@ export default function ConsultationSchedulingPage() {
           </div>
 
           {/* Guidance Section */}
-          <div className="rounded-2xl p-8 border-2 mb-8" style={{ backgroundColor: `${designTokens.colors.secondary}08`, borderColor: `${designTokens.colors.secondary}20` }}>
+          <div className="rounded-3xl p-8 border border-slate-200/80 mb-8 bg-white shadow-xs">
             <div className="flex items-center gap-3 mb-6">
-              <Shield className="w-6 h-6" style={{ color: designTokens.colors.secondary }} />
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-[#00A884] flex items-center justify-center border border-emerald-100">
+                <Shield className="w-5 h-5" />
+              </div>
               <div>
-                <h2 className="text-xl font-bold" style={{ color: designTokens.colors.textPrimary }}>
+                <h2 className="text-xl font-bold font-sora text-slate-900">
                   What Happens Next
                 </h2>
-                <p className="text-sm mt-1" style={{ color: designTokens.colors.textSecondary }}>
+                <p className="text-sm mt-0.5 text-slate-500 font-sans">
                   Here is how 8Liv handles your consultation after payment.
                 </p>
               </div>

@@ -412,7 +412,7 @@ export async function signPrescription(
     patient_id: prescription.patient_id,
     type: 'prescription_issued',
     title: 'Prescription issued',
-    message: 'Your doctor has issued a signed prescription. Please confirm your delivery address to begin medication fulfillment.',
+    message: 'Your doctor has issued a signed prescription. You can view your clinical protocol and active medication details in your patient portal.',
     is_read: false,
   })
 

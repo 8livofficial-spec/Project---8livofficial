@@ -53,24 +53,20 @@ export function proxy(request: NextRequest) {
     }
   }
 
-  // Only protect /admin, /doctor, /patient and /pharmacy routes
-  if (pathname.startsWith('/admin') || pathname.startsWith('/doctor') || pathname.startsWith('/patient') || pathname.startsWith('/pharmacy')) {
-    // Public exception: /pharmacy/accept-invitation is a token-secured onboarding route
-    if (pathname.startsWith('/pharmacy/accept-invitation')) {
-      return withSeoPrivacyHeaders(NextResponse.next(), pathname);
-    }
+  // Redirect any legacy pharmacy or driver portal route to home
+  if (pathname.startsWith('/pharmacy') || pathname.startsWith('/driver')) {
+    return withSeoPrivacyHeaders(NextResponse.redirect(new URL('/', request.url)), pathname);
+  }
 
+  // Only protect /admin, /doctor, and /patient routes
+  if (pathname.startsWith('/admin') || pathname.startsWith('/doctor') || pathname.startsWith('/patient')) {
     // 1. Verify existence of active Supabase auth session cookie
     const cookieHeader = request.headers.get('cookie') || '';
     const hasAuthCookie = /sb-[a-z0-9_-]+-auth-token|sb-access-token|supabase-auth-token/i.test(cookieHeader);
 
     // If unauthenticated, redirect directly to appropriate login surface
     if (!hasAuthCookie) {
-      const redirectPath = pathname.startsWith('/doctor')
-        ? '/?role=doctor'
-        : pathname.startsWith('/pharmacy')
-        ? '/login?role=pharmacy'
-        : '/login';
+      const redirectPath = pathname.startsWith('/doctor') ? '/?role=doctor' : '/login';
       const loginUrl = new URL(redirectPath, request.url);
       return withSeoPrivacyHeaders(NextResponse.redirect(loginUrl), pathname);
     }
@@ -88,19 +84,14 @@ export function proxy(request: NextRequest) {
         response.cookies.set('user_role', 'patient', { path: '/', maxAge: 86400, sameSite: 'lax' });
         return withSeoPrivacyHeaders(response, pathname);
       }
-      const redirectPath = pathname.startsWith('/doctor')
-        ? '/?role=doctor'
-        : pathname.startsWith('/pharmacy')
-        ? '/login?role=pharmacy'
-        : '/login';
+      const redirectPath = pathname.startsWith('/doctor') ? '/?role=doctor' : '/login';
       const loginUrl = new URL(redirectPath, request.url);
       return withSeoPrivacyHeaders(NextResponse.redirect(loginUrl), pathname);
     }
 
     // Route Protection Logic
     if (pathname.startsWith('/admin') && normalizedRole !== 'ADMIN') {
-      const isPharmacy = Boolean(normalizedRole && ['PHARMACY', 'PHARMACY_STAFF', 'PHARMACY_ADMIN'].includes(normalizedRole));
-      const unauthorizedUrl = new URL(isPharmacy ? '/pharmacy' : '/', request.url);
+      const unauthorizedUrl = new URL('/', request.url);
       return withSeoPrivacyHeaders(NextResponse.redirect(unauthorizedUrl), pathname);
     }
 
@@ -111,15 +102,6 @@ export function proxy(request: NextRequest) {
 
     if (pathname.startsWith('/patient') && normalizedRole !== 'PATIENT') {
       const unauthorizedUrl = new URL('/', request.url);
-      return withSeoPrivacyHeaders(NextResponse.redirect(unauthorizedUrl), pathname);
-    }
-
-    if (pathname.startsWith('/pharmacy')) {
-      const isPharmacyRole = Boolean(normalizedRole && ['PHARMACY', 'PHARMACY_STAFF', 'PHARMACY_ADMIN'].includes(normalizedRole));
-      if (isPharmacyRole || normalizedRole === 'ADMIN') {
-        return withSeoPrivacyHeaders(NextResponse.next(), pathname);
-      }
-      const unauthorizedUrl = new URL('/login?role=pharmacy', request.url);
       return withSeoPrivacyHeaders(NextResponse.redirect(unauthorizedUrl), pathname);
     }
   }

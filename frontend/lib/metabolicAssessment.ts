@@ -11,7 +11,7 @@
 export type BiologicalGender = 'female' | 'male'
 
 export interface AssessmentInputs {
-  gender: BiologicalGender
+  gender: BiologicalGender | ''
   age: number
   heightCm: number
   weightKg: number
@@ -292,13 +292,17 @@ export interface AssessmentResult {
  * Complete assessment calculation wrapper
  */
 export function computeAssessment(inputs: AssessmentInputs): AssessmentResult {
+  const gender = (inputs.gender || 'female') as BiologicalGender
+  const heightCm = inputs.heightCm > 0 ? inputs.heightCm : 165
+  const weightKg = inputs.weightKg > 0 ? inputs.weightKg : 70
+  const waistCm = inputs.waistCm > 0 ? inputs.waistCm : 86
   return {
-    bmi: calculateBmi(inputs.weightKg, inputs.heightCm),
-    waistRisk: calculateWaistRisk(inputs.gender, inputs.waistCm, inputs.heightCm),
-    healthyWeight: calculateHealthyWeightRange(inputs.heightCm),
-    heightFormatted: convertUnits(inputs.heightCm, 'height'),
-    weightFormatted: convertUnits(inputs.weightKg, 'weight'),
-    waistFormatted: convertUnits(inputs.waistCm, 'waist'),
+    bmi: calculateBmi(weightKg, heightCm),
+    waistRisk: calculateWaistRisk(gender, waistCm, heightCm),
+    healthyWeight: calculateHealthyWeightRange(heightCm),
+    heightFormatted: convertUnits(heightCm, 'height'),
+    weightFormatted: convertUnits(weightKg, 'weight'),
+    waistFormatted: convertUnits(waistCm, 'waist'),
   }
 }
 
@@ -310,10 +314,10 @@ export interface ContactData {
   first_name: string
   last_name: string
   phone_number: string
-  pincode: string
-  street_address: string
-  city: string
-  state: string
+  pincode?: string
+  street_address?: string
+  city?: string
+  state?: string
   agree_terms: boolean
 }
 

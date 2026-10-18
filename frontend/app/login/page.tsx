@@ -83,8 +83,6 @@ export default function UnifiedLogin() {
       window.location.href = '/doctor/dashboard'
     } else if (['dietitian', 'trainer', 'fitness_coach', 'nutritionist'].includes(userRole)) {
       window.location.href = '/provider/dashboard'
-    } else if (['PHARMACY', 'PHARMACY_ADMIN', 'PHARMACY_STAFF', 'DELIVERY_PARTNER', 'PHARMACIST'].includes(String(userRole).toUpperCase())) {
-      window.location.href = '/pharmacy'
     } else {
       window.location.href = '/patient'
     }
@@ -121,13 +119,6 @@ export default function UnifiedLogin() {
           }
           if (!role) role = 'patient'
 
-          if (requestedRole === 'pharmacy' && role !== 'pharmacy') {
-            await supabase.auth.signOut()
-            document.cookie = 'user_role=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT'
-            setCheckingAuth(false)
-            return
-          }
-
           syncSupabaseAuthCookie(session)
           document.cookie = `user_role=${role}; path=/; max-age=86400; SameSite=Lax`
 
@@ -137,8 +128,6 @@ export default function UnifiedLogin() {
             router.push('/doctor/dashboard')
           } else if (role === 'dietitian' || role === 'trainer' || role === 'fitness_coach' || role === 'nutritionist') {
             router.push('/provider/dashboard')
-          } else if (['PHARMACY', 'PHARMACY_ADMIN', 'PHARMACY_STAFF', 'DELIVERY_PARTNER', 'PHARMACIST'].includes(String(role).toUpperCase())) {
-            router.push('/pharmacy')
           } else {
             const statusRes = await fetch(`/api/patient/status?patientId=${session.user.id}`, {
               headers: { Authorization: `Bearer ${session.access_token}` },

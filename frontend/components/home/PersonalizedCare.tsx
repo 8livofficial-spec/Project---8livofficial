@@ -1,6 +1,6 @@
 import React from 'react'
 import Link from 'next/link'
-import { ArrowRight, Globe, Mic, PhoneOff, Video, Volume2 } from 'lucide-react'
+import { ArrowRight, Globe, Mic, PhoneOff, Video, Volume2, ShieldCheck } from 'lucide-react'
 import KineticText from '@/components/ui/KineticText'
 import ScrollRevealBox from '@/components/ui/ScrollRevealBox'
 
@@ -159,38 +159,53 @@ export default function PersonalizedCare() {
             </div>
           </ScrollRevealBox>
 
-          {/* ── CARD 3 (RIGHT - COL 3): GLOBAL ACCESS & THREE COACH AVAILABILITIES ── */}
+          {/* ── CARD 3 (RIGHT - COL 3): DEDICATED CARE TEAM ── */}
           <ScrollRevealBox variant="stagger-scale" delay={0.3} className="w-full min-w-0 lg:col-span-3 rounded-3xl bg-white/15 backdrop-blur-xl border border-white/25 p-5 xs:p-6 sm:p-7 text-white flex flex-col justify-between shadow-2xl hover:-translate-y-1 transition-all duration-300">
             <div>
               <div className="flex items-center justify-between mb-4 sm:mb-5">
-                <h3 className="font-sans font-bold text-base sm:text-lg text-white">Global Access</h3>
-                <Globe className="w-5 h-5 text-[#00A884]" />
+                <h3 className="font-sans font-bold text-base sm:text-lg text-white">Dedicated Care Team</h3>
+                <ShieldCheck className="w-5 h-5 text-[#00A884]" />
               </div>
 
-              {/* Stacked Glass Info Tiles */}
-              <div className="space-y-3 mb-4 sm:mb-5">
-                <div className="rounded-2xl p-3 xs:p-3.5 bg-white/10 border border-white/15 text-xs sm:text-sm">
-                  <span className="text-slate-200 block mb-0.5">5 Languages Available</span>
-                  <span className="font-semibold text-white">Hindi, Tamil, Telugu, Kannada, English</span>
+              {/* Care Team Roles - Spacious & Uncongested */}
+              <div className="space-y-3">
+                {/* Lead Physician */}
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-white/10 border border-white/15">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-sans font-bold text-sm text-white">Lead Physician</span>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-teal-300 bg-teal-900/40 px-2 py-0.5 rounded-full border border-teal-500/30">
+                      Doctor-Led
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    General Medicine · Endocrinology · Internal Medicine
+                  </p>
                 </div>
-              </div>
 
-              {/* Care Team Credentials */}
-              <div>
-                <span className="text-xs sm:text-sm text-slate-200 font-medium block mb-2 sm:mb-2.5">Care Team</span>
-                <div className="space-y-2 text-xs sm:text-sm">
-                  <div className="flex justify-between items-center p-2.5 rounded-xl bg-white/10 border border-white/15">
-                    <span className="font-medium text-slate-100">Lead Physician</span>
-                    <span className="text-xs text-slate-300 font-medium">MD / MBBS</span>
+                {/* Clinical Dietitian */}
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-white/10 border border-white/15">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-sans font-bold text-sm text-white">Clinical Dietitian</span>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-teal-300 bg-teal-900/40 px-2 py-0.5 rounded-full border border-teal-500/30">
+                      Nutrition
+                    </span>
                   </div>
-                  <div className="flex justify-between items-center p-2.5 rounded-xl bg-white/10 border border-white/15">
-                    <span className="font-medium text-slate-100">Clinical Dietitian</span>
-                    <span className="text-xs text-slate-300 font-medium">Metabolic Specialist</span>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Metabolic Specialist · Zero-Starvation Indian Meal Plans
+                  </p>
+                </div>
+
+                {/* Fitness Coach */}
+                <div className="p-3.5 sm:p-4 rounded-2xl bg-white/10 border border-white/15">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="font-sans font-bold text-sm text-white">Fitness Coach</span>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-teal-300 bg-teal-900/40 px-2 py-0.5 rounded-full border border-teal-500/30">
+                      Movement
+                    </span>
                   </div>
-                  <div className="flex justify-between items-center p-2.5 rounded-xl bg-white/10 border border-white/15">
-                    <span className="font-medium text-slate-100">Fitness Coach</span>
-                    <span className="text-xs text-slate-300 font-medium">Lean Muscle Coach</span>
-                  </div>
+                  <p className="text-xs text-slate-300 leading-relaxed">
+                    Lean Muscle Retention & Guided Resistance Routines
+                  </p>
                 </div>
               </div>
             </div>

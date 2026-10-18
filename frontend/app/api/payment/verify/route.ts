@@ -107,10 +107,8 @@ export async function POST(request: Request) {
     let expectedMinAmount = 0
     if (paymentType === 'consultation') {
       expectedMinAmount = 499
-    } else if (paymentType === 'membership') {
+    } else if (paymentType === 'membership' || paymentType === 'combined') {
       expectedMinAmount = pricing.finalPrice
-    } else if (paymentType === 'combined') {
-      expectedMinAmount = pricing.finalPrice + 499
     }
 
     const orderRecordedAmount = Number(existingTxn.amount || 0)

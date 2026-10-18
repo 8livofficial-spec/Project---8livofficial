@@ -47,14 +47,38 @@ export async function GET(request: Request, context: RouteContext) {
     let doctorName = '8LIV Medical Specialist'
     let doctorSpecialty = 'Consultant Physician & Endocrinologist'
     if (appointment.doctor_id) {
-      const { data: doc } = await supabaseAdmin
-        .from('doctor_profiles')
-        .select('full_name, specialty')
-        .eq('id', appointment.doctor_id)
+      const { data: prov } = await supabaseAdmin
+        .from('provider_profiles')
+        .select('provider_id, full_name, specialization, qualification')
+        .eq('provider_id', appointment.doctor_id)
         .maybeSingle()
-      if (doc) {
-        doctorName = doc.full_name?.startsWith('Dr.') ? doc.full_name : `Dr. ${doc.full_name || 'Medical Officer'}`
-        doctorSpecialty = doc.specialty || doctorSpecialty
+
+      if (prov?.full_name) {
+        doctorName = prov.full_name.startsWith('Dr.') ? prov.full_name : `Dr. ${prov.full_name}`
+        doctorSpecialty = prov.specialization || prov.qualification || doctorSpecialty
+      } else {
+        const { data: prof } = await supabaseAdmin
+          .from('profiles')
+          .select('id, first_name, last_name, display_id')
+          .eq('id', appointment.doctor_id)
+          .maybeSingle()
+
+        if (prof) {
+          const name = prof.display_id || `${prof.first_name || ''} ${prof.last_name || ''}`.trim()
+          if (name) {
+            doctorName = name.startsWith('Dr.') ? name : `Dr. ${name}`
+          }
+        } else {
+          const { data: doc } = await supabaseAdmin
+            .from('doctor_profiles')
+            .select('full_name, specialty')
+            .eq('id', appointment.doctor_id)
+            .maybeSingle()
+          if (doc?.full_name) {
+            doctorName = doc.full_name.startsWith('Dr.') ? doc.full_name : `Dr. ${doc.full_name}`
+            doctorSpecialty = doc.specialty || doctorSpecialty
+          }
+        }
       }
     }
 

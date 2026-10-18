@@ -448,6 +448,13 @@ export default function DoctorPrescriptionBuilderModal({
     patientsList.find((p) => p.id === selectedPatientId)?.first_name ||
     'Selected Patient'
 
+  const resolvedLabReportUrl =
+    consultation?.patient_lab_report_url ||
+    (patient as any)?.patient_lab_report_url ||
+    (patient as any)?.lab_report_url ||
+    (patient as any)?.medical_history?.lab_work?.report_url ||
+    null
+
   const renderFormContent = () => (
     <div className="space-y-6">
       {error && (
@@ -480,6 +487,22 @@ export default function DoctorPrescriptionBuilderModal({
                 <p className="font-bold text-[#8896A4] uppercase tracking-wider text-[10px]">Prescription Mode</p>
                 <p className="font-black text-[#C4622D] text-sm mt-0.5">Encrypted Telemedicine ℞</p>
               </div>
+              {resolvedLabReportUrl && (
+                <div className="col-span-full pt-3 mt-1 border-t border-[#1A1F36]/8 flex items-center justify-between bg-teal-50/70 p-3 rounded-xl border border-teal-200/70">
+                  <span className="text-xs font-bold text-[#0D9488] flex items-center gap-1.5">
+                    <FileCheck className="w-4 h-4 text-[#0D9488]" />
+                    Diagnostic Blood Report Available
+                  </span>
+                  <a
+                    href={resolvedLabReportUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0D9488] hover:bg-[#0B7A6F] text-white text-xs font-bold transition-all shadow-xs"
+                  >
+                    <Eye className="w-3.5 h-3.5" /> View Blood Report (PDF)
+                  </a>
+                </div>
+              )}
             </div>
           </div>
 

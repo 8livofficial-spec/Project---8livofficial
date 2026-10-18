@@ -36,22 +36,15 @@ export default function AdminPrescriptionDetailPage() {
               <h1 className="mt-2 text-3xl font-black">Signed Prescription</h1>
               <div className="mt-4 flex flex-wrap gap-3">
                 {data.signedPdfUrl && <a href={data.signedPdfUrl} target="_blank" className="inline-flex items-center gap-2 rounded-xl bg-[#1A1F36] px-4 py-3 text-sm font-black text-white"><Download className="h-4 w-4" />Signed PDF</a>}
-                {order && <Link href={`/admin/pharmacy-orders/${order.id}`} className="rounded-xl border border-[#1A1F36]/10 px-4 py-3 text-sm font-black">Open fulfilment order</Link>}
               </div>
             </div>
-            <section className="grid gap-4 md:grid-cols-2">
+            <section className="grid gap-4 md:grid-cols-1">
               <Panel title="Clinical Content">
                 <Meta label="Diagnosis" value={rx.diagnosis} />
                 <Meta label="Status" value={rx.status} />
                 <Meta label="Issue date" value={rx.issued_at ? new Date(rx.issued_at).toLocaleString() : '-'} />
                 <Meta label="Valid until" value={rx.valid_until || '-'} />
                 <Meta label="Hash" value={rx.signature_hash || '-'} />
-              </Panel>
-              <Panel title="Partner Pharmacy Fulfilment">
-                <Meta label="Partner" value={order?.partner_pharmacies?.name || 'Licensed Partner Pharmacy'} />
-                <Meta label="Order status" value={order?.status ? order.status.replaceAll('_', ' ') : 'Pending delivery confirmation'} />
-                <Meta label="Order reference" value={order ? `8LIV-PO-${order.id.slice(0, 8).toUpperCase()}` : '-'} />
-                <Meta label="Tracking" value={order?.tracking_number || '-'} />
               </Panel>
             </section>
             <Panel title="Medicines">

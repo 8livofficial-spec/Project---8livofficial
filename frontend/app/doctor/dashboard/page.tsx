@@ -9,7 +9,7 @@ import {
   Activity, Users, CheckCircle2, XCircle, Video, Calendar, Wallet,
   ArrowDownToLine, Pill, FileText, Clock, AlertCircle, LogOut,
   Stethoscope, ChevronRight, Plus, X, TrendingUp, BadgeCheck, Bell, BellRing, UserCheck, Check, PhoneOff, MessageCircle,
-  Eye, EyeOff, Printer, Download, Menu, Settings,
+  Eye, EyeOff, Printer, Download, Menu, Settings, ClipboardList, Scale,
   ShieldCheck, FileCheck, Sparkles, Truck, Search, Filter, Hash, AlertTriangle, Copy,
   RefreshCw, User, PenTool, Apple,
 } from 'lucide-react';
@@ -599,6 +599,9 @@ export default function DoctorDashboard() {
   const [activeCallPatient, setActiveCallPatient] = useState('');
   const [activeCallStatus, setActiveCallStatus] = useState<string>('calling');
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
+  const [activeCallConsultation, setActiveCallConsultation] = useState<Consultation | null>(null);
+  const [showPatientHistoryOnCall, setShowPatientHistoryOnCall] = useState<boolean>(true);
+  const [doctorInCallNotes, setDoctorInCallNotes] = useState<string>('');
   const [callTimer, setCallTimer] = useState<string>('');
   const callTimerRef = useRef<any>(null);
 
@@ -1449,6 +1452,9 @@ export default function DoctorDashboard() {
     setActiveCallPatient(c.patient_name || 'Member');
     setActiveCallStatus('calling');
     setActiveCallId(c.id);
+    setActiveCallConsultation(c);
+    setShowPatientHistoryOnCall(true);
+    setDoctorInCallNotes(c.prescription_notes || '');
 
     // Update status and record call_started_at in DB securely via API
     try {
@@ -1505,6 +1511,7 @@ export default function DoctorDashboard() {
     setActiveCallUrl('');
     setActiveCallPatient('');
     setActiveCallId(null);
+    setActiveCallConsultation(null);
     setCallTimer('');
     if (doctor) loadConsultations(doctor.id);
   };
@@ -1809,39 +1816,236 @@ export default function DoctorDashboard() {
         </div>
       )}
 
-      {/* ACTIVE VIDEO CALL OVERLAY (Stream Video) */}
+      {/* ACTIVE VIDEO CALL OVERLAY (Stream Video with In-Call Patient Medical Dossier) */}
       {activeCallUrl && (
-        <div className="fixed inset-0 z-[100] bg-[#0D101C] flex flex-col">
-          {/* Top Control Bar */}
-          <div className="bg-[#1A1F36] text-white px-4 py-3 flex items-center justify-between border-b border-white/10 shrink-0">
+        <div className="fixed inset-0 z-[100] bg-[#0A0D18] flex flex-col overflow-hidden">
+          {/* Top Control Bar with Glassmorphism */}
+          <div className="bg-slate-900/85 backdrop-blur-2xl border-b border-white/10 px-4 sm:px-6 py-3 flex items-center justify-between text-white shrink-0 z-20 shadow-xl">
             <div className="flex items-center gap-3">
-              <span className="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_rgba(239,68,68,0.8)]"></span>
-              <Video className="w-5 h-5 text-[#C4622D]" />
-              <span className="font-black text-base">Live Consultation — {activeCallPatient}</span>
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></span>
+                <span className="w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+              </div>
+              <div className="hidden md:flex items-center gap-2 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 text-xs font-bold font-sora">
+                <Stethoscope className="w-3.5 h-3.5 text-[#00A884]" />
+                <span className="text-white">8LIV Telehealth Suite</span>
+              </div>
+              <div className="h-4 w-px bg-white/15 hidden md:block" />
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-sm sm:text-base font-sora text-white">
+                  {activeCallPatient}
+                </span>
+                {activeCallConsultation?.patient_age && (
+                  <span className="text-xs text-white/60 hidden sm:inline">
+                    ({activeCallConsultation.patient_age}y)
+                  </span>
+                )}
+              </div>
               {callTimer && (
-                <span className="bg-white/10 text-white font-mono font-black text-sm px-3 py-1 rounded-full border border-white/20">
+                <span className="bg-slate-800/80 text-emerald-400 font-mono font-bold text-xs sm:text-sm px-3 py-1 rounded-full border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
                   ⏱ {callTimer}
                 </span>
               )}
-              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${activeCallStatus === 'calling'
-                  ? 'bg-[#D89A3D]/20 text-[#F0C06A] border border-[#D89A3D]/30'
-                  : 'bg-[#5C7A6B]/25 text-[#DCE8E0] border border-[#5C7A6B]/35'
-                }`}>
+              <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
+                activeCallStatus === 'calling'
+                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
+                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+              }`}>
                 {activeCallStatus === 'calling' ? '📞 Waiting for patient...' : '🟢 Patient Connected'}
               </span>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="text-xs text-white/55 font-semibold hidden sm:block">⚠️ Do not share personal contact details</div>
+
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              {/* Toggle Patient History Option ON CALL ITSELF */}
               <button
-                onClick={endCall}
-                className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-5 rounded-xl text-sm transition-all shadow-lg flex items-center gap-2"
+                type="button"
+                onClick={() => setShowPatientHistoryOnCall(!showPatientHistoryOnCall)}
+                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                  showPatientHistoryOnCall
+                    ? 'bg-[#00A884] hover:bg-[#008f70] text-white shadow-emerald-500/20'
+                    : 'bg-white/10 hover:bg-white/15 text-white/90 border border-white/10'
+                }`}
+                title={showPatientHistoryOnCall ? 'Hide Patient Medical History' : 'Show Patient Medical History'}
               >
-                <PhoneOff className="w-4 h-4" /> End Session
+                <ClipboardList className="w-4 h-4" />
+                <span className="hidden sm:inline">Patient History</span>
+                <span className="text-[10px] uppercase font-bold opacity-80">
+                  {showPatientHistoryOnCall ? 'Hide' : 'View'}
+                </span>
+              </button>
+
+              {/* End Session Button */}
+              <button
+                type="button"
+                onClick={endCall}
+                className="bg-red-600/90 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-xl text-xs sm:text-sm transition-all shadow-lg shadow-red-600/20 flex items-center gap-1.5 cursor-pointer"
+              >
+                <PhoneOff className="w-4 h-4" />
+                <span>End Session</span>
               </button>
             </div>
           </div>
-          <div className="flex-1 w-full bg-[#0D101C]">
-            <StreamConsultationCall appointmentId={activeCallUrl} onLeave={endCall} />
+
+          {/* Main Video & In-Call History Split-Viewport */}
+          <div className="flex-1 w-full min-h-0 flex bg-[#0A0D18] relative overflow-hidden">
+            {/* Video Viewport */}
+            <div className="flex-1 h-full min-w-0 relative flex flex-col bg-[#0A0D18]">
+              {/* Subtle ambient lighting backdrop */}
+              <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(0,168,132,0.12),_transparent_70%)] z-0" />
+              <div className="relative z-10 w-full h-full flex flex-col">
+                <StreamConsultationCall appointmentId={activeCallUrl} onLeave={endCall} />
+              </div>
+            </div>
+
+            {/* In-Call Patient Medical History Drawer / Panel */}
+            {showPatientHistoryOnCall && (
+              <div className="w-full sm:w-[400px] lg:w-[440px] shrink-0 h-full border-l border-white/10 bg-slate-900/95 backdrop-blur-2xl text-white flex flex-col z-20 shadow-2xl">
+                {/* Dossier Header */}
+                <div className="px-5 py-3.5 border-b border-white/10 flex items-center justify-between shrink-0 bg-white/5">
+                  <div className="flex items-center gap-2">
+                    <Activity className="w-4 h-4 text-[#00A884]" />
+                    <div>
+                      <h4 className="font-bold text-sm font-sora text-white">Patient Clinical Dossier</h4>
+                      <p className="text-[10px] text-slate-400">Live Intake &amp; Health History</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowPatientHistoryOnCall(false)}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors"
+                    title="Close Panel"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Dossier Body */}
+                <div className="flex-1 overflow-y-auto p-5 space-y-4 text-xs">
+                  {/* Patient Identity */}
+                  <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-sm text-white">{activeCallPatient}</span>
+                      <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold text-[10px]">
+                        {activeCallConsultation?.patient_eligibility_status || 'Active Member'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-slate-300 text-[11px]">
+                      <div>
+                        <span className="text-slate-400">Age: </span>
+                        <span className="font-semibold text-white">{activeCallConsultation?.patient_age || '—'} yrs</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400">Phone: </span>
+                        <span className="font-semibold text-white">{activeCallConsultation?.patient_phone || 'Verified'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Vitals Grid */}
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Weight</p>
+                      <p className="text-base font-extrabold text-white mt-0.5">
+                        {activeCallConsultation?.patient_weight ? `${activeCallConsultation.patient_weight} kg` : '—'}
+                      </p>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">Goal Weight</p>
+                      <p className="text-base font-extrabold text-[#00A884] mt-0.5">
+                        {activeCallConsultation?.patient_goal_weight ? `${activeCallConsultation.patient_goal_weight} kg` : '—'}
+                      </p>
+                    </div>
+                    <div className="p-2.5 rounded-xl bg-white/5 border border-white/10">
+                      <p className="text-[10px] text-slate-400 font-bold uppercase">BMI</p>
+                      <p className="text-base font-extrabold text-amber-400 mt-0.5">
+                        {activeCallConsultation?.patient_bmi ? Number(activeCallConsultation.patient_bmi).toFixed(1) : '—'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Medical History & Risk Factors */}
+                  <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-slate-300 font-bold">
+                      <ShieldCheck className="w-3.5 h-3.5 text-[#00A884]" />
+                      <span>Medical History &amp; Comorbidities</span>
+                    </div>
+                    <p className="text-slate-300 leading-relaxed text-[11px] bg-black/20 p-2.5 rounded-xl border border-white/5">
+                      {activeCallConsultation?.patient_history || 'No chronic conditions reported in initial intake.'}
+                    </p>
+                    {activeCallConsultation?.patient_medical_risk_flags && (
+                      <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-200 text-[10px]">
+                        ⚠️ {activeCallConsultation.patient_medical_risk_flags}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Diagnostic Blood Lab Report Link */}
+                  {activeCallConsultation?.patient_lab_report_url && (
+                    <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-emerald-400" />
+                        <div>
+                          <p className="font-bold text-emerald-200 text-xs">Diagnostic Blood Report</p>
+                          <p className="text-[10px] text-emerald-400/80">Uploaded by patient</p>
+                        </div>
+                      </div>
+                      <a
+                        href={activeCallConsultation.patient_lab_report_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 rounded-lg bg-[#00A884] hover:bg-[#008f70] text-white font-bold text-[11px] shadow-sm transition-colors flex items-center gap-1"
+                      >
+                        <span>View PDF</span>
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Lifestyle & Dietary Preferences */}
+                  {activeCallConsultation?.patient_extra_info && (
+                    <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-1">
+                      <p className="font-bold text-slate-300 text-[11px]">Diet &amp; Lifestyle Preferences:</p>
+                      <p className="text-slate-400 leading-relaxed text-[11px]">
+                        {activeCallConsultation.patient_extra_info}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* In-Call Live Doctor Notes */}
+                  <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-bold text-slate-200 text-[11px]">Live Consultation Scratchpad</span>
+                      <span className="text-[10px] text-slate-400">Transferred to prescription</span>
+                    </div>
+                    <textarea
+                      value={doctorInCallNotes}
+                      onChange={(e) => setDoctorInCallNotes(e.target.value)}
+                      placeholder="Type clinical observations, recommended GLP-1 dosage, or lifestyle advice..."
+                      rows={3}
+                      className="w-full rounded-xl bg-slate-950/60 border border-white/15 p-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-[#00A884]"
+                    />
+                  </div>
+
+                  {/* Quick Action: Prepare Prescription */}
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (activeCallConsultation) {
+                          setPrescribeCase(activeCallConsultation);
+                          if (doctorInCallNotes) {
+                            setCompletionNotes(doctorInCallNotes);
+                          }
+                        }
+                      }}
+                      className="w-full py-2.5 rounded-xl bg-[#00A884] hover:bg-[#008f70] text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Pill className="w-3.5 h-3.5" />
+                      <span>Prepare Prescription Now</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1865,6 +2069,22 @@ export default function DoctorDashboard() {
                   <p className="text-xs text-[#C4622D] font-bold mt-1.5">
                     ⏱ Call Duration: {formatDuration(prescribeCase.call_started_at, prescribeCase.call_ended_at)}
                   </p>
+                )}
+                {prescribeCase.patient_lab_report_url && (
+                  <div className="mt-3 pt-3 border-t border-[#1A1F36]/10 flex items-center justify-between">
+                    <span className="text-xs font-bold text-[#1A1F36] flex items-center gap-1.5">
+                      <FileText className="w-4 h-4 text-[#0D9488]" />
+                      Diagnostic Blood Report:
+                    </span>
+                    <a
+                      href={prescribeCase.patient_lab_report_url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0D9488] hover:bg-[#0B7A6F] text-white text-xs font-bold shadow-xs transition-colors"
+                    >
+                      <FileText className="w-3.5 h-3.5" /> View Report (PDF)
+                    </a>
+                  </div>
                 )}
               </div>
 

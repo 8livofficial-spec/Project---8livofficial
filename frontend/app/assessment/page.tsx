@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft } from 'lucide-react'
+import { ArrowLeft, Lock } from 'lucide-react'
 import { supabase, syncSupabaseAuthCookie } from '@/lib/supabaseClient'
 import { getPatientJourneyTarget } from '@/lib/patientJourney'
 import { logJourneyDebug } from '@/lib/logger'
@@ -47,11 +47,6 @@ export default function AssessmentPage() {
             return
           } else if (role === 'doctor') {
             router.replace('/doctor/dashboard')
-            return
-          } else if (
-            ['PHARMACY', 'PHARMACY_ADMIN', 'PHARMACY_STAFF'].includes(String(role).toUpperCase())
-          ) {
-            router.replace('/pharmacy')
             return
           } else {
             const res = await fetch(`/api/patient/status?patientId=${session.user.id}`, {
@@ -106,29 +101,25 @@ export default function AssessmentPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#FAFBF9] py-6 sm:py-10 px-4 relative flex flex-col items-center justify-start overflow-hidden">
-      {/* Ambient Atmospheric Glow */}
-      <div className="absolute top-0 inset-x-0 h-96 bg-[radial-gradient(ellipse_at_top,rgba(0,168,132,0.1),transparent_70%)] pointer-events-none" />
-      <div className="absolute bottom-0 right-0 w-96 h-96 bg-[radial-gradient(circle,rgba(0,168,132,0.05),transparent_70%)] pointer-events-none" />
+    <main className="min-h-screen bg-gradient-to-b from-[#F7F9F6] via-[#F1F5EF] to-[#E9F0E7] py-6 sm:py-12 px-4 relative flex flex-col items-center justify-start overflow-hidden">
+      {/* Ambient Atmospheric Caustic Glows */}
+      <div className="absolute top-0 inset-x-0 h-[480px] bg-[radial-gradient(ellipse_at_top,rgba(0,168,132,0.16),transparent_72%)] pointer-events-none" />
+      <div className="absolute top-1/3 left-0 w-80 h-80 bg-[radial-gradient(circle,rgba(0,168,132,0.08),transparent_70%)] pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-[500px] h-[500px] bg-[radial-gradient(circle,rgba(0,168,132,0.07),transparent_70%)] pointer-events-none" />
 
       {/* Top Header */}
-      <div className="w-full max-w-[580px] mb-6 flex items-center justify-between relative z-10">
+      <div className="w-full max-w-[580px] lg:max-w-[1040px] mb-5 flex items-center justify-start relative z-10 px-1 transition-all duration-300">
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-xs sm:text-sm font-sans font-semibold text-slate-600 hover:text-[#00A884] bg-white/80 hover:bg-white backdrop-blur-md px-3.5 py-1.5 rounded-full border border-slate-200/80 shadow-2xs transition-all"
+          className="inline-flex items-center gap-2 text-xs sm:text-sm font-sans font-semibold text-slate-600 hover:text-[#00A884] bg-white/90 hover:bg-white backdrop-blur-md px-3.5 py-1.5 rounded-full border border-slate-200/90 shadow-2xs transition-all cursor-pointer hover:shadow-xs"
         >
           <ArrowLeft className="w-4 h-4 text-[#00A884]" />
           <span>Back to 8Liv</span>
         </Link>
-        
-        <div className="flex items-center gap-2 text-xs font-sans font-medium text-slate-500 bg-white/60 backdrop-blur-md px-3 py-1 rounded-full border border-slate-200/60">
-          <span className="w-2 h-2 rounded-full bg-[#00A884]" />
-          <span>Clinical Telehealth Assessment</span>
-        </div>
       </div>
 
       {resumeNotice && (
-        <div className="w-full max-w-[580px] mb-4 p-3.5 bg-amber-50/90 border border-amber-200/80 text-amber-900 text-xs rounded-2xl shadow-xs relative z-10 font-sans">
+        <div className="w-full max-w-[580px] lg:max-w-[1040px] mb-4 p-3.5 bg-amber-50/90 border border-amber-200/80 text-amber-900 text-xs rounded-2xl shadow-xs relative z-10 font-sans transition-all duration-300">
           {resumeNotice}
         </div>
       )}

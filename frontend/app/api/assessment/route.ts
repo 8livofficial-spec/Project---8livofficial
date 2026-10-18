@@ -224,6 +224,18 @@ export async function POST(request: Request) {
     }
 
     const patientId = await resolveAssessmentPatientId(request, userId)
+
+    const age = Number(formData.age)
+    const heightCm = Number(formData.height_cm)
+    const weightKg = Number(formData.weight_kg)
+
+    if (!age || isNaN(age) || age < 18) {
+      return NextResponse.json({ error: 'Please enter a valid adult age (18 or older).' }, { status: 400 })
+    }
+    if (!heightCm || isNaN(heightCm) || !weightKg || isNaN(weightKg)) {
+      return NextResponse.json({ error: 'Please provide valid height and weight measurements.' }, { status: 400 })
+    }
+
     const eligibility = evaluateEligibility(formData)
     const normalizedPhone = normalizePhoneNumber(formData.phone_number)
     if (!normalizedPhone.isValid) {
@@ -252,20 +264,12 @@ export async function POST(request: Request) {
       // but ideally we should log this in an error tracking system.
     }
 
-    const composedAddress = formData.address || [
-      formData.street_address,
-      formData.city,
-      formData.state,
-      formData.pincode ? `PIN: ${formData.pincode}` : '',
-    ].filter(Boolean).join(', ')
-
     const assessmentPayload = {
       patient_id: patientId,
       first_name: formData.first_name,
       last_name: formData.last_name,
       age: parseInt(formData.age) || null,
       phone_number: normalizedPhone.e164,
-      address: composedAddress || null,
       agree_terms: formData.agree_terms,
       height_cm: parseFloat(formData.height_cm) || null,
       weight_kg: parseFloat(formData.weight_kg) || null,
@@ -299,6 +303,9 @@ export async function POST(request: Request) {
         lab_work: {
           preference: formData.lab_preference || 'none',
           report_url: formData.lab_report_url || null,
+          collection_address: formData.lab_collection_address || null,
+          collection_city: formData.lab_collection_city || null,
+          collection_pincode: formData.lab_collection_pincode || null,
         }
       },
       is_eligible: eligibility.status !== 'NOT_ELIGIBLE',

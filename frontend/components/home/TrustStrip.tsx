@@ -11,9 +11,9 @@ const trustPillars = [
     detail: 'Board-Certified Indian Physicians',
   },
   {
-    icon: <Truck className="w-4 h-4 text-[#00A884]" />,
-    label: 'Doorstep Cold Delivery',
-    detail: 'Discreet & Temperature-Controlled',
+    icon: <ShieldCheck className="w-4 h-4 text-[#00A884]" />,
+    label: 'Direct Clinical Prescriptions',
+    detail: 'Authenticated Digital Rx Access',
   },
   {
     icon: <Utensils className="w-4 h-4 text-[#00A884]" />,

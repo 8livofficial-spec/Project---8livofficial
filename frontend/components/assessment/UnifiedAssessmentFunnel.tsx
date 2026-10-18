@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useId, useRef } from 'react'
+import React, { useState, useEffect, useId, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   BiologicalGender,
@@ -8,7 +8,6 @@ import {
   convertUnits,
   computeAssessment,
   formatPhoneNumberLive,
-  isValidPincode,
   validatePasswordStrength,
   COMMON_COMORBIDITY_OPTIONS,
   SENSITIVE_SAFETY_QUESTIONS,
@@ -42,6 +41,8 @@ import {
   CheckCircle,
   Minus,
   Plus,
+  Stethoscope,
+  Star,
 } from 'lucide-react'
 import {
   ScreenerWelcomeIllustration,
@@ -52,7 +53,7 @@ import {
   WeightIllustration,
   WaistIllustration,
   DoctorConsultationIllustration,
-  PrescriptionDeliveryIllustration,
+  PatientProfileIllustration,
   VitalsTelemetryIllustration,
   SafetyShieldIllustration,
   HealthHistoryIllustration,
@@ -100,24 +101,79 @@ async function fetchJsonWithTimeout(url: string, options: RequestInit, timeoutMs
   }
 }
 
+const SCREENER_STEPS = [
+  { id: 1, label: 'Sex', fullTitle: 'Biological Profile', description: 'Metabolic baseline' },
+  { id: 2, label: 'Age', fullTitle: 'Age Verification', description: 'Adult clinical eligibility' },
+  { id: 3, label: 'Height', fullTitle: 'Height Stature', description: 'Body surface area' },
+  { id: 4, label: 'Weight', fullTitle: 'Current Weight', description: 'Dosage calibration' },
+  { id: 5, label: 'Waist', fullTitle: 'Waist Measurement', description: 'Visceral fat ratio' },
+]
+
+
+
+const INTAKE_STEPS = [
+  { step: 1, label: 'Profile' },
+  { step: 2, label: 'Vitals' },
+  { step: 3, label: 'Safety' },
+  { step: 4, label: 'History' },
+  { step: 5, label: 'Lab' },
+  { step: 6, label: 'Meds' },
+  { step: 7, label: 'Account' },
+]
+
 function IntakeProgressBar({ currentStep, title }: { currentStep: number; title: string }) {
   return (
-    <div className="mb-7 pb-5 border-b border-stone-100">
-      <div className="flex items-center justify-between text-xs font-mono font-medium text-slate-400 mb-2.5">
-        <span className="text-[#00A884] font-semibold tracking-wider">Stage 0{currentStep} of 07</span>
-        <span className="text-slate-500 font-sans font-medium">{title}</span>
+    <div className="mb-7 pb-4 border-b border-slate-100 select-none">
+      <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-2.5">
+        {INTAKE_STEPS.map((s) => {
+          const isPast = s.step < currentStep
+          const isCurrent = s.step === currentStep
+          return (
+            <div
+              key={s.step}
+              className={`flex flex-col items-center py-1.5 px-0.5 rounded-lg transition-all text-center ${
+                isCurrent
+                  ? 'bg-emerald-50/80 text-[#00A884] font-bold'
+                  : isPast
+                  ? 'bg-slate-50 text-slate-700'
+                  : 'bg-transparent text-slate-300'
+              }`}
+            >
+              <div className="flex items-center gap-1">
+                {isPast ? (
+                  <span className="w-3 h-3 rounded-full bg-[#00A884] text-white flex items-center justify-center text-[8px] font-bold">
+                    ✓
+                  </span>
+                ) : (
+                  <span
+                    className={`w-3 h-3 rounded-full flex items-center justify-center text-[9px] font-mono ${
+                      isCurrent ? 'bg-[#00A884] text-white' : 'bg-slate-200 text-slate-500'
+                    }`}
+                  >
+                    {s.step}
+                  </span>
+                )}
+                <span className="text-[10px] sm:text-[11px] truncate hidden md:inline">{s.label}</span>
+              </div>
+              <div className="w-full h-1 mt-1 rounded-full overflow-hidden bg-slate-200/70">
+                <div
+                  className={`h-full transition-all duration-300 ${
+                    isPast || isCurrent ? 'bg-[#00A884]' : 'bg-transparent'
+                  }`}
+                />
+              </div>
+            </div>
+          )
+        })}
       </div>
-      <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex gap-1.5">
-        {[1, 2, 3, 4, 5, 6, 7].map((s) => (
-          <div
-            key={s}
-            className={`h-full flex-1 rounded-full transition-all duration-300 ${
-              currentStep >= s
-                ? 'bg-gradient-to-r from-[#00A884] to-[#0A8F70]'
-                : 'bg-slate-200/60'
-            }`}
-          />
-        ))}
+      <div className="flex items-center justify-between text-xs px-0.5">
+        <div className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#00A884] animate-pulse" />
+          <span className="font-semibold text-slate-800">{title}</span>
+        </div>
+        <span className="font-mono text-[11px] text-slate-400">
+          Section {currentStep} of 7
+        </span>
       </div>
     </div>
   )
@@ -148,13 +204,13 @@ export default function UnifiedAssessmentFunnel({
     }
   }, [stage, screenerStep])
 
-  // Screener inputs
+  // Screener inputs (start empty so inputs display placeholders, not pre-filled numbers)
   const [screenerInputs, setScreenerInputs] = useState<AssessmentInputs>({
-    gender: 'female',
-    age: 32,
-    heightCm: 165,
-    weightKg: 76,
-    waistCm: 88,
+    gender: '',
+    age: 0,
+    heightCm: 0,
+    weightKg: 0,
+    waistCm: 0,
   })
 
   // Full clinical intake inputs
@@ -169,13 +225,13 @@ export default function UnifiedAssessmentFunnel({
     state: '',
     agree_terms: false,
 
-    // Vitals
-    height_cm: '165',
-    weight_kg: '76',
-    goal_weight_kg: '65',
-    gender: 'female' as BiologicalGender,
-    age: '32',
-    waist_cm: '88',
+    // Vitals (empty strings with placeholders)
+    height_cm: '',
+    weight_kg: '',
+    goal_weight_kg: '',
+    gender: '' as unknown as BiologicalGender,
+    age: '',
+    waist_cm: '',
     blood_pressure_range: 'normal', // 'normal' | 'stage1' | 'stage2' | 'unknown'
     resting_heart_rate: 'normal',   // 'normal' | 'below60' | 'above100' | 'unknown'
 
@@ -197,6 +253,9 @@ export default function UnifiedAssessmentFunnel({
     // Lab Work
     lab_preference: 'none' as 'none' | 'upload' | 'third_party' | 'skip',
     lab_report_url: '',
+    lab_collection_address: '',
+    lab_collection_city: '',
+    lab_collection_pincode: '',
 
     // Account
     email: '',
@@ -211,9 +270,15 @@ export default function UnifiedAssessmentFunnel({
   const [isMobile, setIsMobile] = useState(false)
   const [resultsRevealStep, setResultsRevealStep] = useState<number>(0)
   
-  // Lab upload state
+  // Waist unit toggle ('in' vs 'cm') with raw string tracking (starts empty to display placeholder)
+  const [waistUnit, setWaistUnit] = useState<'in' | 'cm'>('in')
+  const [waistRaw, setWaistRaw] = useState<string>('')
   const [isUploadingLab, setIsUploadingLab] = useState(false)
   const [uploadError, setUploadError] = useState('')
+
+  // Google Places Autocomplete refs
+  const addressInputRef = useRef<HTMLInputElement>(null)
+  const autocompleteInstanceRef = useRef<any>(null)
 
   // Accessible unique IDs
   const ageId = useId()
@@ -221,6 +286,98 @@ export default function UnifiedAssessmentFunnel({
   const weightId = useId()
   const waistId = useId()
   const goalWeightId = useId()
+
+  // Google Places Autocomplete for doorstep sample collection
+  useEffect(() => {
+    if (formData.lab_preference !== 'third_party') return
+
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY || 'AIzaSyDMBnA2Ud3NySBkP9CrcttVXa5yS_AHmuE'
+
+    const initAutocomplete = () => {
+      const g = typeof window !== 'undefined' ? (window as any).google : null
+      if (!addressInputRef.current || !g?.maps?.places?.Autocomplete) return
+
+      if (autocompleteInstanceRef.current && g.maps.event?.clearInstanceListeners) {
+        g.maps.event.clearInstanceListeners(autocompleteInstanceRef.current)
+      }
+
+      try {
+        const autocomplete = new g.maps.places.Autocomplete(addressInputRef.current, {
+          componentRestrictions: { country: 'in' },
+          fields: ['address_components', 'formatted_address', 'name'],
+          types: ['geocode', 'establishment'],
+        })
+
+        autocomplete.addListener('place_changed', () => {
+          const place = autocomplete.getPlace()
+          if (!place) return
+
+          let postalCode = ''
+          let city = ''
+
+          if (place.address_components) {
+            for (const comp of place.address_components) {
+              const types = comp.types || []
+              if (types.includes('postal_code')) {
+                postalCode = comp.long_name || comp.short_name
+              }
+              if (types.includes('locality')) {
+                city = comp.long_name
+              } else if (!city && types.includes('administrative_area_level_2')) {
+                city = comp.long_name
+              } else if (!city && types.includes('sublocality_level_1')) {
+                city = comp.long_name
+              }
+            }
+          }
+
+          const formatted = place.formatted_address || place.name || addressInputRef.current?.value || ''
+
+          setFormData((prev) => ({
+            ...prev,
+            lab_collection_address: formatted,
+            lab_collection_city: city || prev.lab_collection_city,
+            lab_collection_pincode: postalCode || prev.lab_collection_pincode,
+          }))
+        })
+
+        autocompleteInstanceRef.current = autocomplete
+      } catch (err) {
+        console.warn('Google Places autocomplete init warning:', err)
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const g = (window as any).google
+      if (g?.maps?.places?.Autocomplete) {
+        const t = setTimeout(initAutocomplete, 50)
+        return () => clearTimeout(t)
+      } else {
+        const scriptId = 'google-maps-places-sdk'
+        const existingScript = document.getElementById(scriptId) as HTMLScriptElement
+        if (!existingScript) {
+          const script = document.createElement('script')
+          script.id = scriptId
+          script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`
+          script.async = true
+          script.defer = true
+          script.onload = () => {
+            setTimeout(initAutocomplete, 50)
+          }
+          document.head.appendChild(script)
+        } else {
+          existingScript.addEventListener('load', () => setTimeout(initAutocomplete, 50))
+        }
+      }
+    }
+
+    return () => {
+      const g = typeof window !== 'undefined' ? (window as any).google : null
+      if (autocompleteInstanceRef.current && g?.maps?.event?.clearInstanceListeners) {
+        g.maps.event.clearInstanceListeners(autocompleteInstanceRef.current)
+      }
+    }
+  }, [formData.lab_preference])
 
   // Track mobile viewport vs desktop
   useEffect(() => {
@@ -232,14 +389,15 @@ export default function UnifiedAssessmentFunnel({
     return () => window.removeEventListener('resize', handleResize)
   }, [])
 
-  // Silent progress restore & auto-save (NO draft save badge displayed on screen)
+  // Silent progress restore & auto-save (restores entered vitals & inputs across page reloads/navigations)
   useEffect(() => {
     try {
       const saved = sessionStorage.getItem(STORAGE_KEY)
-      sessionStorage.removeItem(STORAGE_KEY)
       if (saved) {
         const parsed = JSON.parse(saved)
         if (parsed.stage && initialStage === 'screener') setStage(parsed.stage)
+        if (parsed.formData) setFormData((prev) => ({ ...prev, ...parsed.formData }))
+        if (parsed.screenerInputs) setScreenerInputs((prev) => ({ ...prev, ...parsed.screenerInputs }))
       }
     } catch {
       // Ignore session storage errors
@@ -256,14 +414,21 @@ export default function UnifiedAssessmentFunnel({
     })
   }, [initialStage])
 
-  // Save only non-sensitive progress metadata
+  // Save progress metadata and input state to prevent data loss on refresh/navigation
   useEffect(() => {
     try {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ stage }))
+      sessionStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          stage,
+          formData,
+          screenerInputs,
+        })
+      )
     } catch {
       // Silent error
     }
-  }, [stage])
+  }, [stage, formData, screenerInputs])
 
   // Results screen sequential reveal stagger
   useEffect(() => {
@@ -282,11 +447,22 @@ export default function UnifiedAssessmentFunnel({
     }
   }, [stage])
 
-  // Computed live units
-  const heightFormatted = convertUnits(screenerInputs.heightCm, 'height')
-  const weightFormatted = convertUnits(screenerInputs.weightKg, 'weight')
-  const waistFormatted = convertUnits(screenerInputs.waistCm, 'waist')
-  const results = computeAssessment(screenerInputs)
+  // Computed live units (safeguarded against empty inputs during direct typing)
+  const safeAge = screenerInputs.age > 0 ? Math.max(18, Math.min(85, screenerInputs.age)) : 30
+  const safeHeight = screenerInputs.heightCm > 0 ? Math.max(130, Math.min(220, screenerInputs.heightCm)) : 165
+  const safeWeight = screenerInputs.weightKg > 0 ? Math.max(35, Math.min(200, screenerInputs.weightKg)) : 70
+  const safeWaist = screenerInputs.waistCm > 0 ? Math.max(45, Math.min(160, screenerInputs.waistCm)) : 86
+
+  const heightFormatted = convertUnits(safeHeight, 'height')
+  const weightFormatted = convertUnits(safeWeight, 'weight')
+  const waistFormatted = convertUnits(safeWaist, 'waist')
+  const results = computeAssessment({
+    gender: screenerInputs.gender || 'female',
+    age: safeAge,
+    heightCm: safeHeight,
+    weightKg: safeWeight,
+    waistCm: safeWaist,
+  })
 
   // Handle gender selection with smooth feedback and auto-advance
   const handleGenderSelect = (gender: BiologicalGender) => {
@@ -297,15 +473,15 @@ export default function UnifiedAssessmentFunnel({
     }, 240)
   }
 
-  // Prepopulate Vitals from Screener when moving to Intake
+  // Prepopulate Vitals from Screener when moving to Intake (keep empty if screener was 0)
   const startIntakeFromTransition = () => {
     setFormData((prev) => ({
       ...prev,
-      height_cm: prev.height_cm || String(screenerInputs.heightCm),
-      weight_kg: prev.weight_kg || String(screenerInputs.weightKg),
-      waist_cm: prev.waist_cm || String(screenerInputs.waistCm),
-      age: prev.age || String(screenerInputs.age),
-      gender: screenerInputs.gender,
+      height_cm: prev.height_cm || (screenerInputs.heightCm > 0 ? String(screenerInputs.heightCm) : ''),
+      weight_kg: prev.weight_kg || (screenerInputs.weightKg > 0 ? String(screenerInputs.weightKg) : ''),
+      waist_cm: prev.waist_cm || (screenerInputs.waistCm > 0 ? String(screenerInputs.waistCm) : ''),
+      age: prev.age || (screenerInputs.age > 0 ? String(screenerInputs.age) : ''),
+      gender: (screenerInputs.gender || prev.gender) as BiologicalGender,
     }))
     setStage('intake_contact')
   }
@@ -416,6 +592,10 @@ export default function UnifiedAssessmentFunnel({
       const passwordError = validatePasswordStrength(formData.password)
       if (passwordError) throw new Error(passwordError)
 
+      if (!formData.phone_number || formData.phone_number.replace(/\D/g, '').length < 10) {
+        throw new Error('Please enter a valid mobile number with country code (e.g. +91 98765 43210).')
+      }
+
       const { data: { session } } = await supabase.auth.getSession()
       let userId = session?.user.id || currentUserId
       const accessToken = session?.access_token || null
@@ -428,8 +608,9 @@ export default function UnifiedAssessmentFunnel({
           body: JSON.stringify({
             email: formData.email,
             password: formData.password,
-            firstName: formData.first_name,
-            lastName: formData.last_name,
+            firstName: formData.first_name || (formData.email.split('@')[0] || 'Patient'),
+            lastName: formData.last_name || '',
+            phoneNumber: formData.phone_number,
           }),
         })
         if (!signupRes.ok) {
@@ -449,7 +630,11 @@ export default function UnifiedAssessmentFunnel({
           userId,
           formData: {
             ...formData,
-            waist_cm: screenerInputs.waistCm,
+            first_name: formData.first_name || (formData.email ? formData.email.split('@')[0] : 'Patient'),
+            age: formData.age || (screenerInputs.age > 0 ? String(screenerInputs.age) : '30'),
+            height_cm: formData.height_cm || (screenerInputs.heightCm > 0 ? String(screenerInputs.heightCm) : '165'),
+            weight_kg: formData.weight_kg || (screenerInputs.weightKg > 0 ? String(screenerInputs.weightKg) : '70'),
+            waist_cm: screenerInputs.waistCm || formData.waist_cm || '86',
           },
         }),
       })
@@ -468,8 +653,7 @@ export default function UnifiedAssessmentFunnel({
 
       if (accessToken) {
         syncSupabaseAuthCookie(session)
-        const target = result.status === 'NOT_ELIGIBLE' ? '/not-eligible' : '/consultation-payment'
-        window.location.href = target
+        window.location.href = '/consultation-payment'
         return
       }
 
@@ -486,13 +670,35 @@ export default function UnifiedAssessmentFunnel({
     }
   }
 
+  // Dynamic stage container max-width to ensure optimal responsive layout on mobile, tablet, and desktop
+  const stageContainerClass = useMemo(() => {
+    switch (stage) {
+      case 'screener':
+        return 'max-w-[580px] md:max-w-[680px]'
+      case 'results':
+        return 'max-w-[580px] md:max-w-[840px] lg:max-w-[920px]'
+      case 'transition':
+        return 'max-w-[580px] md:max-w-[880px] lg:max-w-[960px]'
+      case 'intake_contact':
+      case 'intake_vitals':
+      case 'intake_safety':
+      case 'intake_history':
+      case 'intake_lab':
+      case 'intake_medication':
+      case 'intake_account':
+        return 'max-w-[580px] md:max-w-[760px]'
+      default:
+        return 'max-w-[580px] md:max-w-[680px]'
+    }
+  }, [stage])
+
   /* =========================================================================
      RENDERERS
      ========================================================================= */
 
   return (
     <div ref={topAnchorRef} className={`w-full flex justify-center ${className}`}>
-      <div className="w-full max-w-[580px]">
+      <div className={`w-full ${stageContainerClass} transition-all duration-300 ease-out`}>
         
         {/* ===================================================================
             SCREEN 1: SCREENER (Mobile 1-question view / Desktop 2-column grid)
@@ -501,35 +707,84 @@ export default function UnifiedAssessmentFunnel({
           <div className="bg-white/95 backdrop-blur-xl border border-stone-200/90 rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 md:p-12 text-slate-900 shadow-[0_30px_70px_rgba(0,0,0,0.04),0_10px_20px_rgba(0,0,0,0.02)] transition-all">
             <AssessmentBrandHeader />
             
-            {/* Minimalist Hairline Step Progress */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between text-xs font-mono font-medium text-slate-400 mb-2.5">
-                <span className="text-[#00A884] font-semibold">Step 0{screenerStep} of 05</span>
-                <span>
-                  {screenerStep === 1 && 'Biological Profile'}
-                  {screenerStep === 2 && 'Age Verification'}
-                  {screenerStep === 3 && 'Height Stature'}
-                  {screenerStep === 4 && 'Current Weight'}
-                  {screenerStep === 5 && 'Waist Measurement'}
-                </span>
+            {/* Interactive Clinical Biometric Step Navigator */}
+            <div className="mb-8 select-none">
+              {/* 5 Interactive Step Segments */}
+              <div className="grid grid-cols-5 gap-1.5 sm:gap-2 mb-3">
+                {SCREENER_STEPS.map((s) => {
+                  const isPast = s.id < screenerStep
+                  const isCurrent = s.id === screenerStep
+                  return (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => setScreenerStep(s.id)}
+                      className={`group flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all cursor-pointer relative ${
+                        isCurrent
+                          ? 'bg-emerald-50/90 text-[#00A884] ring-1 ring-[#00A884]/40 shadow-xs'
+                          : isPast
+                          ? 'bg-slate-50 hover:bg-emerald-50/50 text-slate-700 hover:text-[#00A884] border border-slate-200/60'
+                          : 'bg-stone-50/50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 border border-slate-100'
+                      }`}
+                      aria-label={`Jump to ${s.fullTitle}`}
+                      title={`Click to jump to ${s.fullTitle}`}
+                    >
+                      <div className="flex items-center gap-1 sm:gap-1.5">
+                        {isPast ? (
+                          <span className="w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full bg-[#00A884] text-white flex items-center justify-center text-[9px] font-bold shrink-0">
+                            ✓
+                          </span>
+                        ) : (
+                          <span
+                            className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center text-[10px] font-mono font-bold shrink-0 ${
+                              isCurrent
+                                ? 'bg-[#00A884] text-white shadow-xs'
+                                : 'bg-slate-200/80 text-slate-500 group-hover:bg-slate-300'
+                            }`}
+                          >
+                            {s.id}
+                          </span>
+                        )}
+                        <span className="text-[11px] sm:text-xs font-sans font-semibold tracking-tight truncate">
+                          {s.label}
+                        </span>
+                      </div>
+
+                      {/* Interactive hairline segment track */}
+                      <div className="w-full h-1 mt-1.5 rounded-full overflow-hidden bg-slate-200/70">
+                        <div
+                          className={`h-full transition-all duration-300 ${
+                            isPast || isCurrent
+                              ? 'bg-gradient-to-r from-[#00A884] to-[#0A8F70]'
+                              : 'bg-transparent'
+                          }`}
+                        />
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
-              <div className="w-full h-1.5 bg-slate-100 rounded-full overflow-hidden flex gap-1.5">
-                {[1, 2, 3, 4, 5].map((stepNum) => (
-                  <div
-                    key={stepNum}
-                    className={`h-full flex-1 rounded-full transition-all duration-300 ${
-                      screenerStep >= stepNum
-                        ? 'bg-gradient-to-r from-[#00A884] to-[#0A8F70]'
-                        : 'bg-slate-200/60'
-                    }`}
-                  />
-                ))}
+
+              {/* Active Step Context Headline */}
+              <div className="flex items-center justify-between text-xs px-1 text-slate-500 font-sans">
+                <div className="flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#00A884] animate-pulse" />
+                  <span className="font-semibold text-slate-800">
+                    {SCREENER_STEPS[screenerStep - 1].fullTitle}
+                  </span>
+                  <span className="text-slate-400 hidden sm:inline">
+                    · {SCREENER_STEPS[screenerStep - 1].description}
+                  </span>
+                </div>
+                <span className="text-[11px] font-mono font-medium text-slate-400">
+                  {screenerStep} of 5
+                </span>
               </div>
             </div>
 
             {/* 1 Question Per View with Smooth Funnel Animations */}
             <div>
-              {/* Step 1: Biological Gender */}
+                  {/* Step 1: Biological Gender */}
               {screenerStep === 1 && (
                 <div key="step-1" className="animate-funnel-step">
                   <h1 className="font-sans text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#11241A] tracking-tight leading-tight mb-2">
@@ -543,50 +798,65 @@ export default function UnifiedAssessmentFunnel({
                     <button
                       type="button"
                       onClick={() => handleGenderSelect('female')}
-                      className={`p-6 sm:p-7 rounded-2xl border transition-all flex flex-col items-center text-center gap-4 cursor-pointer relative group ${
+                      className={`p-6 sm:p-7 rounded-2xl border transition-all flex flex-col items-center text-center gap-3.5 cursor-pointer relative group ${
                         screenerInputs.gender === 'female'
-                          ? 'bg-emerald-50/70 border-[#00A884] ring-2 ring-[#00A884]/25 shadow-sm'
-                          : 'bg-white border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/50 hover:shadow-xs'
+                          ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-sm'
+                          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 hover:shadow-xs'
                       }`}
                     >
-                      {screenerInputs.gender === 'female' && (
-                        <div className="absolute top-3.5 right-3.5 w-6 h-6 rounded-full bg-[#00A884] text-white flex items-center justify-center shadow-xs">
-                          <Check className="w-3.5 h-3.5 stroke-[3]" />
-                        </div>
-                      )}
-                      <GenderFemaleIllustration className="w-20 h-20 sm:w-24 sm:h-24 transition-transform group-hover:scale-105" />
+                      <div className="absolute top-4 right-4">
+                        {screenerInputs.gender === 'female' ? (
+                          <div className="w-5 h-5 rounded-full bg-[#00A884] text-white flex items-center justify-center shadow-xs">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </div>
+                        ) : (
+                          <div className="w-5 h-5 rounded-full border-2 border-slate-200 group-hover:border-slate-300 transition-colors" />
+                        )}
+                      </div>
+
+                      <GenderFemaleIllustration className="w-16 h-16 sm:w-18 sm:h-18" />
+
                       <div>
-                        <span className="font-sans text-lg font-bold text-[#11241A] block mb-0.5">Female</span>
-                        <span className="font-sans text-xs text-slate-500 font-medium">Biological female</span>
+                        <span className="font-sans text-lg font-bold text-slate-900 block mb-0.5">Female</span>
+                        <span className="font-sans text-xs text-slate-500 font-medium">Biological female physiology</span>
                       </div>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => handleGenderSelect('male')}
-                      className={`p-6 sm:p-7 rounded-2xl border transition-all flex flex-col items-center text-center gap-4 cursor-pointer relative group ${
+                      className={`p-6 sm:p-7 rounded-2xl border transition-all flex flex-col items-center text-center gap-3.5 cursor-pointer relative group ${
                         screenerInputs.gender === 'male'
-                          ? 'bg-emerald-50/70 border-[#00A884] ring-2 ring-[#00A884]/25 shadow-sm'
-                          : 'bg-white border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/50 hover:shadow-xs'
+                          ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-sm'
+                          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 hover:shadow-xs'
                       }`}
                     >
-                      {screenerInputs.gender === 'male' && (
-                        <div className="absolute top-3.5 right-3.5 w-6 h-6 rounded-full bg-[#00A884] text-white flex items-center justify-center shadow-xs">
-                          <Check className="w-3.5 h-3.5 stroke-[3]" />
-                        </div>
-                      )}
-                      <GenderMaleIllustration className="w-20 h-20 sm:w-24 sm:h-24 transition-transform group-hover:scale-105" />
+                      <div className="absolute top-4 right-4">
+                        {screenerInputs.gender === 'male' ? (
+                          <div className="w-5 h-5 rounded-full bg-[#00A884] text-white flex items-center justify-center shadow-xs">
+                            <Check className="w-3 h-3 stroke-[3]" />
+                          </div>
+                        ) : (
+                          <div className="w-5 h-5 rounded-full border-2 border-slate-200 group-hover:border-slate-300 transition-colors" />
+                        )}
+                      </div>
+
+                      <GenderMaleIllustration className="w-16 h-16 sm:w-18 sm:h-18" />
+
                       <div>
-                        <span className="font-sans text-lg font-bold text-[#11241A] block mb-0.5">Male</span>
-                        <span className="font-sans text-xs text-slate-500 font-medium">Biological male</span>
+                        <span className="font-sans text-lg font-bold text-slate-900 block mb-0.5">Male</span>
+                        <span className="font-sans text-xs text-slate-500 font-medium">Biological male physiology</span>
                       </div>
                     </button>
                   </div>
 
                   <button
                     type="button"
-                    onClick={() => setScreenerStep(2)}
-                    className="w-full min-h-[50px] rounded-full bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white font-sans font-bold text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99] transition-all"
+                    disabled={!screenerInputs.gender}
+                    onClick={() => {
+                      if (screenerInputs.gender) setScreenerStep(2)
+                    }}
+                    className="w-full min-h-[50px] rounded-full bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] disabled:opacity-50 disabled:pointer-events-none text-white font-sans font-bold text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99] transition-all"
                   >
                     <span>Continue</span>
                     <ChevronRight className="w-4 h-4" />
@@ -604,33 +874,56 @@ export default function UnifiedAssessmentFunnel({
                     Adult GLP-1 weight management therapies require patients to be 18 years or older.
                   </p>
 
-                  {/* Luxury Biometric Counter */}
+                  {/* Luxury Biometric Counter with Direct Accessible Manual Entry */}
                   <div className="flex items-center justify-center gap-6 my-6 sm:my-8">
                     <button
                       type="button"
-                      onClick={() => setScreenerInputs((p) => ({ ...p, age: Math.max(18, p.age - 1) }))}
-                      disabled={screenerInputs.age <= 18}
-                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs"
-                      aria-label="Decrease age"
+                      onClick={() => setScreenerInputs((p) => ({ ...p, age: Math.max(18, (p.age || 30) - 1) }))}
+                      disabled={screenerInputs.age > 0 && screenerInputs.age <= 18}
+                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-[#00A884]"
+                      aria-label="Decrease age by 1 year"
                     >
                       <Minus className="w-5 h-5" />
                     </button>
 
-                    <div className="text-center min-w-[150px]">
-                      <div className="font-sans text-6xl sm:text-7xl font-extrabold text-[#11241A] tracking-tight tabular-nums">
-                        {screenerInputs.age}
-                      </div>
-                      <div className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 mt-1">
-                        years of age
-                      </div>
+                    <div className="text-center min-w-[160px] flex flex-col items-center">
+                      <input
+                        id={ageId}
+                        type="number"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        min={18}
+                        max={85}
+                        placeholder="30"
+                        value={screenerInputs.age === 0 ? '' : screenerInputs.age}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10)
+                          if (!isNaN(val)) {
+                            setScreenerInputs((prev) => ({ ...prev, age: val }))
+                          }
+                        }}
+                        onBlur={() => {
+                          if (screenerInputs.age > 0) {
+                            setScreenerInputs((prev) => ({
+                              ...prev,
+                              age: Math.max(18, Math.min(85, prev.age)),
+                            }))
+                          }
+                        }}
+                        aria-label="Enter age in years"
+                        className="w-32 sm:w-40 text-center font-sans text-6xl sm:text-7xl font-extrabold text-[#11241A] tracking-tight tabular-nums bg-transparent border-b-2 border-transparent hover:border-slate-300 focus:border-[#00A884] focus:outline-none transition-all p-0 placeholder:text-slate-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none cursor-pointer focus:cursor-text"
+                      />
+                      <label htmlFor={ageId} className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 mt-1 cursor-pointer">
+                        {screenerInputs.age === 0 ? 'years of age' : `${screenerInputs.age} years of age`}
+                      </label>
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => setScreenerInputs((p) => ({ ...p, age: Math.min(85, p.age + 1) }))}
+                      onClick={() => setScreenerInputs((p) => ({ ...p, age: Math.min(85, (p.age || 30) + 1) }))}
                       disabled={screenerInputs.age >= 85}
-                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs"
-                      aria-label="Increase age"
+                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-[#00A884]"
+                      aria-label="Increase age by 1 year"
                     >
                       <Plus className="w-5 h-5" />
                     </button>
@@ -639,16 +932,15 @@ export default function UnifiedAssessmentFunnel({
                   {/* Tactile Range Slider */}
                   <div className="px-2 py-4 mb-4">
                     {(() => {
-                      const percent = ((screenerInputs.age - 18) / (85 - 18)) * 100
+                      const percent = ((safeAge - 18) / (85 - 18)) * 100
                       return (
                         <input
-                          id={ageId}
                           type="range"
                           min={18}
                           max={85}
                           step={1}
                           inputMode="numeric"
-                          value={screenerInputs.age}
+                          value={safeAge}
                           onChange={(e) =>
                             setScreenerInputs((prev) => ({ ...prev, age: Number(e.target.value) }))
                           }
@@ -656,6 +948,7 @@ export default function UnifiedAssessmentFunnel({
                             background: `linear-gradient(to right, #00A884 0%, #00A884 ${percent}%, #E2E8F0 ${percent}%, #E2E8F0 100%)`,
                           }}
                           className="luxury-slider"
+                          aria-label="Age slider control"
                         />
                       )
                     })()}
@@ -675,7 +968,13 @@ export default function UnifiedAssessmentFunnel({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setScreenerStep(3)}
+                      onClick={() => {
+                        setScreenerInputs((prev) => ({
+                          ...prev,
+                          age: prev.age > 0 ? Math.max(18, Math.min(85, prev.age)) : 30,
+                        }))
+                        setScreenerStep(3)
+                      }}
                       className="flex-1 min-h-[50px] rounded-full bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white font-sans font-bold text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99] transition-all"
                     >
                       <span>Continue</span>
@@ -695,33 +994,56 @@ export default function UnifiedAssessmentFunnel({
                     Used to determine baseline body surface area and calculate your clinical metabolic ratio.
                   </p>
 
-                  {/* Luxury Biometric Counter */}
+                  {/* Luxury Biometric Counter with Direct Accessible Manual Entry */}
                   <div className="flex items-center justify-center gap-6 my-6 sm:my-8">
                     <button
                       type="button"
-                      onClick={() => setScreenerInputs((p) => ({ ...p, heightCm: Math.max(130, p.heightCm - 1) }))}
-                      disabled={screenerInputs.heightCm <= 130}
-                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs"
-                      aria-label="Decrease height"
+                      onClick={() => setScreenerInputs((p) => ({ ...p, heightCm: Math.max(130, (p.heightCm || 165) - 1) }))}
+                      disabled={screenerInputs.heightCm > 0 && screenerInputs.heightCm <= 130}
+                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-[#00A884]"
+                      aria-label="Decrease height by 1 cm"
                     >
                       <Minus className="w-5 h-5" />
                     </button>
 
-                    <div className="text-center min-w-[170px]">
-                      <div className="font-sans text-6xl sm:text-7xl font-extrabold text-[#11241A] tracking-tight tabular-nums">
-                        {screenerInputs.heightCm}
-                      </div>
-                      <div className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 mt-1">
-                        cm · {heightFormatted.imperialLabel}
-                      </div>
+                    <div className="text-center min-w-[170px] flex flex-col items-center">
+                      <input
+                        id={heightId}
+                        type="number"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        min={130}
+                        max={220}
+                        placeholder="165"
+                        value={screenerInputs.heightCm === 0 ? '' : screenerInputs.heightCm}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10)
+                          if (!isNaN(val)) {
+                            setScreenerInputs((prev) => ({ ...prev, heightCm: val }))
+                          }
+                        }}
+                        onBlur={() => {
+                          if (screenerInputs.heightCm > 0) {
+                            setScreenerInputs((prev) => ({
+                              ...prev,
+                              heightCm: Math.max(130, Math.min(220, prev.heightCm)),
+                            }))
+                          }
+                        }}
+                        aria-label="Enter height in centimeters"
+                        className="w-32 sm:w-44 text-center font-sans text-6xl sm:text-7xl font-extrabold text-[#11241A] tracking-tight tabular-nums bg-transparent border-b-2 border-transparent hover:border-slate-300 focus:border-[#00A884] focus:outline-none transition-all p-0 placeholder:text-slate-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none cursor-pointer focus:cursor-text"
+                      />
+                      <label htmlFor={heightId} className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 mt-1 cursor-pointer">
+                        {screenerInputs.heightCm === 0 ? 'centimeters (cm)' : `cm · ${heightFormatted.imperialLabel}`}
+                      </label>
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => setScreenerInputs((p) => ({ ...p, heightCm: Math.min(220, p.heightCm + 1) }))}
+                      onClick={() => setScreenerInputs((p) => ({ ...p, heightCm: Math.min(220, (p.heightCm || 165) + 1) }))}
                       disabled={screenerInputs.heightCm >= 220}
-                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs"
-                      aria-label="Increase height"
+                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-[#00A884]"
+                      aria-label="Increase height by 1 cm"
                     >
                       <Plus className="w-5 h-5" />
                     </button>
@@ -730,16 +1052,15 @@ export default function UnifiedAssessmentFunnel({
                   {/* Tactile Range Slider */}
                   <div className="px-2 py-4 mb-4">
                     {(() => {
-                      const percent = ((screenerInputs.heightCm - 130) / (220 - 130)) * 100
+                      const percent = ((safeHeight - 130) / (220 - 130)) * 100
                       return (
                         <input
-                          id={heightId}
                           type="range"
                           min={130}
                           max={220}
                           step={1}
                           inputMode="numeric"
-                          value={screenerInputs.heightCm}
+                          value={safeHeight}
                           onChange={(e) =>
                             setScreenerInputs((prev) => ({ ...prev, heightCm: Number(e.target.value) }))
                           }
@@ -747,6 +1068,7 @@ export default function UnifiedAssessmentFunnel({
                             background: `linear-gradient(to right, #00A884 0%, #00A884 ${percent}%, #E2E8F0 ${percent}%, #E2E8F0 100%)`,
                           }}
                           className="luxury-slider"
+                          aria-label="Height slider control"
                         />
                       )
                     })()}
@@ -766,7 +1088,13 @@ export default function UnifiedAssessmentFunnel({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setScreenerStep(4)}
+                      onClick={() => {
+                        setScreenerInputs((prev) => ({
+                          ...prev,
+                          heightCm: prev.heightCm > 0 ? Math.max(130, Math.min(220, prev.heightCm)) : 165,
+                        }))
+                        setScreenerStep(4)
+                      }}
                       className="flex-1 min-h-[50px] rounded-full bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white font-sans font-bold text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99] transition-all"
                     >
                       <span>Continue</span>
@@ -776,7 +1104,7 @@ export default function UnifiedAssessmentFunnel({
                 </div>
               )}
 
-              {/* Step 4: Weight */}
+              {/* Step 4: Weight (Exclusively KG, No LBS, Direct Editable Number) */}
               {screenerStep === 4 && (
                 <div key="step-4" className="animate-funnel-step">
                   <h1 className="font-sans text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#11241A] tracking-tight leading-tight mb-2">
@@ -786,51 +1114,73 @@ export default function UnifiedAssessmentFunnel({
                     Prescription titrations are calibrated against your starting weight to guarantee safety and efficacy.
                   </p>
 
-                  {/* Luxury Biometric Counter */}
+                  {/* Luxury Biometric Counter with Direct Accessible Manual Entry */}
                   <div className="flex items-center justify-center gap-6 my-6 sm:my-8">
                     <button
                       type="button"
-                      onClick={() => setScreenerInputs((p) => ({ ...p, weightKg: Math.max(35, p.weightKg - 1) }))}
-                      disabled={screenerInputs.weightKg <= 35}
-                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs"
-                      aria-label="Decrease weight"
+                      onClick={() => setScreenerInputs((p) => ({ ...p, weightKg: Math.max(35, (p.weightKg || 70) - 1) }))}
+                      disabled={screenerInputs.weightKg > 0 && screenerInputs.weightKg <= 35}
+                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-[#00A884]"
+                      aria-label="Decrease weight by 1 kg"
                     >
                       <Minus className="w-5 h-5" />
                     </button>
 
-                    <div className="text-center min-w-[170px]">
-                      <div className="font-sans text-6xl sm:text-7xl font-extrabold text-[#11241A] tracking-tight tabular-nums">
-                        {screenerInputs.weightKg}
-                      </div>
-                      <div className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 mt-1">
-                        kg · {weightFormatted.imperialLabel}
-                      </div>
+                    <div className="text-center min-w-[170px] flex flex-col items-center">
+                      <input
+                        id={weightId}
+                        type="number"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        min={35}
+                        max={200}
+                        placeholder="70"
+                        value={screenerInputs.weightKg === 0 ? '' : screenerInputs.weightKg}
+                        onChange={(e) => {
+                          const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10)
+                          if (!isNaN(val)) {
+                            setScreenerInputs((prev) => ({ ...prev, weightKg: val }))
+                          }
+                        }}
+                        onBlur={() => {
+                          if (screenerInputs.weightKg > 0) {
+                            setScreenerInputs((prev) => ({
+                              ...prev,
+                              weightKg: Math.max(35, Math.min(200, prev.weightKg)),
+                            }))
+                          }
+                        }}
+                        aria-label="Enter weight in kilograms"
+                        className="w-32 sm:w-44 text-center font-sans text-6xl sm:text-7xl font-extrabold text-[#11241A] tracking-tight tabular-nums bg-transparent border-b-2 border-transparent hover:border-slate-300 focus:border-[#00A884] focus:outline-none transition-all p-0 placeholder:text-slate-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none cursor-pointer focus:cursor-text"
+                      />
+                      <label htmlFor={weightId} className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 mt-1 cursor-pointer">
+                        {screenerInputs.weightKg === 0 ? 'kilograms (kg)' : `${screenerInputs.weightKg} kg`}
+                      </label>
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => setScreenerInputs((p) => ({ ...p, weightKg: Math.min(200, p.weightKg + 1) }))}
+                      onClick={() => setScreenerInputs((p) => ({ ...p, weightKg: Math.min(200, (p.weightKg || 70) + 1) }))}
                       disabled={screenerInputs.weightKg >= 200}
-                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs"
-                      aria-label="Increase weight"
+                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-[#00A884]"
+                      aria-label="Increase weight by 1 kg"
                     >
                       <Plus className="w-5 h-5" />
                     </button>
                   </div>
 
-                  {/* Tactile Range Slider */}
+                  {/* Tactile Range Slider (Strictly KG) */}
                   <div className="px-2 py-4 mb-4">
                     {(() => {
-                      const percent = ((screenerInputs.weightKg - 35) / (200 - 35)) * 100
+                      const percent = ((safeWeight - 35) / (200 - 35)) * 100
                       return (
                         <input
-                          id={weightId}
                           type="range"
                           min={35}
                           max={200}
                           step={1}
                           inputMode="numeric"
-                          value={screenerInputs.weightKg}
+                          value={safeWeight}
                           onChange={(e) =>
                             setScreenerInputs((prev) => ({ ...prev, weightKg: Number(e.target.value) }))
                           }
@@ -838,12 +1188,13 @@ export default function UnifiedAssessmentFunnel({
                             background: `linear-gradient(to right, #00A884 0%, #00A884 ${percent}%, #E2E8F0 ${percent}%, #E2E8F0 100%)`,
                           }}
                           className="luxury-slider"
+                          aria-label="Weight slider control"
                         />
                       )
                     })()}
                     <div className="flex justify-between text-xs font-mono text-slate-400 mt-2 font-medium">
-                      <span>35 kg (77 lbs)</span>
-                      <span>200 kg (441 lbs)</span>
+                      <span>35 kg</span>
+                      <span>200 kg</span>
                     </div>
                   </div>
 
@@ -857,7 +1208,13 @@ export default function UnifiedAssessmentFunnel({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setScreenerStep(5)}
+                      onClick={() => {
+                        setScreenerInputs((prev) => ({
+                          ...prev,
+                          weightKg: prev.weightKg > 0 ? Math.max(35, Math.min(200, prev.weightKg)) : 70,
+                        }))
+                        setScreenerStep(5)
+                      }}
                       className="flex-1 min-h-[50px] rounded-full bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white font-sans font-bold text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99] transition-all"
                     >
                       <span>Continue</span>
@@ -873,37 +1230,146 @@ export default function UnifiedAssessmentFunnel({
                   <h1 className="font-sans text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#11241A] tracking-tight leading-tight mb-2">
                     What is your waist measurement?
                   </h1>
-                  <p className="font-sans text-sm sm:text-base text-slate-500 mb-8 max-w-lg leading-relaxed">
+                  <p className="font-sans text-sm sm:text-base text-slate-500 mb-6 max-w-lg leading-relaxed">
                     Waist-to-height ratio is the clinical gold standard for assessing visceral fat and metabolic syndrome risk.
                   </p>
 
-                  {/* Luxury Biometric Counter */}
+                  {/* Unit Selector (Inches vs Centimeters) */}
+                  <div className="flex justify-center mb-6">
+                    <div className="inline-flex p-1 rounded-full bg-slate-100 border border-slate-200/80 text-xs font-semibold shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWaistUnit('in')
+                          if (screenerInputs.waistCm > 0) {
+                            setWaistRaw(String(Math.round(screenerInputs.waistCm / 2.54)))
+                          } else {
+                            setWaistRaw('')
+                          }
+                        }}
+                        className={`px-4 py-1.5 rounded-full transition-all cursor-pointer ${
+                          waistUnit === 'in'
+                            ? 'bg-white text-[#00A884] shadow-xs font-bold'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Inches (in)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWaistUnit('cm')
+                          if (screenerInputs.waistCm > 0) {
+                            setWaistRaw(String(screenerInputs.waistCm))
+                          } else {
+                            setWaistRaw('')
+                          }
+                        }}
+                        className={`px-4 py-1.5 rounded-full transition-all cursor-pointer ${
+                          waistUnit === 'cm'
+                            ? 'bg-white text-[#00A884] shadow-xs font-bold'
+                            : 'text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        Centimeters (cm)
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Luxury Biometric Counter with Direct Accessible Manual Entry */}
                   <div className="flex items-center justify-center gap-6 my-6 sm:my-8">
                     <button
                       type="button"
-                      onClick={() => setScreenerInputs((p) => ({ ...p, waistCm: Math.max(45, p.waistCm - 1) }))}
-                      disabled={screenerInputs.waistCm <= 45}
-                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs"
-                      aria-label="Decrease waist"
+                      onClick={() => {
+                        const parsed = parseInt(waistRaw, 10)
+                        if (waistUnit === 'in') {
+                          const current = isNaN(parsed) ? 34 : parsed
+                          const nextVal = Math.max(18, current - 1)
+                          setWaistRaw(String(nextVal))
+                          setScreenerInputs((p) => ({ ...p, waistCm: Math.round(nextVal * 2.54) }))
+                        } else {
+                          const current = isNaN(parsed) ? 86 : parsed
+                          const nextVal = Math.max(45, current - 1)
+                          setWaistRaw(String(nextVal))
+                          setScreenerInputs((p) => ({ ...p, waistCm: nextVal }))
+                        }
+                      }}
+                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-[#00A884]"
+                      aria-label={waistUnit === 'in' ? 'Decrease waist by 1 inch' : 'Decrease waist by 1 cm'}
                     >
                       <Minus className="w-5 h-5" />
                     </button>
 
-                    <div className="text-center min-w-[170px]">
-                      <div className="font-sans text-6xl sm:text-7xl font-extrabold text-[#11241A] tracking-tight tabular-nums">
-                        {screenerInputs.waistCm}
-                      </div>
-                      <div className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 mt-1">
-                        cm · {waistFormatted.imperialLabel}
-                      </div>
+                    <div className="text-center min-w-[170px] flex flex-col items-center">
+                      <input
+                        id={waistId}
+                        type="number"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        min={waistUnit === 'in' ? 18 : 45}
+                        max={waistUnit === 'in' ? 65 : 165}
+                        placeholder={waistUnit === 'in' ? '34' : '86'}
+                        value={waistRaw}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setWaistRaw(val)
+                          const parsed = parseInt(val, 10)
+                          if (!isNaN(parsed) && parsed > 0) {
+                            if (waistUnit === 'in') {
+                              setScreenerInputs((prev) => ({ ...prev, waistCm: Math.round(parsed * 2.54) }))
+                            } else {
+                              setScreenerInputs((prev) => ({ ...prev, waistCm: parsed }))
+                            }
+                          } else {
+                            setScreenerInputs((prev) => ({ ...prev, waistCm: 0 }))
+                          }
+                        }}
+                        onBlur={() => {
+                          const parsed = parseInt(waistRaw, 10)
+                          if (!isNaN(parsed) && parsed > 0) {
+                            if (waistUnit === 'in') {
+                              const clamped = Math.max(18, Math.min(65, parsed))
+                              setWaistRaw(String(clamped))
+                              setScreenerInputs((prev) => ({ ...prev, waistCm: Math.round(clamped * 2.54) }))
+                            } else {
+                              const clamped = Math.max(45, Math.min(165, parsed))
+                              setWaistRaw(String(clamped))
+                              setScreenerInputs((prev) => ({ ...prev, waistCm: clamped }))
+                            }
+                          }
+                        }}
+                        aria-label={waistUnit === 'in' ? 'Enter waist in inches' : 'Enter waist in centimeters'}
+                        className="w-32 sm:w-44 text-center font-sans text-6xl sm:text-7xl font-extrabold text-[#11241A] tracking-tight tabular-nums bg-transparent border-b-2 border-transparent hover:border-slate-300 focus:border-[#00A884] focus:outline-none transition-all p-0 placeholder:text-slate-300 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none cursor-pointer focus:cursor-text"
+                      />
+                      <label htmlFor={waistId} className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 mt-1 cursor-pointer">
+                        {waistRaw ? (
+                          waistUnit === 'in'
+                            ? `inches · ${Math.round((parseInt(waistRaw, 10) || 34) * 2.54)} cm`
+                            : `cm · ${Math.round((parseInt(waistRaw, 10) || 86) / 2.54)}"`
+                        ) : (
+                          waistUnit === 'in' ? 'inches' : 'centimeters'
+                        )}
+                      </label>
                     </div>
 
                     <button
                       type="button"
-                      onClick={() => setScreenerInputs((p) => ({ ...p, waistCm: Math.min(160, p.waistCm + 1) }))}
-                      disabled={screenerInputs.waistCm >= 160}
-                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs"
-                      aria-label="Increase waist"
+                      onClick={() => {
+                        const parsed = parseInt(waistRaw, 10)
+                        if (waistUnit === 'in') {
+                          const current = isNaN(parsed) ? 34 : parsed
+                          const nextVal = Math.min(65, current + 1)
+                          setWaistRaw(String(nextVal))
+                          setScreenerInputs((p) => ({ ...p, waistCm: Math.round(nextVal * 2.54) }))
+                        } else {
+                          const current = isNaN(parsed) ? 86 : parsed
+                          const nextVal = Math.min(165, current + 1)
+                          setWaistRaw(String(nextVal))
+                          setScreenerInputs((p) => ({ ...p, waistCm: nextVal }))
+                        }
+                      }}
+                      className="w-12 h-12 rounded-full border border-slate-200/90 bg-slate-50 hover:bg-slate-100 disabled:opacity-40 text-slate-700 flex items-center justify-center transition-all active:scale-95 cursor-pointer shadow-xs focus:outline-none focus:ring-2 focus:ring-[#00A884]"
+                      aria-label={waistUnit === 'in' ? 'Increase waist by 1 inch' : 'Increase waist by 1 cm'}
                     >
                       <Plus className="w-5 h-5" />
                     </button>
@@ -912,30 +1378,70 @@ export default function UnifiedAssessmentFunnel({
                   {/* Tactile Range Slider */}
                   <div className="px-2 py-4 mb-4">
                     {(() => {
-                      const percent = ((screenerInputs.waistCm - 45) / (160 - 45)) * 100
-                      return (
-                        <input
-                          id={waistId}
-                          type="range"
-                          min={45}
-                          max={160}
-                          step={1}
-                          inputMode="numeric"
-                          value={screenerInputs.waistCm}
-                          onChange={(e) =>
-                            setScreenerInputs((prev) => ({ ...prev, waistCm: Number(e.target.value) }))
-                          }
-                          style={{
-                            background: `linear-gradient(to right, #00A884 0%, #00A884 ${percent}%, #E2E8F0 ${percent}%, #E2E8F0 100%)`,
-                          }}
-                          className="luxury-slider"
-                        />
-                      )
+                      if (waistUnit === 'in') {
+                        const parsed = parseInt(waistRaw, 10)
+                        const currentInches = !isNaN(parsed) && parsed > 0 ? parsed : 34
+                        const clamped = Math.max(18, Math.min(65, currentInches))
+                        const percent = ((clamped - 18) / (65 - 18)) * 100
+                        return (
+                          <>
+                            <input
+                              type="range"
+                              min={18}
+                              max={65}
+                              step={1}
+                              inputMode="numeric"
+                              value={clamped}
+                              onChange={(e) => {
+                                const val = Number(e.target.value)
+                                setWaistRaw(String(val))
+                                setScreenerInputs((prev) => ({ ...prev, waistCm: Math.round(val * 2.54) }))
+                              }}
+                              style={{
+                                background: `linear-gradient(to right, #00A884 0%, #00A884 ${percent}%, #E2E8F0 ${percent}%, #E2E8F0 100%)`,
+                              }}
+                              className="luxury-slider"
+                              aria-label="Waist slider in inches"
+                            />
+                            <div className="flex justify-between text-xs font-mono text-slate-400 mt-2 font-medium">
+                              <span>18 in (45 cm)</span>
+                              <span>65 in (165 cm)</span>
+                            </div>
+                          </>
+                        )
+                      } else {
+                        const parsed = parseInt(waistRaw, 10)
+                        const currentCm = !isNaN(parsed) && parsed > 0 ? parsed : 86
+                        const clamped = Math.max(45, Math.min(165, currentCm))
+                        const percent = ((clamped - 45) / (165 - 45)) * 100
+                        return (
+                          <>
+                            <input
+                              type="range"
+                              min={45}
+                              max={165}
+                              step={1}
+                              inputMode="numeric"
+                              value={clamped}
+                              onChange={(e) => {
+                                const val = Number(e.target.value)
+                                setWaistRaw(String(val))
+                                setScreenerInputs((prev) => ({ ...prev, waistCm: val }))
+                              }}
+                              style={{
+                                background: `linear-gradient(to right, #00A884 0%, #00A884 ${percent}%, #E2E8F0 ${percent}%, #E2E8F0 100%)`,
+                              }}
+                              className="luxury-slider"
+                              aria-label="Waist slider in centimeters"
+                            />
+                            <div className="flex justify-between text-xs font-mono text-slate-400 mt-2 font-medium">
+                              <span>45 cm (18&quot;)</span>
+                              <span>165 cm (65&quot;)</span>
+                            </div>
+                          </>
+                        )
+                      }
                     })()}
-                    <div className="flex justify-between text-xs font-mono text-slate-400 mt-2 font-medium">
-                      <span>45 cm (18&quot;)</span>
-                      <span>160 cm (63&quot;)</span>
-                    </div>
                   </div>
 
                   {/* Inline measurement tip */}
@@ -954,7 +1460,21 @@ export default function UnifiedAssessmentFunnel({
                     </button>
                     <button
                       type="button"
-                      onClick={() => setStage('results')}
+                      onClick={() => {
+                        const parsed = parseInt(waistRaw, 10)
+                        const defaultCm = 86
+                        const finalCm = !isNaN(parsed) && parsed > 0
+                          ? (waistUnit === 'in' ? Math.round(Math.max(18, Math.min(65, parsed)) * 2.54) : Math.max(45, Math.min(165, parsed)))
+                          : defaultCm
+                        setScreenerInputs((prev) => ({
+                          gender: prev.gender || 'female',
+                          age: prev.age > 0 ? prev.age : 30,
+                          heightCm: prev.heightCm > 0 ? prev.heightCm : 165,
+                          weightKg: prev.weightKg > 0 ? prev.weightKg : 70,
+                          waistCm: prev.waistCm > 0 ? prev.waistCm : finalCm,
+                        }))
+                        setStage('results')
+                      }}
                       className="flex-1 min-h-[50px] rounded-full bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white font-sans font-bold text-sm sm:text-base flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-[#00A884]/25 hover:shadow-xl active:scale-[0.99] transition-all"
                     >
                       <span>Calculate Clinical Results</span>
@@ -995,77 +1515,82 @@ export default function UnifiedAssessmentFunnel({
                   Here&apos;s what our assessment found
                 </h1>
               </div>
-              <DoctorConsultationIllustration className="w-20 h-20 sm:w-24 sm:h-24 shrink-0" />
+              <DoctorConsultationIllustration className="w-12 h-12 sm:w-14 sm:h-14 shrink-0" />
             </div>
 
-            {/* 1. BMI Donut Card (Step 1 reveal) */}
-            <div
-              className={`transition-all duration-500 ${
-                resultsRevealStep >= 1 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
-              } ${results.bmi.cardBgClass} border ${results.bmi.cardBorderClass} rounded-2xl p-5 sm:p-6 mb-4 flex items-center gap-4 sm:gap-6 shadow-xs`}
-            >
-              {/* Donut Chart */}
-              <div className="relative w-[80px] h-[80px] shrink-0 flex items-center justify-center">
-                <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
-                  <circle cx="50" cy="50" r="38" fill="none" stroke={results.bmi.trackColorHex} strokeWidth="11" />
-                  <circle
-                    cx="50"
-                    cy="50"
-                    r="38"
-                    fill="none"
-                    stroke={results.bmi.colorHex}
-                    strokeWidth="11"
-                    strokeDasharray={239}
-                    strokeDashoffset={
-                      239 - 239 * Math.max(0.15, Math.min(0.95, (results.bmi.score - 14) / 26))
-                    }
-                    strokeLinecap="round"
-                  />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="font-sans text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
-                    {results.bmi.score}
-                  </span>
+            {/* Clinical Metric Cards: 2-column grid on tablet/desktop, stacked on mobile */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+              {/* 1. BMI Donut Card (Step 1 reveal) */}
+              <div
+                className={`transition-all duration-500 ${
+                  resultsRevealStep >= 1 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
+                } ${results.bmi.cardBgClass} border ${results.bmi.cardBorderClass} rounded-2xl p-5 sm:p-6 flex items-center gap-4 sm:gap-6 shadow-xs h-full`}
+              >
+                {/* Donut Chart */}
+                <div className="relative w-[80px] h-[80px] shrink-0 flex items-center justify-center">
+                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100" aria-hidden="true">
+                    <circle cx="50" cy="50" r="38" fill="none" stroke={results.bmi.trackColorHex} strokeWidth="11" />
+                    <circle
+                      cx="50"
+                      cy="50"
+                      r="38"
+                      fill="none"
+                      stroke={results.bmi.colorHex}
+                      strokeWidth="11"
+                      strokeDasharray={239}
+                      strokeDashoffset={
+                        239 - 239 * Math.max(0.15, Math.min(0.95, (results.bmi.score - 14) / 26))
+                      }
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <span className="font-sans text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
+                      {results.bmi.score}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Lead Headline first, score secondary */}
+                <div>
+                  <h2 className={`font-sans text-base sm:text-lg font-bold leading-snug ${results.bmi.textColorClass}`}>
+                    {results.bmi.headline}
+                  </h2>
+                  <p className={`text-xs sm:text-sm mt-1 leading-relaxed ${results.bmi.subtextColorClass}`}>
+                    {results.bmi.summary}
+                  </p>
                 </div>
               </div>
 
-              {/* Lead Headline first, score secondary */}
-              <div>
-                <h2 className={`font-sans text-base sm:text-lg font-bold leading-snug ${results.bmi.textColorClass}`}>
-                  {results.bmi.headline}
-                </h2>
-                <p className={`text-xs sm:text-sm mt-1 leading-relaxed ${results.bmi.subtextColorClass}`}>
-                  {results.bmi.summary}
-                </p>
-              </div>
-            </div>
-
-            {/* 2. Waist Size Card with Color + Icon + Text badge (Step 2 reveal) */}
-            <div
-              className={`transition-all duration-500 delay-100 ${
-                resultsRevealStep >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
-              } bg-slate-50/80 border border-slate-200/80 rounded-2xl p-5 sm:p-6 mb-4 shadow-xs`}
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Ruler className="w-4 h-4 text-slate-700 rotate-45" />
-                  <span className="font-sans text-sm font-bold text-slate-900">Waist measurement</span>
+              {/* 2. Waist Size Card with Color + Icon + Text badge (Step 2 reveal) */}
+              <div
+                className={`transition-all duration-500 delay-100 ${
+                  resultsRevealStep >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
+                } bg-slate-50/80 border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-xs h-full flex flex-col justify-between`}
+              >
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Ruler className="w-4 h-4 text-slate-700 rotate-45" />
+                      <span className="font-sans text-sm font-bold text-slate-900">Waist measurement</span>
+                    </div>
+                    {/* Never color alone: icon + text + badge */}
+                    <span
+                      className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-semibold border ${results.waistRisk.badgeBgClass} ${results.waistRisk.badgeTextClass} ${results.waistRisk.badgeBorderClass}`}
+                    >
+                      {results.waistRisk.statusTag === 'On track' ? (
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      ) : (
+                        <AlertCircle className="w-3.5 h-3.5" />
+                      )}
+                      <span>{results.waistRisk.statusTag}</span>
+                    </span>
+                  </div>
+                  <p className="text-xs sm:text-sm text-slate-600 mt-2 leading-relaxed">
+                    {results.waistRisk.description}
+                  </p>
                 </div>
-                {/* Never color alone: icon + text + badge */}
-                <span
-                  className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full font-semibold border ${results.waistRisk.badgeBgClass} ${results.waistRisk.badgeTextClass} ${results.waistRisk.badgeBorderClass}`}
-                >
-                  {results.waistRisk.statusTag === 'On track' ? (
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                  ) : (
-                    <AlertCircle className="w-3.5 h-3.5" />
-                  )}
-                  <span>{results.waistRisk.statusTag}</span>
-                </span>
               </div>
-              <p className="text-xs sm:text-sm text-slate-600 mt-2 leading-relaxed">
-                {results.waistRisk.description}
-              </p>
             </div>
 
             {/* 3. Healthy Reference Range & Disclaimer (Step 3 reveal) */}
@@ -1109,59 +1634,123 @@ export default function UnifiedAssessmentFunnel({
         )}
 
         {/* ===================================================================
-            TRANSITION SCREEN (New: Carries score forward, steps & time, privacy)
+            TRANSITION SCREEN (Luxury Clinical Concierge Eligibility Experience)
             =================================================================== */}
         {stage === 'transition' && (
-          <div className="bg-white/95 backdrop-blur-xl border border-stone-200/90 rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 md:p-12 text-slate-900 shadow-[0_30px_70px_rgba(0,0,0,0.04),0_10px_20px_rgba(0,0,0,0.02)] transition-all text-center animate-funnel-step">
+          <div className="bg-white/95 backdrop-blur-2xl border border-stone-200/90 ring-1 ring-black/[0.03] rounded-[28px] sm:rounded-[36px] p-6 sm:p-9 md:p-11 text-slate-900 shadow-[0_30px_80px_-15px_rgba(11,36,26,0.08),0_10px_30px_-5px_rgba(11,36,26,0.04)] transition-all text-left animate-funnel-step">
             <AssessmentBrandHeader />
-            <div className="flex justify-center mb-5">
-              <DoctorConsultationIllustration className="w-24 h-24 sm:w-28 sm:h-28" />
-            </div>
-            <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-emerald-50 border border-emerald-200 text-[#00A884] text-xs font-mono font-semibold uppercase tracking-wider mb-3">
-              <Sparkles className="w-3.5 h-3.5 text-[#00A884]" />
-              Assessment Complete
-            </span>
 
-            <h1 className="font-sans text-2xl sm:text-3xl font-extrabold text-[#11241A] tracking-tight leading-snug">
-              Based on your score, here&apos;s what&apos;s next
-            </h1>
-            <p className="font-sans text-sm text-slate-600 mt-2 leading-relaxed max-w-lg mx-auto">
-              Your body mass ratio of <strong>{results.bmi.score}</strong> indicates that a personalized metabolic weight management protocol can help restore metabolic balance.
-            </p>
+            {/* 1. Status Hero: Verified Clinical Qualification Header */}
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-b from-[#0A2617] via-[#061C10] to-[#030E07] border border-emerald-500/30 p-6 sm:p-7 text-white shadow-xl mb-6">
+              {/* Ambient atmospheric glow flare */}
+              <div className="absolute -top-16 -right-16 w-48 h-48 bg-[#00A884]/25 rounded-full blur-3xl pointer-events-none" />
 
-            {/* Steps & Time Estimate Card */}
-            <div className="my-6 p-5 sm:p-6 rounded-2xl bg-emerald-50/40 border border-emerald-100/80 space-y-4 text-left shadow-xs">
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-[#00A884]/10 text-[#00A884] flex items-center justify-center shrink-0">
-                  <Clock className="w-5 h-5" />
-                </div>
+              <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-5">
                 <div>
-                  <h2 className="font-sans text-sm font-bold text-[#11241A]">5 short sections · ~3 minutes</h2>
-                  <p className="text-xs text-slate-500 mt-0.5">Quickly covers your health vitals, safety checks, and medical history.</p>
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/30 text-teal-300 text-xs font-semibold uppercase tracking-wider mb-3">
+                    <span className="w-2 h-2 rounded-full bg-[#00A884] animate-pulse" />
+                    <span>Clinical Eligibility Confirmed</span>
+                  </div>
+                  <h1 className="font-sans text-2xl sm:text-[28px] font-extrabold text-white tracking-tight leading-snug">
+                    You qualify for physician-supervised GLP-1 care
+                  </h1>
+                  <p className="text-xs sm:text-sm text-slate-300 mt-2 leading-relaxed max-w-md">
+                    Based on your Body Mass Index of <strong className="text-teal-300">{results.bmi.score}</strong> and metabolic telemetry, our medical board recommends a customized clinical weight management protocol.
+                  </p>
                 </div>
-              </div>
 
-              <div className="pt-3 border-t border-emerald-100/60 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-600">
-                <div className="flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-[#00A884] shrink-0" />
-                  <span className="font-medium">100% confidential & encrypted</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Lock className="w-4 h-4 text-[#00A884] shrink-0" />
-                  <span className="font-medium">No initial payment required</span>
+                {/* Metric Telemetry Pill */}
+                <div className="shrink-0 flex sm:flex-col items-center justify-center px-4 py-3 sm:py-3.5 rounded-2xl bg-white/5 border border-white/10 backdrop-blur-md">
+                  <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">BMI Metric</span>
+                  <span className="font-sans text-xl sm:text-2xl font-extrabold text-white tabular-nums">{results.bmi.score}</span>
+                  <span className="text-[11px] text-teal-300 font-semibold">{results.bmi.headline}</span>
                 </div>
               </div>
             </div>
 
-            {/* Single Continue CTA */}
-            <button
-              type="button"
-              onClick={startIntakeFromTransition}
-              className="w-full min-h-[50px] py-3.5 px-6 rounded-full bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white font-sans font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99]"
-            >
-              <span>Continue to Clinical Intake</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
+            {/* 2. The 3-Step Concierge Care Pathway */}
+            <div className="mb-6">
+              <span className="block text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 mb-3">
+                Your Clinical Journey to Care
+              </span>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+                {/* Step 1 */}
+                <div className="flex flex-col sm:flex-row md:flex-col items-start gap-3 p-4 sm:p-5 rounded-2xl bg-slate-50/80 border border-slate-200/80 hover:bg-slate-50 transition-colors h-full">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200/60 text-[#00A884] flex items-center justify-center font-bold text-xs shrink-0 font-mono">
+                    01
+                  </div>
+                  <div>
+                    <h2 className="font-sans text-sm font-bold text-[#11241A] leading-snug">
+                      Complete Health Intake · ~3 mins
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      Confirm your vitals, lifestyle habits, and medical safety history for our physicians.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 2 */}
+                <div className="flex flex-col sm:flex-row md:flex-col items-start gap-3 p-4 sm:p-5 rounded-2xl bg-slate-50/80 border border-slate-200/80 hover:bg-slate-50 transition-colors h-full">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200/60 text-[#00A884] flex items-center justify-center font-bold text-xs shrink-0 font-mono">
+                    02
+                  </div>
+                  <div>
+                    <h2 className="font-sans text-sm font-bold text-[#11241A] leading-snug">
+                      1-on-1 Dedicated Doctor Telehealth
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      Private video review with a licensed General Medicine / Endocrinology physician.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Step 3 */}
+                <div className="flex flex-col sm:flex-row md:flex-col items-start gap-3 p-4 sm:p-5 rounded-2xl bg-slate-50/80 border border-slate-200/80 hover:bg-slate-50 transition-colors h-full">
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-200/60 text-[#00A884] flex items-center justify-center font-bold text-xs shrink-0 font-mono">
+                    03
+                  </div>
+                  <div>
+                    <h2 className="font-sans text-sm font-bold text-[#11241A] leading-snug">
+                      Prescription Protocol & Clinical Care Plan
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                      Custom GLP-1 titration and Indian meal plan coordinated by your dedicated physician.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 3. Medical Reassurance Badges */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-6 text-xs text-slate-600">
+              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50/50 border border-emerald-100/70">
+                <Check className="w-4 h-4 text-[#00A884] shrink-0 stroke-[2.5]" />
+                <span className="font-medium text-[11px] sm:text-xs">No upfront payment</span>
+              </div>
+              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50/50 border border-emerald-100/70">
+                <ShieldCheck className="w-4 h-4 text-[#00A884] shrink-0" />
+                <span className="font-medium text-[11px] sm:text-xs">100% HIPAA Private</span>
+              </div>
+              <div className="flex items-center gap-2 p-2.5 rounded-xl bg-emerald-50/50 border border-emerald-100/70">
+                <Lock className="w-4 h-4 text-[#00A884] shrink-0" />
+                <span className="font-medium text-[11px] sm:text-xs">Licensed Physicians</span>
+              </div>
+            </div>
+
+            {/* 4. High-Conversion Primary CTA */}
+            <div>
+              <button
+                type="button"
+                onClick={startIntakeFromTransition}
+                className="w-full min-h-[52px] py-4 px-8 rounded-full bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white font-sans font-bold text-base transition-all flex items-center justify-center gap-2.5 cursor-pointer shadow-lg shadow-[#00A884]/25 hover:shadow-xl active:scale-[0.99] group"
+              >
+                <span>Continue to Confidential Intake</span>
+                <ChevronRight className="w-5 h-5 group-hover:translate-x-0.5 transition-transform" />
+              </button>
+              <p className="text-center text-[11px] text-slate-400 mt-2.5">
+                Takes ~3 minutes · No initial payment required · Free medical pre-screening
+              </p>
+            </div>
           </div>
         )}
 
@@ -1183,7 +1772,7 @@ export default function UnifiedAssessmentFunnel({
                   Your doctor will use these details to address your clinical prescription dossier.
                 </p>
               </div>
-              <PrescriptionDeliveryIllustration className="w-18 h-18 sm:w-22 sm:h-22 shrink-0" />
+              <PatientProfileIllustration className="w-12 h-12 sm:w-14 sm:h-14 shrink-0" />
             </div>
 
             <form
@@ -1198,10 +1787,6 @@ export default function UnifiedAssessmentFunnel({
                   setFormError('Please enter a valid mobile number with country code.')
                   return
                 }
-                if (!isValidPincode(formData.pincode)) {
-                  setFormError('Please enter a valid 6-digit PIN code.')
-                  return
-                }
                 if (!formData.agree_terms) {
                   setFormError('Please agree to the medical terms and privacy policy to continue.')
                   return
@@ -1211,31 +1796,33 @@ export default function UnifiedAssessmentFunnel({
               }}
               className="space-y-4"
             >
-              {/* Separate rows for first & last name */}
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1.5">First name</label>
-                <input
-                  type="text"
-                  required
-                  autoComplete="given-name"
-                  placeholder="Your first name"
-                  value={formData.first_name}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, first_name: e.target.value }))}
-                  className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
-                />
-              </div>
+              {/* First & Last name: 2 cols on tablet/desktop, stacked on mobile */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1.5">First name</label>
+                  <input
+                    type="text"
+                    required
+                    autoComplete="given-name"
+                    placeholder="e.g. Priya"
+                    value={formData.first_name}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, first_name: e.target.value }))}
+                    className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
+                  />
+                </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1.5">Last name</label>
-                <input
-                  type="text"
-                  required
-                  autoComplete="family-name"
-                  placeholder="Your last name"
-                  value={formData.last_name}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, last_name: e.target.value }))}
-                  className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
-                />
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1.5">Last name</label>
+                  <input
+                    type="text"
+                    required
+                    autoComplete="family-name"
+                    placeholder="e.g. Sharma"
+                    value={formData.last_name}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, last_name: e.target.value }))}
+                    className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
+                  />
+                </div>
               </div>
 
               {/* Phone auto-formats live */}
@@ -1254,66 +1841,6 @@ export default function UnifiedAssessmentFunnel({
                 <span className="text-[11px] text-slate-400 mt-1 block">
                   Used by our licensed physician for your scheduled telehealth visit.
                 </span>
-              </div>
-
-              {/* Pincode-first address with auto-expansion */}
-              <div className="pt-2 border-t border-slate-100">
-                <label className="text-xs font-semibold text-slate-700 block mb-1.5">Delivery PIN code</label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    maxLength={6}
-                    inputMode="numeric"
-                    placeholder="Enter 6-digit PIN code"
-                    value={formData.pincode}
-                    onChange={handlePincodeChange}
-                    className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
-                  />
-                  {isValidPincode(formData.pincode) && (
-                    <Check className="w-4 h-4 text-[#00A884] absolute right-4 top-4" />
-                  )}
-                </div>
-                <span className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-                  <Info className="w-3.5 h-3.5 text-slate-400" />
-                  Used only for prescription fulfillment if medication is prescribed.
-                </span>
-
-                {/* Expands once 6 digits entered */}
-                {isValidPincode(formData.pincode) && (
-                  <div className="mt-3 space-y-3 animate-in fade-in duration-300">
-                    <div>
-                      <label className="text-xs font-semibold text-slate-700 block mb-1.5">Street address / Apartment</label>
-                      <input
-                        type="text"
-                        placeholder="House / Flat / Street address"
-                        value={formData.street_address}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, street_address: e.target.value }))}
-                        className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-semibold text-slate-700 block mb-1">City</label>
-                        <input
-                          type="text"
-                          value={formData.city}
-                          onChange={(e) => setFormData((prev) => ({ ...prev, city: e.target.value }))}
-                          className="w-full min-h-[46px] px-3.5 rounded-xl border border-slate-200 text-xs font-semibold text-[#11241A] bg-slate-50"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-slate-700 block mb-1">State</label>
-                        <input
-                          type="text"
-                          value={formData.state}
-                          onChange={(e) => setFormData((prev) => ({ ...prev, state: e.target.value }))}
-                          className="w-full min-h-[46px] px-3.5 rounded-xl border border-slate-200 text-xs font-semibold text-[#11241A] bg-slate-50"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Terms agreement */}
@@ -1375,7 +1902,7 @@ export default function UnifiedAssessmentFunnel({
                   Confirmed values help our clinical team calibrate appropriate protocol titration.
                 </p>
               </div>
-              <VitalsTelemetryIllustration className="w-18 h-18 sm:w-22 sm:h-22 shrink-0" />
+              <VitalsTelemetryIllustration className="w-12 h-12 sm:w-14 sm:h-14 shrink-0" />
             </div>
 
             <form
@@ -1400,6 +1927,7 @@ export default function UnifiedAssessmentFunnel({
                     min={120}
                     max={230}
                     required
+                    placeholder="e.g. 165"
                     value={formData.height_cm}
                     onChange={(e) => setFormData((prev) => ({ ...prev, height_cm: e.target.value }))}
                     className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
@@ -1413,6 +1941,7 @@ export default function UnifiedAssessmentFunnel({
                     min={35}
                     max={250}
                     required
+                    placeholder="e.g. 70"
                     value={formData.weight_kg}
                     onChange={(e) => setFormData((prev) => ({ ...prev, weight_kg: e.target.value }))}
                     className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
@@ -1430,7 +1959,7 @@ export default function UnifiedAssessmentFunnel({
                   min={35}
                   max={250}
                   required
-                  placeholder="e.g. 65"
+                  placeholder="e.g. 60"
                   value={formData.goal_weight_kg}
                   onChange={(e) => setFormData((prev) => ({ ...prev, goal_weight_kg: e.target.value }))}
                   className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
@@ -1541,7 +2070,7 @@ export default function UnifiedAssessmentFunnel({
                   Our physicians cross-verify these items to ensure total treatment safety.
                 </p>
               </div>
-              <SafetyShieldIllustration className="w-18 h-18 sm:w-22 sm:h-22 shrink-0" />
+              <SafetyShieldIllustration className="w-12 h-12 sm:w-14 sm:h-14 shrink-0" />
             </div>
 
             <div className="space-y-4">
@@ -1626,7 +2155,7 @@ export default function UnifiedAssessmentFunnel({
                   Select all that apply. This helps your clinician customize supportive diet and medication guidance.
                 </p>
               </div>
-              <HealthHistoryIllustration className="w-18 h-18 sm:w-22 sm:h-22 shrink-0" />
+              <HealthHistoryIllustration className="w-12 h-12 sm:w-14 sm:h-14 shrink-0" />
             </div>
 
             {/* Multi-select chips */}
@@ -1682,7 +2211,7 @@ export default function UnifiedAssessmentFunnel({
             </button>
 
             <div className="flex justify-center mb-6">
-              <LabWorkIllustration className="w-18 h-18 sm:w-20 sm:h-20" />
+              <LabWorkIllustration className="w-16 h-16 sm:w-18 sm:h-18" />
             </div>
             <h1 className="font-sans text-2xl sm:text-3xl font-extrabold text-[#11241A] tracking-tight leading-snug mb-2 text-center">
               Blood Work & Lab Report
@@ -1765,12 +2294,76 @@ export default function UnifiedAssessmentFunnel({
                 </button>
 
                 {formData.lab_preference === 'third_party' && (
-                  <div className="mt-4 pt-4 border-t border-slate-200/60">
-                    <div className="bg-emerald-50/70 p-4 rounded-xl flex items-start gap-3 border border-emerald-200/60">
-                      <CheckCircle className="w-5 h-5 text-[#00A884] shrink-0 mt-0.5" />
+                  <div className="mt-4 pt-4 border-t border-slate-200/60 space-y-3.5">
+                    <div className="bg-emerald-50/70 p-3.5 rounded-xl flex items-start gap-3 border border-emerald-200/60">
+                      <CheckCircle className="w-4 h-4 text-[#00A884] shrink-0 mt-0.5" />
                       <p className="text-xs text-slate-700 leading-relaxed font-sans">
-                        <strong className="text-slate-900">Doorstep sample collection:</strong> Our medical coordinator will schedule a certified phlebotomist to collect your sample at home. Results will be uploaded directly to your clinical record.
+                        <strong className="text-slate-900">Doorstep sample collection:</strong> A certified phlebotomist from our partner lab will visit your address for morning fasting blood collection.
                       </p>
+                    </div>
+
+                    {/* Collection Address Fields */}
+                    <div className="space-y-3 pt-1">
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="block text-xs font-bold text-slate-700">
+                            Home / Pickup Address <span className="text-[#00A884]">*</span>
+                          </label>
+                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#00A884] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/50">
+                            <Sparkles className="w-2.5 h-2.5" /> Google Auto-fill
+                          </span>
+                        </div>
+                        <div className="relative">
+                          <input
+                            ref={addressInputRef}
+                            type="text"
+                            required
+                            value={formData.lab_collection_address}
+                            onChange={(e) => setFormData((p) => ({ ...p, lab_collection_address: e.target.value }))}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') e.preventDefault()
+                            }}
+                            placeholder="Start typing your apartment, building, or street..."
+                            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 transition-all shadow-xs"
+                          />
+                          <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            City <span className="text-[#00A884]">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            value={formData.lab_collection_city}
+                            onChange={(e) => setFormData((p) => ({ ...p, lab_collection_city: e.target.value }))}
+                            placeholder="e.g. Mumbai, Bangalore"
+                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 transition-all"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1">
+                            PIN Code <span className="text-[#00A884]">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            maxLength={6}
+                            value={formData.lab_collection_pincode}
+                            onChange={(e) => setFormData((p) => ({ ...p, lab_collection_pincode: e.target.value.replace(/\D/g, '') }))}
+                            placeholder="6-digit PIN"
+                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 transition-all font-mono"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="pt-1 flex items-center gap-2 text-[11px] sm:text-xs text-slate-500 font-medium bg-white/70 rounded-xl p-2.5 border border-slate-200/60">
+                        <span className="flex h-2 w-2 rounded-full bg-[#00A884] shrink-0" />
+                        <span>Our clinical team will call you directly to schedule your doorstep sample collection.</span>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1800,13 +2393,19 @@ export default function UnifiedAssessmentFunnel({
 
             <button
               type="button"
-              disabled={formData.lab_preference === 'none'}
+              disabled={
+                formData.lab_preference === 'none' ||
+                (formData.lab_preference === 'third_party' &&
+                  (!formData.lab_collection_address.trim() || formData.lab_collection_pincode.trim().length < 6))
+              }
               onClick={() => {
                 syncProgressSilent('intake_medication', 4)
                 setStage('intake_medication')
               }}
               className={`w-full min-h-[50px] rounded-full font-sans font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${
-                formData.lab_preference !== 'none'
+                formData.lab_preference !== 'none' &&
+                (formData.lab_preference !== 'third_party' ||
+                  (formData.lab_collection_address.trim().length > 0 && formData.lab_collection_pincode.trim().length >= 6))
                   ? 'bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99]'
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
               }`}
@@ -1900,7 +2499,7 @@ export default function UnifiedAssessmentFunnel({
                   Create your secure portal login to view your physician&apos;s recommendations and schedule your consultation.
                 </p>
               </div>
-              <AccountSecurityIllustration className="w-18 h-18 sm:w-22 sm:h-22 shrink-0" />
+              <AccountSecurityIllustration className="w-12 h-12 sm:w-14 sm:h-14 shrink-0" />
             </div>
 
             <form onSubmit={handleFinalSubmit} className="space-y-4">
@@ -1915,6 +2514,28 @@ export default function UnifiedAssessmentFunnel({
                   onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                   className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
                 />
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-700 block">Mobile number</label>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
+                    WhatsApp & Phone Login
+                  </span>
+                </div>
+                <input
+                  type="tel"
+                  required
+                  autoComplete="tel"
+                  inputMode="tel"
+                  placeholder="+91 98765 43210"
+                  value={formData.phone_number}
+                  onChange={handlePhoneChange}
+                  className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
+                />
+                <span className="text-[11px] text-slate-400 mt-1 block">
+                  Used for instant WhatsApp alerts, login OTPs, and doctor video call coordination.
+                </span>
               </div>
 
               <div>

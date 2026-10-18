@@ -72,11 +72,10 @@ export default function AdminPrescriptionsPage() {
         <div className="overflow-hidden rounded-xl bg-white shadow-sm">
           <table className="w-full text-left text-sm">
             <thead className="bg-[#1A1F36] text-xs uppercase tracking-wider text-white">
-              <tr><th className="p-4">Prescription</th><th>Status</th><th>Issued</th><th>Order</th><th>Updated</th></tr>
+              <tr><th className="p-4">Prescription</th><th>Status</th><th>Issued</th><th>Updated</th></tr>
             </thead>
             <tbody className="divide-y divide-[#1A1F36]/8">
               {prescriptions.map((rx) => {
-                const order = rx.pharmacy_orders?.[0]
                 return (
                   <tr key={rx.id}>
                     <td className="p-4">
@@ -85,7 +84,6 @@ export default function AdminPrescriptionsPage() {
                     </td>
                     <td className="font-bold">{rx.status}</td>
                     <td>{rx.issued_at ? new Date(rx.issued_at).toLocaleString() : '-'}</td>
-                    <td>{order ? <Link className="font-bold text-[#C4622D]" href={`/admin/pharmacy-orders/${order.id}`}>{order.status}</Link> : '-'}</td>
                     <td>{new Date(rx.updated_at || rx.created_at).toLocaleString()}</td>
                   </tr>
                 )

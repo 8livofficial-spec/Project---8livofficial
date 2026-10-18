@@ -24,8 +24,6 @@ type AdminTab =
   | 'payments'
   | 'provider-wallets'
   | 'prescription-fulfilment'
-  | 'pharmacy-orders'
-  | 'partner-pharmacies'
   | 'reports'
   | 'notifications'
   | 'audit-logs'
@@ -273,6 +271,7 @@ function AdminDashboardContent() {
   const [membershipFilter, setMembershipFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [appointmentFilter, setAppointmentFilter] = useState('all');
+  const [labFilter, setLabFilter] = useState('all');
   const [paymentTab, setPaymentTab] = useState('all');
   const [providerFilter, setProviderFilter] = useState('all');
   const [providerFullName, setProviderFullName] = useState('');
@@ -486,14 +485,6 @@ function AdminDashboardContent() {
   const openAdminTab = (tab: AdminTab) => {
     if (tab === 'prescription-fulfilment') {
       router.push('/admin/prescriptions');
-      return;
-    }
-    if (tab === 'pharmacy-orders') {
-      router.push('/admin/pharmacy-orders');
-      return;
-    }
-    if (tab === 'partner-pharmacies') {
-      router.push('/admin/pharmacy');
       return;
     }
     setAdminTab(tab);
@@ -918,6 +909,7 @@ function AdminDashboardContent() {
         membership: membershipFilter,
         payment: paymentFilter,
         appointment: appointmentFilter,
+        lab: labFilter,
       });
       const res = await adminFetch(`/api/admin/patients?${params.toString()}`);
       if (!res.ok) throw new Error('Failed to load patients.');
@@ -1384,8 +1376,112 @@ function AdminDashboardContent() {
     const matchesPayment = paymentFilter === 'all' || (paymentFilter === 'paid' ? isPaid : !isPaid);
     const hasAppointment = Boolean(patient.booking_date || patient.booking_time);
     const matchesAppointment = appointmentFilter === 'all' || (appointmentFilter === 'scheduled' ? hasAppointment : !hasAppointment);
-    return matchesSearch && matchesEligibility && matchesMembership && matchesPayment && matchesAppointment;
+
+    const labWork = patient?.medical_history?.lab_work || {};
+    const labPref = labWork.preference || patient?.lab_preference || 'none';
+    const hasReport = Boolean(labWork.report_url || patient?.lab_report_url);
+    const matchesLab =
+      labFilter === 'all'
+        ? true
+        : labFilter === 'third_party'
+        ? labPref === 'third_party'
+        : labFilter === 'pending_report'
+        ? labPref === 'third_party' && !hasReport
+        : labFilter === 'completed_report'
+        ? hasReport
+        : labFilter === 'upload'
+        ? labPref === 'upload'
+        : labFilter === 'skip'
+        ? labPref === 'skip'
+        : true;
+
+    return matchesSearch && matchesEligibility && matchesMembership && matchesPayment && matchesAppointment && matchesLab;
   });
+
+  const homeLabOrders = assessments.filter(p => {
+    const labWork = p.medical_history?.lab_work || {};
+    return (labWork.preference || p.lab_preference) === 'third_party';
+  });
+  const homeLabOrdersCount = homeLabOrders.length;
+  const homeLabPendingCount = homeLabOrders.filter(p => {
+    const labWork = p.medical_history?.lab_work || {};
+    return !Boolean(labWork.report_url || p.lab_report_url);
+  }).length;
+
+  const handleExportLabOrders = () => {
+    const targets = assessments.filter(p => {
+      const labWork = p.medical_history?.lab_work || {};
+      const pref = labWork.preference || p.lab_preference || 'none';
+      const hasReport = Boolean(labWork.report_url || p.lab_report_url);
+      if (labFilter === 'pending_report') return pref === 'third_party' && !hasReport;
+      if (labFilter === 'completed_report') return hasReport;
+      if (labFilter === 'upload') return pref === 'upload';
+      return pref === 'third_party';
+    });
+
+    if (targets.length === 0) {
+      alert('No matching lab collection requests found to export.');
+      return;
+    }
+
+    const headers = [
+      'Patient ID',
+      'Patient Name',
+      'Phone Number',
+      'Age',
+      'Gender',
+      'Collection Address',
+      'City',
+      'PIN Code',
+      'Test Request Type',
+      'Report Status',
+      'Assigned Doctor',
+      'Registration Date',
+      'Consultation Booking',
+    ];
+
+    const rows = targets.map(p => {
+      const labWork = p.medical_history?.lab_work || {};
+      const pref = labWork.preference || p.lab_preference || 'none';
+      const hasReport = Boolean(labWork.report_url || p.lab_report_url);
+      const name = getPatientName(p);
+      const phone = p.phone_number || p.phone || '';
+      const age = p.age || '';
+      const gender = p.biological_gender || p.gender || '';
+      const address = (labWork.collection_address || p.address || '').replace(/"/g, '""');
+      const city = (labWork.collection_city || '').replace(/"/g, '""');
+      const pincode = labWork.collection_pincode || '';
+      const status = hasReport ? 'Report Uploaded' : 'Doorstep Sample Pending';
+      const booking = p.booking_date ? `${p.booking_date} ${p.booking_time || ''}`.trim() : 'Not booked';
+      const date = p.created_at ? new Date(p.created_at).toLocaleDateString() : '';
+      const doc = p.assigned_doctor_name || 'Unassigned';
+
+      return [
+        `"${p.patient_id || p.id || ''}"`,
+        `"${name.replace(/"/g, '""')}"`,
+        `"${phone}"`,
+        `"${age}"`,
+        `"${gender}"`,
+        `"${address}"`,
+        `"${city}"`,
+        `"${pincode}"`,
+        `"${pref === 'third_party' ? 'Home Sample Collection' : pref}"`,
+        `"${status}"`,
+        `"${doc}"`,
+        `"${date}"`,
+        `"${booking}"`,
+      ].join(',');
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `8liv_lab_collection_orders_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
   const filteredDoctors = doctors.filter(doc => {
     const text = `${doc.full_name || ''} ${doc.specialty || ''} ${doc.specialization || ''}`.toLowerCase();
     return !normalizedSearch || text.includes(normalizedSearch);
@@ -1532,11 +1628,9 @@ function AdminDashboardContent() {
       ],
     },
     {
-      title: 'Prescription Fulfilment',
+      title: 'Clinical Prescriptions',
       items: [
         { id: 'prescription-fulfilment', label: 'Prescriptions', icon: FileText },
-        { id: 'pharmacy-orders', label: 'Pharmacy Orders', icon: Package },
-        { id: 'partner-pharmacies', label: 'Partner Pharmacies', icon: Building2 },
       ],
     },
     {
@@ -1943,19 +2037,28 @@ function AdminDashboardContent() {
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-[#C4622D]">User Management</p>
                 <h2 className="text-3xl font-black text-[#1A1F36]">Patients</h2>
               </div>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-5 lg:min-w-[900px]">
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-6 lg:min-w-[1050px]">
                 <input value={managementSearch} onChange={e => handleSearchChange(e.target.value)} placeholder="Search patients..." className="sm:col-span-2 rounded-xl border border-[#1A1F36]/10 bg-white px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#C4622D]/20" />
                 <select value={eligibilityFilter} onChange={e => { setEligibilityFilter(e.target.value); setPatientsPage(1); }} className="rounded-xl border border-[#1A1F36]/10 bg-white px-3 py-3 text-sm font-bold"><option value="all">Eligibility</option><option value="true">Eligible</option><option value="false">Not Eligible</option></select>
                 <select value={membershipFilter} onChange={e => { setMembershipFilter(e.target.value); setPatientsPage(1); }} className="rounded-xl border border-[#1A1F36]/10 bg-white px-3 py-3 text-sm font-bold"><option value="all">Program Status</option><option value="active">Enrolled Program</option><option value="not selected">Not Selected</option></select>
                 <select value={paymentFilter} onChange={e => { setPaymentFilter(e.target.value); setPatientsPage(1); }} className="rounded-xl border border-[#1A1F36]/10 bg-white px-3 py-3 text-sm font-bold"><option value="all">Payment</option><option value="paid">Paid</option><option value="unpaid">Unpaid</option></select>
+                <select value={labFilter} onChange={e => { setLabFilter(e.target.value); setPatientsPage(1); }} className="rounded-xl border border-[#1A1F36]/10 bg-white px-3 py-3 text-sm font-bold">
+                  <option value="all">Lab: All</option>
+                  <option value="third_party">Home Test Requested</option>
+                  <option value="pending_report">Home: Pending Report</option>
+                  <option value="completed_report">Report Uploaded</option>
+                  <option value="upload">Self Uploaded</option>
+                  <option value="skip">Skipped</option>
+                </select>
               </div>
             </div>
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-6">
               {[
                 { label: 'Total Patients', value: patientsCount, helper: 'Complete member roster', icon: Users, tone: 'blue' },
                 { label: 'Eligible', value: eligibleCount, helper: 'Approved assessment', icon: ShieldCheck, tone: 'green' },
+                { label: 'Home Lab Requests', value: homeLabOrdersCount, helper: `${homeLabPendingCount} report pending`, icon: Activity, tone: 'amber' },
                 { label: 'Paid Consultation', value: paidCount, helper: 'Rs 499 received', icon: Wallet, tone: 'orange' },
-                { label: 'Appointments', value: appointmentCount, helper: 'Booked slots', icon: Calendar, tone: 'amber' },
+                { label: 'Appointments', value: appointmentCount, helper: 'Booked slots', icon: Calendar, tone: 'blue' },
                 { label: 'Progress Logged', value: progressCount, helper: 'Weight goal present', icon: TrendingUp, tone: 'red' },
               ].map(card => {
                 const Icon = card.icon;
@@ -1971,33 +2074,86 @@ function AdminDashboardContent() {
             </div>
             <div className="flex flex-col gap-3 rounded-[20px] border border-[#1A1F36]/8 bg-white p-5 shadow-[0_12px_32px_rgba(26,31,54,0.07)] sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-black text-[#1A1F36]">Patient Roster Operations</p>
-                <p className="mt-1 text-sm font-semibold text-[#8896A4]">Export the filtered roster and review eligibility, payment, appointments, and progress inside this page.</p>
+                <p className="text-sm font-black text-[#1A1F36]">Patient Roster & Lab Operations</p>
+                <p className="mt-1 text-sm font-semibold text-[#8896A4]">Export the filtered roster or download home lab collection orders to send to your partner diagnostic company.</p>
               </div>
-              <a
-                href="/api/admin/reports?format=csv"
-                download="8liv_patients_report.csv"
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1A1F36] px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#11162A]"
-              >
-                <ArrowDownToLine className="h-4 w-4" />
-                Export Patient Roster
-              </a>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleExportLabOrders}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#00A884] hover:bg-[#088F6F] px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-sm transition-all hover:-translate-y-0.5 cursor-pointer"
+                  title="Download CSV of patients who requested home sample collection to send to partner lab"
+                >
+                  <ArrowDownToLine className="h-4 w-4" />
+                  Export Lab Orders ({homeLabOrdersCount})
+                </button>
+                <a
+                  href="/api/admin/reports?format=csv"
+                  download="8liv_patients_report.csv"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1A1F36] px-5 py-3 text-xs font-black uppercase tracking-wider text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-[#11162A]"
+                >
+                  <ArrowDownToLine className="h-4 w-4" />
+                  Export Patient Roster
+                </a>
+              </div>
             </div>
             <div className="overflow-hidden rounded-[20px] border border-[#1A1F36]/8 bg-white shadow-[0_12px_32px_rgba(26,31,54,0.07)]">
-              <div className="grid grid-cols-[1.4fr_0.8fr_0.8fr_1fr_0.8fr_0.8fr] gap-4 border-b border-[#1A1F36]/8 bg-[#F5F0EB] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-[#8896A4]">
-                <span>Patient</span><span>Eligibility</span><span>Membership</span><span>Assigned Doctor</span><span>Payment</span><span>Progress</span>
+              <div className="grid grid-cols-[1.4fr_0.8fr_0.8fr_1fr_1fr_0.8fr_0.7fr] gap-4 border-b border-[#1A1F36]/8 bg-[#F5F0EB] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-[#8896A4]">
+                <span>Patient</span><span>Eligibility</span><span>Membership</span><span>Blood Test / Lab</span><span>Assigned Doctor</span><span>Payment</span><span>Action</span>
               </div>
               <div className="divide-y divide-[#1A1F36]/8">
                 {filteredPatients.map(patient => {
                   const assignmentDoctor = allStaff.find(staff => staff.id === currentAssignment?.doctor_id);
+                  const labWork = patient?.medical_history?.lab_work || {};
+                  const labPref = labWork.preference || patient?.lab_preference || 'none';
+                  const hasReport = Boolean(labWork.report_url || patient?.lab_report_url);
+
                   return (
-                    <div key={patient.id} className="grid grid-cols-1 gap-3 px-5 py-4 text-sm font-bold text-[#40516A] md:grid-cols-[1.4fr_0.8fr_0.8fr_1fr_0.8fr_0.8fr] md:items-center">
+                    <div
+                      key={patient.id}
+                      className="grid grid-cols-1 gap-3 px-5 py-4 text-sm font-bold text-[#40516A] md:grid-cols-[1.4fr_0.8fr_0.8fr_1fr_1fr_0.8fr_0.7fr] md:items-center hover:bg-slate-50/70 transition-colors cursor-pointer"
+                      onClick={() => setSelectedPatient(patient)}
+                    >
                       <div><p className="font-black text-[#1A1F36]">{getPatientName(patient)}</p><p className="text-xs text-[#8896A4]">{patient.phone_number || patient.patient_id}</p></div>
                       <span className={`w-fit rounded-full px-3 py-1 text-xs font-black ${patient.is_eligible ? 'bg-[#5C7A6B]/12 text-[#5C7A6B]' : 'bg-[#D96A6A]/12 text-[#B94D4D]'}`}>{patient.is_eligible ? 'Eligible' : 'Not Eligible'}</span>
                       <span>{getPatientMembership(patient)}</span>
+                      <div>
+                        {labPref === 'third_party' ? (
+                          hasReport ? (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black bg-emerald-100 text-emerald-800">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" /> Report Ready
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black bg-amber-100 text-amber-900 border border-amber-300">
+                              <Activity className="w-3.5 h-3.5 text-amber-700 animate-pulse" /> Home Sample Needed
+                            </span>
+                          )
+                        ) : labPref === 'upload' ? (
+                          hasReport ? (
+                            <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-black bg-teal-50 text-teal-700 border border-teal-200">
+                              <FileText className="w-3.5 h-3.5 text-teal-600" /> Self Uploaded
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400 font-semibold">Upload Pending</span>
+                          )
+                        ) : (
+                          <span className="text-xs text-slate-400">Skipped / None</span>
+                        )}
+                      </div>
                       <span>{assignmentDoctor ? `${assignmentDoctor.first_name} ${assignmentDoctor.last_name}` : 'Auto Assigned'}</span>
                       <span className={patient.consultation_fee_paid ? 'text-[#5C7A6B]' : 'text-[#B7792F]'}>{patient.consultation_fee_paid ? 'Paid' : 'Pending'}</span>
-                      <span>{patient.weight_kg && patient.goal_weight_kg ? `${patient.weight_kg} → ${patient.goal_weight_kg} kg` : 'Not logged'}</span>
+                      <div>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedPatient(patient);
+                          }}
+                          className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs"
+                        >
+                          {hasReport ? 'View Report' : labPref === 'third_party' ? 'Upload Report' : 'View File'}
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
@@ -4484,8 +4640,15 @@ function AdminDashboardContent() {
                       </p>
                       <div className="mt-4 grid gap-3 text-sm font-bold text-slate-700 md:grid-cols-2">
                         <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
-                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Collection address</p>
-                          <p className="mt-2">{selectedPatient.address || 'Address not recorded'}</p>
+                          <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Sample collection address</p>
+                          <p className="mt-2 text-sm font-bold text-slate-900">
+                            {selectedLabWork.collection_address
+                              ? `${selectedLabWork.collection_address}, ${selectedLabWork.collection_city || ''} (PIN: ${selectedLabWork.collection_pincode || ''})`
+                              : selectedPatient.address || 'Address not recorded'}
+                          </p>
+                          <p className="mt-1 text-xs font-semibold text-slate-500">
+                            Coordination: Team calls patient directly
+                          </p>
                         </div>
                         <div className="rounded-2xl bg-slate-50 p-4 border border-slate-100">
                           <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Contact</p>

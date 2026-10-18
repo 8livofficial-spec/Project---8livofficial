@@ -148,8 +148,13 @@ export default function Hero() {
 
             {/* Bottom Glassmorphism Doctor Widget */}
             <div className="absolute bottom-4 inset-x-3 sm:inset-x-4 z-30 pointer-events-auto">
-              <div className="bg-[#040f08]/92 backdrop-blur-2xl border border-white/30 border-t-white/50 rounded-2xl p-3.5 sm:p-4 text-white shadow-2xl text-center">
-                <span className="font-sans font-bold text-sm sm:text-base tracking-tight text-white">Dedicated Doctor</span>
+              <div className="bg-[#040f08]/92 backdrop-blur-2xl border border-white/30 border-t-white/50 rounded-2xl p-4 sm:p-4.5 text-white shadow-2xl">
+                <div className="mb-1.5">
+                  <span className="font-sans font-bold text-sm sm:text-base tracking-tight text-white">Dedicated Doctor</span>
+                </div>
+                <p className="font-sans text-xs sm:text-sm text-slate-200 leading-snug">
+                  1-on-1 metabolic supervision & clinically calibrated GLP-1 prescription care.
+                </p>
               </div>
             </div>
 

@@ -13,6 +13,7 @@ export async function GET(request: Request) {
     const membership = searchParams.get('membership') || 'all'
     const payment = searchParams.get('payment') || 'all'
     const appointment = searchParams.get('appointment') || 'all'
+    const lab = searchParams.get('lab') || 'all'
     const searchPattern = ilikePattern(searchParams.get('search') || '')
     const from = (page - 1) * limit
     const to = page * limit - 1
@@ -33,6 +34,13 @@ export async function GET(request: Request) {
       if (payment !== 'all') query = query.eq('consultation_fee_paid', payment === 'paid')
       if (appointment !== 'all') {
         query = appointment === 'scheduled' ? query.not('booking_date', 'is', null) : query.is('booking_date', null)
+      }
+      if (lab === 'third_party') {
+        query = query.filter('medical_history->lab_work->>preference', 'eq', 'third_party')
+      } else if (lab === 'upload') {
+        query = query.filter('medical_history->lab_work->>preference', 'eq', 'upload')
+      } else if (lab === 'skip') {
+        query = query.filter('medical_history->lab_work->>preference', 'eq', 'skip')
       }
 
       const { data, count, error } = await query.order('created_at', { ascending: false }).range(from, to)

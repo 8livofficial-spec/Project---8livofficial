@@ -73,11 +73,9 @@ export default function MedicationCard({
   const isDispatched = fulfillmentStatus === 'DISPATCHED'
   const isDelivered = fulfillmentStatus === 'DELIVERED'
 
-  const trackerHref = orderId
-    ? `/patient/medicine-orders/${orderId}`
-    : prescriptionId
+  const trackerHref = prescriptionId
     ? `/patient/prescriptions/${prescriptionId}`
-    : '/patient/medicine-orders'
+    : '/patient/prescriptions'
 
   const getStatusDisplay = () => {
     if (isDelivered) return { label: 'Delivered', color: 'text-emerald-700 bg-emerald-50 border-emerald-200' }
@@ -176,15 +174,15 @@ export default function MedicationCard({
                 href={trackerHref}
                 className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-[#1A1F36] px-3.5 py-2 text-xs font-black text-white hover:bg-[#2A314E] transition-transform active:scale-[0.98] shrink-0 shadow-xs"
               >
-                <span>Track Delivery</span>
-                <Truck className="w-3.5 h-3.5" />
+                <span>View Rx Details</span>
+                <FileText className="w-3.5 h-3.5" />
               </Link>
             </div>
           </>
         ) : (
           <div className="py-6 text-center space-y-3">
             <p className="text-sm text-[#8896A4] font-medium leading-relaxed">
-              Your treatment cycle review is in progress with your physician. Once authorized, your structured prescription and pharmacy fulfillment tracking will display here.
+              Your treatment cycle review is in progress with your physician. Once authorized, your structured clinical prescription protocol will display here.
             </p>
           </div>
         )}
@@ -192,20 +190,13 @@ export default function MedicationCard({
 
       {/* Patient Action Buttons */}
       <div className="mt-4 pt-3 border-t border-[#1A1F36]/8 space-y-2">
-        <div className="grid grid-cols-2 gap-2">
+        <div>
           <Link
             href="/patient/prescriptions"
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-[#1A1F36]/10 bg-white py-2 text-xs font-bold text-[#1A1F36] hover:bg-[#F5F0EB] transition"
+            className="w-full flex items-center justify-center gap-1.5 rounded-xl border border-[#1A1F36]/10 bg-white py-2.5 text-xs font-bold text-[#1A1F36] hover:bg-[#F5F0EB] transition"
           >
             <FileText className="w-3.5 h-3.5 text-[#C4622D]" />
-            Prescription
-          </Link>
-          <Link
-            href="/patient/prescriptions"
-            className="flex items-center justify-center gap-1.5 rounded-xl border border-[#1A1F36]/10 bg-white py-2 text-xs font-bold text-[#1A1F36] hover:bg-[#F5F0EB] transition"
-          >
-            <Truck className="w-3.5 h-3.5 text-[#C4622D]" />
-            Track Delivery
+            View Active Prescriptions
           </Link>
         </div>
 

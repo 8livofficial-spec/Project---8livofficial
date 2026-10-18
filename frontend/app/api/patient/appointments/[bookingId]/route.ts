@@ -131,13 +131,42 @@ export async function GET(request: Request, context: RouteContext) {
     let doctor: DoctorProfile | null = null
 
     if (appointment.doctor_id) {
-      const { data: doctorProfile } = await supabaseAdmin
-        .from('doctor_profiles')
-        .select('id, full_name, specialty')
-        .eq('id', appointment.doctor_id)
+      const { data: prov } = await supabaseAdmin
+        .from('provider_profiles')
+        .select('provider_id, full_name, specialization, qualification')
+        .eq('provider_id', appointment.doctor_id)
         .maybeSingle()
 
-      doctor = (doctorProfile as DoctorProfile | null) || null
+      if (prov?.full_name) {
+        doctor = {
+          id: prov.provider_id,
+          full_name: prov.full_name.startsWith('Dr.') ? prov.full_name : `Dr. ${prov.full_name}`,
+          specialty: prov.specialization || prov.qualification || 'Metabolic Physician Specialist'
+        }
+      } else {
+        const { data: prof } = await supabaseAdmin
+          .from('profiles')
+          .select('id, first_name, last_name, display_id')
+          .eq('id', appointment.doctor_id)
+          .maybeSingle()
+
+        if (prof) {
+          const name = prof.display_id || `${prof.first_name || ''} ${prof.last_name || ''}`.trim()
+          doctor = {
+            id: prof.id,
+            full_name: name.startsWith('Dr.') ? name : `Dr. ${name}`,
+            specialty: 'Metabolic Physician Specialist'
+          }
+        } else {
+          const { data: doctorProfile } = await supabaseAdmin
+            .from('doctor_profiles')
+            .select('id, full_name, specialty')
+            .eq('id', appointment.doctor_id)
+            .maybeSingle()
+
+          doctor = (doctorProfile as DoctorProfile | null) || null
+        }
+      }
     }
 
     const { data: matchedPayment } = await supabaseAdmin
@@ -253,12 +282,12 @@ export async function GET(request: Request, context: RouteContext) {
         membershipStatus: membershipActive ? 'ACTIVE' : membershipValidity.expiresAt ? 'EXPIRED' : selectedMembershipTier ? 'SELECTED' : 'NOT_SELECTED',
         membershipExpiresAt: membershipValidity.expiresAt,
         dashboardAccess: membershipActive,
-        meetingProvider,
+        meetingProvider: '8Liv Encrypted Telehealth',
         meetingRoom: null,
         roomUrl: null,
         callId: joinDisabled ? null : callId,
         callType: joinDisabled ? null : callType,
-        paymentAmount: 499,
+        paymentAmount: payment?.amount ? Number(payment.amount) : ((consultation as any)?.consultation_fee ? Number((consultation as any).consultation_fee) : 499),
         paymentStatus: payment?.status === 'success' || payment?.status === 'paid' ? 'PAID' : (payment?.status || 'PENDING').toUpperCase(),
         paymentId: payment?.transaction_id || null,
         paymentMethod: payment?.payment_method || null,

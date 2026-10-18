@@ -161,14 +161,6 @@ function validateBookingEligibility(context: PatientBookingContext, appointmentT
     return null
   }
 
-  if (!context.assessment) return 'Complete your assessment before booking the initial consultation.'
-  const eligibilityStatus = String(
-    context.assessment.medical_history?.eligibility_status
-    || (context.assessment.is_eligible ? 'ELIGIBLE' : 'NOT_ELIGIBLE')
-  ).toUpperCase()
-  if (eligibilityStatus !== 'ELIGIBLE' && eligibilityStatus !== 'REVIEW_REQUIRED') {
-    return 'Eligibility approval is required before booking the initial consultation.'
-  }
   return null
 }
 
@@ -652,14 +644,47 @@ export async function requestPatientManualDoctorAppointment(params: {
     return { error: 'Verified consultation payment is required before requesting a manual slot.', status: 402 as const }
   }
 
+  let doctorId = context.primaryDoctorId || null
+  if (!doctorId) {
+    const { data: provs } = await supabaseAdmin
+      .from('provider_profiles')
+      .select('provider_id')
+      .eq('role', 'doctor')
+      .eq('status', 'active')
+      .limit(1)
+    if (provs && provs.length > 0) {
+      doctorId = provs[0].provider_id
+    } else {
+      const { data: profs } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('role', 'doctor')
+        .limit(1)
+      doctorId = profs?.[0]?.id || 'd7e54501-04b4-49d1-94d8-c30cfd6283be'
+    }
+  }
+
   const appointmentId = randomUUID()
+  const meeting = createStreamMeeting({
+    appointmentId,
+    providerRole: 'doctor',
+    patientId: params.patientId,
+    providerId: doctorId || '',
+    createdBy: params.patientId,
+  })
+
   const payload: Record<string, unknown> = {
     id: appointmentId,
     patient_id: params.patientId,
-    doctor_id: null,
+    doctor_id: doctorId,
     booking_date: params.selectedDate,
     booking_time: normalizedTime,
     status: 'booking_pending',
+    meeting_provider: meeting.meetingProvider,
+    call_id: meeting.callId,
+    call_type: meeting.callType,
+    created_by: meeting.createdBy,
+    meeting_status: meeting.meetingStatus,
     appointment_type: params.appointmentType === INITIAL_DOCTOR_CONSULTATION ? 'INITIAL_CONSULTATION' : 'FOLLOW_UP_CONSULTATION',
     is_completed: false,
   }

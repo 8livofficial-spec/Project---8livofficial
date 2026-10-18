@@ -7,7 +7,7 @@ import {
   ShieldCheck,
   ArrowRight,
   Stethoscope,
-  Truck,
+  Award,
   HeartPulse,
   CalendarCheck,
 } from 'lucide-react'
@@ -45,7 +45,7 @@ const FALLBACK_PLANS: TreatmentPlan[] = [
       'Follow-up review consultation included (₹0)',
       'High-protein Indian meal blueprint tailored to your family',
       'Dedicated fitness coach movement roadmap',
-      'Doorstep prescription delivery via partner pharmacy',
+      'Direct digital e-prescription access',
     ],
     displayOrder: 1,
   },
@@ -66,7 +66,7 @@ const FALLBACK_PLANS: TreatmentPlan[] = [
       'Continuous clinical dietitian guidance & chat',
       'Habit, energy & biomarker progress tracking',
       'Safe dosage titration as your body adapts',
-      'Care team messaging & priority delivery dispatch',
+      'Care team messaging & ongoing doctor check-ins',
     ],
     displayOrder: 2,
   },
@@ -86,7 +86,7 @@ const FALLBACK_PLANS: TreatmentPlan[] = [
       'Included monthly doctor review consultations (₹0)',
       'Advanced metabolic coaching & progress reviews',
       'Dedicated clinical dietitian & certified trainer support',
-      'Priority cold-chain pharmacy dispatch',
+      'Priority physician consultation & prescription access',
       'Long-term set-point maintenance protocol',
     ],
     displayOrder: 3,
@@ -107,7 +107,7 @@ const FALLBACK_PLANS: TreatmentPlan[] = [
       '10% Instant Discount (Save ₹1,999)',
       'Included doctor follow-up consultation each month (₹0)',
       'Full dedicated multi-disciplinary care team',
-      'Priority partner pharmacy fulfillment',
+      'Dedicated clinician follow-ups & titration monitoring',
       'Long-term habit lock-in & maintenance protocol',
     ],
     displayOrder: 4,
@@ -170,7 +170,7 @@ export default function PricingShaderCards() {
           </h2>
 
           <p className="text-base md:text-lg text-slate-600 font-normal max-w-2xl mx-auto leading-relaxed">
-            All plans include licensed doctor video consultations, personalized Indian meal plans, dedicated coach support, and doorstep delivery coordination.
+            All plans include licensed doctor video consultations, personalized Indian meal plans, dedicated coach support, and verified medical care protocols.
           </p>
         </div>
 
@@ -276,8 +276,8 @@ export default function PricingShaderCards() {
             <span>No Hidden Cancellation Fees</span>
           </div>
           <div className="flex items-center gap-2">
-            <Truck className="w-4 h-4 text-[#00A884]" />
-            <span>Temperature-Controlled Delivery</span>
+            <Award className="w-4 h-4 text-[#00A884]" />
+            <span>Verified Clinical Protocols</span>
           </div>
         </div>
 

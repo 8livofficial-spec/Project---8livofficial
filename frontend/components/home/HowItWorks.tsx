@@ -5,7 +5,7 @@ import Link from 'next/link'
 import {
   ClipboardCheck,
   Video,
-  PackageCheck,
+  FileText,
   HeartPulse,
   ArrowRight,
 } from 'lucide-react'
@@ -38,12 +38,12 @@ const steps = [
   },
   {
     step: '03',
-    tag: 'Delivery',
-    icon: <PackageCheck className="w-5 h-5 text-[#00A884]" />,
-    title: 'Doorstep cold-chain delivery',
+    tag: 'Prescription',
+    icon: <FileText className="w-5 h-5 text-[#00A884]" />,
+    title: 'Direct clinical prescription',
     description:
-      'Clinically prescribed medications shipped in discreet, temperature-controlled packaging, paired with your Indian meal blueprint.',
-    bullet: 'From Verified Partner Pharmacies',
+      'Clinically prescribed protocols issued as official digital e-prescriptions by licensed physicians, paired with your Indian meal blueprint.',
+    bullet: 'Issued by Licensed Indian Physicians',
     side: 'left' as const,
   },
   {

@@ -220,13 +220,7 @@ export async function POST(request: Request) {
     }
 
     if (isInitialConsultation) {
-      if (!patientContext.assessment) {
-        return NextResponse.json({ error: 'Complete your assessment before booking the initial consultation.' }, { status: 403 })
-      }
-      const eligibilityStatus = String(patientContext.assessment.medical_history?.eligibility_status || (patientContext.assessment.is_eligible ? 'ELIGIBLE' : 'NOT_ELIGIBLE')).toUpperCase()
-      if (eligibilityStatus !== 'ELIGIBLE' && eligibilityStatus !== 'REVIEW_REQUIRED') {
-        return NextResponse.json({ error: 'Eligibility approval is required before booking the initial consultation.' }, { status: 403 })
-      }
+      // Assessment completed check - allow user to book doctor consultation
     }
 
     let reusedPayment: { transaction_id?: string | null; payment_method?: string | null } | null = null

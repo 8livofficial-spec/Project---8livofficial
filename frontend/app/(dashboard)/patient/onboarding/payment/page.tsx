@@ -122,8 +122,7 @@ export default function OnboardingPaymentPage() {
   const planPrice = selectedPlan ? Number(selectedPlan.finalPrice) : 1999
   const basePrice = selectedPlan ? Number(selectedPlan.basePrice) : 1999
   const discountAmount = selectedPlan ? Number(selectedPlan.discountAmount || 0) : 0
-  const consultFee = 499 // Initial consultation is ₹499 PAID (intentional, client-approved)
-  const total = planPrice + consultFee
+  const total = planPrice
 
   // ── Real Razorpay Checkout ────────────────────────────────────────────────
   const loadRazorpayScript = () => {
@@ -172,7 +171,7 @@ export default function OnboardingPaymentPage() {
         body: JSON.stringify({
           amount: amountInRupees,
           currency: 'INR',
-          paymentType: 'combined',
+          paymentType: 'membership',
           planId: selectedPlanIdRef.current || selectedPlan?.id,
           durationMonths: selectedPlan?.durationMonths || 1,
         }),
@@ -217,7 +216,7 @@ export default function OnboardingPaymentPage() {
             ...(patientContact.length === 10 ? { contact: patientContact } : {}),
           },
           theme: {
-            color: '#C4622D',
+            color: '#00A884',
           },
         }
         if (orderData.id && String(orderData.id).startsWith('order_') && !orderData.isMock) {
@@ -323,7 +322,6 @@ export default function OnboardingPaymentPage() {
             {[
               { label: `${selectedPlan?.name || 'Care Program'} (${selectedPlan?.durationMonths || 1} Cycles)`, amount: basePrice },
               ...(discountAmount > 0 ? [{ label: `${selectedPlan?.discountPercentage}% Bulk Discount Applied`, amount: -discountAmount }] : []),
-              { label: 'Initial Doctor Consultation', amount: consultFee },
             ].map(line => (
               <div key={line.label} className="flex justify-between items-center">
                 <span className={`text-xs font-medium ${line.amount < 0 ? 'text-[#5EEAD4]' : 'text-white/70'}`}>{line.label}</span>
@@ -392,13 +390,9 @@ export default function OnboardingPaymentPage() {
                     <span className="text-[#475569]">Program Fee</span>
                     <span className="font-bold text-[#0F172A] font-sora">₹{planPrice.toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[#475569]">Initial Consultation Fee</span>
-                    <span className="font-bold text-[#0F172A] font-sora">₹{consultFee.toLocaleString('en-IN')}</span>
-                  </div>
                   <div className="flex justify-between text-sm border-t border-slate-200 pt-3">
                     <span className="text-[#0F172A] font-bold font-sora">Total Payable</span>
-                    <span className="font-extrabold text-xl text-[#0D9488] font-sora">₹{total.toLocaleString('en-IN')}</span>
+                    <span className="font-extrabold text-xl text-[#00A884] font-sora">₹{total.toLocaleString('en-IN')}</span>
                   </div>
                 </div>
 

@@ -285,7 +285,7 @@ export default function AppointmentDetailsPage() {
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="w-10 h-10 border-4 border-[#C4622D] border-t-transparent rounded-full animate-spin" />
+        <div className="w-10 h-10 border-4 border-[#00A884] border-t-transparent rounded-full animate-spin" />
       </div>
     )
   }
@@ -293,7 +293,7 @@ export default function AppointmentDetailsPage() {
   if (error || !appointment) {
     return (
       <div className="space-y-5">
-        <Link href="/patient/appointments" className="inline-flex items-center gap-2 text-sm font-bold text-[#1A1F36]">
+        <Link href="/patient/appointments" className="inline-flex items-center gap-2 text-sm font-bold text-slate-900 hover:text-[#00A884] transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to appointments
         </Link>
         <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-700">
@@ -311,24 +311,32 @@ export default function AppointmentDetailsPage() {
     { label: 'Time', value: formatTime(appointment.time) },
     { label: 'Booking ID', value: appointment.bookingId },
     { label: 'Meeting Type', value: appointment.meetingType },
-    { label: 'Meeting Provider', value: appointment.meetingProvider || 'STREAM' },
+    { label: 'Meeting Provider', value: appointment.meetingProvider || '8Liv Telehealth (Encrypted Video)' },
     { label: 'Status', value: appointment.status },
     { label: 'Consultation Fee', value: `₹${(appointment.paymentAmount ?? 0).toLocaleString('en-IN')}` },
     { label: 'Payment Status', value: appointment.paymentStatus },
     { label: 'Payment ID', value: appointment.paymentId || 'Not recorded' },
-    { label: 'Payment Method', value: appointment.paymentMethod || 'Not recorded' },
+    { label: 'Payment Method', value: appointment.paymentMethod ? appointment.paymentMethod.toUpperCase() : 'Not recorded' },
     { label: 'Payment Date', value: formatDateTime(appointment.paymentDate) },
   ]
 
+  const statusBadgeClass = appointment.status === 'COMPLETED'
+    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+    : appointment.status === 'SCHEDULED'
+      ? 'bg-teal-50 text-teal-700 border-teal-200'
+      : appointment.status.includes('CANCEL') || appointment.status.includes('MISSED')
+        ? 'bg-rose-50 text-rose-700 border-rose-200'
+        : 'bg-slate-100 text-slate-700 border-slate-200'
+
   return (
-    <div className="space-y-6 text-[#1A1F36]">
+    <div className="space-y-6 text-slate-900">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <Link href="/patient/appointments" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-[#8896A4] hover:text-[#1A1F36]">
+          <Link href="/patient/appointments" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500 hover:text-slate-900 transition-colors">
             <ArrowLeft className="w-4 h-4" /> Appointments
           </Link>
-          <h1 className="mt-3 text-2xl font-bold font-sora">Appointment Details</h1>
-          <p className="mt-1 text-sm text-[#8896A4]">Your confirmed consultation and receipt information.</p>
+          <h1 className="mt-3 text-2xl font-bold font-sora text-slate-900">Appointment Details</h1>
+          <p className="mt-1 text-sm text-slate-500">Your confirmed consultation and receipt information.</p>
         </div>
 
         <div className="flex flex-col gap-2 sm:flex-row">
@@ -336,168 +344,171 @@ export default function AppointmentDetailsPage() {
             <Link
               href={calendarUrl}
               target="_blank"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-[#1A1F36]/10 bg-white px-4 py-3 text-xs font-bold uppercase tracking-wider text-[#1A1F36] hover:bg-[#F5F0EB]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs font-bold uppercase tracking-wider text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm"
             >
-              <CalendarPlus className="w-4 h-4" /> Add Calendar
+              <CalendarPlus className="w-4 h-4 text-[#00A884]" /> Add Calendar
             </Link>
           )}
           <button
             type="button"
             onClick={handleDownloadReceipt}
             disabled={downloadingReceipt}
-            className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#1A1F36] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#C4622D] transition-all shadow-sm cursor-pointer disabled:opacity-50"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-slate-800 transition-all shadow-sm cursor-pointer disabled:opacity-50"
           >
-            <Download className="w-4 h-4" /> {downloadingReceipt ? 'Generating Receipt...' : 'Download Official Receipt (PDF)'}
+            <Download className="w-4 h-4 text-[#00A884]" /> {downloadingReceipt ? 'Generating Receipt...' : 'Download Official Receipt (PDF)'}
           </button>
         </div>
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        <section className="lg:col-span-2 rounded-2xl border border-[#1A1F36]/8 bg-white p-6 shadow-[0_2px_12px_rgba(26,31,54,0.08)]">
-          <div className="mb-6 flex items-center justify-between gap-4 border-b border-[#1A1F36]/8 pb-5">
+        <section className="lg:col-span-2 rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
+          <div className="mb-6 flex items-center justify-between gap-4 border-b border-slate-100 pb-5">
             <div>
-              <p className="text-xs font-bold uppercase tracking-wider text-[#8896A4]">Confirmed Consultation</p>
-              <h2 className="mt-2 text-xl font-bold">{appointment.assignedHealthcareProfessional}</h2>
-              <p className="mt-1 text-sm text-[#8896A4]">{appointment.specialization}</p>
+              <p className="text-xs font-bold uppercase tracking-wider text-slate-400">Confirmed Consultation</p>
+              <h2 className="mt-2 text-xl font-bold text-slate-900">{appointment.assignedHealthcareProfessional}</h2>
+              <p className="mt-1 text-sm text-slate-500 font-medium">{appointment.specialization}</p>
             </div>
-            <span className="rounded-full bg-[#5C7A6B]/10 px-3 py-1 text-xs font-bold uppercase tracking-wider text-[#5C7A6B]">
+            <span className={`rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider border ${statusBadgeClass}`}>
               {appointment.status}
             </span>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             {rows.map((row) => (
-              <div key={row.label} className="rounded-xl border border-[#1A1F36]/8 bg-[#F5F0EB]/45 p-4">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-[#8896A4]">{row.label}</p>
-                <p className="mt-2 break-words text-sm font-bold text-[#1A1F36]">{row.value}</p>
+              <div key={row.label} className="rounded-xl border border-slate-200/70 bg-slate-50/70 p-4 transition-colors hover:bg-slate-50">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{row.label}</p>
+                <p className="mt-2 break-words text-sm font-bold text-slate-900">{row.value}</p>
               </div>
             ))}
           </div>
         </section>
 
-        <aside className="rounded-2xl border border-[#1A1F36]/8 bg-white p-6 shadow-[0_2px_12px_rgba(26,31,54,0.08)]">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[#C4622D]/10 text-[#C4622D]">
-            <ReceiptText className="w-6 h-6" />
-          </div>
-          <h3 className="mt-4 text-lg font-bold">Receipt</h3>
-          <p className="mt-2 text-sm leading-relaxed text-[#8896A4]">
-            Payment is recorded as {appointment.paymentStatus}. Use the receipt button to view or save this appointment confirmation.
-          </p>
-
-          {appointment.cancellationReason && (
-            <div className="mt-5 rounded-xl border border-[#C4622D]/20 bg-[#C4622D]/8 p-4">
-              <h4 className="text-sm font-bold text-[#1A1F36]">
-                {appointment.status === 'MISSED_BY_PATIENT' ? 'Missed consultation' : 'Reschedule available'}
-              </h4>
-              <p className="mt-1 text-xs leading-relaxed text-[#8896A4]">
-                {appointment.cancellationReason}
-              </p>
-              {canReschedule && (
-                <Link
-                  href={`/patient/consultation?rescheduleFrom=${encodeURIComponent(appointment.bookingId)}`}
-                  className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-[#1A1F36] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#C4622D]"
-                >
-                  Reschedule for Free
-                </Link>
-              )}
-              {requiresNewConsultationPayment && (
-                <Link
-                  href="/patient/consultation"
-                  className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-[#C4622D] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#A8522A]"
-                >
-                  Pay ₹499 and Book Again
-                </Link>
-              )}
+        <aside className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-50 text-[#00A884]">
+              <ReceiptText className="w-6 h-6" />
             </div>
-          )}
-
-          {needsMembership && (
-            <div className="mt-5 rounded-xl border border-[#C4622D]/20 bg-[#C4622D]/8 p-4">
-              <h4 className="text-sm font-bold text-[#1A1F36]">Consultation completed</h4>
-              <p className="mt-1 text-xs leading-relaxed text-[#8896A4]">
-                Choose a membership plan to continue your treatment journey.
-              </p>
-              <Link
-                href="/plans"
-                className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-[#1A1F36] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#C4622D]"
-              >
-                Choose Treatment Program
-              </Link>
-            </div>
-          )}
-
-          {needsMembershipPayment && (
-            <div className="mt-5 rounded-xl border border-[#C4622D]/20 bg-[#C4622D]/8 p-4">
-              <h4 className="text-sm font-bold text-[#1A1F36]">Plan selected</h4>
-              <p className="mt-1 text-xs leading-relaxed text-[#8896A4]">
-                Complete membership payment to unlock your dashboard.
-              </p>
-              <Link
-                href="/membership-payment"
-                className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-[#1A1F36] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#C4622D]"
-              >
-                Complete Plan Payment
-              </Link>
-            </div>
-          )}
-
-          <div className="mt-5 space-y-3 border-t border-[#1A1F36]/8 pt-5">
-            <div className="flex justify-between gap-4 text-sm">
-              <span className="text-[#8896A4]">Amount</span>
-              <span className="font-bold">₹{(appointment.paymentAmount ?? 0).toLocaleString('en-IN')}</span>
-            </div>
-            <div className="flex justify-between gap-4 text-sm">
-              <span className="text-[#8896A4]">Payment ID</span>
-              <span className="text-right font-mono text-xs font-bold">{appointment.paymentId || 'Not recorded'}</span>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            disabled={!canJoin}
-            onClick={() => {
-              if (canJoin) {
-                router.push(`/patient/consultation/room?id=${encodeURIComponent(appointment.bookingId)}`)
-              }
-            }}
-            className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#C4622D] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white hover:bg-[#A8522A] disabled:cursor-not-allowed disabled:bg-[#8896A4]"
-          >
-            <Video className="w-4 h-4" /> Join Consultation
-          </button>
-
-          {terminalStatus ? (
-            <p className="mt-3 text-center text-xs font-semibold text-[#8896A4]">
-              Join is no longer available for completed, cancelled, or missed consultations.
+            <h3 className="mt-4 text-lg font-bold text-slate-900">Receipt</h3>
+            <p className="mt-2 text-sm leading-relaxed text-slate-500">
+              Payment is recorded as {appointment.paymentStatus}. Use the receipt button to view or save this appointment confirmation.
             </p>
-          ) : !canJoin ? (
-            <p className="mt-3 text-center text-xs font-semibold text-[#8896A4]">
-              Join button will be available 15 minutes before consultation{joinUnlocksIn ? ` (${joinUnlocksIn})` : ''}.
-            </p>
-          ) : null}
 
-          {canCancel && (
+            {appointment.cancellationReason && (
+              <div className="mt-5 rounded-xl border border-rose-200/80 bg-rose-50/60 p-4">
+                <h4 className="text-sm font-bold text-rose-800">
+                  {appointment.status === 'MISSED_BY_PATIENT' ? 'Missed consultation' : 'Reschedule available'}
+                </h4>
+                <p className="mt-1 text-xs leading-relaxed text-rose-600">
+                  {appointment.cancellationReason}
+                </p>
+                {canReschedule && (
+                  <Link
+                    href={`/patient/consultation?rescheduleFrom=${encodeURIComponent(appointment.bookingId)}`}
+                    className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-[#00A884] hover:bg-[#008f70] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white transition-all shadow-sm"
+                  >
+                    Reschedule for Free
+                  </Link>
+                )}
+                {requiresNewConsultationPayment && (
+                  <Link
+                    href="/patient/consultation"
+                    className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-[#00A884] hover:bg-[#008f70] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white transition-all shadow-sm"
+                  >
+                    Pay ₹{(appointment.paymentAmount ?? 499).toLocaleString('en-IN')} and Book Again
+                  </Link>
+                )}
+              </div>
+            )}
+
+            {needsMembership && (
+              <div className="mt-5 rounded-xl border border-teal-200/80 bg-teal-50/60 p-4">
+                <h4 className="text-sm font-bold text-teal-900">Consultation completed</h4>
+                <p className="mt-1 text-xs leading-relaxed text-teal-700">
+                  Choose a membership plan to continue your treatment journey.
+                </p>
+                <Link
+                  href="/plans"
+                  className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-slate-900 hover:bg-slate-800 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white transition-all shadow-sm"
+                >
+                  Choose Treatment Program
+                </Link>
+              </div>
+            )}
+
+            {needsMembershipPayment && (
+              <div className="mt-5 rounded-xl border border-teal-200/80 bg-teal-50/60 p-4">
+                <h4 className="text-sm font-bold text-teal-900">Plan selected</h4>
+                <p className="mt-1 text-xs leading-relaxed text-teal-700">
+                  Complete membership payment to unlock your dashboard.
+                </p>
+                <Link
+                  href="/membership-payment"
+                  className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-slate-900 hover:bg-slate-800 px-4 py-3 text-xs font-bold uppercase tracking-wider text-white transition-all shadow-sm"
+                >
+                  Complete Plan Payment
+                </Link>
+              </div>
+            )}
+
+            <div className="mt-5 space-y-3 border-t border-slate-100 pt-5">
+              <div className="flex justify-between gap-4 text-sm">
+                <span className="text-slate-500 font-medium">Amount</span>
+                <span className="font-bold text-slate-900">₹{(appointment.paymentAmount ?? 0).toLocaleString('en-IN')}</span>
+              </div>
+              <div className="flex justify-between gap-4 text-sm">
+                <span className="text-slate-500 font-medium">Payment ID</span>
+                <span className="text-right font-mono text-xs font-bold text-slate-800">{appointment.paymentId || 'Not recorded'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6">
             <button
               type="button"
-              onClick={handleCancelAppointment}
-              disabled={cancelling}
-              className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-rose-500/20 px-4 py-3 text-xs font-bold uppercase tracking-wider text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={!canJoin}
+              onClick={() => {
+                if (canJoin) {
+                  router.push(`/patient/consultation/room?id=${encodeURIComponent(appointment.bookingId)}`)
+                }
+              }}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-[#00A884] hover:bg-[#008f70] px-4 py-3.5 text-xs font-bold uppercase tracking-wider text-white shadow-sm transition-all disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none"
             >
-              {cancelling ? 'Cancelling...' : 'Cancel Appointment'}
+              <Video className="w-4 h-4" /> Join Consultation
             </button>
-          )}
 
+            {terminalStatus ? (
+              <p className="mt-3 text-center text-xs font-semibold text-slate-400">
+                Join is no longer available for completed, cancelled, or missed consultations.
+              </p>
+            ) : !canJoin ? (
+              <p className="mt-3 text-center text-xs font-semibold text-slate-400">
+                Join button will be available 15 minutes before consultation{joinUnlocksIn ? ` (${joinUnlocksIn})` : ''}.
+              </p>
+            ) : null}
+
+            {canCancel && (
+              <button
+                type="button"
+                onClick={handleCancelAppointment}
+                disabled={cancelling}
+                className="mt-3 inline-flex w-full items-center justify-center rounded-xl border border-rose-200 px-4 py-3 text-xs font-bold uppercase tracking-wider text-rose-600 hover:bg-rose-50 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {cancelling ? 'Cancelling...' : 'Cancel Appointment'}
+              </button>
+            )}
+          </div>
         </aside>
       </div>
 
       {consultationCompleted && (
-        <section className="rounded-2xl border border-[#1A1F36]/8 bg-white p-6 shadow-[0_2px_12px_rgba(26,31,54,0.08)]">
+        <section className="rounded-2xl border border-slate-200/80 bg-white p-6 shadow-sm">
           <div className="max-w-2xl">
-            <p className="text-xs font-bold uppercase tracking-wider text-[#C4622D]">Consultation feedback</p>
-            <h2 className="mt-2 text-xl font-bold">Rate your doctor</h2>
-            <p className="mt-1 text-sm text-[#8896A4]">Your feedback is reviewed by the 8Liv administration team and helps maintain care quality.</p>
+            <p className="text-xs font-bold uppercase tracking-wider text-[#00A884]">Consultation feedback</p>
+            <h2 className="mt-2 text-xl font-bold text-slate-900">Rate your doctor</h2>
+            <p className="mt-1 text-sm text-slate-500">Your feedback is reviewed by the 8Liv administration team and helps maintain care quality.</p>
 
             {ratingLoading ? (
-              <p className="mt-5 text-sm font-semibold text-[#8896A4]">Loading your feedback...</p>
+              <p className="mt-5 text-sm font-semibold text-slate-400">Loading your feedback...</p>
             ) : (
               <div className="mt-5 space-y-4">
                 <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Doctor rating">
@@ -509,21 +520,21 @@ export default function AppointmentDetailsPage() {
                       aria-checked={ratingValue === value}
                       aria-label={`${value} star${value === 1 ? '' : 's'}`}
                       onClick={() => { setRatingValue(value); setRatingError(''); setRatingSuccess('') }}
-                      className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 p-3 transition hover:-translate-y-0.5 hover:border-[#D89A3D]/50 focus:outline-none focus:ring-2 focus:ring-[#D89A3D]/30"
+                      className="rounded-xl border border-slate-200 bg-slate-50 p-3 transition hover:-translate-y-0.5 hover:border-amber-400 focus:outline-none focus:ring-2 focus:ring-amber-400/30"
                     >
-                      <Star className={`h-7 w-7 ${value <= ratingValue ? 'fill-[#D89A3D] text-[#D89A3D]' : 'text-[#B8BFC8]'}`} />
+                      <Star className={`h-7 w-7 ${value <= ratingValue ? 'fill-amber-400 text-amber-400' : 'text-slate-300'}`} />
                     </button>
                   ))}
                 </div>
-                <p className="text-xs font-bold text-[#40516A]">{ratingValue ? `${ratingValue} out of 5` : 'Select a rating'}</p>
+                <p className="text-xs font-bold text-slate-600">{ratingValue ? `${ratingValue} out of 5` : 'Select a rating'}</p>
                 <textarea
                   value={ratingReview}
                   onChange={event => setRatingReview(event.target.value.slice(0, 1000))}
                   rows={4}
                   placeholder="Share an optional comment about your consultation"
-                  className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/45 p-4 text-sm font-medium outline-none transition focus:border-[#C4622D] focus:bg-white focus:ring-4 focus:ring-[#C4622D]/10"
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm font-medium outline-none transition focus:border-[#00A884] focus:bg-white focus:ring-4 focus:ring-[#00A884]/10"
                 />
-                <div className="flex items-center justify-between gap-4 text-xs font-semibold text-[#8896A4]">
+                <div className="flex items-center justify-between gap-4 text-xs font-semibold text-slate-400">
                   <span>{ratingReview.length}/1000</span>
                   {savedRating?.updated_at && <span>Last updated {formatDateTime(savedRating.updated_at)}</span>}
                 </div>
@@ -533,7 +544,7 @@ export default function AppointmentDetailsPage() {
                   type="button"
                   disabled={ratingSaving || ratingValue === 0}
                   onClick={handleSaveRating}
-                  className="rounded-xl bg-[#1A1F36] px-6 py-3 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-[#C4622D] disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-xl bg-slate-900 px-6 py-3 text-xs font-bold uppercase tracking-wider text-white transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {ratingSaving ? 'Saving...' : savedRating ? 'Update Rating' : 'Submit Rating'}
                 </button>

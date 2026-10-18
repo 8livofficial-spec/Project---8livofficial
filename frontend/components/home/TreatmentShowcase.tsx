@@ -13,7 +13,7 @@ const treatments = [
     imageSrc: '/images/card_glp1_meds.jpg',
     imageAlt: 'GLP-1 pre-filled pen and clinical medicine vial',
     badge: 'Evidence-Based',
-    tags: ['Doctor Supervised', 'Cold-Chain Delivery', 'Dosage Calibrated'],
+    tags: ['Doctor Supervised', 'Direct Prescription', 'Dosage Calibrated'],
     href: '/assessment',
   },
   {

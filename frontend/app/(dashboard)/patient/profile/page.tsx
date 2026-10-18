@@ -1,10 +1,9 @@
 'use client'
 
 import React, { useState, useEffect } from 'react'
-import { User, Mail, Phone, Calendar, Scale, Ruler, Lock, CheckCircle2 } from 'lucide-react'
+import { User, Mail, Phone, Calendar, Scale, Ruler, Lock, CheckCircle2, ShieldCheck, ArrowRight } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import { usePatientData } from '@/hooks/usePatientData'
-import { motion } from 'framer-motion'
 import { normalizePhoneNumber } from '@/lib/phone'
 
 export default function PatientProfilePage() {
@@ -25,31 +24,52 @@ export default function PatientProfilePage() {
   const [successMsg, setSuccessMsg] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
 
-  // Populate state when data loads
+  // Populate state with smart fallback cascading across profile, assessment, and user metadata
   useEffect(() => {
-    if (profile) {
-      setFirstName(profile.first_name || '')
-      setLastName(profile.last_name || '')
-      setPhoneNumber(profile.phone_number || '')
-    } else if (assessment) {
-      setFirstName(assessment.first_name || '')
-      setLastName(assessment.last_name || '')
-      setPhoneNumber(assessment.phone_number || '')
-    }
+    const meta = user?.user_metadata || {}
+    const metaFullName = meta.full_name || meta.name || ''
+    const metaParts = metaFullName.trim().split(/\s+/)
+    const emailPrefix = user?.email ? user.email.split('@')[0] : ''
+
+    const resolvedFirst =
+      profile?.first_name ||
+      assessment?.first_name ||
+      meta.first_name ||
+      (metaParts[0] && metaParts[0] !== 'Patient' ? metaParts[0] : '') ||
+      (profile?.display_id && profile.display_id.trim() ? profile.display_id.split(' ')[0] : '') ||
+      emailPrefix
+
+    const resolvedLast =
+      profile?.last_name ||
+      assessment?.last_name ||
+      meta.last_name ||
+      (metaParts.length > 1 ? metaParts.slice(1).join(' ') : '') ||
+      (profile?.display_id && profile.display_id.trim().split(' ').length > 1 ? profile.display_id.split(' ').slice(1).join(' ') : '')
+
+    const resolvedPhone =
+      profile?.phone_number ||
+      assessment?.phone_number ||
+      meta.phone_number ||
+      user?.phone ||
+      ''
+
+    setFirstName(resolvedFirst)
+    setLastName(resolvedLast)
+    setPhoneNumber(resolvedPhone)
 
     if (assessment) {
-      setAge(assessment.age?.toString() || '')
-      setHeight(assessment.height_cm?.toString() || '')
-      setWeight(assessment.weight_kg?.toString() || '')
-      setGoalWeight(assessment.goal_weight_kg?.toString() || '')
+      if (assessment.age) setAge(assessment.age.toString())
+      if (assessment.height_cm) setHeight(assessment.height_cm.toString())
+      if (assessment.weight_kg) setWeight(assessment.weight_kg.toString())
+      if (assessment.goal_weight_kg) setGoalWeight(assessment.goal_weight_kg.toString())
     }
-  }, [profile, assessment])
+  }, [profile, assessment, user])
 
   if (loading) {
     return (
-      <div className="space-y-6 max-w-4xl font-sans text-[#1A1F36] animate-pulse" aria-busy="true">
+      <div className="space-y-6 max-w-4xl font-sans text-[#11241A] animate-pulse" aria-busy="true">
         <div className="h-8 w-44 bg-slate-200/80 rounded-xl" />
-        <div className="dash-card p-6 sm:p-8 space-y-6 bg-white border border-slate-200/70 rounded-2xl">
+        <div className="p-6 sm:p-8 space-y-6 bg-white border border-slate-200/70 rounded-3xl">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-slate-100" />
             <div className="space-y-2">
@@ -80,102 +100,61 @@ export default function PatientProfilePage() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) throw new Error('No active session.')
 
-      const userId = session.user.id
       const normalizedPhone = normalizePhoneNumber(phoneNumber)
-      if (!normalizedPhone.isValid) {
-        throw new Error('Please enter a valid mobile number with country code.')
+      if (phoneNumber.trim() && !normalizedPhone.isValid) {
+        throw new Error('Please enter a valid mobile number with country code (e.g. +91 98765 43210).')
       }
 
-      // ── 1. Update Profiles Table ──
-      const { error: profileErr } = await supabase
-        .from('profiles')
-        .upsert({
-          id: userId,
-          first_name: firstName,
-          last_name: lastName,
-          phone_number: normalizedPhone.e164,
-          role: 'patient',
-          updated_at: new Date().toISOString()
-        })
+      // Execute through server endpoint to avoid PostgreSQL RLS recursion (42P17)
+      const res = await fetch('/api/patient/profile', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({
+          firstName,
+          lastName,
+          phoneNumber: normalizedPhone.isValid ? normalizedPhone.e164 : phoneNumber,
+          age,
+          height,
+          weight,
+          goalWeight,
+        }),
+      })
 
-      if (profileErr) throw profileErr
-
-      // ── 2. Update Health Assessments Table ──
-      // First check if an assessment row already exists for this patient
-      const { data: existingAssess } = await supabase
-        .from('health_assessments')
-        .select('id')
-        .eq('patient_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(1)
-
-      const updateData = {
-        first_name: firstName,
-        last_name: lastName,
-        phone_number: normalizedPhone.e164,
-        age: age ? parseInt(age) : null,
-        height_cm: height ? parseFloat(height) : null,
-        weight_kg: weight ? parseFloat(weight) : null,
-        goal_weight_kg: goalWeight ? parseFloat(goalWeight) : null,
-        updated_at: new Date().toISOString()
+      const data = await res.json()
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update profile.')
       }
 
-      if (existingAssess && existingAssess.length > 0) {
-        // Update existing row
-        const { error: assessErr } = await supabase
-          .from('health_assessments')
-          .update(updateData)
-          .eq('id', existingAssess[0].id)
-
-        if (assessErr) throw assessErr
-      } else {
-        // Insert new row
-        const { error: assessErr } = await supabase
-          .from('health_assessments')
-          .insert({
-            patient_id: userId,
-            ...updateData
-          })
-
-        if (assessErr) throw assessErr
-      }
-
-      // ── 3. Record dynamic notification for updating profile ──
-      await supabase
-        .from('patient_notifications')
-        .insert({
-          patient_id: userId,
-          type: 'profile',
-          title: 'Profile Updated',
-          message: 'You successfully updated your personal profile details.',
-          is_read: false
-        })
-
-      setSuccessMsg('Your profile has been updated successfully! ✨')
-      reloadData()
-    } catch (err: any) {
+      setSuccessMsg('Your profile has been saved successfully! ✨')
+      await reloadData({ force: true })
+    } catch (err: unknown) {
       console.error(err)
-      setErrorMsg(err.message || 'Failed to update profile.')
+      setErrorMsg(err instanceof Error ? err.message : 'Failed to update profile.')
     } finally {
       setSaving(false)
     }
   }
 
+  const initials = `${firstName?.[0] || 'P'}${lastName?.[0] || 'M'}`.toUpperCase()
+
   return (
-    <div className="max-w-4xl mx-auto space-y-6 text-[#1A1F36]">
+    <div className="max-w-4xl mx-auto space-y-6 text-[#11241A] font-sans pb-12">
       <div>
-        <h3 className="text-xl font-bold font-sora text-[#1A1F36]">My Profile</h3>
-        <p className="text-xs text-[#8896A4] mt-1">Manage your personal details and wellness parameters</p>
+        <h3 className="text-2xl font-extrabold tracking-tight text-[#11241A]">My Profile</h3>
+        <p className="text-xs text-slate-500 mt-1">Manage your personal details and wellness biometrics</p>
       </div>
 
       {successMsg && (
-        <div className="bg-[#5C7A6B]/8 border border-[#5C7A6B]/25 text-[#5C7A6B] text-xs font-semibold px-4 py-3 rounded-xl flex items-center gap-2">
-          <CheckCircle2 size={14} /> {successMsg}
+        <div className="bg-emerald-50 border border-emerald-200 text-[#00A884] text-xs font-semibold px-4 py-3 rounded-2xl flex items-center gap-2 shadow-xs animate-in fade-in">
+          <CheckCircle2 size={16} className="text-[#00A884] shrink-0" /> {successMsg}
         </div>
       )}
 
       {errorMsg && (
-        <div className="bg-red-500/8 border border-red-500/25 text-red-500 text-xs font-semibold px-4 py-3 rounded-xl">
+        <div className="bg-rose-50 border border-rose-200 text-rose-600 text-xs font-semibold px-4 py-3 rounded-2xl shadow-xs animate-in fade-in">
           {errorMsg}
         </div>
       )}
@@ -184,92 +163,96 @@ export default function PatientProfilePage() {
         
         {/* Left Column: Summary Info */}
         <div className="md:col-span-1 space-y-6">
-          <div className="bg-white rounded-3xl p-6 border border-[#1A1F36]/6 shadow-sm text-center space-y-4">
-            <div className="w-20 h-20 bg-gradient-to-br from-[#C4622D] to-[#A8522A] rounded-full mx-auto flex items-center justify-center text-white text-2xl font-black font-sora shadow-md">
-              {firstName?.[0] || 'P'}{lastName?.[0] || 'M'}
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs text-center space-y-4">
+            <div className="w-20 h-20 bg-gradient-to-br from-[#00A884] to-[#0A8F70] rounded-full mx-auto flex items-center justify-center text-white text-2xl font-black shadow-md shadow-[#00A884]/20 ring-4 ring-emerald-50">
+              {initials}
             </div>
             <div>
-              <h4 className="font-bold text-[#1A1F36] font-sora truncate">{firstName} {lastName}</h4>
-              <p className="text-xs text-[#8896A4] truncate">{user?.email}</p>
+              <h4 className="font-extrabold text-[#11241A] text-lg truncate">
+                {firstName || lastName ? `${firstName} ${lastName}`.trim() : (user?.email?.split('@')[0] || 'Patient Member')}
+              </h4>
+              <p className="text-xs text-slate-400 truncate mt-0.5">{user?.email}</p>
             </div>
-            <div className="bg-[#F5F0EB] py-2 px-4 rounded-full inline-block">
-              <span className="text-xs font-bold text-[#C4622D] capitalize">
+            <div className="bg-emerald-50 border border-emerald-100 py-1.5 px-4 rounded-full inline-block">
+              <span className="text-xs font-bold text-[#00A884] capitalize">
                 {assessment?.membership_tier ? (isNaN(Number(assessment.membership_tier)) ? assessment.membership_tier : `${assessment.membership_tier} Month Program`) : 'Active Treatment Program'}
               </span>
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl p-6 border border-[#1A1F36]/6 shadow-sm space-y-4">
-            <h4 className="text-xs font-black uppercase tracking-wider text-[#8896A4]">Security Information</h4>
-            <div className="flex items-center gap-3 text-xs text-[#8896A4]">
-              <Lock size={14} className="text-[#C4622D]" />
+          <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-3">
+            <h4 className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400">Security Information</h4>
+            <div className="flex items-start gap-3 text-xs text-slate-600 bg-emerald-50/50 p-3.5 rounded-2xl border border-emerald-100/60">
+              <ShieldCheck size={18} className="text-[#00A884] shrink-0 mt-0.5" />
               <div>
-                <p className="font-bold text-[#1A1F36]">Encryption Active</p>
-                <p className="mt-0.5">Your medical records are encrypted.</p>
+                <p className="font-bold text-[#11241A]">Encryption Active</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">Your medical records and biometric data are encrypted in accordance with HIPAA clinical privacy standards.</p>
               </div>
             </div>
           </div>
         </div>
 
         {/* Right Column: Editable Details */}
-        <div className="md:col-span-2 bg-white rounded-3xl p-6 lg:p-8 border border-[#1A1F36]/6 shadow-sm space-y-6">
+        <div className="md:col-span-2 bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs space-y-6">
           <div className="space-y-4">
-            <h4 className="text-xs font-black uppercase tracking-wider text-[#8896A4] border-b border-[#1A1F36]/6 pb-2">
+            <h4 className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
               Personal Information
             </h4>
             
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] ml-1">First Name</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-slate-600 ml-1">First Name</label>
                 <div className="relative">
-                  <User size={14} className="absolute left-4 top-3.5 text-[#8896A4]" />
+                  <User size={15} className="absolute left-4 top-3.5 text-slate-400" />
                   <input
                     type="text"
                     required
                     value={firstName}
+                    placeholder="Enter first name"
                     onChange={e => setFirstName(e.target.value)}
-                    className="w-full bg-[#F5F0EB] border border-transparent rounded-xl pl-10 pr-4 py-3 text-sm text-[#1A1F36] font-medium outline-none focus:border-[#C4622D]/20 focus:ring-2 focus:ring-[#C4622D]/15"
+                    className="w-full bg-slate-50/70 border border-slate-200/80 rounded-2xl pl-10 pr-4 py-3 text-sm text-[#11241A] font-medium outline-none focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 transition-all shadow-2xs"
                   />
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] ml-1">Last Name</label>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-slate-600 ml-1">Last Name</label>
                 <div className="relative">
-                  <User size={14} className="absolute left-4 top-3.5 text-[#8896A4]" />
+                  <User size={15} className="absolute left-4 top-3.5 text-slate-400" />
                   <input
                     type="text"
                     required
                     value={lastName}
+                    placeholder="Enter last name"
                     onChange={e => setLastName(e.target.value)}
-                    className="w-full bg-[#F5F0EB] border border-transparent rounded-xl pl-10 pr-4 py-3 text-sm text-[#1A1F36] font-medium outline-none focus:border-[#C4622D]/20 focus:ring-2 focus:ring-[#C4622D]/15"
+                    className="w-full bg-slate-50/70 border border-slate-200/80 rounded-2xl pl-10 pr-4 py-3 text-sm text-[#11241A] font-medium outline-none focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 transition-all shadow-2xs"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] ml-1">Phone Number</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-slate-600 ml-1">Phone Number</label>
                 <div className="relative">
-                  <Phone size={14} className="absolute left-4 top-3.5 text-[#8896A4]" />
+                  <Phone size={15} className="absolute left-4 top-3.5 text-slate-400" />
                   <input
                     type="tel"
                     value={phoneNumber}
                     onChange={e => setPhoneNumber(e.target.value)}
-                    placeholder="Enter phone number"
-                    className="w-full bg-[#F5F0EB] border border-transparent rounded-xl pl-10 pr-4 py-3 text-sm text-[#1A1F36] font-medium outline-none focus:border-[#C4622D]/20 focus:ring-2 focus:ring-[#C4622D]/15"
+                    placeholder="+91 98765 43210"
+                    className="w-full bg-slate-50/70 border border-slate-200/80 rounded-2xl pl-10 pr-4 py-3 text-sm text-[#11241A] font-medium outline-none focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 transition-all shadow-2xs"
                   />
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] ml-1">Email Address</label>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-slate-600 ml-1">Email Address</label>
                 <div className="relative">
-                  <Mail size={14} className="absolute left-4 top-3.5 text-[#8896A4] opacity-50" />
+                  <Mail size={15} className="absolute left-4 top-3.5 text-slate-400 opacity-60" />
                   <input
                     type="email"
                     disabled
                     value={user?.email || ''}
-                    className="w-full bg-[#F5F0EB] opacity-60 border border-transparent rounded-xl pl-10 pr-4 py-3 text-sm text-[#8896A4] font-medium outline-none cursor-not-allowed"
+                    className="w-full bg-slate-100/70 border border-slate-200/60 rounded-2xl pl-10 pr-4 py-3 text-sm text-slate-400 font-medium outline-none cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -277,79 +260,88 @@ export default function PatientProfilePage() {
           </div>
 
           <div className="space-y-4">
-            <h4 className="text-xs font-black uppercase tracking-wider text-[#8896A4] border-b border-[#1A1F36]/6 pb-2">
+            <h4 className="text-[11px] font-mono font-bold uppercase tracking-wider text-slate-400 border-b border-slate-100 pb-2">
               Body Parameters & Biometrics
             </h4>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] ml-1">Age (Years)</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-slate-600 ml-1">Age (Years)</label>
                 <div className="relative">
-                  <Calendar size={14} className="absolute left-4 top-3.5 text-[#8896A4]" />
+                  <Calendar size={15} className="absolute left-4 top-3.5 text-slate-400" />
                   <input
                     type="number"
+                    min={18}
+                    max={100}
                     value={age}
                     onChange={e => setAge(e.target.value)}
-                    placeholder="Enter age"
-                    className="w-full bg-[#F5F0EB] border border-transparent rounded-xl pl-10 pr-4 py-3 text-sm text-[#1A1F36] font-medium outline-none focus:border-[#C4622D]/20 focus:ring-2 focus:ring-[#C4622D]/15"
+                    placeholder="e.g. 28"
+                    className="w-full bg-slate-50/70 border border-slate-200/80 rounded-2xl pl-10 pr-4 py-3 text-sm text-[#11241A] font-medium outline-none focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 transition-all shadow-2xs"
                   />
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] ml-1">Height (cm)</label>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-slate-600 ml-1">Height (cm)</label>
                 <div className="relative">
-                  <Ruler size={14} className="absolute left-4 top-3.5 text-[#8896A4]" />
+                  <Ruler size={15} className="absolute left-4 top-3.5 text-slate-400" />
                   <input
                     type="number"
                     step="0.1"
+                    min={100}
+                    max={250}
                     value={height}
                     onChange={e => setHeight(e.target.value)}
-                    placeholder="Enter height"
-                    className="w-full bg-[#F5F0EB] border border-transparent rounded-xl pl-10 pr-4 py-3 text-sm text-[#1A1F36] font-medium outline-none focus:border-[#C4622D]/20 focus:ring-2 focus:ring-[#C4622D]/15"
+                    placeholder="e.g. 172"
+                    className="w-full bg-slate-50/70 border border-slate-200/80 rounded-2xl pl-10 pr-4 py-3 text-sm text-[#11241A] font-medium outline-none focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 transition-all shadow-2xs"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] ml-1">Starting Weight (kg)</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-slate-600 ml-1">Starting Weight (kg)</label>
                 <div className="relative">
-                  <Scale size={14} className="absolute left-4 top-3.5 text-[#8896A4]" />
+                  <Scale size={15} className="absolute left-4 top-3.5 text-slate-400" />
                   <input
                     type="number"
                     step="0.1"
+                    min={35}
+                    max={250}
                     value={weight}
                     onChange={e => setWeight(e.target.value)}
-                    placeholder="Enter starting weight"
-                    className="w-full bg-[#F5F0EB] border border-transparent rounded-xl pl-10 pr-4 py-3 text-sm text-[#1A1F36] font-medium outline-none focus:border-[#C4622D]/20 focus:ring-2 focus:ring-[#C4622D]/15"
+                    placeholder="e.g. 78"
+                    className="w-full bg-slate-50/70 border border-slate-200/80 rounded-2xl pl-10 pr-4 py-3 text-sm text-[#11241A] font-medium outline-none focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 transition-all shadow-2xs"
                   />
                 </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] ml-1">Goal Weight (kg)</label>
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-slate-600 ml-1">Goal Weight (kg)</label>
                 <div className="relative">
-                  <Scale size={14} className="absolute left-4 top-3.5 text-[#8896A4]" />
+                  <Scale size={15} className="absolute left-4 top-3.5 text-slate-400" />
                   <input
                     type="number"
                     step="0.1"
+                    min={35}
+                    max={250}
                     value={goalWeight}
                     onChange={e => setGoalWeight(e.target.value)}
-                    placeholder="Enter goal weight"
-                    className="w-full bg-[#F5F0EB] border border-transparent rounded-xl pl-10 pr-4 py-3 text-sm text-[#1A1F36] font-medium outline-none focus:border-[#C4622D]/20 focus:ring-2 focus:ring-[#C4622D]/15"
+                    placeholder="e.g. 68"
+                    className="w-full bg-slate-50/70 border border-slate-200/80 rounded-2xl pl-10 pr-4 py-3 text-sm text-[#11241A] font-medium outline-none focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 transition-all shadow-2xs"
                   />
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="pt-2 flex justify-end">
+          <div className="pt-3 flex justify-end">
             <button
               type="submit"
               disabled={saving}
-              className="bg-[#1A1F36] hover:bg-[#C4622D] text-white font-bold px-8 py-3.5 rounded-full text-xs uppercase tracking-wider transition-colors disabled:opacity-50 cursor-pointer shadow-md shadow-[#1A1F36]/10"
+              className="bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white font-bold px-8 py-3.5 rounded-full text-xs uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shadow-md shadow-[#00A884]/20 hover:shadow-lg active:scale-[0.99] flex items-center gap-2"
             >
-              {saving ? 'Saving changes...' : 'Save Profile Details'}
+              <span>{saving ? 'Saving changes...' : 'Save Profile Details'}</span>
+              <ArrowRight size={14} />
             </button>
           </div>
         </div>

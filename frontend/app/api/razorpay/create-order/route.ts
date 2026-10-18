@@ -92,11 +92,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Amount is required in paise.' }, { status: 400 })
     } else if (paymentType === 'membership' || paymentType === 'combined') {
       selectedPricing = await getAuthoritativeSubscriptionPricing(lookupKey)
-      if (paymentType === 'membership') {
-        amount = selectedPricing.finalPrice
-      } else {
-        amount = selectedPricing.finalPrice + 499
-      }
+      amount = selectedPricing.finalPrice
     }
 
     const amountInPaise = isStandardOrder ? Math.round(Number(body.amount)) : Math.round(amount * 100)
