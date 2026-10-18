@@ -138,23 +138,23 @@ export default function RealStories() {
       {/* FULL-WIDTH CINEMATIC OUTDOOR BANNER (CLIP-INSET REVEAL)   */}
       {/* ========================================================= */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 sm:mt-16">
-        <ScrollRevealBox variant="clip-inset" delay={0.15} duration={0.9} className="relative rounded-[2.5rem] overflow-hidden aspect-[16/8] sm:aspect-[16/7] shadow-2xl flex items-center justify-center text-center p-6 sm:p-10 group">
+        <ScrollRevealBox variant="fade-up" delay={0.15} duration={0.8} className="relative rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden min-h-[380px] sm:min-h-0 sm:aspect-[16/7] md:aspect-[16/6] shadow-2xl flex items-center justify-center text-center p-6 sm:p-10 py-12 sm:py-14 group">
           <img
             src="/images/burnex/couple_banner.jpg"
             alt="Active couple smiling outdoors"
             className="absolute inset-0 w-full h-full object-cover object-center filter brightness-[0.4] saturate-[1.2] group-hover:scale-103 transition-transform duration-700 ease-out"
           />
-          <div className="relative z-10 max-w-2xl mx-auto text-white">
-            <h3 className="font-sans text-[26px] xs:text-[32px] sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight mb-4 drop-shadow-md">
+          <div className="relative z-10 max-w-2xl mx-auto text-white px-2">
+            <h3 className="font-sans text-2xl xs:text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight mb-3.5 sm:mb-4 drop-shadow-md">
               Transform Your Body,<br />
               Transform Your Life
             </h3>
-            <p className="font-sans text-sm sm:text-base text-slate-100 mb-8 max-w-lg mx-auto">
+            <p className="font-sans text-xs xs:text-sm sm:text-base text-slate-100 mb-6 sm:mb-8 max-w-lg mx-auto leading-relaxed">
               Join thousands who&apos;ve achieved their weight loss goals with our physician-guided personalized plans
             </p>
             <Link
               href="/assessment"
-              className="inline-flex items-center gap-2 px-9 py-4 rounded-full bg-[#00A884] hover:bg-[#008f70] text-white font-sans font-bold text-sm sm:text-base shadow-xl hover:shadow-[0_0_30px_rgba(0,168,132,0.6)] transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+              className="inline-flex items-center gap-2 px-7 sm:px-9 py-3.5 sm:py-4 rounded-full bg-[#00A884] hover:bg-[#008f70] text-white font-sans font-bold text-sm sm:text-base shadow-xl hover:shadow-[0_0_30px_rgba(0,168,132,0.6)] transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
             >
               <span>Start Free Assessment</span>
               <ArrowRight className="w-4 h-4" />

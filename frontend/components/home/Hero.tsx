@@ -2,7 +2,7 @@
 
 import React from 'react'
 import Link from 'next/link'
-import { ArrowRight, ShieldCheck, Dumbbell, Salad, CheckCircle2 } from 'lucide-react'
+import { ArrowRight, ShieldCheck, Salad, CheckCircle2 } from 'lucide-react'
 import KineticText from '@/components/ui/KineticText'
 import ScrollRevealBox from '@/components/ui/ScrollRevealBox'
 
@@ -148,27 +148,8 @@ export default function Hero() {
 
             {/* Bottom Glassmorphism Doctor Widget */}
             <div className="absolute bottom-4 inset-x-3 sm:inset-x-4 z-30 pointer-events-auto">
-              <div className="bg-[#040f08]/92 backdrop-blur-2xl border border-white/30 border-t-white/50 rounded-2xl p-4 sm:p-4.5 text-white shadow-2xl">
-                <div className="mb-2.5">
-                  <span className="font-sans font-bold text-sm sm:text-base tracking-tight text-white">Dedicated Doctor</span>
-                </div>
-
-                {/* Dosage Calibration Ramp */}
-                <div className="flex items-end justify-between h-11 sm:h-12 gap-1.5 px-1">
-                  <div className="w-3 sm:w-3.5 rounded-full bg-white/30 h-[40%]" />
-                  <div className="w-3 sm:w-3.5 rounded-full bg-white/50 h-[65%]" />
-                  <div className="w-3 sm:w-3.5 rounded-full bg-white/70 h-[85%]" />
-                  
-                  <div className="relative w-4 sm:w-4.5 rounded-full bg-gradient-to-t from-[#00A884] to-teal-300 h-[100%] shadow-[0_0_16px_rgba(0,168,132,0.9)]">
-                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 bg-white text-slate-950 font-mono text-[10px] font-bold px-2 py-0.5 rounded-full shadow-md whitespace-nowrap">
-                      Dosage
-                    </div>
-                  </div>
-
-                  <div className="w-3 sm:w-3.5 rounded-full bg-white/70 h-[75%]" />
-                  <div className="w-3 sm:w-3.5 rounded-full bg-white/50 h-[55%]" />
-                  <div className="w-3 sm:w-3.5 rounded-full bg-white/30 h-[40%]" />
-                </div>
+              <div className="bg-[#040f08]/92 backdrop-blur-2xl border border-white/30 border-t-white/50 rounded-2xl p-3.5 sm:p-4 text-white shadow-2xl text-center">
+                <span className="font-sans font-bold text-sm sm:text-base tracking-tight text-white">Dedicated Doctor</span>
               </div>
             </div>
 
@@ -194,42 +175,15 @@ export default function Hero() {
               />
             </div>
 
-            {/* Bottom Glassmorphism Fitness Widget (Text alone, no bullet points) */}
+            {/* Bottom Glassmorphism Fitness Widget */}
             <div className="absolute bottom-4 inset-x-3 sm:inset-x-4 z-30 pointer-events-auto">
-              <div className="bg-[#040f08]/92 backdrop-blur-2xl border border-white/25 rounded-2xl p-4 sm:p-4.5 text-white shadow-2xl flex items-center justify-between gap-3">
-                <div className="flex-1 pr-1">
-                  <div className="mb-1.5">
-                    <span className="font-sans font-bold text-sm sm:text-base tracking-tight text-white">Fitness Coach</span>
-                  </div>
-                  <p className="font-sans text-xs sm:text-sm text-slate-200 leading-snug">
-                    Lean muscle retention & guided resistance routines tailored to your pace.
-                  </p>
+              <div className="bg-[#040f08]/92 backdrop-blur-2xl border border-white/25 rounded-2xl p-4 sm:p-4.5 text-white shadow-2xl">
+                <div className="mb-1.5">
+                  <span className="font-sans font-bold text-sm sm:text-base tracking-tight text-white">Fitness Coach</span>
                 </div>
-
-                {/* Radial Progress Ring with Dumbbell */}
-                <div className="relative w-14 h-14 sm:w-15 sm:h-15 flex items-center justify-center shrink-0">
-                  <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
-                    <path
-                      className="text-white/20"
-                      strokeWidth="3.2"
-                      stroke="currentColor"
-                      fill="none"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                    <path
-                      className="text-[#00A884]"
-                      strokeDasharray="94, 100"
-                      strokeWidth="3.2"
-                      strokeLinecap="round"
-                      stroke="currentColor"
-                      fill="none"
-                      d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                    />
-                  </svg>
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Dumbbell className="w-5 h-5 text-[#00A884] drop-shadow-[0_0_6px_rgba(0,168,132,0.8)]" />
-                  </div>
-                </div>
+                <p className="font-sans text-xs sm:text-sm text-slate-200 leading-snug">
+                  Lean muscle retention & guided resistance routines tailored to your pace.
+                </p>
               </div>
             </div>
 

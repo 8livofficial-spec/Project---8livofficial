@@ -65,11 +65,8 @@ export default function FAQ() {
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 lg:gap-8 items-start">
             {/* AnimatedList Column */}
             <div className="lg:col-span-6 flex flex-col">
-              <div className="flex items-center justify-between px-1 mb-2 text-xs sm:text-sm text-slate-600 font-medium">
+              <div className="px-1 mb-2 text-xs sm:text-sm text-slate-600 font-medium">
                 <span>Frequently Asked Questions</span>
-                <span className="hidden lg:inline-block text-xs text-[#065F46] bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200 font-sora font-medium">
-                  Use ↑ / ↓ arrow keys
-                </span>
               </div>
 
               <AnimatedList
@@ -92,16 +89,7 @@ export default function FAQ() {
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`text-xs sm:text-sm font-mono font-bold px-2.5 py-0.5 rounded-md transition-colors ${
-                              isSelected
-                                ? 'bg-[#0F766E] text-white'
-                                : 'bg-slate-100 text-slate-600'
-                            }`}
-                          >
-                            {String(index + 1).padStart(2, '0')}
-                          </span>
+                        <div className="flex-1">
                           <p
                             className={`font-sora text-sm sm:text-base font-semibold leading-snug m-0 transition-colors ${
                               isSelected ? 'text-[#0F766E]' : 'text-slate-900'
