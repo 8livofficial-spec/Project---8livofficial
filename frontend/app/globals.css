@@ -1,51 +1,13 @@
 @import "tailwindcss";
 
-/* ─── Aptos Official TrueType Web Fonts ─── */
-@font-face {
-  font-family: 'Aptos';
-  src: local('Aptos Light'), local('Aptos-Light'), url('/fonts/aptos/Aptos-Light.ttf') format('truetype');
-  font-weight: 300;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Aptos';
-  src: local('Aptos'), local('Aptos Regular'), url('/fonts/aptos/Aptos-Regular.ttf') format('truetype');
-  font-weight: 400 600;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Aptos';
-  src: local('Aptos Bold'), local('Aptos-Bold'), url('/fonts/aptos/Aptos-Bold.ttf') format('truetype');
-  font-weight: 700 900;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Aptos Display';
-  src: local('Aptos Display'), url('/fonts/aptos/AptosDisplay-Regular.ttf') format('truetype');
-  font-weight: 400 600;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Aptos Display';
-  src: local('Aptos Display Bold'), local('AptosDisplay-Bold'), url('/fonts/aptos/AptosDisplay-Bold.ttf') format('truetype');
-  font-weight: 700 900;
-  font-style: normal;
-  font-display: swap;
-}
-
+/* ─── Production-Grade Typography Stack ───
+   Uses Next.js optimized Plus Jakarta Sans (self-hosted & zero CLS),
+   with local Aptos and system font fallbacks without missing file 404s. */
 :root {
-  --font-primary: 'Aptos', 'Aptos Display', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-primary: var(--font-plus-jakarta), 'Aptos', 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-inter: var(--font-primary);
   --font-sora: var(--font-primary);
-  --font-aptos: 'Aptos', sans-serif;
+  --font-aptos: var(--font-primary);
   --font-serif: var(--font-cormorant), 'Playfair Display', Georgia, serif;
   --bg: #FFFFFF; /* Clean White Background */
   --bg-cream: #F8FAFC; /* Clean Light Surface */
