@@ -347,11 +347,11 @@ export const EmailService = {
       to: input.email,
       patientId: input.patientId,
       template: 'DELIVERY_OUT_FOR_DELIVERY_OTP',
-      subject: `Your 8LIV Medicine Delivery is Out for Delivery • OTP: ${input.otpCode}`,
-      html: baseTemplate('Medicine Package Out for Delivery', `
+      subject: `Your 8LIV Care Package is Out for Delivery • OTP: ${input.otpCode}`,
+      html: baseTemplate('Care Package Out for Delivery', `
         <p style="font-size: 16px; line-height: 1.6;">Hello ${escapeHtml(input.name || 'there')},</p>
         <p style="font-size: 15px; line-height: 1.6; color: #40516A;">
-          Your 8LIV treatment package (<strong>${escapeHtml(input.orderReference)}</strong>) is now out for delivery with our designated delivery executive.
+          Your 8LIV care kit (<strong>${escapeHtml(input.orderReference)}</strong>) is now out for delivery with our designated courier partner.
         </p>
 
         <div style="background: #FDF9F6; border: 2px dashed #C4622D; border-radius: 16px; padding: 24px; text-align: center; margin: 24px 0;">

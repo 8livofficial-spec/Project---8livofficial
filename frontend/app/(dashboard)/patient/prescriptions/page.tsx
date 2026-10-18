@@ -23,15 +23,15 @@ import {
 import { authedFetch } from '@/lib/apiClient'
 
 const STATUS_LABELS: Record<string, string> = {
-  PENDING_ASSIGNMENT: 'Pending pharmacy allocation',
-  RECEIVED: 'Order sent to pharmacy',
-  ACKNOWLEDGED: 'Pharmacy processing',
-  STOCK_CONFIRMED: 'Stock confirmed',
-  PREPARING: 'Medication being packed',
-  DISPATCHED: 'Dispatched & in transit',
-  DELIVERED: 'Delivered',
+  PENDING_ASSIGNMENT: 'Clinical review pending',
+  RECEIVED: 'E-Prescription signed',
+  ACKNOWLEDGED: 'Prescription ready for download',
+  STOCK_CONFIRMED: 'Verified by physician',
+  PREPARING: 'Processing clinical documentation',
+  DISPATCHED: 'Ready for independent fulfillment',
+  DELIVERED: 'Prescription issued',
   CLARIFICATION_REQUIRED: 'In clinical review',
-  UNABLE_TO_FULFILL: 'Unable to fulfill',
+  UNABLE_TO_FULFILL: 'Not clinically indicated',
   CANCELLED: 'Cancelled',
 }
 

@@ -235,6 +235,8 @@ export default function ConsultationSchedulingPage() {
   const [bookingMode, setBookingMode] = useState<BookingMode>('slot')
   const [manualDate, setManualDate] = useState('')
   const [manualTime, setManualTime] = useState('')
+  const [gate2Accepted, setGate2Accepted] = useState(false)
+  const [termsCheckboxTicked, setTermsCheckboxTicked] = useState(false)
 
   const abortControllerRef = React.useRef<AbortController | null>(null)
   const dateAbortControllerRef = React.useRef<AbortController | null>(null)
@@ -460,6 +462,18 @@ export default function ConsultationSchedulingPage() {
     return () => window.clearTimeout(timer)
   }, [loadAvailableSlots, patientDataLoading])
 
+  // Gate 2 check: Check if user already accepted current v4.0 terms
+  useEffect(() => {
+    patientFetch('/api/consent/status')
+      .then(async (res) => {
+        const json = await res.json()
+        if (json.success && json.gate2Accepted) {
+          setGate2Accepted(true)
+        }
+      })
+      .catch((err) => console.warn('Gate 2 check notice:', err))
+  }, [])
+
 
   useEffect(() => {
     return () => {
@@ -556,6 +570,31 @@ export default function ConsultationSchedulingPage() {
 
     setLoading(true)
     setPaymentError('')
+
+    // Gate 2: Enforce Terms of Service, Privacy Policy & Prescription Policy acceptance
+    if (!gate2Accepted) {
+      if (!termsCheckboxTicked) {
+        setLoading(false)
+        setPaymentError('Please read and agree to the Terms of Service, Privacy Policy, and Prescription Policy to continue.')
+        return
+      }
+      try {
+        const consentRes = await patientFetch('/api/consent/gate2', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ terms_agreed: true }),
+        })
+        const consentJson = await consentRes.json()
+        if (!consentRes.ok || consentJson.error) {
+          throw new Error(consentJson.error || 'Failed to record terms acceptance.')
+        }
+        setGate2Accepted(true)
+      } catch (cErr: any) {
+        setLoading(false)
+        setPaymentError(cErr.message || 'Failed to record terms acceptance.')
+        return
+      }
+    }
 
     try {
       // Direct booking for Dietitian and Gym Trainer (covered in program membership)
@@ -944,6 +983,12 @@ export default function ConsultationSchedulingPage() {
                 </span>
               </div>
             </div>
+
+            {/* Emergency Notice (Statutory Requirement) */}
+            <div className="mt-3 py-2 px-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold font-sora flex items-center justify-between gap-2">
+              <span>This service is not for emergencies. In an emergency, call 112 immediately.</span>
+              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md bg-rose-100 text-rose-800">Emergency: 112</span>
+            </div>
           </div>
 
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
@@ -1271,11 +1316,40 @@ export default function ConsultationSchedulingPage() {
                     </div>
                   )}
 
+                  {/* Gate 2 Terms Acceptance Checkbox (skipped if already accepted current version) */}
+                  {!gate2Accepted && (
+                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 mb-4 text-xs text-slate-700">
+                      <label className="flex items-start gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={termsCheckboxTicked}
+                          onChange={(e) => setTermsCheckboxTicked(e.target.checked)}
+                          className="mt-0.5 w-4 h-4 rounded text-[#0D9488] focus:ring-[#0D9488] border-slate-300 cursor-pointer shrink-0"
+                        />
+                        <span className="leading-relaxed">
+                          I have read and agree to the{' '}
+                          <Link href="/terms" target="_blank" rel="noopener noreferrer" className="font-bold text-[#0D9488] underline hover:text-[#097A70]">
+                            Terms of Service
+                          </Link>
+                          ,{' '}
+                          <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="font-bold text-[#0D9488] underline hover:text-[#097A70]">
+                            Privacy Policy
+                          </Link>{' '}
+                          and{' '}
+                          <Link href="/prescription-policy" target="_blank" rel="noopener noreferrer" className="font-bold text-[#0D9488] underline hover:text-[#097A70]">
+                            Prescription Policy
+                          </Link>
+                          .
+                        </span>
+                      </label>
+                    </div>
+                  )}
+
                   <div className="mt-5 space-y-3">
                     <button
                       type="button"
                       onClick={handleConfirmBooking}
-                      disabled={!selectedSlot || loading}
+                      disabled={!selectedSlot || loading || (!gate2Accepted && !termsCheckboxTicked)}
                       className="w-full py-4 px-4 rounded-2xl font-bold font-sora text-sm text-white bg-[#0D9488] hover:bg-[#097A70] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-[#0D9488]/20 hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
                     >
                       {loading ? (
@@ -1736,11 +1810,40 @@ export default function ConsultationSchedulingPage() {
                   </div>
                 )}
 
+                {/* Gate 2 Terms Acceptance Checkbox (skipped if already accepted current version) */}
+                {!gate2Accepted && (
+                  <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 mb-4 text-xs text-slate-700">
+                    <label className="flex items-start gap-2.5 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={termsCheckboxTicked}
+                        onChange={(e) => setTermsCheckboxTicked(e.target.checked)}
+                        className="mt-0.5 w-4 h-4 rounded text-[#00A884] focus:ring-[#00A884] border-slate-300 cursor-pointer shrink-0"
+                      />
+                      <span className="leading-relaxed">
+                        I have read and agree to the{' '}
+                        <Link href="/terms" target="_blank" rel="noopener noreferrer" className="font-bold text-[#00A884] underline hover:text-[#097A70]">
+                          Terms of Service
+                        </Link>
+                        ,{' '}
+                        <Link href="/privacy" target="_blank" rel="noopener noreferrer" className="font-bold text-[#00A884] underline hover:text-[#097A70]">
+                          Privacy Policy
+                        </Link>{' '}
+                        and{' '}
+                        <Link href="/prescription-policy" target="_blank" rel="noopener noreferrer" className="font-bold text-[#00A884] underline hover:text-[#097A70]">
+                          Prescription Policy
+                        </Link>
+                        .
+                      </span>
+                    </label>
+                  </div>
+                )}
+
                 {/* CTA Button */}
                 <button
                   type="button"
                   onClick={handleConfirmBooking}
-                  disabled={(bookingMode === 'slot' ? !selectedSlot : !selectedManualDateTime) || loading || patientDataLoading}
+                  disabled={(bookingMode === 'slot' ? !selectedSlot : !selectedManualDateTime) || loading || patientDataLoading || (!gate2Accepted && !termsCheckboxTicked)}
                   className="w-full py-4 px-6 rounded-2xl font-bold text-white transition-all duration-300 disabled:opacity-40 disabled:cursor-not-allowed hover:shadow-lg cursor-pointer bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] shadow-md shadow-[#00A884]/25 hover:scale-[1.01] active:scale-[0.99]"
                 >
                   {loading

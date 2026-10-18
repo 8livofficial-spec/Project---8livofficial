@@ -17,6 +17,9 @@ import {
   rateLimitResponse,
 } from '@/lib/authSecurity'
 
+import { recordConsent } from '@/lib/consent/consentService'
+import { CONSENT_VERSION } from '@/lib/consent/constants'
+
 export async function POST(request: Request) {
   const ip = getClientIp(request)
   const userAgent = request.headers.get('user-agent')
@@ -29,6 +32,14 @@ export async function POST(request: Request) {
     const rawPhone = String(body.phoneNumber || body.phone || '').trim()
     const normalizedPhone = rawPhone ? normalizePhoneNumber(rawPhone) : null
     const role = 'patient'
+
+    // Gate 1: Enforce mandatory data consent on account creation
+    const consent = body.consent || {}
+    if (!consent.consent_health_data || !consent.consent_care_team_share) {
+      return NextResponse.json({
+        error: 'Explicit consent is mandatory to create an account. Please review and accept the required health data and care team sharing terms.',
+      }, { status: 400 })
+    }
 
     const rate = checkRateLimit(`signup:${ip}:${email}`, APP_CONFIG.rateLimits.signup)
     if (!rate.allowed) return rateLimitResponse(rate.retryAfter || 60, rate.message)
@@ -79,6 +90,29 @@ export async function POST(request: Request) {
       display_id: `${firstName} ${lastName}`.trim(),
       phone_number: normalizedPhone?.isValid ? normalizedPhone.e164 : null,
     })
+
+    // Record Gate 1 data consent in append-only audit trail
+    try {
+      await recordConsent({
+        userId: data.user.id,
+        guardianUserId: body.guardianUserId || null,
+        documentId: 'data_notice',
+        version: CONSENT_VERSION,
+        gate: 'gate1',
+        choices: {
+          consent_health_data: Boolean(consent.consent_health_data),
+          consent_care_team_share: Boolean(consent.consent_care_team_share),
+          consent_reminders: Boolean(consent.consent_reminders),
+          consent_deidentified_research: Boolean(consent.consent_deidentified_research),
+        },
+        action: 'accepted',
+        ipAddress: ip,
+        userAgent: userAgent,
+        otpVerified: Boolean(body.otpVerified),
+      })
+    } catch (consentErr) {
+      console.error('[Signup] Failed to write initial Gate 1 consent record:', consentErr)
+    }
 
     await updatePatientJourneyState(data.user.id, {
       assessmentStatus: 'IN_PROGRESS',

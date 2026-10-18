@@ -1,10 +1,11 @@
 'use client'
 
 import React, { useState, useEffect, useRef, Suspense, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { Video, Mic, MicOff, Camera, CameraOff, PhoneOff, Calendar, FileText, CheckCircle, AlertCircle, RefreshCw } from 'lucide-react'
 import { usePatientData } from '@/hooks/usePatientData'
 import { supabase } from '@/lib/supabaseClient'
+import { authedFetch } from '@/lib/apiClient'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 
@@ -39,6 +40,7 @@ export default function ConsultationRoomPage() {
 }
 
 function ConsultationRoomContent() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const queryId = searchParams.get('id')
   const { assessment, reloadData, loading } = usePatientData()
@@ -55,6 +57,25 @@ function ConsultationRoomContent() {
   const [doctorRole, setDoctorRole] = useState('Physician Specialist')
 
   const appointmentId = queryId || ''
+
+  // Gate 3 Check: Redirect to informed consent if not yet accepted for this appointment
+  useEffect(() => {
+    if (!queryId) return
+
+    const checkGate3 = async () => {
+      try {
+        const res = await authedFetch(`/api/consent/status?bookingId=${encodeURIComponent(queryId)}`)
+        const data = await res.json()
+        if (data.success && !data.gate3Accepted) {
+          router.replace(`/patient/consultation/consent?bookingId=${encodeURIComponent(queryId)}`)
+        }
+      } catch (err) {
+        console.warn('Gate 3 pre-check notice:', err)
+      }
+    }
+
+    void checkGate3()
+  }, [queryId, router])
 
   const stopCameraStream = useCallback(() => {
     if (streamRef.current) {
@@ -174,7 +195,17 @@ function ConsultationRoomContent() {
     }
   }
 
-  const joinCall = () => {
+  const joinCall = async () => {
+    try {
+      const res = await authedFetch(`/api/consent/status?bookingId=${encodeURIComponent(appointmentId)}`)
+      const data = await res.json()
+      if (data.success && !data.gate3Accepted) {
+        router.replace(`/patient/consultation/consent?bookingId=${encodeURIComponent(appointmentId)}`)
+        return
+      }
+    } catch (err) {
+      console.warn('Gate 3 join verification error:', err)
+    }
     stopCameraStream()
     setPhase('call')
   }

@@ -156,7 +156,13 @@ export default function StreamConsultationCall({ appointmentId, onLeave }: Props
           body: JSON.stringify({ appointmentId }),
         })
         const data = await res.json()
-        if (!res.ok) throw new Error(data.error || 'Unable to prepare secure video session.')
+        if (!res.ok) {
+          if (data.requiresGate3Consent && data.consentUrl) {
+            window.location.href = data.consentUrl
+            return
+          }
+          throw new Error(data.error || 'Unable to prepare secure video session.')
+        }
         if (active) setTokenData(data)
       } catch (err) {
         if (active) setError(err instanceof Error ? err.message : 'Unable to prepare secure video session.')

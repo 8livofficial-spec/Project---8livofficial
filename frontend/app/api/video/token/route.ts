@@ -5,6 +5,7 @@ import { getIndiaSlotTimestamp } from '@/lib/appointmentAvailability'
 import { getPublicStreamApiKey, getStreamConfig } from '@/lib/video/streamClient'
 import { createStreamUserToken } from '@/services/video/token.service'
 import { consultationTypeForVideoRole, createStreamMeeting, terminalMeetingStatus } from '@/services/video/meeting.service'
+import { getUserConsentStatus } from '@/lib/consent/consentService'
 
 type ConsultationRecord = {
   id: string
@@ -143,6 +144,17 @@ export async function POST(request: Request) {
     const isAdmin = auth.role === 'admin'
     if (!isPatient && !isProvider && !isAdmin) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    if (isPatient) {
+      const consentStatus = await getUserConsentStatus(auth.user.id, consultation.id)
+      if (!consentStatus.gate3Accepted) {
+        return NextResponse.json({
+          error: 'Informed Consent to Treatment (Gate 3) is required before entering the consultation.',
+          requiresGate3Consent: true,
+          consentUrl: `/patient/consultation/consent?bookingId=${encodeURIComponent(consultation.id)}`,
+        }, { status: 403 })
+      }
     }
 
     const joinBlockedReason = assertJoinWindow(consultation)

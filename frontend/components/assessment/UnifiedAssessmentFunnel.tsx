@@ -43,6 +43,8 @@ import {
   Plus,
   Stethoscope,
   Star,
+  ExternalLink,
+  ShieldAlert,
 } from 'lucide-react'
 import {
   ScreenerWelcomeIllustration,
@@ -275,6 +277,111 @@ export default function UnifiedAssessmentFunnel({
   const [waistRaw, setWaistRaw] = useState<string>('')
   const [isUploadingLab, setIsUploadingLab] = useState(false)
   const [uploadError, setUploadError] = useState('')
+
+  // Gate 1: Statutory Data & Privacy Consents
+  const [gate1Consents, setGate1Consents] = useState({
+    health_data: false,
+    care_team_sharing: false,
+    comms: false,
+    research: false,
+  })
+
+  // Date of Birth & Minor Guardian Verification
+  const [patientDob, setPatientDob] = useState('')
+  const [isMinor, setIsMinor] = useState(false)
+  const [guardianInfo, setGuardianInfo] = useState({
+    name: '',
+    relationship: 'Parent',
+    phone: '',
+    email: '',
+  })
+  const [guardianOtp, setGuardianOtp] = useState('')
+  const [guardianOtpSent, setGuardianOtpSent] = useState(false)
+  const [guardianOtpVerified, setGuardianOtpVerified] = useState(false)
+  const [isSendingGuardianOtp, setIsSendingGuardianOtp] = useState(false)
+  const [isVerifyingGuardianOtp, setIsVerifyingGuardianOtp] = useState(false)
+  const [guardianOtpError, setGuardianOtpError] = useState('')
+  const [guardianOtpCooldown, setGuardianOtpCooldown] = useState(0)
+
+  useEffect(() => {
+    if (guardianOtpCooldown <= 0) return
+    const timer = setInterval(() => setGuardianOtpCooldown((p) => Math.max(0, p - 1)), 1000)
+    return () => clearInterval(timer)
+  }, [guardianOtpCooldown])
+
+  const handleDobChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    setPatientDob(val)
+    if (!val) {
+      setIsMinor(false)
+      return
+    }
+    const birthDate = new Date(val)
+    const today = new Date()
+    let age = today.getFullYear() - birthDate.getFullYear()
+    const m = today.getMonth() - birthDate.getMonth()
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--
+    }
+    const under18 = age < 18
+    setIsMinor(under18)
+    setFormData((prev) => ({ ...prev, age: String(Math.max(1, age)) }))
+  }
+
+  const handleSendGuardianOtp = async () => {
+    const rawDigits = guardianInfo.phone.replace(/\D/g, '')
+    if (rawDigits.length < 10) {
+      setGuardianOtpError('Please enter a valid 10-digit mobile number for the parent or legal guardian.')
+      return
+    }
+    setGuardianOtpError('')
+    setIsSendingGuardianOtp(true)
+    try {
+      const res = await fetch('/api/auth/whatsapp/otp/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumber: guardianInfo.phone,
+          purpose: 'VERIFY_PHONE',
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Failed to dispatch verification code.')
+      setGuardianOtpSent(true)
+      setGuardianOtpCooldown(60)
+    } catch (err: any) {
+      setGuardianOtpError(err.message || 'Unable to send OTP.')
+    } finally {
+      setIsSendingGuardianOtp(false)
+    }
+  }
+
+  const handleVerifyGuardianOtp = async () => {
+    if (guardianOtp.length !== 6) {
+      setGuardianOtpError('Enter the 6-digit code received on WhatsApp.')
+      return
+    }
+    setGuardianOtpError('')
+    setIsVerifyingGuardianOtp(true)
+    try {
+      const res = await fetch('/api/auth/whatsapp/otp/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          phoneNumber: guardianInfo.phone,
+          otp: guardianOtp,
+          purpose: 'VERIFY_PHONE',
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Invalid OTP code.')
+      setGuardianOtpVerified(true)
+    } catch (err: any) {
+      setGuardianOtpError(err.message || 'OTP verification failed.')
+    } finally {
+      setIsVerifyingGuardianOtp(false)
+    }
+  }
 
   // Google Places Autocomplete refs
   const addressInputRef = useRef<HTMLInputElement>(null)
@@ -596,6 +703,15 @@ export default function UnifiedAssessmentFunnel({
         throw new Error('Please enter a valid mobile number with country code (e.g. +91 98765 43210).')
       }
 
+      // Gate 1: Statutory Consent Validation
+      if (!gate1Consents.health_data || !gate1Consents.care_team_sharing) {
+        throw new Error('Please review and check the required health data and care team sharing consent checkboxes.')
+      }
+
+      if (isMinor && !guardianOtpVerified) {
+        throw new Error('Parent / legal guardian verification via mobile OTP is required for patients under 18.')
+      }
+
       const { data: { session } } = await supabase.auth.getSession()
       let userId = session?.user.id || currentUserId
       const accessToken = session?.access_token || null
@@ -611,6 +727,14 @@ export default function UnifiedAssessmentFunnel({
             firstName: formData.first_name || (formData.email.split('@')[0] || 'Patient'),
             lastName: formData.last_name || '',
             phoneNumber: formData.phone_number,
+            consent: {
+              consent_health_data: gate1Consents.health_data,
+              consent_care_team_share: gate1Consents.care_team_sharing,
+              consent_reminders: gate1Consents.comms,
+              consent_deidentified_research: gate1Consents.research,
+            },
+            guardianUserId: isMinor ? `${guardianInfo.name} (${guardianInfo.relationship})` : null,
+            otpVerified: isMinor ? guardianOtpVerified : false,
           }),
         })
         if (!signupRes.ok) {
@@ -2564,6 +2688,220 @@ export default function UnifiedAssessmentFunnel({
                 </span>
               </div>
 
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-700 block">Date of birth</label>
+                  <span className="text-[11px] text-slate-400">Used for clinical safety &amp; legal verification</span>
+                </div>
+                <input
+                  type="date"
+                  required
+                  max={new Date().toISOString().split('T')[0]}
+                  value={patientDob}
+                  onChange={handleDobChange}
+                  className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
+                />
+              </div>
+
+              {/* Minor Guardian Consent (< 18 check) */}
+              {isMinor && (
+                <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/90 border border-amber-200 space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">Parent / Legal Guardian Consent Required</h4>
+                      <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
+                        Because you are under 18, a parent or legal guardian must create this account and consent on your behalf.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-700 block mb-1">Guardian Full Name</label>
+                      <input
+                        type="text"
+                        required={isMinor}
+                        placeholder="Parent or Guardian Name"
+                        value={guardianInfo.name}
+                        onChange={(e) => setGuardianInfo((p) => ({ ...p, name: e.target.value }))}
+                        className="w-full min-h-[44px] px-3.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-700 block mb-1">Relationship</label>
+                      <select
+                        value={guardianInfo.relationship}
+                        onChange={(e) => setGuardianInfo((p) => ({ ...p, relationship: e.target.value }))}
+                        className="w-full min-h-[44px] px-3.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                      >
+                        <option value="Parent">Parent</option>
+                        <option value="Mother">Mother</option>
+                        <option value="Father">Father</option>
+                        <option value="Legal Guardian">Legal Guardian</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-700 block mb-1">Guardian Email</label>
+                      <input
+                        type="email"
+                        placeholder="guardian@example.com"
+                        value={guardianInfo.email}
+                        onChange={(e) => setGuardianInfo((p) => ({ ...p, email: e.target.value }))}
+                        className="w-full min-h-[44px] px-3.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-700 block mb-1">Guardian Mobile (WhatsApp OTP)</label>
+                      <div className="flex gap-2">
+                        <input
+                          type="tel"
+                          placeholder="+91 98765 43210"
+                          value={guardianInfo.phone}
+                          onChange={(e) => setGuardianInfo((p) => ({ ...p, phone: e.target.value }))}
+                          disabled={guardianOtpVerified}
+                          className="w-full min-h-[44px] px-3.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:bg-slate-100"
+                        />
+                        {!guardianOtpVerified && (
+                          <button
+                            type="button"
+                            onClick={handleSendGuardianOtp}
+                            disabled={isSendingGuardianOtp || guardianOtpCooldown > 0}
+                            className="shrink-0 px-3 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            {guardianOtpCooldown > 0 ? `${guardianOtpCooldown}s` : isSendingGuardianOtp ? 'Sending...' : guardianOtpSent ? 'Resend' : 'Send OTP'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {guardianOtpSent && !guardianOtpVerified && (
+                    <div className="pt-2 border-t border-amber-200/60 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                      <input
+                        type="text"
+                        maxLength={6}
+                        placeholder="Enter 6-digit OTP"
+                        value={guardianOtp}
+                        onChange={(e) => setGuardianOtp(e.target.value.replace(/\D/g, ''))}
+                        className="w-full sm:w-48 px-3.5 py-2 text-center font-mono text-sm tracking-widest font-bold rounded-xl border border-amber-300 bg-white"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleVerifyGuardianOtp}
+                        disabled={isVerifyingGuardianOtp || guardianOtp.length !== 6}
+                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        {isVerifyingGuardianOtp ? 'Verifying...' : 'Verify Guardian OTP'}
+                      </button>
+                    </div>
+                  )}
+
+                  {guardianOtpVerified && (
+                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-100/70 p-2.5 rounded-xl">
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Parent / Guardian verified via OTP</span>
+                    </div>
+                  )}
+
+                  {guardianOtpError && (
+                    <p className="text-xs text-rose-600 bg-rose-50 p-2 rounded-lg">{guardianOtpError}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Statutory Gate 1 Data Notice Summary Card */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3 mt-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-[#00A884]">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-800">Part 4: Data &amp; Privacy Notice</span>
+                  </div>
+                  <a
+                    href="/privacy"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#00A884] hover:underline"
+                  >
+                    <span>Full Policy</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+
+                <div className="text-[12px] text-slate-600 space-y-1.5 leading-relaxed bg-white p-3 rounded-xl border border-slate-200/70">
+                  <p><strong className="text-slate-800">Who is asking:</strong> 8liv Health Platform (www.8liv.in).</p>
+                  <p><strong className="text-slate-800">What we collect:</strong> Contact details, date of birth, metabolic vitals, lab reports, and clinical consultation records.</p>
+                  <p><strong className="text-slate-800">Why we collect:</strong> Clinical evaluation, doctor-supervised telemedicine, and personalized nutrition &amp; workout protocols.</p>
+                  <p><strong className="text-slate-800">Who sees it:</strong> Exclusively your assigned doctor, dietician, trainer, and authorized clinical operations staff.</p>
+                  <p><strong className="text-slate-800">Retention:</strong> Encrypted and securely maintained for the duration of your care program in accordance with medical standards.</p>
+                  <p><strong className="text-slate-800">Your rights:</strong> You may inspect, download, or withdraw consent at any time via Account Settings &gt; Privacy.</p>
+                </div>
+
+                {/* 4 Consent Checkboxes */}
+                <div className="space-y-2 pt-1">
+                  {/* 1. Required */}
+                  <label className="flex items-start gap-3 p-2.5 rounded-xl bg-white border border-slate-200/80 hover:border-slate-300 transition-colors cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={gate1Consents.health_data}
+                      onChange={(e) => setGate1Consents((p) => ({ ...p, health_data: e.target.checked }))}
+                      className="w-4 h-4 mt-0.5 rounded text-[#00A884] border-slate-300 focus:ring-[#00A884] cursor-pointer"
+                    />
+                    <div className="text-xs text-slate-700 leading-snug">
+                      <span className="inline-block px-1.5 py-0.5 mr-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200">Required</span>
+                      I consent to 8liv collecting and using my personal and health data for the purposes above.
+                    </div>
+                  </label>
+
+                  {/* 2. Required */}
+                  <label className="flex items-start gap-3 p-2.5 rounded-xl bg-white border border-slate-200/80 hover:border-slate-300 transition-colors cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={gate1Consents.care_team_sharing}
+                      onChange={(e) => setGate1Consents((p) => ({ ...p, care_team_sharing: e.target.checked }))}
+                      className="w-4 h-4 mt-0.5 rounded text-[#00A884] border-slate-300 focus:ring-[#00A884] cursor-pointer"
+                    />
+                    <div className="text-xs text-slate-700 leading-snug">
+                      <span className="inline-block px-1.5 py-0.5 mr-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200">Required</span>
+                      I consent to my lab reports and health records being shared with my doctor, dietician and trainer for my care.
+                    </div>
+                  </label>
+
+                  {/* 3. Optional */}
+                  <label className="flex items-start gap-3 p-2.5 rounded-xl bg-white border border-slate-200/80 hover:border-slate-300 transition-colors cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={gate1Consents.comms}
+                      onChange={(e) => setGate1Consents((p) => ({ ...p, comms: e.target.checked }))}
+                      className="w-4 h-4 mt-0.5 rounded text-[#00A884] border-slate-300 focus:ring-[#00A884] cursor-pointer"
+                    />
+                    <div className="text-xs text-slate-600 leading-snug">
+                      <span className="inline-block px-1.5 py-0.5 mr-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">Optional</span>
+                      I would like reminders and health tips by WhatsApp, SMS or email.
+                    </div>
+                  </label>
+
+                  {/* 4. Optional */}
+                  <label className="flex items-start gap-3 p-2.5 rounded-xl bg-white border border-slate-200/80 hover:border-slate-300 transition-colors cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={gate1Consents.research}
+                      onChange={(e) => setGate1Consents((p) => ({ ...p, research: e.target.checked }))}
+                      className="w-4 h-4 mt-0.5 rounded text-[#00A884] border-slate-300 focus:ring-[#00A884] cursor-pointer"
+                    />
+                    <div className="text-xs text-slate-600 leading-snug">
+                      <span className="inline-block px-1.5 py-0.5 mr-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">Optional</span>
+                      I consent to my de-identified data being used to improve 8liv&apos;s services.
+                    </div>
+                  </label>
+                </div>
+              </div>
+
               {formError && (
                 <p className="text-xs text-rose-600 bg-rose-50 p-2.5 rounded-xl border border-rose-200">
                   {formError}
@@ -2572,7 +2910,7 @@ export default function UnifiedAssessmentFunnel({
 
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || !gate1Consents.health_data || !gate1Consents.care_team_sharing || (isMinor && !guardianOtpVerified)}
                 className="w-full min-h-[50px] rounded-full bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] disabled:opacity-50 text-white font-sans font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99] mt-6"
               >
                 {isSubmitting ? (

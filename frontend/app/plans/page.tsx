@@ -69,7 +69,7 @@ export default async function PlansPage() {
         'Included doctor follow-ups each cycle (₹0)',
         'Personalized nutrition & diet guidance',
         'Fitness coach movement plan',
-        'Prescription & pharmacy coordination',
+        'Doctor-issued signed e-prescriptions',
       ],
       href: `/assessment?duration=${p.duration_months}`,
       featured: calc.discountPercentage > 0,
