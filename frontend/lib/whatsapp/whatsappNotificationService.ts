@@ -1,17 +1,22 @@
 /**
- * Event-Driven WhatsApp Notification Service
+ * Event-Driven WhatsApp Notification Service (Meta Approved Templates)
  *
- * Implements clinical and transactional notification templates for:
- * - Patient appointment booking, rescheduling, cancellation, and reminders
- * - Payment receipts and treatment plan activations
- * - Pharmacy orders, in-house delivery OTPs, and delivery milestones
- * - Doctor clinical assignments
+ * Implements clinical and transactional notification templates using
+ * strictly approved Meta WhatsApp Cloud API templates:
+ * - 8liv_login_otp: Authentication
+ * - membership_receipt: Utility
+ * - consultation_payment_confirmation: Utility
+ * - consultation_booking_confirmed: Utility
+ * - consultation_reminder__30_min: Utility
+ * - appointment_cancelled: Utility
+ * - lab_doorstep_collection: Utility
  *
- * All dispatches are non-blocking and privacy-preserving.
+ * All outbound notifications route through the durable transactional outbox
+ * (`whatsapp_outbox_queue`) for idempotency, retry safety, and zero loss.
  */
 
-import { WhatsAppClient } from './whatsappClient'
 import { WHATSAPP_CONFIG } from './whatsappConfig'
+import { WhatsAppOutbox } from './whatsappOutbox'
 import { normalizePhoneNumber } from '../phone'
 import { supabaseAdmin } from '../supabaseServer'
 
@@ -21,6 +26,8 @@ export type AppointmentNotificationData = {
   date: string
   time: string
   bookingId?: string
+  appointmentType?: string
+  scheduledStart?: string | Date
   callUrl?: string
 }
 
@@ -32,13 +39,13 @@ export type PaymentNotificationData = {
   receiptUrl?: string
 }
 
-export type DeliveryNotificationData = {
+export type LabCollectionNotificationData = {
   patientName: string
-  orderReference: string
-  otpCode: string
-  driverName?: string
-  driverPhone?: string
-  deliverySlot?: string
+  address: string
+  date: string
+  startTime: string
+  endTime: string
+  collectionId?: string
 }
 
 export class WhatsAppNotificationService {
@@ -63,198 +70,379 @@ export class WhatsAppNotificationService {
   }
 
   /**
-   * 1. Patient Registration Confirmation
+   * 1. Membership Payment Receipt
+   * Template: membership_receipt (UTILITY)
+   * Body: "Your payment of {{1}} for {{2}} has been processed successfully..."
+   * Button: Dynamic URL https://www.8liv.in/patient/billing{{1}}
    */
-  public static async sendRegistrationConfirmation(phone: string, name: string): Promise<void> {
+  public static async sendMembershipReceipt(
+    phone: string,
+    data: { patientName: string; amount: number; paymentId: string; planName?: string }
+  ): Promise<boolean> {
     try {
-      if (await this.isOptedOut(phone)) return
+      if (await this.isOptedOut(phone)) return false
 
       const normalized = normalizePhoneNumber(phone)
-      if (!normalized.whatsapp) return
+      if (!normalized.e164) return false
 
-      await WhatsAppClient.sendText({
-        to: normalized.whatsapp,
-        text: `Hello ${name || 'there'},\n\nWelcome to *8LIV* — Doctor-Led & Coach-Supervised Metabolic Healthcare.\n\nYour account is now ready. You can sign in anytime at https://8liv.in to take your health assessment, book doctor consultations, and track your care plan.\n\nReply STOP anytime to unsubscribe from notifications.`,
+      const amountFormatted = `INR ${Number(data.amount || 0).toLocaleString('en-IN')}`
+      const planFormatted = data.planName || '8LIV Metabolic Care Membership'
+
+      return await WhatsAppOutbox.enqueue({
+        idempotencyKey: `membership_receipt_${data.paymentId}`,
+        recipientPhone: normalized.e164,
+        payload: {
+          type: 'template',
+          templateName: WHATSAPP_CONFIG.templates.membershipReceipt.name,
+          languageCode: WHATSAPP_CONFIG.templates.membershipReceipt.language,
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: amountFormatted },
+                { type: 'text', text: planFormatted },
+              ],
+            },
+            {
+              type: 'button',
+              sub_type: 'url',
+              index: 0,
+              parameters: [{ type: 'text', text: '' }],
+            },
+          ],
+          metadata: {
+            paymentId: data.paymentId,
+            type: 'MEMBERSHIP_RECEIPT',
+            amount: data.amount,
+          },
+        },
       })
     } catch (err: any) {
-      console.warn('[WhatsAppNotification] sendRegistrationConfirmation notice:', err.message)
+      console.warn('[WhatsAppNotification] sendMembershipReceipt notice:', err.message)
+      return false
     }
   }
 
   /**
-   * 2. Appointment Booking Confirmation
+   * 2. Consultation Payment Receipt
+   * Template: consultation_payment_confirmation (UTILITY)
+   * Body: "Your payment of {{1}} for {{2}} has been processed successfully..."
+   * Button: Static URL https://www.8liv.in/patient/billing
+   */
+  public static async sendConsultationPayment(
+    phone: string,
+    data: { patientName: string; amount: number; paymentId: string; description?: string }
+  ): Promise<boolean> {
+    try {
+      if (await this.isOptedOut(phone)) return false
+
+      const normalized = normalizePhoneNumber(phone)
+      if (!normalized.e164) return false
+
+      const amountFormatted = `INR ${Number(data.amount || 0).toLocaleString('en-IN')}`
+      const descFormatted = data.description || 'Doctor Video Consultation'
+
+      return await WhatsAppOutbox.enqueue({
+        idempotencyKey: `consultation_payment_${data.paymentId}`,
+        recipientPhone: normalized.e164,
+        payload: {
+          type: 'template',
+          templateName: WHATSAPP_CONFIG.templates.consultationPayment.name,
+          languageCode: WHATSAPP_CONFIG.templates.consultationPayment.language,
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: amountFormatted },
+                { type: 'text', text: descFormatted },
+              ],
+            },
+          ],
+          metadata: {
+            paymentId: data.paymentId,
+            type: 'CONSULTATION_PAYMENT',
+            amount: data.amount,
+          },
+        },
+      })
+    } catch (err: any) {
+      console.warn('[WhatsAppNotification] sendConsultationPayment notice:', err.message)
+      return false
+    }
+  }
+
+  /**
+   * 3. Consultation Booking Confirmation & Auto-schedule 30-min Reminder
+   * Template: consultation_booking_confirmed (UTILITY)
+   * Body: "Hello {{1}}, Thank you for booking with {{2}}. Your appointment for {{3}} on {{4}} at {{5}} is confirmed."
+   * Button: Dynamic URL https://www.8liv.in/{{1}} -> "patient/appointments"
    */
   public static async sendAppointmentConfirmation(
     phone: string,
     data: AppointmentNotificationData
-  ): Promise<void> {
+  ): Promise<boolean> {
     try {
-      if (await this.isOptedOut(phone)) return
+      if (await this.isOptedOut(phone)) return false
 
       const normalized = normalizePhoneNumber(phone)
-      if (!normalized.whatsapp) return
+      if (!normalized.e164) return false
 
-      const doctorStr = data.doctorName ? `with *${data.doctorName}*` : 'with your assigned physician specialist'
-      const joinStr = data.callUrl ? `\n\n*Join Video Call:* ${data.callUrl}` : ''
+      const bookingId = data.bookingId || 'latest'
+      const patientName = data.patientName || 'Patient'
+      const doctorName = data.doctorName ? `Dr. ${data.doctorName.replace(/^Dr\.\s*/i, '')}` : '8LIV Medical Team'
+      const apptType = data.appointmentType || 'Doctor Video Consultation'
 
-      await WhatsAppClient.sendText({
-        to: normalized.whatsapp,
-        text: `*Consultation Confirmed — 8LIV*\n\nHello ${data.patientName || 'Patient'},\nYour medical consultation ${doctorStr} has been confirmed.\n\n📅 *Date:* ${data.date}\n⏰ *Time:* ${data.time}${joinStr}\n\nPlease join 5 minutes before your scheduled slot. For clinical privacy, your video room is encrypted end-to-end.\n\nManage appointment: https://8liv.in/patient/appointments`,
+      // Enqueue immediate confirmation
+      const enqueued = await WhatsAppOutbox.enqueue({
+        idempotencyKey: `consultation_booking_${bookingId}`,
+        recipientPhone: normalized.e164,
+        payload: {
+          type: 'template',
+          templateName: WHATSAPP_CONFIG.templates.consultationBooking.name,
+          languageCode: WHATSAPP_CONFIG.templates.consultationBooking.language,
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: patientName },
+                { type: 'text', text: doctorName },
+                { type: 'text', text: apptType },
+                { type: 'text', text: data.date },
+                { type: 'text', text: data.time },
+              ],
+            },
+            {
+              type: 'button',
+              sub_type: 'url',
+              index: 0,
+              parameters: [{ type: 'text', text: 'patient/appointments' }],
+            },
+          ],
+          metadata: {
+            bookingId,
+            type: 'CONSULTATION_BOOKING',
+          },
+        },
       })
+
+      // Schedule durable 30-minute reminder if scheduled start is available
+      if (data.scheduledStart && bookingId !== 'latest') {
+        const startTime = new Date(data.scheduledStart).getTime()
+        const reminderTime = new Date(startTime - 30 * 60 * 1000)
+
+        // Only schedule if reminder is still in the future
+        if (reminderTime.getTime() > Date.now()) {
+          await this.scheduleConsultationReminder(phone, {
+            ...data,
+            bookingId,
+            reminderTime,
+          })
+        }
+      }
+
+      return enqueued
     } catch (err: any) {
       console.warn('[WhatsAppNotification] sendAppointmentConfirmation notice:', err.message)
+      return false
     }
   }
 
   /**
-   * 3. Appointment Rescheduled Notification
+   * 4. Consultation Reminder (30 Minutes Before Slot)
+   * Template: consultation_reminder__30_min (UTILITY)
+   * Body: "Hello {{1}}, This is a reminder about your upcoming appointment with {{2}} on {{3}} at {{4}}..."
+   * Button: Dynamic URL https://www.8liv.in/patient/consultation{{1}}
    */
-  public static async sendAppointmentRescheduled(
+  public static async scheduleConsultationReminder(
     phone: string,
-    data: AppointmentNotificationData
-  ): Promise<void> {
+    data: AppointmentNotificationData & { reminderTime: Date }
+  ): Promise<boolean> {
     try {
-      if (await this.isOptedOut(phone)) return
-
       const normalized = normalizePhoneNumber(phone)
-      if (!normalized.whatsapp) return
+      if (!normalized.e164 || !data.bookingId) return false
 
-      await WhatsAppClient.sendText({
-        to: normalized.whatsapp,
-        text: `*Consultation Rescheduled — 8LIV*\n\nHello ${data.patientName || 'Patient'},\nYour consultation has been rescheduled to:\n\n📅 *New Date:* ${data.date}\n⏰ *New Time:* ${data.time}\n\nView details: https://8liv.in/patient/appointments`,
+      const doctorName = data.doctorName ? `Dr. ${data.doctorName.replace(/^Dr\.\s*/i, '')}` : 'your physician specialist'
+
+      return await WhatsAppOutbox.enqueue({
+        idempotencyKey: `consultation_reminder_30m_${data.bookingId}`,
+        recipientPhone: normalized.e164,
+        nextAttemptAt: data.reminderTime,
+        payload: {
+          type: 'template',
+          templateName: WHATSAPP_CONFIG.templates.consultationReminder30m.name,
+          languageCode: WHATSAPP_CONFIG.templates.consultationReminder30m.language,
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: data.patientName || 'Patient' },
+                { type: 'text', text: doctorName },
+                { type: 'text', text: data.date },
+                { type: 'text', text: data.time },
+              ],
+            },
+            {
+              type: 'button',
+              sub_type: 'url',
+              index: 0,
+              parameters: [{ type: 'text', text: `/${data.bookingId}` }],
+            },
+          ],
+          metadata: {
+            consultationId: data.bookingId,
+            type: 'CONSULTATION_REMINDER_30M',
+          },
+        },
       })
     } catch (err: any) {
-      console.warn('[WhatsAppNotification] sendAppointmentRescheduled notice:', err.message)
+      console.warn('[WhatsAppNotification] scheduleConsultationReminder notice:', err.message)
+      return false
     }
   }
 
   /**
-   * 4. Appointment Cancelled Notification
+   * 5. Appointment Cancelled Notification & Invalidate Pending Reminders
+   * Template: appointment_cancelled (UTILITY)
+   * Body: "Hello {{1}}, Your upcoming appointment with {{2}} on {{3}} at {{4}} has been canceled..."
+   * Button: Dynamic URL https://www.8liv.in/{{1}} -> "patient/appointments"
    */
   public static async sendAppointmentCancelled(
     phone: string,
-    data: { patientName: string; reason?: string }
-  ): Promise<void> {
+    data: { patientName: string; doctorName?: string; date?: string; time?: string; bookingId?: string }
+  ): Promise<boolean> {
     try {
-      if (await this.isOptedOut(phone)) return
+      // 1. Immediately dead-letter any pending reminder outbox jobs for this appointment
+      if (data.bookingId) {
+        await WhatsAppOutbox.cancelPendingForConsultation(data.bookingId)
+      }
+
+      if (await this.isOptedOut(phone)) return false
 
       const normalized = normalizePhoneNumber(phone)
-      if (!normalized.whatsapp) return
+      if (!normalized.e164) return false
 
-      await WhatsAppClient.sendText({
-        to: normalized.whatsapp,
-        text: `*Consultation Cancelled — 8LIV*\n\nHello ${data.patientName || 'Patient'},\nYour consultation has been cancelled${data.reason ? ` (${data.reason})` : ''}.\n\nYou can book a new slot at your convenience: https://8liv.in/patient/appointments`,
+      const doctorName = data.doctorName ? `Dr. ${data.doctorName.replace(/^Dr\.\s*/i, '')}` : '8LIV Healthcare'
+      const apptDate = data.date || 'your scheduled date'
+      const apptTime = data.time || 'your scheduled time'
+
+      return await WhatsAppOutbox.enqueue({
+        idempotencyKey: `appointment_cancelled_${data.bookingId || Date.now()}`,
+        recipientPhone: normalized.e164,
+        payload: {
+          type: 'template',
+          templateName: WHATSAPP_CONFIG.templates.appointmentCancel.name,
+          languageCode: WHATSAPP_CONFIG.templates.appointmentCancel.language,
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: data.patientName || 'Patient' },
+                { type: 'text', text: doctorName },
+                { type: 'text', text: apptDate },
+                { type: 'text', text: apptTime },
+              ],
+            },
+            {
+              type: 'button',
+              sub_type: 'url',
+              index: 0,
+              parameters: [{ type: 'text', text: 'patient/appointments' }],
+            },
+          ],
+          metadata: {
+            bookingId: data.bookingId,
+            type: 'APPOINTMENT_CANCELLED',
+          },
+        },
       })
     } catch (err: any) {
       console.warn('[WhatsAppNotification] sendAppointmentCancelled notice:', err.message)
+      return false
     }
   }
 
   /**
-   * 5. Consultation Reminder (15-30 minutes prior)
+   * 6. Lab Doorstep Sample Collection
+   * Template: lab_doorstep_collection (UTILITY)
+   * Body: "Hi {{1}}, we're scheduling a technician visit to {{2}} on {{3}} between {{4}} and {{5}}..."
+   * Buttons: QUICK_REPLY: Confirm, Reschedule
    */
-  public static async sendConsultationReminder(
+  public static async sendLabDoorstepCollection(
     phone: string,
-    data: AppointmentNotificationData
-  ): Promise<void> {
+    data: LabCollectionNotificationData
+  ): Promise<boolean> {
     try {
-      if (await this.isOptedOut(phone)) return
+      if (await this.isOptedOut(phone)) return false
 
       const normalized = normalizePhoneNumber(phone)
-      if (!normalized.whatsapp) return
+      if (!normalized.e164) return false
 
-      await WhatsAppClient.sendText({
-        to: normalized.whatsapp,
-        text: `*Starting Soon: Your 8LIV Consultation*\n\nHello ${data.patientName || 'Patient'},\nYour consultation with ${data.doctorName || 'your doctor'} begins in a few minutes at *${data.time}*.\n\n👉 *Tap to join video call:* ${data.callUrl || 'https://8liv.in/patient/consultation/room'}`,
+      return await WhatsAppOutbox.enqueue({
+        idempotencyKey: `lab_doorstep_${data.collectionId || Date.now()}`,
+        recipientPhone: normalized.e164,
+        payload: {
+          type: 'template',
+          templateName: WHATSAPP_CONFIG.templates.labDoorstepCollection.name,
+          languageCode: WHATSAPP_CONFIG.templates.labDoorstepCollection.language,
+          components: [
+            {
+              type: 'body',
+              parameters: [
+                { type: 'text', text: data.patientName || 'Patient' },
+                { type: 'text', text: data.address || 'your registered address' },
+                { type: 'text', text: data.date },
+                { type: 'text', text: data.startTime },
+                { type: 'text', text: data.endTime },
+              ],
+            },
+          ],
+          metadata: {
+            collectionId: data.collectionId,
+            type: 'LAB_DOORSTEP_COLLECTION',
+          },
+        },
       })
     } catch (err: any) {
-      console.warn('[WhatsAppNotification] sendConsultationReminder notice:', err.message)
+      console.warn('[WhatsAppNotification] sendLabDoorstepCollection notice:', err.message)
+      return false
     }
   }
 
   /**
-   * 6. Payment Receipt & Subscription Activation
+   * Legacy routing adapter for backwards compatibility
    */
   public static async sendPaymentReceipt(
     phone: string,
     data: PaymentNotificationData
   ): Promise<void> {
-    try {
-      if (await this.isOptedOut(phone)) return
-
-      const normalized = normalizePhoneNumber(phone)
-      if (!normalized.whatsapp) return
-
-      await WhatsAppClient.sendText({
-        to: normalized.whatsapp,
-        text: `*Payment Receipt — 8LIV*\n\nHello ${data.patientName || 'Valued Member'},\nWe have successfully received your payment of *INR ${data.amount.toLocaleString('en-IN')}* for your ${data.planOrType || '8LIV Treatment Program'}.\n\n🧾 *Transaction ID:* ${data.paymentId}\n\nYour clinical care team has been notified. Access your portal: https://8liv.in/patient`,
+    const isMembership = /membership|program|plan/i.test(data.planOrType || '')
+    if (isMembership) {
+      await this.sendMembershipReceipt(phone, {
+        patientName: data.patientName,
+        amount: data.amount,
+        paymentId: data.paymentId,
+        planName: data.planOrType,
       })
-    } catch (err: any) {
-      console.warn('[WhatsAppNotification] sendPaymentReceipt notice:', err.message)
+    } else {
+      await this.sendConsultationPayment(phone, {
+        patientName: data.patientName,
+        amount: data.amount,
+        paymentId: data.paymentId,
+        description: data.planOrType,
+      })
     }
   }
 
   /**
-   * 7. In-House Pharmacy Delivery OTP (Dispatched to patient)
+   * Replaced by sendAppointmentConfirmation with updated times & reminder re-scheduling
    */
-  public static async sendDeliveryOutForDeliveryOtp(
+  public static async sendAppointmentRescheduled(
     phone: string,
-    data: DeliveryNotificationData
+    data: AppointmentNotificationData
   ): Promise<void> {
-    try {
-      if (await this.isOptedOut(phone)) return
-
-      const normalized = normalizePhoneNumber(phone)
-      if (!normalized.whatsapp) return
-
-      await WhatsAppClient.sendText({
-        to: normalized.whatsapp,
-        text: `*Package Out for Delivery — 8LIV Pharmacy*\n\nHello ${data.patientName || 'Patient'},\nYour prescribed medication package (*${data.orderReference}*) is out for delivery with our rider *${data.driverName || '8LIV Rider'}*.\n\n🔑 *Your 6-Digit Delivery OTP:* *${data.otpCode}*\n\nPlease provide this OTP to the delivery partner at your doorstep to verify receipt. Never share this code prior to package handover.\n\nDriver Contact: ${data.driverPhone || '8LIV Support'}`,
-      })
-    } catch (err: any) {
-      console.warn('[WhatsAppNotification] sendDeliveryOutForDeliveryOtp notice:', err.message)
+    if (data.bookingId) {
+      await WhatsAppOutbox.cancelPendingForConsultation(data.bookingId)
     }
-  }
-
-  /**
-   * 8. Delivery Completed Confirmation
-   */
-  public static async sendDeliveryCompleted(
-    phone: string,
-    data: { patientName: string; orderReference: string }
-  ): Promise<void> {
-    try {
-      if (await this.isOptedOut(phone)) return
-
-      const normalized = normalizePhoneNumber(phone)
-      if (!normalized.whatsapp) return
-
-      await WhatsAppClient.sendText({
-        to: normalized.whatsapp,
-        text: `*Delivery Confirmed — 8LIV Pharmacy*\n\nHello ${data.patientName || 'Patient'},\nYour order *${data.orderReference}* has been successfully delivered and verified via doorstep OTP.\n\nPlease follow the clinical dosage instructions in your prescription: https://8liv.in/patient/prescriptions`,
-      })
-    } catch (err: any) {
-      console.warn('[WhatsAppNotification] sendDeliveryCompleted notice:', err.message)
-    }
-  }
-
-  /**
-   * 9. Doctor Notification: New Appointment Assigned
-   */
-  public static async sendDoctorAppointmentAssigned(
-    phone: string,
-    data: { doctorName: string; patientName: string; date: string; time: string; appointmentId?: string }
-  ): Promise<void> {
-    try {
-      const normalized = normalizePhoneNumber(phone)
-      if (!normalized.whatsapp) return
-
-      await WhatsAppClient.sendText({
-        to: normalized.whatsapp,
-        text: `*New Consultation Assigned — 8LIV Doctor Portal*\n\nDr. ${data.doctorName || 'Doctor'},\nA new patient consultation has been scheduled with *${data.patientName || 'Patient'}*.\n\n📅 *Date:* ${data.date}\n⏰ *Time:* ${data.time}\n\nReview medical questionnaire and join: https://8liv.in/doctor/dashboard`,
-      })
-    } catch (err: any) {
-      console.warn('[WhatsAppNotification] sendDoctorAppointmentAssigned notice:', err.message)
-    }
+    await this.sendAppointmentConfirmation(phone, data)
   }
 }

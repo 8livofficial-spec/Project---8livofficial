@@ -24,19 +24,24 @@ export interface OutboxEnqueueParams {
   recipientPhone: string
   payload: OutboxPayload
   maxAttempts?: number
+  nextAttemptAt?: Date | string
 }
 
 export class WhatsAppOutbox {
   /**
    * Enqueues a notification into the durable outbox queue.
-   * Idempotent by `idempotency_key`.
+   * Idempotent by `idempotency_key`. Supports delayed scheduling via `nextAttemptAt`.
    */
   public static async enqueue(params: OutboxEnqueueParams): Promise<boolean> {
     try {
-      const { idempotencyKey, recipientPhone, payload, maxAttempts = 5 } = params
+      const { idempotencyKey, recipientPhone, payload, maxAttempts = 5, nextAttemptAt } = params
 
       const normalized = normalizePhoneNumber(recipientPhone)
       const targetPhone = normalized.e164 || recipientPhone
+
+      const nextAttemptIso = nextAttemptAt
+        ? new Date(nextAttemptAt).toISOString()
+        : new Date().toISOString()
 
       const { error } = await supabaseAdmin
         .from('whatsapp_outbox_queue')
@@ -47,7 +52,7 @@ export class WhatsAppOutbox {
           status: 'PENDING',
           attempts: 0,
           max_attempts: maxAttempts,
-          next_attempt_at: new Date().toISOString(),
+          next_attempt_at: nextAttemptIso,
         })
 
       if (error) {
@@ -63,6 +68,26 @@ export class WhatsAppOutbox {
     } catch (err: any) {
       console.error('[WhatsAppOutbox] Enqueue error:', err)
       return false
+    }
+  }
+
+  /**
+   * Invalidate and dead-letter all pending reminder jobs for a cancelled or rescheduled appointment
+   */
+  public static async cancelPendingForConsultation(consultationId: string): Promise<void> {
+    try {
+      if (!consultationId) return
+      await supabaseAdmin
+        .from('whatsapp_outbox_queue')
+        .update({
+          status: 'DEAD_LETTER',
+          last_error: 'Appointment was cancelled or rescheduled',
+          updated_at: new Date().toISOString(),
+        })
+        .like('idempotency_key', `%_${consultationId}%`)
+        .in('status', ['PENDING', 'FAILED'])
+    } catch (err) {
+      console.warn('[WhatsAppOutbox] cancelPendingForConsultation notice:', err)
     }
   }
 
@@ -125,13 +150,36 @@ export class WhatsAppOutbox {
         continue
       }
 
+      // Validate that consultation is still scheduled before sending reminders
+      if (payload.metadata?.consultationId && payload.templateName?.includes('reminder')) {
+        const { data: consult } = await supabaseAdmin
+          .from('doctor_consultations')
+          .select('status')
+          .eq('id', payload.metadata.consultationId)
+          .maybeSingle()
+
+        const consultStatus = (consult?.status || '').toLowerCase()
+        if (!['scheduled', 'calling', 'attended'].includes(consultStatus)) {
+          await supabaseAdmin
+            .from('whatsapp_outbox_queue')
+            .update({
+              status: 'DEAD_LETTER',
+              last_error: `Consultation cancelled or no longer scheduled (status: ${consultStatus || 'CANCELLED'})`,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', job.id)
+          stats.deadLetter++
+          continue
+        }
+      }
+
       let dispatchResult: import('./whatsappClient').WhatsAppSendResult
 
       if (payload.type === 'template' && payload.templateName) {
         dispatchResult = await WhatsAppClient.sendTemplate({
           to: waNumber,
           templateName: payload.templateName,
-          languageCode: payload.languageCode || 'en',
+          languageCode: payload.languageCode || 'en_US',
           components: payload.components,
         })
       } else {

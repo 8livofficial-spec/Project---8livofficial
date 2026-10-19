@@ -291,12 +291,36 @@ export async function POST(request: Request) {
       }
 
       if (patientPhone) {
-        WhatsAppNotificationService.sendPaymentReceipt(patientPhone, {
-          patientName,
-          amount: amount || 0,
-          paymentId: razorpay_payment_id,
-          planOrType: programName || (paymentType === 'membership' ? '8LIV Membership Program' : '8LIV Healthcare Services'),
-        }).catch(waErr => console.warn('[WhatsApp] Payment receipt dispatch notice:', waErr))
+        if (paymentType === 'consultation') {
+          WhatsAppNotificationService.sendConsultationPayment(patientPhone, {
+            patientName,
+            amount: amount || 499,
+            paymentId: razorpay_payment_id,
+            description: 'Doctor Video Consultation',
+          }).catch(waErr => console.warn('[WhatsApp] Consultation payment dispatch notice:', waErr))
+        } else if (paymentType === 'membership') {
+          WhatsAppNotificationService.sendMembershipReceipt(patientPhone, {
+            patientName,
+            amount: amount || pricing.finalPrice,
+            paymentId: razorpay_payment_id,
+            planName: programName,
+          }).catch(waErr => console.warn('[WhatsApp] Membership receipt dispatch notice:', waErr))
+        } else if (paymentType === 'combined') {
+          // Send distinct membership receipt and consultation payment confirmation
+          WhatsAppNotificationService.sendMembershipReceipt(patientPhone, {
+            patientName,
+            amount: (amount && amount > 499) ? amount - 499 : pricing.finalPrice,
+            paymentId: `${razorpay_payment_id}_m`,
+            planName: programName,
+          }).catch(waErr => console.warn('[WhatsApp] Combined membership receipt notice:', waErr))
+
+          WhatsAppNotificationService.sendConsultationPayment(patientPhone, {
+            patientName,
+            amount: 499,
+            paymentId: `${razorpay_payment_id}_c`,
+            description: 'Doctor Video Consultation',
+          }).catch(waErr => console.warn('[WhatsApp] Combined consultation payment notice:', waErr))
+        }
       }
       } catch (notificationError) {
         console.error('Failed to send payment notifications:', notificationError)

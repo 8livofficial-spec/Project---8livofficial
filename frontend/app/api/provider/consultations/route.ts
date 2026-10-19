@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 import { canJoinConsultation, labelForRole } from '@/lib/providerConsultations'
 import { creditCompletedConsultation } from '@/lib/walletLedger'
 import { patientSearchOrFilter } from '@/lib/queryFilters'
+import { WhatsAppNotificationService } from '@/lib/whatsapp/whatsappNotificationService'
 
 const terminalStatuses = ['completed', 'cancelled', 'cancelled_by_doctor', 'cancelled_by_patient', 'missed', 'missed_by_patient']
 const emptyStats = { total: 0, today: 0, upcoming: 0, completed: 0, missed: 0, cancelled: 0 }
@@ -181,6 +182,34 @@ export async function PATCH(request: Request) {
       message: `Your ${labelForRole(data.staff_role)} video session has been marked ${nextStatus.replaceAll('_', ' ')}.`,
       is_read: false,
     })
+
+  if (action === 'cancel') {
+    Promise.resolve().then(async () => {
+      try {
+        const { data: patientProfile } = await supabaseAdmin
+          .from('profiles')
+          .select('first_name, last_name, phone_number')
+          .eq('id', data.patient_id)
+          .maybeSingle()
+
+        const patientPhone = patientProfile?.phone_number
+        if (patientPhone) {
+          const patientName = [patientProfile.first_name, patientProfile.last_name].filter(Boolean).join(' ') || 'Patient'
+          const doctorName = (provider.user?.user_metadata as any)?.full_name || 'Assigned Specialist'
+
+          await WhatsAppNotificationService.sendAppointmentCancelled(patientPhone, {
+            patientName,
+            doctorName,
+            date: data.available_date || data.booking_date || undefined,
+            time: data.start_time || data.booking_time || undefined,
+            bookingId: data.id,
+          })
+        }
+      } catch (err) {
+        console.warn('[WhatsApp] Doctor cancel notification error:', err)
+      }
+    })
+  }
 
   if (action === 'complete') {
     try {

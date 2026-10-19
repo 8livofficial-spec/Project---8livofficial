@@ -26,40 +26,34 @@ export const WHATSAPP_CONFIG = {
   resendCooldownSeconds: 60,
   customerServiceWindowHours: 24,
 
-  // Meta Message Templates (Standardized mapping for 8LIV)
+  // Meta Approved Message Templates for 8LIV Health
   templates: {
     otpAuth: {
-      name: process.env.WHATSAPP_TEMPLATE_OTP || 'auth_otp_v1',
-      fallbackName: 'hello_world', // Built-in default for sandbox test accounts
+      name: process.env.WHATSAPP_TEMPLATE_OTP || '8liv_login_otp',
       language: 'en_US',
     },
-    appointmentBooking: {
-      name: process.env.WHATSAPP_TEMPLATE_APPT_BOOKED || 'appointment_confirmation_v1',
-      fallbackName: 'jaspers_market_order_confirmation_v1',
+    membershipReceipt: {
+      name: process.env.WHATSAPP_TEMPLATE_MEMBERSHIP_RECEIPT || 'membership_receipt',
       language: 'en_US',
     },
-    appointmentReschedule: {
-      name: process.env.WHATSAPP_TEMPLATE_APPT_RESCHEDULED || 'appointment_rescheduled_v1',
+    consultationPayment: {
+      name: process.env.WHATSAPP_TEMPLATE_CONSULT_PAYMENT || 'consultation_payment_confirmation',
+      language: 'en_US',
+    },
+    consultationBooking: {
+      name: process.env.WHATSAPP_TEMPLATE_CONSULT_BOOKING || 'consultation_booking_confirmed',
+      language: 'en_US',
+    },
+    consultationReminder30m: {
+      name: process.env.WHATSAPP_TEMPLATE_CONSULT_REMINDER || 'consultation_reminder__30_min',
       language: 'en_US',
     },
     appointmentCancel: {
-      name: process.env.WHATSAPP_TEMPLATE_APPT_CANCELLED || 'appointment_cancelled_v1',
+      name: process.env.WHATSAPP_TEMPLATE_APPT_CANCELLED || 'appointment_cancelled',
       language: 'en_US',
     },
-    consultationReminder: {
-      name: process.env.WHATSAPP_TEMPLATE_CONSULT_REMINDER || 'consultation_reminder_v1',
-      language: 'en_US',
-    },
-    paymentReceipt: {
-      name: process.env.WHATSAPP_TEMPLATE_PAYMENT_RECEIPT || 'payment_receipt_v1',
-      language: 'en_US',
-    },
-    orderDispatched: {
-      name: process.env.WHATSAPP_TEMPLATE_ORDER_DISPATCHED || 'pharmacy_order_dispatched_v1',
-      language: 'en_US',
-    },
-    orderDelivered: {
-      name: process.env.WHATSAPP_TEMPLATE_ORDER_DELIVERED || 'pharmacy_order_delivered_v1',
+    labDoorstepCollection: {
+      name: process.env.WHATSAPP_TEMPLATE_LAB_DOORSTEP || 'lab_doorstep_collection',
       language: 'en_US',
     },
   },

@@ -663,19 +663,14 @@ export async function POST(request: Request) {
           WhatsAppNotificationService.sendAppointmentConfirmation(patientPhone, {
             patientName,
             doctorName: doctor?.full_name || 'Assigned Doctor',
+            appointmentType: 'Doctor Video Consultation',
             date: slot.available_date,
             time: slot.time_slot,
             bookingId: consultation.id,
+            scheduledStart: consultation.scheduled_start
+              ? String(consultation.scheduled_start)
+              : (slot.available_date && slot.time_slot ? `${slot.available_date}T${slot.time_slot}:00+05:30` : undefined),
           }).catch(err => console.warn('[WhatsApp] Appointment confirmation notification notice:', err))
-
-          if (isInitialConsultation && !reusedPayment) {
-            WhatsAppNotificationService.sendPaymentReceipt(patientPhone, {
-              patientName,
-              amount: CONSULTATION_FEE,
-              paymentId: txnId || consultation.id,
-              planOrType: 'Doctor Video Consultation',
-            }).catch(err => console.warn('[WhatsApp] Consultation fee receipt notice:', err))
-          }
         }
       } catch (backgroundErr) {
         console.error('Failed executing background booking tasks:', backgroundErr)

@@ -206,17 +206,10 @@ export class WhatsAppOtpService {
       ],
     })
 
-    // If template not found / not approved yet (e.g. Meta test sandbox), fallback to text message
     if (!sendResult.success) {
-      console.warn(`[WhatsAppOtpService] Template '${WHATSAPP_CONFIG.templates.otpAuth.name}' failed. Falling back to direct text delivery:`, sendResult.error?.message)
-      sendResult = await WhatsAppClient.sendText({
-        to: normalized.whatsapp,
-        text: `Your 8LIV security verification code is: *${rawOtp}*.\n\nThis code expires in 5 minutes. Never share this OTP with anyone for your privacy and clinical safety.`,
-      })
-    }
-
-    if (!sendResult.success) {
-      throw new Error(sendResult.error?.message || 'Failed to dispatch WhatsApp OTP. Please verify your phone number.')
+      const errorMsg = sendResult.error?.message || 'Failed to dispatch WhatsApp OTP.'
+      console.error(`[WhatsAppOtpService] Authentication template '${WHATSAPP_CONFIG.templates.otpAuth.name}' dispatch failed:`, errorMsg)
+      throw new Error(`WhatsApp delivery failed: ${errorMsg}. Please check your phone number and try again.`)
     }
 
     writeAuthAudit({

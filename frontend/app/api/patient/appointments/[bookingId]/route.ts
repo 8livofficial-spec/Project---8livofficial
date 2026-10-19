@@ -5,6 +5,7 @@ import { createStreamMeeting } from '@/services/video/meeting.service'
 import { invalidateDoctorAvailabilityCache } from '@/lib/patientAppointmentBooking'
 import { invalidateSlotsCache } from '@/lib/appointmentAvailability'
 import { invalidatePatientApiDashboardCache } from '@/lib/patientDashboardCache'
+import { WhatsAppNotificationService } from '@/lib/whatsapp/whatsappNotificationService'
 
 type RouteContext = {
   params: Promise<{ bookingId: string }>
@@ -388,6 +389,42 @@ export async function PATCH(request: Request, context: RouteContext) {
           : 'Your appointment was cancelled too late and is treated as missed. You may use your one free missed-consultation reschedule if available.',
         is_read: false
       })
+
+    // Non-blocking WhatsApp Cancellation Notification and Reminder Invalidation
+    Promise.resolve().then(async () => {
+      try {
+        const [{ data: patientProfile }, { data: doctorProfile }] = await Promise.all([
+          supabaseAdmin
+            .from('profiles')
+            .select('first_name, last_name, display_id, phone_number')
+            .eq('id', patientId)
+            .maybeSingle(),
+          consultation.doctor_id
+            ? supabaseAdmin
+                .from('profiles')
+                .select('first_name, last_name, display_id')
+                .eq('id', consultation.doctor_id)
+                .maybeSingle()
+            : Promise.resolve({ data: null }),
+        ])
+
+        const patientPhone = patientProfile?.phone_number
+        if (patientPhone) {
+          const patientName = [patientProfile?.first_name, patientProfile?.last_name].filter(Boolean).join(' ') || 'Patient'
+          const doctorName = [doctorProfile?.first_name, doctorProfile?.last_name].filter(Boolean).join(' ') || 'Assigned Physician'
+
+          await WhatsAppNotificationService.sendAppointmentCancelled(patientPhone, {
+            patientName,
+            doctorName,
+            date: consultation.booking_date,
+            time: consultation.booking_time,
+            bookingId,
+          })
+        }
+      } catch (waErr) {
+        console.warn('[WhatsApp] Patient appointment cancellation dispatch notice:', waErr)
+      }
+    })
 
     return NextResponse.json({
       success: true,
