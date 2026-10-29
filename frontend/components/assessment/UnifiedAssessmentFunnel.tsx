@@ -45,6 +45,9 @@ import {
   Star,
   ExternalLink,
   ShieldAlert,
+  MessageSquare,
+  Phone,
+  RefreshCw,
 } from 'lucide-react'
 import {
   ScreenerWelcomeIllustration,
@@ -118,8 +121,8 @@ const INTAKE_STEPS = [
   { step: 2, label: 'Vitals' },
   { step: 3, label: 'Safety' },
   { step: 4, label: 'History' },
-  { step: 5, label: 'Lab' },
-  { step: 6, label: 'Meds' },
+  { step: 5, label: 'Meds' },
+  { step: 6, label: 'Lab' },
   { step: 7, label: 'Account' },
 ]
 
@@ -255,6 +258,8 @@ export default function UnifiedAssessmentFunnel({
     // Lab Work
     lab_preference: 'none' as 'none' | 'upload' | 'third_party' | 'skip',
     lab_report_url: '',
+    lab_report_date: '',
+    lab_report_within_7_days: false,
     lab_collection_address: '',
     lab_collection_city: '',
     lab_collection_pincode: '',
@@ -277,6 +282,7 @@ export default function UnifiedAssessmentFunnel({
   const [waistRaw, setWaistRaw] = useState<string>('')
   const [isUploadingLab, setIsUploadingLab] = useState(false)
   const [uploadError, setUploadError] = useState('')
+  const [labDateError, setLabDateError] = useState('')
 
   // Gate 1: Statutory Data & Privacy Consents
   const [gate1Consents, setGate1Consents] = useState({
@@ -286,34 +292,32 @@ export default function UnifiedAssessmentFunnel({
     research: false,
   })
 
-  // Date of Birth & Minor Guardian Verification
+  // Date of Birth & Age Restriction (18+ only per government regulations)
   const [patientDob, setPatientDob] = useState('')
-  const [isMinor, setIsMinor] = useState(false)
-  const [guardianInfo, setGuardianInfo] = useState({
-    name: '',
-    relationship: 'Parent',
-    phone: '',
-    email: '',
-  })
-  const [guardianOtp, setGuardianOtp] = useState('')
-  const [guardianOtpSent, setGuardianOtpSent] = useState(false)
-  const [guardianOtpVerified, setGuardianOtpVerified] = useState(false)
-  const [isSendingGuardianOtp, setIsSendingGuardianOtp] = useState(false)
-  const [isVerifyingGuardianOtp, setIsVerifyingGuardianOtp] = useState(false)
-  const [guardianOtpError, setGuardianOtpError] = useState('')
-  const [guardianOtpCooldown, setGuardianOtpCooldown] = useState(0)
+  const [isUnder18, setIsUnder18] = useState(false)
+  const [dobError, setDobError] = useState('')
+
+  // Patient WhatsApp OTP Verification
+  const [patientOtp, setPatientOtp] = useState('')
+  const [patientOtpSent, setPatientOtpSent] = useState(false)
+  const [patientOtpVerified, setPatientOtpVerified] = useState(false)
+  const [isSendingPatientOtp, setIsSendingPatientOtp] = useState(false)
+  const [isVerifyingPatientOtp, setIsVerifyingPatientOtp] = useState(false)
+  const [patientOtpError, setPatientOtpError] = useState('')
+  const [patientOtpCooldown, setPatientOtpCooldown] = useState(0)
 
   useEffect(() => {
-    if (guardianOtpCooldown <= 0) return
-    const timer = setInterval(() => setGuardianOtpCooldown((p) => Math.max(0, p - 1)), 1000)
+    if (patientOtpCooldown <= 0) return
+    const timer = setInterval(() => setPatientOtpCooldown((p) => Math.max(0, p - 1)), 1000)
     return () => clearInterval(timer)
-  }, [guardianOtpCooldown])
+  }, [patientOtpCooldown])
 
   const handleDobChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value
     setPatientDob(val)
     if (!val) {
-      setIsMinor(false)
+      setIsUnder18(false)
+      setDobError('')
       return
     }
     const birthDate = new Date(val)
@@ -323,63 +327,86 @@ export default function UnifiedAssessmentFunnel({
     if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
       age--
     }
-    const under18 = age < 18
-    setIsMinor(under18)
+    if (age < 18) {
+      setIsUnder18(true)
+      setDobError('Must be 18 or older to proceed.')
+    } else {
+      setIsUnder18(false)
+      setDobError('')
+    }
     setFormData((prev) => ({ ...prev, age: String(Math.max(1, age)) }))
   }
 
-  const handleSendGuardianOtp = async () => {
-    const rawDigits = guardianInfo.phone.replace(/\D/g, '')
+  const handleSendPatientOtp = async () => {
+    const rawDigits = (formData.phone_number || '').replace(/\D/g, '')
     if (rawDigits.length < 10) {
-      setGuardianOtpError('Please enter a valid 10-digit mobile number for the parent or legal guardian.')
+      setPatientOtpError('Please enter a valid 10-digit mobile number with country code (e.g. +91 98765 43210).')
       return
     }
-    setGuardianOtpError('')
-    setIsSendingGuardianOtp(true)
+    if (isUnder18) {
+      setPatientOtpError('Treatment is strictly restricted to patients aged 18 and older.')
+      return
+    }
+    setPatientOtpError('')
+    setIsSendingPatientOtp(true)
     try {
       const res = await fetch('/api/auth/whatsapp/otp/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phoneNumber: guardianInfo.phone,
-          purpose: 'VERIFY_PHONE',
+          phoneNumber: formData.phone_number,
+          purpose: 'SIGNUP',
         }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Failed to dispatch verification code.')
-      setGuardianOtpSent(true)
-      setGuardianOtpCooldown(60)
+      if (!res.ok) throw new Error(data.error || 'Failed to dispatch WhatsApp verification code.')
+      setPatientOtpSent(true)
+      setPatientOtpCooldown(60)
     } catch (err: any) {
-      setGuardianOtpError(err.message || 'Unable to send OTP.')
+      setPatientOtpError(err.message || 'Unable to send WhatsApp OTP.')
     } finally {
-      setIsSendingGuardianOtp(false)
+      setIsSendingPatientOtp(false)
     }
   }
 
-  const handleVerifyGuardianOtp = async () => {
-    if (guardianOtp.length !== 6) {
-      setGuardianOtpError('Enter the 6-digit code received on WhatsApp.')
-      return
+  const handleVerifyPatientOtp = async () => {
+    if (patientOtp.length !== 6) {
+      setPatientOtpError('Enter the 6-digit code received on WhatsApp.')
+      return null
     }
-    setGuardianOtpError('')
-    setIsVerifyingGuardianOtp(true)
+    setPatientOtpError('')
+    setIsVerifyingPatientOtp(true)
     try {
       const res = await fetch('/api/auth/whatsapp/otp/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          phoneNumber: guardianInfo.phone,
-          otp: guardianOtp,
-          purpose: 'VERIFY_PHONE',
+          phoneNumber: formData.phone_number,
+          otp: patientOtp,
+          purpose: 'SIGNUP',
+          email: formData.email || undefined,
+          firstName: formData.first_name || 'Patient',
+          lastName: formData.last_name || '',
         }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Invalid OTP code.')
-      setGuardianOtpVerified(true)
+      setPatientOtpVerified(true)
+      
+      // Establish session
+      if (data.session) {
+        await supabase.auth.setSession({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        })
+        syncSupabaseAuthCookie(data.session)
+      }
+      return data
     } catch (err: any) {
-      setGuardianOtpError(err.message || 'OTP verification failed.')
+      setPatientOtpError(err.message || 'OTP verification failed.')
+      throw err
     } finally {
-      setIsVerifyingGuardianOtp(false)
+      setIsVerifyingPatientOtp(false)
     }
   }
 
@@ -696,8 +723,9 @@ export default function UnifiedAssessmentFunnel({
     setIsSubmitting(true)
 
     try {
-      const passwordError = validatePasswordStrength(formData.password)
-      if (passwordError) throw new Error(passwordError)
+      if (isUnder18) {
+        throw new Error('Treatment is strictly restricted to patients aged 18 and older as per clinical guidelines and government regulations.')
+      }
 
       if (!formData.phone_number || formData.phone_number.replace(/\D/g, '').length < 10) {
         throw new Error('Please enter a valid mobile number with country code (e.g. +91 98765 43210).')
@@ -708,39 +736,33 @@ export default function UnifiedAssessmentFunnel({
         throw new Error('Please review and check the required health data and care team sharing consent checkboxes.')
       }
 
-      if (isMinor && !guardianOtpVerified) {
-        throw new Error('Parent / legal guardian verification via mobile OTP is required for patients under 18.')
-      }
-
       const { data: { session } } = await supabase.auth.getSession()
       let userId = session?.user.id || currentUserId
-      const accessToken = session?.access_token || null
+      let accessToken = session?.access_token || null
 
-      // If user is not yet logged in, sign up first
+      // If user is not yet authenticated, verify via WhatsApp OTP
       if (!userId) {
-        const { response: signupRes, data: signupData } = await fetchJsonWithTimeout('/api/auth/signup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            email: formData.email,
-            password: formData.password,
-            firstName: formData.first_name || (formData.email.split('@')[0] || 'Patient'),
-            lastName: formData.last_name || '',
-            phoneNumber: formData.phone_number,
-            consent: {
-              consent_health_data: gate1Consents.health_data,
-              consent_care_team_share: gate1Consents.care_team_sharing,
-              consent_reminders: gate1Consents.comms,
-              consent_deidentified_research: gate1Consents.research,
-            },
-            guardianUserId: isMinor ? `${guardianInfo.name} (${guardianInfo.relationship})` : null,
-            otpVerified: isMinor ? guardianOtpVerified : false,
-          }),
-        })
-        if (!signupRes.ok) {
-          throw new Error(signupData.error || 'Failed to create account.')
+        if (!patientOtpVerified) {
+          if (!patientOtpSent) {
+            await handleSendPatientOtp()
+            setFormError('A 6-digit verification code has been sent to your WhatsApp. Please enter the code below to complete onboarding.')
+            setIsSubmitting(false)
+            return
+          }
+          if (patientOtp.length !== 6) {
+            throw new Error('Please enter the 6-digit WhatsApp verification code.')
+          }
+          const verifiedData = await handleVerifyPatientOtp()
+          if (!verifiedData) {
+            throw new Error('Failed to verify OTP. Please try again.')
+          }
+          userId = verifiedData.userId || verifiedData.user?.id
+          accessToken = verifiedData.session?.access_token || null
         }
-        userId = signupData.userId
+      }
+
+      if (!userId) {
+        throw new Error('Unable to authenticate account. Please verify via WhatsApp OTP.')
       }
 
       // Submit complete assessment payload
@@ -775,20 +797,12 @@ export default function UnifiedAssessmentFunnel({
         return
       }
 
-      if (accessToken) {
-        syncSupabaseAuthCookie(session)
-        window.location.href = '/consultation-payment'
-        return
-      }
-
-      // If newly registered, redirect to verification
-      await supabase.auth.signOut()
-      syncSupabaseAuthCookie(null)
-      window.location.href = `/verification-pending?email=${encodeURIComponent(formData.email)}`
-    } catch (err) {
+      // Direct transition to consultation payment (No email verification or Gmail redirect)
+      window.location.href = '/consultation-payment'
+    } catch (err: any) {
       setFormError(err instanceof DOMException && err.name === 'AbortError'
         ? 'This is taking longer than expected. Please check your connection and try again.'
-        : err instanceof Error ? err.message : 'An error occurred during submission.')
+        : err.message || 'Unable to submit assessment.')
     } finally {
       setIsSubmitting(false)
     }
@@ -1040,6 +1054,11 @@ export default function UnifiedAssessmentFunnel({
                       <label htmlFor={ageId} className="text-xs font-mono font-semibold uppercase tracking-wider text-slate-400 mt-1 cursor-pointer">
                         {screenerInputs.age === 0 ? 'years of age' : `${screenerInputs.age} years of age`}
                       </label>
+                      {screenerInputs.age > 0 && screenerInputs.age < 18 && (
+                        <p className="text-xs text-rose-600 bg-rose-50 px-3 py-1.5 rounded-xl border border-rose-200 mt-2 font-semibold text-center">
+                          Must be 18 or older to proceed.
+                        </p>
+                      )}
                     </div>
 
                     <button
@@ -2307,7 +2326,65 @@ export default function UnifiedAssessmentFunnel({
             <button
               type="button"
               onClick={() => {
-                syncProgressSilent('intake_lab', 4)
+                syncProgressSilent('intake_medication', 4)
+                setStage('intake_medication')
+              }}
+              className="w-full min-h-[50px] rounded-full bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white font-sans font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99]"
+            >
+              <span>Continue to Medication History</span>
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
+        {/* ===================================================================
+            SCREEN 5: PRIOR MEDICATION HISTORY
+            =================================================================== */}
+        {stage === 'intake_medication' && (
+          <div className="bg-white/95 backdrop-blur-xl border border-stone-200/90 rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 md:p-12 text-slate-900 shadow-[0_30px_70px_rgba(0,0,0,0.04),0_10px_20px_rgba(0,0,0,0.02)] transition-all animate-funnel-step">
+            <AssessmentBrandHeader />
+            <IntakeProgressBar currentStep={5} title="Medication History" />
+            <button
+              type="button"
+              onClick={() => setStage('intake_history')}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-[#11241A] mb-5 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back
+            </button>
+
+            <h1 className="font-sans text-2xl sm:text-3xl font-extrabold text-[#11241A] tracking-tight leading-snug mb-2">
+              Prior weight loss medication
+            </h1>
+            <p className="text-sm text-slate-500 mb-6">
+              Have you tried GLP-1 or other metabolic medications before?
+            </p>
+
+            <div className="space-y-3 mb-8">
+              {PRIOR_MEDICATION_OPTIONS.map((opt) => {
+                const isSelected = formData.medication_history_choice === opt.value
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, medication_history_choice: opt.value }))}
+                    className={`w-full min-h-[52px] p-4 rounded-2xl text-left text-xs sm:text-sm font-medium border transition-all flex items-center justify-between cursor-pointer ${
+                      isSelected
+                        ? 'bg-emerald-50/80 text-[#11241A] font-bold border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
+                        : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-50'
+                    }`}
+                  >
+                    <span>{opt.label}</span>
+                    {isSelected && <Check className="w-4 h-4 shrink-0 text-[#00A884]" />}
+                  </button>
+                )
+              })}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                syncProgressSilent('intake_lab', 5)
                 setStage('intake_lab')
               }}
               className="w-full min-h-[50px] rounded-full bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white font-sans font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99]"
@@ -2319,15 +2396,15 @@ export default function UnifiedAssessmentFunnel({
         )}
 
         {/* ===================================================================
-            SCREEN 7: LAB WORK / BLOOD REPORT (NEW)
+            SCREEN 6: LAB WORK / BLOOD REPORT (LAST CLINICAL STEP)
             =================================================================== */}
         {stage === 'intake_lab' && (
           <div className="bg-white/95 backdrop-blur-xl border border-stone-200/90 rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 md:p-12 text-slate-900 shadow-[0_30px_70px_rgba(0,0,0,0.04),0_10px_20px_rgba(0,0,0,0.02)] transition-all animate-funnel-step">
             <AssessmentBrandHeader />
-            <IntakeProgressBar currentStep={5} title="Diagnostic Blood Work" />
+            <IntakeProgressBar currentStep={6} title="Diagnostic Blood Work" />
             <button
               type="button"
-              onClick={() => setStage('intake_history')}
+              onClick={() => setStage('intake_medication')}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-[#11241A] mb-5 transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
@@ -2338,14 +2415,14 @@ export default function UnifiedAssessmentFunnel({
               <LabWorkIllustration className="w-16 h-16 sm:w-18 sm:h-18" />
             </div>
             <h1 className="font-sans text-2xl sm:text-3xl font-extrabold text-[#11241A] tracking-tight leading-snug mb-2 text-center">
-              Blood Work & Lab Report
+              Blood Work &amp; Lab Report
             </h1>
             <p className="font-sans text-sm text-slate-500 mb-8 text-center max-w-md mx-auto">
-              For our clinical team to calibrate safe, effective metabolic dosing, we recommend providing a recent blood report or requesting a doorstep sample collection.
+              Please choose one of the three options below regarding your diagnostic lab work.
             </p>
 
             <div className="space-y-4 mb-8">
-              {/* Option 1: Upload */}
+              {/* Option 1: I have a lab report (Max 7 days validity condition) */}
               <div 
                 className={`p-5 rounded-2xl border transition-all ${
                   formData.lab_preference === 'upload' ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs' : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-50'
@@ -2357,8 +2434,13 @@ export default function UnifiedAssessmentFunnel({
                   className="w-full flex items-center justify-between text-left cursor-pointer focus:outline-none"
                 >
                   <div>
-                    <span className="font-sans text-sm sm:text-base font-bold text-slate-900 block mb-0.5">I have a recent blood report</span>
-                    <span className="font-sans text-xs text-slate-500">Upload your PDF or image file directly for doctor review.</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-sans text-sm sm:text-base font-bold text-slate-900 block">I have a lab report</span>
+                      <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/80 px-2 py-0.5 rounded-full border border-emerald-300">
+                        7-day validity
+                      </span>
+                    </div>
+                    <span className="font-sans text-xs text-slate-500 mt-0.5 block">Upload your recent blood test report (conducted within the last 7 days).</span>
                   </div>
                   <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${formData.lab_preference === 'upload' ? 'border-[#00A884] bg-[#00A884]' : 'border-slate-300'}`}>
                     {formData.lab_preference === 'upload' && <div className="w-2 h-2 rounded-full bg-white" />}
@@ -2366,7 +2448,52 @@ export default function UnifiedAssessmentFunnel({
                 </button>
                 
                 {formData.lab_preference === 'upload' && (
-                  <div className="mt-4 pt-4 border-t border-slate-200/60">
+                  <div className="mt-4 pt-4 border-t border-slate-200/60 space-y-3.5">
+                    {/* Clinical Rule Notice */}
+                    <div className="p-3 bg-amber-50/90 border border-amber-200 rounded-xl flex items-start gap-2.5">
+                      <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      <div className="text-xs text-amber-900 leading-relaxed">
+                        <strong className="font-bold block text-amber-950 mb-0.5">7-Day Recency Requirement:</strong>
+                        To safely determine GLP-1 dosage and evaluate biomarkers, your lab report must be taken within the last 7 days. Reports older than 7 days cannot be accepted.
+                      </div>
+                    </div>
+
+                    {/* Report Date Input */}
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block mb-1">
+                        Date when test was taken <span className="text-[#00A884]">*</span>
+                      </label>
+                      <input
+                        type="date"
+                        max={new Date().toISOString().split('T')[0]}
+                        min={new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
+                        value={formData.lab_report_date}
+                        onChange={(e) => {
+                          const selected = e.target.value
+                          if (!selected) {
+                            setLabDateError('')
+                            setFormData(prev => ({ ...prev, lab_report_date: '', lab_report_within_7_days: false }))
+                            return
+                          }
+                          const testTime = new Date(selected).getTime()
+                          const now = Date.now()
+                          const diffDays = (now - testTime) / (24 * 60 * 60 * 1000)
+                          if (diffDays > 7.05) {
+                            setLabDateError('This report was taken more than 7 days ago. Only reports from the past 7 days are valid. You can request a doorstep test (Option 2) or proceed without a report.')
+                            setFormData(prev => ({ ...prev, lab_report_date: selected, lab_report_within_7_days: false }))
+                          } else {
+                            setLabDateError('')
+                            setFormData(prev => ({ ...prev, lab_report_date: selected, lab_report_within_7_days: true }))
+                          }
+                        }}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-900 bg-white focus:outline-none focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 transition-all"
+                      />
+                      {labDateError && (
+                        <p className="text-xs text-rose-600 bg-rose-50 p-2 rounded-lg mt-1.5 border border-rose-200">{labDateError}</p>
+                      )}
+                    </div>
+
+                    {/* File Upload Box */}
                     <div className="border-2 border-dashed border-emerald-300 bg-white/80 rounded-2xl p-6 text-center hover:bg-emerald-50/30 transition-colors cursor-pointer relative">
                       <input 
                         type="file" 
@@ -2393,11 +2520,24 @@ export default function UnifiedAssessmentFunnel({
                       </div>
                     </div>
                     {uploadError && <p className="text-red-500 text-xs mt-2 text-center">{uploadError}</p>}
+
+                    {/* Confirmation Checkbox */}
+                    <label className="flex items-start gap-2.5 text-xs text-slate-700 cursor-pointer pt-1 bg-white p-2.5 rounded-xl border border-slate-200/70">
+                      <input
+                        type="checkbox"
+                        checked={formData.lab_report_within_7_days}
+                        onChange={(e) => setFormData(p => ({ ...p, lab_report_within_7_days: e.target.checked }))}
+                        className="w-4 h-4 mt-0.5 rounded text-[#00A884] border-slate-300 focus:ring-[#00A884] cursor-pointer"
+                      />
+                      <span className="leading-relaxed">
+                        I confirm this blood report was conducted within the past 7 days and accurately reflects my current health markers.
+                      </span>
+                    </label>
                   </div>
                 )}
               </div>
 
-              {/* Option 2: 3rd Party */}
+              {/* Option 2: I don't have a report, get a lab report from 8live */}
               <div 
                 className={`p-5 rounded-2xl border transition-all ${
                   formData.lab_preference === 'third_party' ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs' : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-50'
@@ -2409,8 +2549,8 @@ export default function UnifiedAssessmentFunnel({
                   className="w-full flex items-center justify-between text-left cursor-pointer focus:outline-none"
                 >
                   <div>
-                    <span className="font-sans text-sm sm:text-base font-bold text-slate-900 block mb-0.5">I need a blood test</span>
-                    <span className="font-sans text-xs text-slate-500">We&apos;ll arrange a home collection via certified lab partners.</span>
+                    <span className="font-sans text-sm sm:text-base font-bold text-slate-900 block mb-0.5">I don&apos;t have a report — Get a lab report from 8live</span>
+                    <span className="font-sans text-xs text-slate-500">We&apos;ll arrange a certified home/doorstep collection via authorized lab partners.</span>
                   </div>
                   <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${formData.lab_preference === 'third_party' ? 'border-[#00A884] bg-[#00A884]' : 'border-slate-300'}`}>
                     {formData.lab_preference === 'third_party' && <div className="w-2 h-2 rounded-full bg-white" />}
@@ -2493,7 +2633,7 @@ export default function UnifiedAssessmentFunnel({
                 )}
               </div>
 
-              {/* Option 3: Skip */}
+              {/* Option 3: Proceed without a lab report (Not needed right now) */}
               <div 
                 className={`p-5 rounded-2xl border transition-all ${
                   formData.lab_preference === 'skip' ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs' : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-50'
@@ -2505,8 +2645,8 @@ export default function UnifiedAssessmentFunnel({
                   className="w-full flex items-center justify-between text-left cursor-pointer focus:outline-none"
                 >
                   <div>
-                    <span className="font-sans text-sm sm:text-base font-bold text-slate-900 block mb-0.5">Skip for now</span>
-                    <span className="font-sans text-xs text-slate-500">I will provide my report during my doctor consultation.</span>
+                    <span className="font-sans text-sm sm:text-base font-bold text-slate-900 block mb-0.5">Proceed without a lab report</span>
+                    <span className="font-sans text-xs text-slate-500">Not needed right now. You can proceed directly and discuss with your physician during consultation.</span>
                   </div>
                   <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${formData.lab_preference === 'skip' ? 'border-[#00A884] bg-[#00A884]' : 'border-slate-300'}`}>
                     {formData.lab_preference === 'skip' && <div className="w-2 h-2 rounded-full bg-white" />}
@@ -2519,34 +2659,35 @@ export default function UnifiedAssessmentFunnel({
               type="button"
               disabled={
                 formData.lab_preference === 'none' ||
+                (formData.lab_preference === 'upload' && (!formData.lab_report_url || !formData.lab_report_within_7_days || Boolean(labDateError))) ||
                 (formData.lab_preference === 'third_party' &&
                   (!formData.lab_collection_address.trim() || formData.lab_collection_pincode.trim().length < 6))
               }
               onClick={() => {
-                syncProgressSilent('intake_medication', 4)
-                setStage('intake_medication')
+                syncProgressSilent('intake_account', 6)
+                setStage('intake_account')
               }}
               className={`w-full min-h-[50px] rounded-full font-sans font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${
-                formData.lab_preference !== 'none' &&
-                (formData.lab_preference !== 'third_party' ||
-                  (formData.lab_collection_address.trim().length > 0 && formData.lab_collection_pincode.trim().length >= 6))
+                formData.lab_preference === 'skip' ||
+                (formData.lab_preference === 'upload' && formData.lab_report_url && formData.lab_report_within_7_days && !labDateError) ||
+                (formData.lab_preference === 'third_party' && formData.lab_collection_address.trim().length > 0 && formData.lab_collection_pincode.trim().length >= 6)
                   ? 'bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99]'
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
               }`}
             >
-              <span>Continue to Medication History</span>
+              <span>Continue to Account Setup</span>
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         )}
 
         {/* ===================================================================
-            SCREEN 7A: PRIOR MEDICATION HISTORY
+            SCREEN 7: ACCOUNT CREATION & WHATSAPP OTP VERIFICATION
             =================================================================== */}
-        {stage === 'intake_medication' && (
+        {stage === 'intake_account' && (
           <div className="bg-white/95 backdrop-blur-xl border border-stone-200/90 rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 md:p-12 text-slate-900 shadow-[0_30px_70px_rgba(0,0,0,0.04),0_10px_20px_rgba(0,0,0,0.02)] transition-all animate-funnel-step">
             <AssessmentBrandHeader />
-            <IntakeProgressBar currentStep={6} title="Medication History" />
+            <IntakeProgressBar currentStep={7} title="Confidential Health Profile" />
             <button
               type="button"
               onClick={() => setStage('intake_lab')}
@@ -2556,264 +2697,193 @@ export default function UnifiedAssessmentFunnel({
               Back
             </button>
 
-            <h1 className="font-sans text-2xl sm:text-3xl font-extrabold text-[#11241A] tracking-tight leading-snug mb-2">
-              Prior weight loss medication
-            </h1>
-            <p className="text-sm text-slate-500 mb-6">
-              Have you tried GLP-1 or other metabolic medications before?
-            </p>
-
-            <div className="space-y-3 mb-8">
-              {PRIOR_MEDICATION_OPTIONS.map((opt) => {
-                const isSelected = formData.medication_history_choice === opt.value
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, medication_history_choice: opt.value }))}
-                    className={`w-full min-h-[52px] p-4 rounded-2xl text-left text-xs sm:text-sm font-medium border transition-all flex items-center justify-between cursor-pointer ${
-                      isSelected
-                        ? 'bg-emerald-50/80 text-[#11241A] font-bold border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
-                        : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-50'
-                    }`}
-                  >
-                    <span>{opt.label}</span>
-                    {isSelected && <Check className="w-4 h-4 shrink-0 text-[#00A884]" />}
-                  </button>
-                )
-              })}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => {
-                syncProgressSilent('intake_account', 5)
-                setStage('intake_account')
-              }}
-              className="w-full min-h-[50px] rounded-full bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white font-sans font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99]"
-            >
-              <span>Continue to Account Setup</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-
-        {/* ===================================================================
-            SCREEN 7B: ACCOUNT CREATION & SUBMIT
-            =================================================================== */}
-        {stage === 'intake_account' && (
-          <div className="bg-white/95 backdrop-blur-xl border border-stone-200/90 rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 md:p-12 text-slate-900 shadow-[0_30px_70px_rgba(0,0,0,0.04),0_10px_20px_rgba(0,0,0,0.02)] transition-all animate-funnel-step">
-            <AssessmentBrandHeader />
-            <IntakeProgressBar currentStep={7} title="Confidential Health Profile" />
-            <button
-              type="button"
-              onClick={() => setStage('intake_medication')}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-[#11241A] mb-5 transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              Back
-            </button>
-
             <div className="flex items-start justify-between gap-4 mb-6">
               <div>
                 <h1 className="font-sans text-2xl sm:text-3xl font-extrabold text-[#11241A] tracking-tight leading-snug mb-2">
-                  Save your health profile
+                  Complete your clinical profile
                 </h1>
                 <p className="text-sm text-slate-500">
-                  Create your secure portal login to view your physician&apos;s recommendations and schedule your consultation.
+                  Verify your mobile number via WhatsApp OTP to securely save your profile and proceed to doctor consultation. No email verification required.
                 </p>
               </div>
               <AccountSecurityIllustration className="w-12 h-12 sm:w-14 sm:h-14 shrink-0" />
             </div>
 
             <form onSubmit={handleFinalSubmit} className="space-y-4">
+              {/* Mobile Number with WhatsApp OTP Send */}
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1.5">Email address</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-700 block">
+                    Mobile number <span className="text-[#00A884]">*</span>
+                  </label>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                    <MessageSquare className="w-3 h-3 text-[#00A884]" /> WhatsApp Verification
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    type="tel"
+                    required
+                    autoComplete="tel"
+                    inputMode="tel"
+                    placeholder="+91 98765 43210"
+                    value={formData.phone_number}
+                    onChange={handlePhoneChange}
+                    disabled={patientOtpVerified}
+                    className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs disabled:bg-slate-100"
+                  />
+                  {!patientOtpVerified && !currentUserId && (
+                    <button
+                      type="button"
+                      onClick={handleSendPatientOtp}
+                      disabled={isSendingPatientOtp || patientOtpCooldown > 0 || (formData.phone_number.replace(/\D/g, '').length < 10) || isUnder18}
+                      className="shrink-0 px-4 py-2.5 rounded-2xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer"
+                    >
+                      {patientOtpCooldown > 0 ? (
+                        <span>{patientOtpCooldown}s</span>
+                      ) : isSendingPatientOtp ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Sending...</span>
+                        </>
+                      ) : patientOtpSent ? (
+                        <span>Resend OTP</span>
+                      ) : (
+                        <span>Send WhatsApp OTP</span>
+                      )}
+                    </button>
+                  )}
+                </div>
+                <span className="text-[11px] text-slate-400 mt-1 block">
+                  A 6-digit verification code will be sent to your WhatsApp.
+                </span>
+              </div>
+
+              {/* OTP Input box when sent */}
+              {patientOtpSent && !patientOtpVerified && (
+                <div className="p-4 rounded-2xl bg-emerald-50/70 border border-emerald-200/80 space-y-2.5 animate-funnel-step">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-emerald-950 block">
+                      Enter 6-digit WhatsApp Code
+                    </label>
+                    <span className="text-[11px] text-emerald-700 font-medium">Sent to WhatsApp</span>
+                  </div>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      maxLength={6}
+                      inputMode="numeric"
+                      placeholder="• • • • • •"
+                      value={patientOtp}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '')
+                        setPatientOtp(val)
+                        if (val.length === 6) {
+                          setTimeout(() => {
+                            handleVerifyPatientOtp().catch(() => {})
+                          }, 100)
+                        }
+                      }}
+                      className="w-full sm:w-48 min-h-[46px] px-3.5 text-center font-mono text-lg tracking-widest font-extrabold rounded-xl border border-emerald-300 bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#00A884]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleVerifyPatientOtp().catch(() => {})}
+                      disabled={isVerifyingPatientOtp || patientOtp.length !== 6}
+                      className="min-h-[46px] px-5 bg-[#00A884] hover:bg-[#009977] disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      {isVerifyingPatientOtp ? (
+                        <>
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          <span>Verifying...</span>
+                        </>
+                      ) : (
+                        <span>Verify Code</span>
+                      )}
+                    </button>
+                  </div>
+                  {patientOtpError && (
+                    <p className="text-xs text-rose-600 bg-rose-50 p-2 rounded-lg border border-rose-200 font-medium">{patientOtpError}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Verified Badge */}
+              {patientOtpVerified && (
+                <div className="flex items-center gap-2 text-xs font-bold text-emerald-800 bg-emerald-100/80 p-3 rounded-2xl border border-emerald-300/60">
+                  <CheckCircle2 className="w-4 h-4 text-[#00A884] shrink-0" />
+                  <span>Mobile number verified via WhatsApp OTP</span>
+                </div>
+              )}
+
+              {/* Name Fields */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1.5">First name</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Your first name"
+                    value={formData.first_name}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, first_name: e.target.value }))}
+                    className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-700 block mb-1.5">Last name</label>
+                  <input
+                    type="text"
+                    placeholder="Your last name"
+                    value={formData.last_name}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, last_name: e.target.value }))}
+                    className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
+                  />
+                </div>
+              </div>
+
+              {/* Email Address (Optional / Secondary, NO VERIFICATION REQUIRED) */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-700 block">
+                    Email address <span className="text-slate-400 font-normal">(Optional)</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-medium">No verification link needed</span>
+                </div>
                 <input
                   type="email"
-                  required
                   autoComplete="email"
                   placeholder="name@example.com"
                   value={formData.email}
                   onChange={(e) => setFormData((prev) => ({ ...prev, email: e.target.value }))}
                   className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
                 />
-              </div>
-
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-slate-700 block">Mobile number</label>
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/60">
-                    WhatsApp & Phone Login
-                  </span>
-                </div>
-                <input
-                  type="tel"
-                  required
-                  autoComplete="tel"
-                  inputMode="tel"
-                  placeholder="+91 98765 43210"
-                  value={formData.phone_number}
-                  onChange={handlePhoneChange}
-                  className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
-                />
                 <span className="text-[11px] text-slate-400 mt-1 block">
-                  Used for instant WhatsApp alerts, login OTPs, and doctor video call coordination.
+                  Used only for appointment receipts and prescription copies. Verification is handled exclusively via your WhatsApp number.
                 </span>
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1.5">Create a password</label>
-                <div className="relative">
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    required
-                    autoComplete="new-password"
-                    placeholder="At least 8 characters"
-                    value={formData.password}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, password: e.target.value }))}
-                    className="w-full min-h-[50px] px-4 pr-11 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-3.5 top-3.5 text-slate-400 hover:text-slate-600 focus:outline-none cursor-pointer"
-                    aria-label={showPassword ? 'Hide password' : 'Show password'}
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-                <span className="text-[11px] text-slate-400 mt-1 block">
-                  Must include 8+ characters, uppercase, lowercase, number, and special character.
-                </span>
-              </div>
-
+              {/* Date of Birth (Strictly 18+ only) */}
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-semibold text-slate-700 block">Date of birth</label>
-                  <span className="text-[11px] text-slate-400">Used for clinical safety &amp; legal verification</span>
+                  <label className="text-xs font-semibold text-slate-700 block">
+                    Date of birth <span className="text-[#00A884]">*</span>
+                  </label>
+                  <span className="text-[11px] text-slate-400">Must be 18+ years of age</span>
                 </div>
                 <input
                   type="date"
                   required
-                  max={new Date().toISOString().split('T')[0]}
+                  max={new Date(Date.now() - 18 * 365.25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]}
                   value={patientDob}
                   onChange={handleDobChange}
                   className="w-full min-h-[50px] px-4 rounded-2xl border border-slate-200/90 text-sm font-semibold text-[#11241A] bg-slate-50/70 focus:bg-white focus:border-[#00A884] focus:ring-4 focus:ring-[#00A884]/10 focus:outline-none transition-all shadow-xs"
                 />
+                {isUnder18 && (
+                  <p className="text-xs text-rose-600 bg-rose-50 p-2.5 rounded-xl border border-rose-200 mt-2 font-semibold">
+                    Must be 18 or older to proceed.
+                  </p>
+                )}
               </div>
-
-              {/* Minor Guardian Consent (< 18 check) */}
-              {isMinor && (
-                <div className="p-4 sm:p-5 rounded-2xl bg-amber-50/90 border border-amber-200 space-y-3">
-                  <div className="flex items-start gap-2.5">
-                    <ShieldAlert className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="text-xs font-bold text-amber-900 uppercase tracking-wider">Parent / Legal Guardian Consent Required</h4>
-                      <p className="text-xs text-amber-800 mt-0.5 leading-relaxed">
-                        Because you are under 18, a parent or legal guardian must create this account and consent on your behalf.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-700 block mb-1">Guardian Full Name</label>
-                      <input
-                        type="text"
-                        required={isMinor}
-                        placeholder="Parent or Guardian Name"
-                        value={guardianInfo.name}
-                        onChange={(e) => setGuardianInfo((p) => ({ ...p, name: e.target.value }))}
-                        className="w-full min-h-[44px] px-3.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-700 block mb-1">Relationship</label>
-                      <select
-                        value={guardianInfo.relationship}
-                        onChange={(e) => setGuardianInfo((p) => ({ ...p, relationship: e.target.value }))}
-                        className="w-full min-h-[44px] px-3.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                      >
-                        <option value="Parent">Parent</option>
-                        <option value="Mother">Mother</option>
-                        <option value="Father">Father</option>
-                        <option value="Legal Guardian">Legal Guardian</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-700 block mb-1">Guardian Email</label>
-                      <input
-                        type="email"
-                        placeholder="guardian@example.com"
-                        value={guardianInfo.email}
-                        onChange={(e) => setGuardianInfo((p) => ({ ...p, email: e.target.value }))}
-                        className="w-full min-h-[44px] px-3.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-[11px] font-semibold text-slate-700 block mb-1">Guardian Mobile (WhatsApp OTP)</label>
-                      <div className="flex gap-2">
-                        <input
-                          type="tel"
-                          placeholder="+91 98765 43210"
-                          value={guardianInfo.phone}
-                          onChange={(e) => setGuardianInfo((p) => ({ ...p, phone: e.target.value }))}
-                          disabled={guardianOtpVerified}
-                          className="w-full min-h-[44px] px-3.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500/20 disabled:bg-slate-100"
-                        />
-                        {!guardianOtpVerified && (
-                          <button
-                            type="button"
-                            onClick={handleSendGuardianOtp}
-                            disabled={isSendingGuardianOtp || guardianOtpCooldown > 0}
-                            className="shrink-0 px-3 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                          >
-                            {guardianOtpCooldown > 0 ? `${guardianOtpCooldown}s` : isSendingGuardianOtp ? 'Sending...' : guardianOtpSent ? 'Resend' : 'Send OTP'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {guardianOtpSent && !guardianOtpVerified && (
-                    <div className="pt-2 border-t border-amber-200/60 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                      <input
-                        type="text"
-                        maxLength={6}
-                        placeholder="Enter 6-digit OTP"
-                        value={guardianOtp}
-                        onChange={(e) => setGuardianOtp(e.target.value.replace(/\D/g, ''))}
-                        className="w-full sm:w-48 px-3.5 py-2 text-center font-mono text-sm tracking-widest font-bold rounded-xl border border-amber-300 bg-white"
-                      />
-                      <button
-                        type="button"
-                        onClick={handleVerifyGuardianOtp}
-                        disabled={isVerifyingGuardianOtp || guardianOtp.length !== 6}
-                        className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
-                      >
-                        {isVerifyingGuardianOtp ? 'Verifying...' : 'Verify Guardian OTP'}
-                      </button>
-                    </div>
-                  )}
-
-                  {guardianOtpVerified && (
-                    <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-100/70 p-2.5 rounded-xl">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Parent / Guardian verified via OTP</span>
-                    </div>
-                  )}
-
-                  {guardianOtpError && (
-                    <p className="text-xs text-rose-600 bg-rose-50 p-2 rounded-lg">{guardianOtpError}</p>
-                  )}
-                </div>
-              )}
 
               {/* Statutory Gate 1 Data Notice Summary Card */}
               <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3 mt-4">
@@ -2910,11 +2980,24 @@ export default function UnifiedAssessmentFunnel({
 
               <button
                 type="submit"
-                disabled={isSubmitting || !gate1Consents.health_data || !gate1Consents.care_team_sharing || (isMinor && !guardianOtpVerified)}
+                disabled={isSubmitting || isUnder18 || !gate1Consents.health_data || !gate1Consents.care_team_sharing || (!currentUserId && !patientOtpVerified && patientOtp.length !== 6 && !patientOtpSent)}
                 className="w-full min-h-[50px] rounded-full bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] disabled:opacity-50 text-white font-sans font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99] mt-6"
               >
                 {isSubmitting ? (
-                  <span>Saving your assessment...</span>
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Saving your assessment...</span>
+                  </>
+                ) : !currentUserId && !patientOtpVerified && !patientOtpSent ? (
+                  <>
+                    <span>Verify via WhatsApp &amp; Complete</span>
+                    <ChevronRight className="w-4 h-4" />
+                  </>
+                ) : !currentUserId && !patientOtpVerified && patientOtpSent ? (
+                  <>
+                    <span>Verify OTP &amp; Complete Assessment</span>
+                    <CheckCircle2 className="w-4 h-4" />
+                  </>
                 ) : (
                   <>
                     <span>Complete Clinical Assessment</span>

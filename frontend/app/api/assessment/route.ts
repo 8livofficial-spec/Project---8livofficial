@@ -202,10 +202,6 @@ async function resolveAssessmentPatientId(request: Request, submittedUserId: unk
   const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId)
   if (error || !data.user) throw new Error('Invalid assessment account.')
 
-  if (data.user.email_confirmed_at || data.user.confirmed_at) {
-    throw new Error('Authentication is required to submit assessment for this account.')
-  }
-
   return data.user.id
 }
 
@@ -303,6 +299,8 @@ export async function POST(request: Request) {
         lab_work: {
           preference: formData.lab_preference || 'none',
           report_url: formData.lab_report_url || null,
+          report_date: formData.lab_report_date || null,
+          within_7_days: Boolean(formData.lab_report_within_7_days),
           collection_address: formData.lab_collection_address || null,
           collection_city: formData.lab_collection_city || null,
           collection_pincode: formData.lab_collection_pincode || null,

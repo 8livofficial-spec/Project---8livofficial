@@ -32,6 +32,9 @@ export type VerifyOtpOptions = {
   purpose: OtpPurpose
   ipAddress?: string
   userAgent?: string
+  email?: string
+  firstName?: string
+  lastName?: string
 }
 
 export type OtpVerificationResult = {
@@ -348,21 +351,39 @@ export class WhatsAppOtpService {
       }
     }
 
+    // Also look up by email if provided and not yet found
+    if (!userId && options.email) {
+      const normalizedEmail = options.email.trim().toLowerCase()
+      const existingUser = await findUserByEmail(normalizedEmail)
+      if (existingUser?.id) {
+        userId = existingUser.id
+        userEmail = existingUser.email || normalizedEmail
+        await supabaseAdmin.from('profiles').update({
+          phone_number: phoneE164,
+          first_name: options.firstName || undefined,
+          last_name: options.lastName || undefined,
+          updated_at: new Date().toISOString(),
+        }).eq('id', userId)
+      }
+    }
+
     // If still no user and purpose is LOGIN or SIGNUP:
     if (!userId && (purpose === 'LOGIN' || purpose === 'SIGNUP')) {
-      // Synthesize stable phone email for Supabase auth: e.g. phone_919876543210@auth.8liv.in
-      const syntheticEmail = `wa_${normalized.whatsapp}@auth.8liv.in`
-      userEmail = syntheticEmail
+      const targetEmail = (options.email && options.email.trim())
+        ? options.email.trim().toLowerCase()
+        : `wa_${normalized.whatsapp}@auth.8liv.in`
+      userEmail = targetEmail
 
       // Look up auth user by email
-      const existingUser = await findUserByEmail(syntheticEmail)
+      const existingUser = await findUserByEmail(targetEmail)
       if (existingUser?.id) {
         userId = existingUser.id
       } else {
-        // Create user in Supabase auth
+        // Create user in Supabase auth (auto-confirmed: verification is via WhatsApp OTP)
         const tempPassword = crypto.randomBytes(24).toString('hex')
+        const displayName = `${options.firstName || ''} ${options.lastName || ''}`.trim() || 'Patient'
         const { data: createdAuth, error: createAuthErr } = await supabaseAdmin.auth.admin.createUser({
-          email: syntheticEmail,
+          email: targetEmail,
           password: tempPassword,
           email_confirm: true,
           phone: phoneE164,
@@ -370,6 +391,7 @@ export class WhatsAppOtpService {
           user_metadata: {
             auth_provider: 'whatsapp_otp',
             phone: phoneE164,
+            display_id: displayName,
           },
         })
 
@@ -384,12 +406,31 @@ export class WhatsAppOtpService {
         await supabaseAdmin.from('profiles').upsert({
           id: userId,
           phone_number: phoneE164,
+          email: targetEmail.includes('@auth.8liv.in') ? null : targetEmail,
           role: 'patient',
-          first_name: 'Patient',
-          last_name: '',
+          first_name: options.firstName || 'Patient',
+          last_name: options.lastName || '',
+          display_id: displayName,
           updated_at: new Date().toISOString(),
         })
       }
+    }
+
+    if (userId) {
+      // Sync names and phone to profile
+      const updateData: Record<string, any> = {
+        phone_number: phoneE164,
+        updated_at: new Date().toISOString(),
+      }
+      if (options.email && !options.email.includes('@auth.8liv.in')) {
+        updateData.email = options.email.trim().toLowerCase()
+      }
+      if (options.firstName) updateData.first_name = options.firstName
+      if (options.lastName) updateData.last_name = options.lastName
+      if (options.firstName || options.lastName) {
+        updateData.display_id = `${options.firstName || ''} ${options.lastName || ''}`.trim()
+      }
+      await supabaseAdmin.from('profiles').update(updateData).eq('id', userId)
     }
 
     if (!userId) {

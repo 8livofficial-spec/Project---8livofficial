@@ -25,8 +25,8 @@ export default function UnifiedLogin() {
   const router = useRouter()
   const [checkingAuth, setCheckingAuth] = useState(true)
   
-  // Auth Mode: Password vs WhatsApp OTP
-  const [authMode, setAuthMode] = useState<'password' | 'whatsapp'>('password')
+  // Auth Mode: WhatsApp OTP (default for patients) vs Password
+  const [authMode, setAuthMode] = useState<'password' | 'whatsapp'>('whatsapp')
   
   // Email/Password state
   const [email, setEmail] = useState('')

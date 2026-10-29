@@ -11,6 +11,9 @@ export async function POST(request: Request) {
     const phoneNumber = String(body.phoneNumber || body.phone || '').trim()
     const enteredOtp = String(body.otp || body.enteredOtp || '').trim()
     const purpose = (String(body.purpose || 'LOGIN').toUpperCase()) as OtpPurpose
+    const email = body.email ? String(body.email).trim().toLowerCase() : undefined
+    const firstName = body.firstName ? String(body.firstName).trim() : undefined
+    const lastName = body.lastName ? String(body.lastName).trim() : undefined
 
     if (!phoneNumber || !enteredOtp) {
       return NextResponse.json({ error: 'Mobile number and 6-digit OTP are required.' }, { status: 400 })
@@ -32,6 +35,9 @@ export async function POST(request: Request) {
       purpose,
       ipAddress: ip,
       userAgent,
+      email,
+      firstName,
+      lastName,
     })
 
     const response = NextResponse.json(result)
