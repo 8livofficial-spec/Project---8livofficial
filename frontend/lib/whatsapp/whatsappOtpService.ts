@@ -80,6 +80,82 @@ function hashOtp(phoneNumber: string, otp: string): string {
 
 export class WhatsAppOtpService {
   /**
+   * Checks whether a user account exists in the database by mobile phone number.
+   * Inspects profiles, health_assessments, and Supabase auth accounts.
+   */
+  public static async checkUserExistsByPhone(normalized: {
+    raw: string
+    e164: string | null
+    whatsapp: string | null
+  }): Promise<boolean> {
+    const phoneE164 = normalized.e164 || ''
+    const whatsapp = normalized.whatsapp || ''
+    const raw = normalized.raw || ''
+    const digits = whatsapp.replace(/\D/g, '')
+    const last10 = digits.length >= 10 ? digits.slice(-10) : digits
+
+    const filterConditions = [
+      phoneE164 ? `phone_number.eq.${phoneE164}` : null,
+      whatsapp ? `phone_number.eq.${whatsapp}` : null,
+      raw ? `phone_number.eq.${raw}` : null,
+      last10 ? `phone_number.ilike.%${last10}%` : null,
+    ].filter(Boolean).join(',')
+
+    // 1. Check profiles table
+    try {
+      if (filterConditions) {
+        const { data: profile } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .or(filterConditions)
+          .limit(1)
+          .maybeSingle()
+
+        if (profile?.id) return true
+      }
+    } catch (err) {
+      console.warn('[WhatsAppOtpService] Error checking profiles for phone existence:', err)
+    }
+
+    // 2. Check health_assessments table
+    try {
+      if (filterConditions) {
+        const { data: assessment } = await supabaseAdmin
+          .from('health_assessments')
+          .select('id')
+          .or(filterConditions)
+          .limit(1)
+          .maybeSingle()
+
+        if (assessment?.id) return true
+      }
+    } catch (err) {
+      console.warn('[WhatsAppOtpService] Error checking health_assessments for phone existence:', err)
+    }
+
+    // 3. Check Supabase auth users (e.g. wa_<whatsapp>@auth.8liv.in or phone)
+    try {
+      if (whatsapp) {
+        const authUser = await findUserByEmail(`wa_${whatsapp}@auth.8liv.in`)
+        if (authUser?.id) return true
+      }
+      if (last10) {
+        const { data } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 50 })
+        const matched = data?.users?.find(
+          (u) =>
+            (u.phone && (u.phone.includes(last10) || u.phone === phoneE164)) ||
+            (u.email && u.email.includes(whatsapp))
+        )
+        if (matched?.id) return true
+      }
+    } catch (err) {
+      console.warn('[WhatsAppOtpService] Error checking auth users for phone existence:', err)
+    }
+
+    return false
+  }
+
+  /**
    * Generates a 6-digit cryptographically secure OTP and dispatches via WhatsApp
    */
   public static async sendOtp(options: SendOtpOptions): Promise<{
@@ -96,6 +172,16 @@ export class WhatsAppOtpService {
     const phoneE164 = normalized.e164
     const now = Date.now()
     const purpose = options.purpose
+
+    // For LOGIN: Verify that the account exists in the database before sending OTP
+    if (purpose === 'LOGIN') {
+      const userExists = await this.checkUserExistsByPhone(normalized)
+      if (!userExists) {
+        throw new Error(
+          'No account found with this mobile number. Please check the number or complete your health assessment to get started.'
+        )
+      }
+    }
 
     // 1. Check existing active challenge for cooldown
     let existingCooldown = 0
@@ -336,18 +422,43 @@ export class WhatsAppOtpService {
     let isNewUser = false
     let userEmail: string | null = null
 
+    const digits = (normalized.whatsapp || '').replace(/\D/g, '')
+    const last10 = digits.length >= 10 ? digits.slice(-10) : digits
+    const filterConditions = [
+      phoneE164 ? `phone_number.eq.${phoneE164}` : null,
+      normalized.raw ? `phone_number.eq.${normalized.raw}` : null,
+      normalized.whatsapp ? `phone_number.eq.${normalized.whatsapp}` : null,
+      last10 ? `phone_number.ilike.%${last10}%` : null,
+    ].filter(Boolean).join(',')
+
     // Look up profile by phone number if user_id wasn't in challenge
-    if (!userId) {
+    if (!userId && filterConditions) {
       const { data: profile } = await supabaseAdmin
         .from('profiles')
         .select('id, email, phone_number, role')
-        .or(`phone_number.eq.${phoneE164},phone_number.eq.${normalized.raw},phone_number.eq.${normalized.whatsapp}`)
+        .or(filterConditions)
         .limit(1)
         .maybeSingle()
 
       if (profile?.id) {
         userId = profile.id
         userEmail = profile.email || null
+      }
+    }
+
+    // Look up health_assessments for patient_id if not found in profiles
+    if (!userId && filterConditions) {
+      const { data: assessment } = await supabaseAdmin
+        .from('health_assessments')
+        .select('patient_id')
+        .or(filterConditions)
+        .not('patient_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (assessment?.patient_id) {
+        userId = assessment.patient_id
       }
     }
 
@@ -367,8 +478,25 @@ export class WhatsAppOtpService {
       }
     }
 
-    // If still no user and purpose is LOGIN or SIGNUP:
-    if (!userId && (purpose === 'LOGIN' || purpose === 'SIGNUP')) {
+    // Look up existing auth user by default WhatsApp email
+    if (!userId) {
+      const targetEmail = (options.email && options.email.trim())
+        ? options.email.trim().toLowerCase()
+        : `wa_${normalized.whatsapp}@auth.8liv.in`
+      const existingUser = await findUserByEmail(targetEmail)
+      if (existingUser?.id) {
+        userId = existingUser.id
+        userEmail = existingUser.email || targetEmail
+      }
+    }
+
+    // If still no user and purpose is LOGIN, do not auto-create
+    if (!userId && purpose === 'LOGIN') {
+      throw new Error('No registered account found with this mobile number. Please complete your initial health assessment to get started.')
+    }
+
+    // If still no user and purpose is SIGNUP or other registration flow:
+    if (!userId && purpose === 'SIGNUP') {
       const targetEmail = (options.email && options.email.trim())
         ? options.email.trim().toLowerCase()
         : `wa_${normalized.whatsapp}@auth.8liv.in`

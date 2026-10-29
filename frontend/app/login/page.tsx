@@ -512,9 +512,22 @@ export default function UnifiedLogin() {
                   </div>
 
                   {authError && (
-                    <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3 text-rose-600">
-                      <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
-                      <p className="text-sm font-semibold">{authError}</p>
+                    <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex flex-col gap-2 text-rose-600">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                        <p className="text-sm font-semibold">{authError}</p>
+                      </div>
+                      {authError.toLowerCase().includes('assessment') && (
+                        <div className="pl-8 pt-1">
+                          <Link
+                            href="/assessment"
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0D9488] hover:text-[#097A70] underline underline-offset-2 font-sora"
+                          >
+                            <span>Start Health Assessment</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -587,9 +600,22 @@ export default function UnifiedLogin() {
                   </div>
 
                   {authError && (
-                    <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex items-start gap-3 text-rose-600">
-                      <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
-                      <p className="text-sm font-semibold">{authError}</p>
+                    <div className="p-4 bg-rose-50 border border-rose-100 rounded-2xl flex flex-col gap-2 text-rose-600">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="w-5 h-5 mt-0.5 flex-shrink-0" />
+                        <p className="text-sm font-semibold">{authError}</p>
+                      </div>
+                      {authError.toLowerCase().includes('assessment') && (
+                        <div className="pl-8 pt-1">
+                          <Link
+                            href="/assessment"
+                            className="inline-flex items-center gap-1.5 text-xs font-bold text-[#0D9488] hover:text-[#097A70] underline underline-offset-2 font-sora"
+                          >
+                            <span>Start Health Assessment</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </Link>
+                        </div>
+                      )}
                     </div>
                   )}
                   {authSuccess && (
