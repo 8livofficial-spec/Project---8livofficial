@@ -2549,7 +2549,12 @@ export default function UnifiedAssessmentFunnel({
                   className="w-full flex items-center justify-between text-left cursor-pointer focus:outline-none"
                 >
                   <div>
-                    <span className="font-sans text-sm sm:text-base font-bold text-slate-900 block mb-0.5">I don&apos;t have a report — Get a lab report from 8live</span>
+                    <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                      <span className="font-sans text-sm sm:text-base font-bold text-slate-900 block">I don&apos;t have a report — Get a lab report from 8live</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-300/80 inline-flex items-center gap-1 shrink-0">
+                        <MapPin className="w-2.5 h-2.5 text-amber-700" /> Bangalore Only
+                      </span>
+                    </div>
                     <span className="font-sans text-xs text-slate-500">We&apos;ll arrange a certified home/doorstep collection via authorized lab partners.</span>
                   </div>
                   <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${formData.lab_preference === 'third_party' ? 'border-[#00A884] bg-[#00A884]' : 'border-slate-300'}`}>
@@ -2559,10 +2564,30 @@ export default function UnifiedAssessmentFunnel({
 
                 {formData.lab_preference === 'third_party' && (
                   <div className="mt-4 pt-4 border-t border-slate-200/60 space-y-3.5">
+                    {/* Notice: Available Exclusively in Bangalore */}
+                    <div className="bg-amber-50/90 border-2 border-amber-300/80 p-3.5 sm:p-4 rounded-2xl flex items-start gap-3 text-amber-950 shadow-xs">
+                      <div className="w-7 h-7 rounded-xl bg-amber-200/80 text-amber-900 flex items-center justify-center shrink-0 mt-0.5 font-bold">
+                        <AlertCircle className="w-4 h-4 text-amber-800" />
+                      </div>
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <h5 className="font-bold text-xs sm:text-sm text-amber-950 font-sora">
+                            Available Exclusively in Bangalore
+                          </h5>
+                          <span className="text-[9px] font-black uppercase tracking-wider bg-amber-200/90 text-amber-900 px-1.5 py-0.5 rounded">
+                            Notice
+                          </span>
+                        </div>
+                        <p className="text-xs text-amber-900 leading-relaxed font-sans">
+                          Doorstep blood sample collection is currently serviced <strong>only within Bangalore (Bengaluru)</strong>. If your pickup location is outside Bangalore, you can proceed by uploading an existing report or simply selecting <strong>&ldquo;Proceed without a lab report&rdquo;</strong> below.
+                        </p>
+                      </div>
+                    </div>
+
                     <div className="bg-emerald-50/70 p-3.5 rounded-xl flex items-start gap-3 border border-emerald-200/60">
                       <CheckCircle className="w-4 h-4 text-[#00A884] shrink-0 mt-0.5" />
                       <p className="text-xs text-slate-700 leading-relaxed font-sans">
-                        <strong className="text-slate-900">Doorstep sample collection:</strong> A certified phlebotomist from our partner lab will visit your address for morning fasting blood collection.
+                        <strong className="text-slate-900">Doorstep sample collection:</strong> A certified phlebotomist from our partner lab will visit your Bangalore address for morning fasting blood collection.
                       </p>
                     </div>
 
@@ -2571,7 +2596,7 @@ export default function UnifiedAssessmentFunnel({
                       <div>
                         <div className="flex items-center justify-between mb-1.5">
                           <label className="block text-xs font-bold text-slate-700">
-                            Home / Pickup Address <span className="text-[#00A884]">*</span>
+                            Home / Pickup Address (Bangalore) <span className="text-[#00A884]">*</span>
                           </label>
                           <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#00A884] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/50">
                             <Sparkles className="w-2.5 h-2.5" /> Google Auto-fill
@@ -2587,7 +2612,7 @@ export default function UnifiedAssessmentFunnel({
                             onKeyDown={(e) => {
                               if (e.key === 'Enter') e.preventDefault()
                             }}
-                            placeholder="Start typing your apartment, building, or street..."
+                            placeholder="Start typing your apartment, building, or street in Bangalore..."
                             className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 transition-all shadow-xs"
                           />
                           <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
@@ -2604,9 +2629,17 @@ export default function UnifiedAssessmentFunnel({
                             required
                             value={formData.lab_collection_city}
                             onChange={(e) => setFormData((p) => ({ ...p, lab_collection_city: e.target.value }))}
-                            placeholder="e.g. Mumbai, Bangalore"
+                            placeholder="Bangalore"
                             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 transition-all"
                           />
+                          {formData.lab_collection_city &&
+                            !formData.lab_collection_city.toLowerCase().includes('bangalore') &&
+                            !formData.lab_collection_city.toLowerCase().includes('bengaluru') && (
+                            <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-1.5 mt-1 font-semibold flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3 shrink-0 text-amber-600" />
+                              <span>Notice: Service is available only in Bangalore.</span>
+                            </p>
+                          )}
                         </div>
                         <div>
                           <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -2618,7 +2651,7 @@ export default function UnifiedAssessmentFunnel({
                             maxLength={6}
                             value={formData.lab_collection_pincode}
                             onChange={(e) => setFormData((p) => ({ ...p, lab_collection_pincode: e.target.value.replace(/\D/g, '') }))}
-                            placeholder="6-digit PIN"
+                            placeholder="6-digit PIN (e.g. 560001)"
                             className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 transition-all font-mono"
                           />
                         </div>
