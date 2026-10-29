@@ -428,8 +428,13 @@ export async function POST(req: Request) {
         patient_eligibility_status: getEligibilityStatus(assess),
         patient_medical_risk_flags: getRiskFlags(assess),
         patient_medication_proof_url: (assess?.medical_history as any)?.medication_proof_url || (assess?.medical_history as any)?.medication_proof || (assess as any)?.medication_proof_url || (assess as any)?.medication_proof || null,
-        patient_lab_preference: labWork?.preference || null,
-        patient_lab_report_url: labWork?.report_url || null,
+        patient_lab_preference: labWork?.preference || (assess as any)?.lab_preference || null,
+        patient_lab_report_url: labWork?.report_url || (assess as any)?.lab_report_url || (assess as any)?.lab_report || null,
+        patient_lab_report_date: labWork?.report_date || (assess as any)?.lab_report_date || null,
+        patient_lab_within_7_days: labWork?.within_7_days ?? null,
+        patient_lab_collection_address: labWork?.collection_address
+          ? `${labWork.collection_address}${labWork.collection_city ? `, ${labWork.collection_city}` : ''}${labWork.collection_pincode ? ` - ${labWork.collection_pincode}` : ''}`
+          : null,
       };
     };
 

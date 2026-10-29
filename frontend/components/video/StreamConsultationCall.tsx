@@ -31,10 +31,12 @@ type VideoTokenResponse = {
   callId: string
   callType: string
   appointmentId: string
+  patientId?: string
 }
 
 type Props = {
   appointmentId: string
+  patientId?: string
   onLeave: () => void
 }
 
@@ -132,7 +134,7 @@ function CustomCallControls({
   )
 }
 
-export default function StreamConsultationCall({ appointmentId, onLeave }: Props) {
+export default function StreamConsultationCall({ appointmentId, patientId, onLeave }: Props) {
   const [tokenData, setTokenData] = useState<VideoTokenResponse | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -268,6 +270,7 @@ export default function StreamConsultationCall({ appointmentId, onLeave }: Props
             </div>
             <InCallProtocolsDrawer
               isOpen={showProtocolsDrawer}
+              patientId={patientId || tokenData?.patientId}
               onClose={() => setShowProtocolsDrawer(false)}
             />
           </div>
@@ -278,6 +281,24 @@ export default function StreamConsultationCall({ appointmentId, onLeave }: Props
               showProtocols={showProtocolsDrawer}
             />
           </div>
+          <style dangerouslySetInnerHTML={{
+            __html: `
+              .str-video__speaker-layout__wrapper {
+                height: 100% !important;
+                width: 100% !important;
+                max-height: 100% !important;
+              }
+              .str-video__speaker-layout {
+                height: 100% !important;
+                width: 100% !important;
+                flex: 1 1 0% !important;
+              }
+              .str-video__participant-view {
+                height: 100% !important;
+                width: 100% !important;
+              }
+            `
+          }} />
         </div>
       </StreamCall>
     </StreamVideo>

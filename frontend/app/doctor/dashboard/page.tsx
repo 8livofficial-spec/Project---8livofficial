@@ -11,7 +11,7 @@ import {
   Stethoscope, ChevronRight, Plus, X, TrendingUp, BadgeCheck, Bell, BellRing, UserCheck, Check, PhoneOff, MessageCircle,
   Eye, EyeOff, Printer, Download, Menu, Settings, ClipboardList, Scale,
   ShieldCheck, FileCheck, Sparkles, Truck, Search, Filter, Hash, AlertTriangle, Copy,
-  RefreshCw, User, PenTool, Apple,
+  RefreshCw, User, PenTool, Apple, ExternalLink,
 } from 'lucide-react';
 import ProviderAvailabilityScheduler, { GeneratedSlot, AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler';
 import dynamic from 'next/dynamic';
@@ -495,6 +495,9 @@ type Consultation = {
   patient_medication_proof_url?: string | null;
   patient_lab_preference?: string | null;
   patient_lab_report_url?: string | null;
+  patient_lab_report_date?: string | null;
+  patient_lab_within_7_days?: boolean | null;
+  patient_lab_collection_address?: string | null;
   patient_phone?: string | null;
   patient_phone_e164?: string | null;
   patient_whatsapp_phone?: string | null;
@@ -1979,26 +1982,79 @@ export default function DoctorDashboard() {
                     )}
                   </div>
 
-                  {/* Diagnostic Blood Lab Report Link */}
-                  {activeCallConsultation?.patient_lab_report_url && (
-                    <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-emerald-400" />
-                        <div>
-                          <p className="font-bold text-emerald-200 text-xs">Diagnostic Blood Report</p>
-                          <p className="text-[10px] text-emerald-400/80">Uploaded by patient</p>
+                  {/* Diagnostic Blood Lab Report & Intake Status */}
+                  <div className="p-3.5 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-slate-300 font-bold">
+                        <FileText className="w-3.5 h-3.5 text-[#00A884]" />
+                        <span>Diagnostic Blood Lab Report</span>
+                      </div>
+                      {activeCallConsultation?.patient_lab_report_url ? (
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold text-[10px] flex items-center gap-1">
+                          <CheckCircle2 className="w-3 h-3" /> Report Uploaded
+                        </span>
+                      ) : activeCallConsultation?.patient_lab_preference === 'doorstep' || activeCallConsultation?.patient_lab_preference === 'request_kit' ? (
+                        <span className="px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 font-bold text-[10px]">
+                          Doorstep Collection
+                        </span>
+                      ) : activeCallConsultation?.patient_lab_preference === 'skip' ? (
+                        <span className="px-2 py-0.5 rounded-md bg-slate-700/80 text-slate-300 font-bold text-[10px]">
+                          Proceeded Without Report
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-bold text-[10px]">
+                          No Report Attached
+                        </span>
+                      )}
+                    </div>
+
+                    {activeCallConsultation?.patient_lab_report_url ? (
+                      <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-bold text-emerald-200 text-xs">Patient Blood Work PDF</p>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              {activeCallConsultation.patient_lab_report_date && (
+                                <span className="text-[10px] text-slate-300">
+                                  Date: <strong className="text-white">{activeCallConsultation.patient_lab_report_date}</strong>
+                                </span>
+                              )}
+                              <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-900/40 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                                Valid ≤ 7 days
+                              </span>
+                            </div>
+                          </div>
+                          <a
+                            href={activeCallConsultation.patient_lab_report_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="px-3 py-1.5 rounded-lg bg-[#00A884] hover:bg-[#008f70] text-white font-bold text-[11px] shadow-sm transition-colors flex items-center gap-1.5 shrink-0"
+                          >
+                            <span>Open Report</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
                         </div>
                       </div>
-                      <a
-                        href={activeCallConsultation.patient_lab_report_url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="px-3 py-1.5 rounded-lg bg-[#00A884] hover:bg-[#008f70] text-white font-bold text-[11px] shadow-sm transition-colors flex items-center gap-1"
-                      >
-                        <span>View PDF</span>
-                      </a>
-                    </div>
-                  )}
+                    ) : activeCallConsultation?.patient_lab_preference === 'doorstep' || activeCallConsultation?.patient_lab_preference === 'request_kit' ? (
+                      <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-[11px] text-sky-200 space-y-1">
+                        <p className="font-semibold text-white">🏠 Doorstep Sample Collection Requested</p>
+                        <p className="text-slate-300 text-[10px]">
+                          {activeCallConsultation.patient_lab_collection_address || 'Patient requested doorstep collection kit through 8live.'}
+                        </p>
+                      </div>
+                    ) : activeCallConsultation?.patient_lab_preference === 'skip' ? (
+                      <div className="p-2.5 rounded-xl bg-black/20 border border-white/5 text-[11px] text-slate-300 space-y-1">
+                        <p className="text-slate-300 font-semibold">No Lab Report Attached</p>
+                        <p className="text-slate-400 text-[10px]">
+                          Patient opted to proceed directly to clinical consultation without an attached lab report. You may recommend diagnostics during the session if clinically necessary.
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="p-2.5 rounded-xl bg-black/20 border border-white/5 text-[11px] text-slate-400">
+                        No diagnostic report or lab work attached to this patient intake.
+                      </div>
+                    )}
+                  </div>
 
                   {/* Lifestyle & Dietary Preferences */}
                   {activeCallConsultation?.patient_extra_info && (

@@ -19,7 +19,14 @@ export async function GET(request: Request) {
       const providerAuth = await getAuthenticatedProvider(request)
       if (!('error' in providerAuth)) {
         if (!queryPatientId) {
-          return NextResponse.json({ error: 'Patient ID required for provider access' }, { status: 400 })
+          return NextResponse.json({
+            prescriptions: [],
+            activePrescription: null,
+            nutritionPlans: [],
+            activeNutritionPlan: null,
+            fitnessPlans: [],
+            activeFitnessPlan: null,
+          })
         }
         patientId = queryPatientId
       } else {

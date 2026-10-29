@@ -242,8 +242,76 @@ function ConsultationRoomContent() {
     )
   }
 
+  // ────────────────── PHASE 2: LIVE CALL FULLSCREEN VIEWPORT ──────────────────
+  // Completely occupies the entire screen edge-to-edge without any white/blank margins
+  if (phase === 'call') {
+    return (
+      <div className="fixed inset-0 z-[100] w-screen h-screen bg-[#0A0D18] flex flex-col overflow-hidden select-none">
+        {/* Header Controls Overlay with Glassmorphism */}
+        <div className="bg-slate-900/90 backdrop-blur-2xl border-b border-white/10 px-4 sm:px-6 py-3 flex items-center justify-between text-white shrink-0 z-20 shadow-xl">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#00A884] to-[#10B981] text-white font-black text-sm flex items-center justify-center shadow-lg shadow-[#00A884]/30">
+              {doctorName.split(' ').pop()?.[0] || 'D'}
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold font-sora text-white">{doctorName}</h3>
+                <span className="text-[10px] text-emerald-300 font-bold bg-[#00A884]/20 px-2.5 py-0.5 rounded-full border border-[#00A884]/30">
+                  {doctorRole}
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-medium mt-0.5 flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
+                <span>256-Bit Encrypted Telehealth Call</span>
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 font-bold uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1.5">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-ping" /> Live Session
+            </span>
+            <button
+              onClick={leaveCall}
+              className="bg-red-600/90 hover:bg-red-600 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 text-xs transition-all shadow-md cursor-pointer"
+              title="Leave Consultation"
+            >
+              <PhoneOff className="w-4 h-4" /> End Call
+            </button>
+          </div>
+        </div>
+
+        {/* Telehealth Comfort Assurance Sub-strip */}
+        <div className="bg-emerald-950/40 border-b border-emerald-500/15 px-4 sm:px-6 py-1.5 flex items-center justify-between text-[11px] text-emerald-300 font-medium z-10 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-emerald-400">🔒</span>
+            <span>Private 1-on-1 Consultation • Your physician has access to your medical history &amp; health goals.</span>
+          </div>
+          <span className="hidden sm:inline text-emerald-400/80 text-[10px] font-semibold">HD Audio &amp; Video</span>
+        </div>
+
+        {/* Fullscreen Video Viewport */}
+        <div className="flex-1 w-full h-full min-h-0 bg-[#0A0D18] relative overflow-hidden flex flex-col">
+          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(0,168,132,0.12),_transparent_75%)] z-0" />
+          <div className="relative z-10 flex-1 w-full h-full min-h-0 flex flex-col">
+            {appointmentId ? (
+              <StreamConsultationCall appointmentId={appointmentId} onLeave={leaveCall} />
+            ) : (
+              <div className="flex h-full items-center justify-center p-6 text-white">
+                <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
+                  <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-300" />
+                  <p className="text-sm font-semibold">Missing consultation identifier. Please return to appointments and join again.</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className={`w-full ${phase === 'call' ? 'h-[calc(100vh-6rem)] p-1 sm:p-2' : 'min-h-[calc(100vh-10rem)] p-2 sm:p-6'} flex flex-col items-center justify-center text-[#1A1F36]`}>
+    <div className="w-full min-h-[calc(100vh-10rem)] p-2 sm:p-6 flex flex-col items-center justify-center text-[#1A1F36]">
       {/* ────────────────── PHASE 1: PRE-CALL CHECK ────────────────── */}
       {phase === 'pre-check' && (
         <div className="w-full max-w-2xl bg-white rounded-3xl p-6 sm:p-8 shadow-[0_8px_32px_rgba(26,31,54,0.08)] border border-[#1A1F36]/8 flex flex-col items-center space-y-6">
@@ -360,70 +428,7 @@ function ConsultationRoomContent() {
         </div>
       )}
 
-      {/* ────────────────── PHASE 2: LIVE CALL VIEWPORT ────────────────── */}
-      {phase === 'call' && (
-        <div className="w-full h-full min-h-[calc(100vh-6rem)] flex flex-col bg-[#0A0D18] rounded-2xl sm:rounded-3xl overflow-hidden border border-white/10 shadow-2xl relative">
-          
-          {/* Header Controls Overlay with Glassmorphism */}
-          <div className="bg-slate-900/85 backdrop-blur-2xl border-b border-white/10 px-4 sm:px-6 py-3.5 flex items-center justify-between text-white select-none shrink-0 z-10 shadow-xl">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#00A884] to-[#10B981] text-white font-black text-sm flex items-center justify-center shadow-lg shadow-[#00A884]/30">
-                {doctorName.split(' ').pop()?.[0] || 'D'}
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold font-sora text-white">{doctorName}</h3>
-                  <span className="text-[10px] text-emerald-300 font-bold bg-[#00A884]/20 px-2.5 py-0.5 rounded-full border border-[#00A884]/30">
-                    {doctorRole}
-                  </span>
-                </div>
-                <p className="text-[10px] text-slate-400 font-medium mt-0.5 flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
-                  <span>256-Bit Encrypted Telehealth Call</span>
-                </p>
-              </div>
-            </div>
 
-            <div className="flex items-center gap-3">
-              <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 font-bold uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1.5">
-                <span className="w-2 h-2 bg-red-500 rounded-full animate-ping" /> Live Session
-              </span>
-              <button
-                onClick={leaveCall}
-                className="bg-red-600/90 hover:bg-red-600 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 text-xs transition-all shadow-md cursor-pointer"
-                title="Leave Consultation"
-              >
-                <PhoneOff className="w-4 h-4" /> End Call
-              </button>
-            </div>
-          </div>
-
-          {/* Telehealth Comfort Assurance Sub-strip */}
-          <div className="bg-emerald-950/40 border-b border-emerald-500/15 px-4 sm:px-6 py-2 flex items-center justify-between text-[11px] text-emerald-300 font-medium z-10 shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="text-emerald-400">🔒</span>
-              <span>Private 1-on-1 Consultation • Your physician has access to your medical history &amp; health goals.</span>
-            </div>
-            <span className="hidden sm:inline text-emerald-400/80 text-[10px] font-semibold">HD Audio &amp; Video</span>
-          </div>
-
-          <div className="flex-1 w-full bg-[#0A0D18] relative overflow-hidden flex flex-col">
-            <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(0,168,132,0.12),_transparent_75%)] z-0" />
-            <div className="relative z-10 flex-1 w-full h-full flex flex-col">
-              {appointmentId ? (
-                <StreamConsultationCall appointmentId={appointmentId} onLeave={leaveCall} />
-              ) : (
-                <div className="flex h-full items-center justify-center p-6 text-white">
-                  <div className="rounded-2xl border border-white/10 bg-white/5 p-6 text-center">
-                    <AlertCircle className="mx-auto mb-3 h-8 w-8 text-amber-300" />
-                    <p className="text-sm font-semibold">Missing consultation identifier. Please return to appointments and join again.</p>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ────────────────── PHASE 3: POST-CALL SUMMARY ────────────────── */}
       {phase === 'post-summary' && (

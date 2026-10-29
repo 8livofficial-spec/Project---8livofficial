@@ -187,6 +187,7 @@ export async function POST(request: Request) {
       callType: process.env.STREAM_CALL_TYPE || 'default',
       consultationType: meeting.callType,
       appointmentId: consultation.id,
+      patientId: consultation.patient_id,
       providerRole: consultation.provider_role,
       participantRole: isPatient ? 'patient' : isProvider ? 'provider' : 'admin',
       expiresInSeconds: 3600,
