@@ -81,15 +81,18 @@ function Gate3Content() {
           return
         }
 
-        const [profileRes, statusRes] = await Promise.all([
+        const [profileRes, statusRes, assessmentRes] = await Promise.all([
           supabase.from('profiles').select('*').eq('id', session.user.id).single(),
           authedFetch(`/api/consent/status?bookingId=${encodeURIComponent(bookingId)}`),
+          supabase.from('health_assessments').select('phone_number').eq('patient_id', session.user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
         ])
 
         if (profileRes.data && active) {
           setPatientProfile(profileRes.data)
-          const phone = profileRes.data.phone_number || session.user.phone || ''
-          setUserPhone(phone)
+          const phone = profileRes.data.phone_number || profileRes.data.phone || session.user.phone || session.user.user_metadata?.phone_number || session.user.user_metadata?.phone || assessmentRes?.data?.phone_number || ''
+          if (phone) {
+            setUserPhone(phone)
+          }
 
           // Minor check (under 18)
           if (profileRes.data.date_of_birth) {
@@ -132,6 +135,16 @@ function Gate3Content() {
       ...prev,
       [id]: !prev[id],
     }))
+  }
+
+  // Toggle all checkboxes together with one click
+  const toggleAll = () => {
+    const nextState = !all12Ticked
+    const updated: Record<string, boolean> = {}
+    PART3_TREATMENT_STATEMENTS.forEach(stmt => {
+      updated[stmt.id] = nextState
+    })
+    setChoices(updated)
   }
 
   // Count ticked statements
@@ -329,14 +342,53 @@ function Gate3Content() {
               </div>
             )}
 
-            {/* 12 Separate Checkboxes (All unticked by default) */}
+            {/* 12 Separate Checkboxes */}
             <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 font-sora">
-                  12 Statutory Telehealth Acknowledgements
-                </h3>
-                <span className="text-[11px] text-slate-400">All boxes required</span>
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100 flex-wrap gap-2">
+                <div>
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 font-sora">
+                    Statutory Telehealth Acknowledgements
+                  </h3>
+                  <span className="text-[11px] text-slate-400">
+                    {tickedCount} of {PART3_TREATMENT_STATEMENTS.length} acknowledged
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={toggleAll}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold font-sora transition-all cursor-pointer ${
+                    all12Ticked
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : 'bg-[#00A884] hover:bg-[#009977] text-white shadow-xs'
+                  }`}
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{all12Ticked ? 'Deselect All' : 'Select All Together'}</span>
+                </button>
               </div>
+
+              {/* Master Select All Toggle Card */}
+              <label className="flex items-center justify-between p-4 rounded-2xl bg-emerald-50/80 border-2 border-[#00A884]/40 hover:border-[#00A884] transition-all cursor-pointer shadow-xs">
+                <div className="flex items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={all12Ticked}
+                    onChange={toggleAll}
+                    className="w-5 h-5 rounded text-[#00A884] focus:ring-[#00A884] border-slate-300 cursor-pointer"
+                  />
+                  <div>
+                    <span className="font-bold text-sm text-slate-900 font-sora block">
+                      Acknowledge &amp; Select All Statements Together
+                    </span>
+                    <span className="text-xs text-slate-600">
+                      Tick all {PART3_TREATMENT_STATEMENTS.length} clinical consent statements with a single click
+                    </span>
+                  </div>
+                </div>
+                <span className="text-xs font-black text-[#00A884] font-sora shrink-0 ml-2">
+                  {all12Ticked ? 'All Selected ✓' : 'Tick All'}
+                </span>
+              </label>
 
               {PART3_TREATMENT_STATEMENTS.map((stmt, idx) => {
                 const isTicked = Boolean(choices[stmt.id])
@@ -387,11 +439,17 @@ function Gate3Content() {
                   <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3.5" />
                   <input
                     type="tel"
-                    readOnly={!isMinor}
                     value={isMinor ? guardianPhone : userPhone}
-                    onChange={(e) => isMinor ? setGuardianPhone(e.target.value) : setUserPhone(e.target.value)}
+                    onChange={(e) => {
+                      setOtpError('')
+                      if (isMinor) {
+                        setGuardianPhone(e.target.value)
+                      } else {
+                        setUserPhone(e.target.value)
+                      }
+                    }}
                     placeholder="+91 98765 43210"
-                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-mono font-bold text-slate-800"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-mono font-bold text-slate-800 focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 focus:outline-none transition-all"
                   />
                 </div>
 
