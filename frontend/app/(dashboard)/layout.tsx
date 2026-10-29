@@ -104,6 +104,7 @@ function DashboardLayoutContent({
   const isOnboardingPaymentPage = pathname.startsWith('/patient/onboarding/payment') || pathname === '/membership-payment'
   const isConsultationBookingPage = pathname.startsWith('/patient/consultation')
   const isConsultationRoomPage = pathname.startsWith('/patient/consultation/room')
+  const isConsultationConsentPage = pathname.startsWith('/patient/consultation/consent')
   const isAppointmentDetailsPage = /^\/patient\/appointments\/[^/]+/.test(pathname)
   const appointmentStatus = onboardingState.appointmentStatus || ''
   const bookingId = onboardingState.bookingId || null
@@ -122,7 +123,7 @@ function DashboardLayoutContent({
       targetPath = '/patient'
     } else if (flowStep === 'appointment_scheduled') {
       const canAccessRescheduleBooking = isConsultationBookingPage && ['MISSED_BY_PATIENT', 'CANCELLED_BY_DOCTOR', 'CANCELLED_BY_PATIENT'].includes(appointmentStatus)
-      if (!isAppointmentDetailsPage && !isConsultationRoomPage && !canAccessRescheduleBooking) {
+      if (!isAppointmentDetailsPage && !isConsultationRoomPage && !isConsultationConsentPage && !canAccessRescheduleBooking) {
         targetPath = bookingId ? `/patient/appointments/${bookingId}` : '/patient/appointments'
       }
     } else if (flowStep === 'needs_consultation') {
@@ -145,6 +146,7 @@ function DashboardLayoutContent({
     isOnboardingPaymentPage,
     isConsultationBookingPage,
     isConsultationRoomPage,
+    isConsultationConsentPage,
     isAppointmentDetailsPage,
     appointmentStatus,
     bookingId,
@@ -237,6 +239,7 @@ function DashboardLayoutContent({
   if (isStandaloneFlowPage) {
     const canRenderStandalonePage =
       isConsultationRoomPage ||
+      isConsultationConsentPage ||
       flowStep === 'ready' ||
       flowStep === 'needs_consultation' ||
       (isOnboardingPlanPage && flowStep === 'needs_plan') ||

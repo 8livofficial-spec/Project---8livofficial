@@ -21,6 +21,7 @@ type AppointmentDetails = {
   dashboardAccess?: boolean
   meetingProvider?: string | null
   meetingRoom?: string | null
+  meetingStatus?: string | null
   roomUrl?: string | null
   callId?: string | null
   callType?: string | null
@@ -209,7 +210,8 @@ export default function AppointmentDetailsPage() {
   const needsMembershipPayment = isInitialConsultation && consultationCompleted && appointment?.membershipStatus === 'SELECTED'
   const canReschedule = Boolean(appointment?.freeRescheduleEligible)
   const requiresNewConsultationPayment = Boolean(appointment?.requiresNewPayment)
-  const canJoin = Boolean(appointment?.bookingId && joinWindowOpen && !terminalStatus)
+  const isCallLive = appointment?.meetingStatus === 'LIVE' || String(appointment?.rawStatus || '').toLowerCase() === 'calling'
+  const canJoin = Boolean(appointment?.bookingId && (joinWindowOpen || isCallLive) && !terminalStatus)
   const canCancel = appointment?.status === 'SCHEDULED' && !consultationCompleted
   const joinUnlocksIn = appointmentStart ? formatCountdown(appointmentStart.getTime() - 15 * 60 * 1000 - now) : null
 
