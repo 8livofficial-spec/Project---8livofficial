@@ -178,7 +178,10 @@ export async function POST(request: Request) {
       email_confirm: false,
       user_metadata: { display_id: fullName, role },
     })
-    if (authErr) return NextResponse.json({ error: authErr.message }, { status: 500 })
+    if (authErr) {
+      const isConflict = authErr.message?.toLowerCase().includes('already') || authErr.message?.toLowerCase().includes('registered')
+      return NextResponse.json({ error: authErr.message }, { status: isConflict ? 409 : 500 })
+    }
 
     const providerId = authData.user.id
     const [firstName, ...rest] = fullName.trim().split(/\s+/)
@@ -310,7 +313,7 @@ export async function POST(request: Request) {
         : undefined,
     })
   } catch (err: any) {
-    const status = err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500)
+    const status = err.status || err.statusCode || (err.message === 'Forbidden' ? 403 : (err.message === 'Unauthorized' ? 401 : 500))
     return NextResponse.json({ error: err.message || 'Failed to create provider' }, { status })
   }
 }

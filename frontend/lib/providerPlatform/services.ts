@@ -25,21 +25,27 @@ function legacyRole(role: string) {
 async function ensureNoProviderDuplicates(email: string, phoneNumber?: string) {
   const normalized = normalizeEmail(email)
   const [{ data: existingV2 }, { data: existingProfile }] = await Promise.all([
-    supabaseAdmin.from('provider_profiles_v2').select('id').eq('email', normalized).maybeSingle(),
-    supabaseAdmin.from('profiles').select('id').eq('email', normalized).maybeSingle(),
+    supabaseAdmin.from('provider_profiles_v2').select('id, account_status').eq('email', normalized).maybeSingle(),
+    supabaseAdmin.from('profiles').select('id, role').eq('email', normalized).maybeSingle(),
   ])
 
-  if (existingV2 || existingProfile) {
-    throw new ProviderPlatformError('PROVIDER_ALREADY_EXISTS', 'A provider with this email already exists.', 409)
+  if (existingProfile?.role === 'admin') {
+    throw new ProviderPlatformError('PROVIDER_ALREADY_EXISTS', 'This email address belongs to an administrator account. Please use a different email.', 409)
+  }
+
+  if (existingV2 && existingV2.account_status === 'ACTIVE') {
+    throw new ProviderPlatformError('PROVIDER_ALREADY_EXISTS', 'A provider with this email already has an active account in the directory.', 409)
   }
 
   if (phoneNumber) {
     const { data: phoneMatch } = await supabaseAdmin
       .from('provider_profiles_v2')
-      .select('id')
+      .select('id, account_status')
       .eq('phone_number', phoneNumber)
       .maybeSingle()
-    if (phoneMatch) throw new ProviderPlatformError('PROVIDER_ALREADY_EXISTS', 'A provider with this phone number already exists.', 409)
+    if (phoneMatch && phoneMatch.account_status === 'ACTIVE') {
+      throw new ProviderPlatformError('PROVIDER_ALREADY_EXISTS', 'A provider with this phone number already has an active account.', 409)
+    }
   }
 }
 
@@ -55,14 +61,74 @@ export const ProviderInvitationService = {
     const phoneNumber = normalizePhone(body.phoneNumber)
     await ensureNoProviderDuplicates(email, phoneNumber)
 
+    let userId: string
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       email_confirm: false,
       user_metadata: { role: body.role, display_id: body.fullName, onboarding_required: true },
     })
-    if (authError || !authData.user) throw new ProviderPlatformError('FINANCIAL_OPERATION_CONFLICT', authError?.message || 'Unable to create auth user.', 500)
 
-    const userId = authData.user.id
+    if (authError || !authData?.user) {
+      const isAlreadyRegistered =
+        authError?.message?.toLowerCase().includes('already') ||
+        authError?.message?.toLowerCase().includes('registered')
+
+      if (isAlreadyRegistered) {
+        // Query users to locate existing auth record
+        const { data: usersList } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 })
+        const existingAuthUser = usersList?.users?.find(
+          (u) => u.email?.toLowerCase() === email.toLowerCase()
+        )
+
+        if (existingAuthUser) {
+          // Check if admin
+          const { data: profile } = await supabaseAdmin
+            .from('profiles')
+            .select('role')
+            .eq('id', existingAuthUser.id)
+            .maybeSingle()
+
+          if (profile?.role === 'admin') {
+            throw new ProviderPlatformError(
+              'PROVIDER_ALREADY_EXISTS',
+              'This email address belongs to an administrator account. Please use a different email.',
+              409
+            )
+          }
+
+          // Check if active provider
+          const { data: v2Record } = await supabaseAdmin
+            .from('provider_profiles_v2')
+            .select('id, account_status')
+            .eq('user_id', existingAuthUser.id)
+            .maybeSingle()
+
+          if (v2Record && v2Record.account_status === 'ACTIVE') {
+            throw new ProviderPlatformError(
+              'PROVIDER_ALREADY_EXISTS',
+              'A provider with this email already has an active account in the directory.',
+              409
+            )
+          }
+
+          userId = existingAuthUser.id
+          await supabaseAdmin.auth.admin.updateUserById(userId, {
+            user_metadata: { role: body.role, display_id: body.fullName, onboarding_required: true },
+          })
+        } else {
+          throw new ProviderPlatformError(
+            'PROVIDER_ALREADY_EXISTS',
+            'A user with this email address has already been registered.',
+            409
+          )
+        }
+      } else {
+        throw new ProviderPlatformError('FINANCIAL_OPERATION_CONFLICT', authError?.message || 'Unable to create auth user.', 400)
+      }
+    } else {
+      userId = authData.user.id
+    }
+
     const [firstName, ...rest] = body.fullName.trim().split(/\s+/)
     const hasAdminCredentials = Boolean(
       body.qualification || body.institution || body.yearsExperience || body.registrationNumber
@@ -82,7 +148,7 @@ export const ProviderInvitationService = {
 
     const { data: provider, error: providerError } = await supabaseAdmin
       .from('provider_profiles_v2')
-      .insert({
+      .upsert({
         user_id: userId,
         legacy_provider_id: userId,
         full_name: body.fullName,
@@ -99,7 +165,7 @@ export const ProviderInvitationService = {
         clinical_verification_status: hasAdminCredentials ? 'APPROVED' : 'PENDING',
         payout_status: 'NOT_CONFIGURED',
         created_by: context.adminId,
-      })
+      }, { onConflict: 'user_id' })
       .select('id, user_id, full_name, email, role, onboarding_status, account_status')
       .single()
     if (providerError) throw providerError
@@ -175,7 +241,10 @@ export const ProviderInvitationService = {
       }
     }
 
-    await supabaseAdmin.from('provider_wallets').insert({ provider_id: provider.id, currency: 'INR' })
+    const { data: existingWallet } = await supabaseAdmin.from('provider_wallets').select('id').eq('provider_id', provider.id).maybeSingle()
+    if (!existingWallet) {
+      await supabaseAdmin.from('provider_wallets').insert({ provider_id: provider.id, currency: 'INR' })
+    }
 
     const { token, tokenHash } = createToken()
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
