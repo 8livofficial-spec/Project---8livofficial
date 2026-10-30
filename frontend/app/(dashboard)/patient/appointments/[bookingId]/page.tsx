@@ -204,14 +204,15 @@ export default function AppointmentDetailsPage() {
     ? now >= appointmentStart.getTime() - 15 * 60 * 1000 && now <= appointmentStart.getTime() + 90 * 60 * 1000
     : false
   const consultationCompleted = appointment?.consultationStatus === 'COMPLETED'
-  const terminalStatus = ['cancelled_by_doctor', 'cancelled_by_patient', 'missed_by_patient', 'approved', 'rejected', 'completed'].includes(String(appointment?.rawStatus || '').toLowerCase())
+  const isCallEndedOrWaiting = appointment?.meetingStatus === 'COMPLETED' || appointment?.meetingStatus === 'WAITING' || String(appointment?.rawStatus || '').toLowerCase() === 'attended'
+  const terminalStatus = ['cancelled_by_doctor', 'cancelled_by_patient', 'missed_by_patient', 'approved', 'rejected', 'completed', 'attended'].includes(String(appointment?.rawStatus || '').toLowerCase()) || appointment?.meetingStatus === 'COMPLETED'
   const isInitialConsultation = ['INITIAL_DOCTOR_CONSULTATION', 'INITIAL_CONSULTATION'].includes(String(appointment?.appointmentType || '').toUpperCase())
-  const needsMembership = isInitialConsultation && consultationCompleted && appointment?.membershipStatus === 'NOT_SELECTED'
-  const needsMembershipPayment = isInitialConsultation && consultationCompleted && appointment?.membershipStatus === 'SELECTED'
+  const needsMembership = isInitialConsultation && (consultationCompleted || isCallEndedOrWaiting) && appointment?.membershipStatus === 'NOT_SELECTED'
+  const needsMembershipPayment = isInitialConsultation && (consultationCompleted || isCallEndedOrWaiting) && appointment?.membershipStatus === 'SELECTED'
   const canReschedule = Boolean(appointment?.freeRescheduleEligible)
   const requiresNewConsultationPayment = Boolean(appointment?.requiresNewPayment)
   const isCallLive = appointment?.meetingStatus === 'LIVE' || String(appointment?.rawStatus || '').toLowerCase() === 'calling'
-  const canJoin = Boolean(appointment?.bookingId && (joinWindowOpen || isCallLive) && !terminalStatus)
+  const canJoin = Boolean(appointment?.bookingId && (joinWindowOpen || isCallLive) && !terminalStatus && !isCallEndedOrWaiting)
   const canCancel = appointment?.status === 'SCHEDULED' && !consultationCompleted
   const joinUnlocksIn = appointmentStart ? formatCountdown(appointmentStart.getTime() - 15 * 60 * 1000 - now) : null
 
@@ -478,9 +479,11 @@ export default function AppointmentDetailsPage() {
               <Video className="w-4 h-4" /> Join Consultation
             </button>
 
-            {terminalStatus ? (
+            {terminalStatus || isCallEndedOrWaiting ? (
               <p className="mt-3 text-center text-xs font-semibold text-slate-400">
-                Join is no longer available for completed, cancelled, or missed consultations.
+                {isCallEndedOrWaiting
+                  ? 'Consultation session concluded. Your doctor is finalizing your treatment plan.'
+                  : 'Join is no longer available for completed, cancelled, or missed consultations.'}
               </p>
             ) : !canJoin ? (
               <p className="mt-3 text-center text-xs font-semibold text-slate-400">

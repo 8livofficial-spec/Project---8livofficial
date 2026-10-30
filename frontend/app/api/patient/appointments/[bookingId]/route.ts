@@ -283,6 +283,7 @@ export async function GET(request: Request, context: RouteContext) {
         membershipStatus: membershipActive ? 'ACTIVE' : membershipValidity.expiresAt ? 'EXPIRED' : selectedMembershipTier ? 'SELECTED' : 'NOT_SELECTED',
         membershipExpiresAt: membershipValidity.expiresAt,
         dashboardAccess: membershipActive,
+        meetingStatus: appointment.meeting_status || null,
         meetingProvider: '8Liv Encrypted Telehealth',
         meetingRoom: null,
         roomUrl: null,

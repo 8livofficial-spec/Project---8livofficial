@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabaseServer';
 import { getAuthenticatedUser } from '@/lib/apiSecurity';
+import { updatePatientJourneyState } from '@/lib/patientJourneyServer';
+import { invalidatePatientApiDashboardCache } from '@/lib/patientDashboardCache';
 
 function sanitizeMatchTarget(target: string): string {
   if (target.startsWith('https://')) {
@@ -60,19 +62,32 @@ export async function POST(req: Request) {
       const { data: docConsult } = await docQuery.maybeSingle();
 
       if (docConsult) {
-        // For doctor consultations: if they actually attended, set status to 'attended' (so doctor can prescribe)
-        // unless a forceStatus (like 'completed' or 'missed') is specified.
+        // For doctor consultations: if they actually attended/ended the call, mark attended and completed call times
         const nextStatus = forceStatus || (docConsult.status === 'scheduled' ? 'attended' : docConsult.status);
+        const now = new Date().toISOString();
         
         await supabaseAdmin
           .from('doctor_consultations')
           .update({
             status: nextStatus,
-            meeting_status: nextStatus === 'completed' ? 'COMPLETED' : 'WAITING',
-            call_ended_at: forceStatus === 'completed' ? new Date().toISOString() : null,
-            updated_at: new Date().toISOString()
+            meeting_status: 'COMPLETED',
+            call_ended_at: docConsult.call_ended_at || now,
+            call_started_at: docConsult.call_started_at || now,
+            updated_at: now
           })
           .eq('id', docConsult.id);
+
+        // Advance patient journey state so the patient is not trapped in 'appointment_scheduled'
+        await updatePatientJourneyState(patientId, {
+          appointmentStatus: 'COMPLETED',
+          consultationStatus: 'COMPLETED',
+          firstConsultationCompleted: true,
+          bookingId: docConsult.id,
+          currentJourneyStep: 'MEMBERSHIP_SELECTION',
+          lastCompletedStep: 'INITIAL_CONSULTATION',
+        }).catch((e) => console.warn('[conclude-consultation] updatePatientJourneyState notice:', e));
+
+        invalidatePatientApiDashboardCache(patientId);
       }
 
       // 2. Search in staff_consultations
@@ -102,6 +117,8 @@ export async function POST(req: Request) {
             updated_at: new Date().toISOString()
           })
           .eq('id', staffConsult.id);
+
+        invalidatePatientApiDashboardCache(patientId);
       }
     }
 

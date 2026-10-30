@@ -474,16 +474,16 @@ function ConsultationRoomContent() {
               <div className="p-4 bg-slate-50 border border-slate-200/70 rounded-2xl space-y-2.5">
                 <div className="flex items-center gap-2 text-[#00A884]">
                   <Calendar className="w-4 h-4" />
-                  <h4 className="text-xs font-bold font-sora text-slate-900">Schedule Next Slot</h4>
+                  <h4 className="text-xs font-bold font-sora text-slate-900">Treatment Program</h4>
                 </div>
                 <p className="text-[10px] text-slate-500 font-medium leading-relaxed">
-                  Avoid plan gaps by scheduling your follow-up progress review or diet check-in early.
+                  Continue your care journey by selecting your clinical metabolic program.
                 </p>
                 <Link
-                  href="/patient/consultation"
+                  href="/plans"
                   className="inline-block text-[10px] font-bold uppercase text-[#00A884] hover:text-[#008f70] tracking-wider mt-1.5"
                 >
-                  Book Next Slot →
+                  View Treatment Plans →
                 </Link>
               </div>
             </div>
