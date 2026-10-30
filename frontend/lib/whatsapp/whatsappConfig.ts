@@ -48,6 +48,10 @@ export const WHATSAPP_CONFIG = {
       name: process.env.WHATSAPP_TEMPLATE_CONSULT_REMINDER || 'consultation_reminder__30_min',
       language: 'en_US',
     },
+    consultationReminder10m: {
+      name: process.env.WHATSAPP_TEMPLATE_CONSULT_REMINDER_10M || process.env.WHATSAPP_TEMPLATE_CONSULT_REMINDER || 'consultation_reminder__30_min',
+      language: 'en_US',
+    },
     appointmentCancel: {
       name: process.env.WHATSAPP_TEMPLATE_APPT_CANCELLED || 'appointment_cancelled',
       language: 'en_US',

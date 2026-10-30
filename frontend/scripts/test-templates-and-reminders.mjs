@@ -52,6 +52,7 @@ await runTest('WHATSAPP_CONFIG references exact approved Meta template names', (
   assert(WHATSAPP_CONFIG.templates.consultationPayment.name === 'consultation_payment_confirmation', 'Payment template must be consultation_payment_confirmation')
   assert(WHATSAPP_CONFIG.templates.consultationBooking.name === 'consultation_booking_confirmed', 'Booking template must be consultation_booking_confirmed')
   assert(WHATSAPP_CONFIG.templates.consultationReminder30m.name === 'consultation_reminder__30_min', 'Reminder template must be consultation_reminder__30_min')
+  assert(WHATSAPP_CONFIG.templates.consultationReminder10m.name === 'consultation_reminder__30_min', '10m Reminder template fallback must be consultation_reminder__30_min')
   assert(WHATSAPP_CONFIG.templates.appointmentCancel.name === 'appointment_cancelled', 'Cancel template must be appointment_cancelled')
   assert(WHATSAPP_CONFIG.templates.labDoorstepCollection.name === 'lab_doorstep_collection', 'Lab template must be lab_doorstep_collection')
   assert(WHATSAPP_CONFIG.templates.otpAuth.language === 'en_US', 'Language must be en_US')
@@ -154,7 +155,7 @@ await runTest('sendConsultationPayment formats consultation receipt without dyna
 })
 
 // 7. Appointment Confirmation with Auto-scheduled Reminder
-await runTest('sendAppointmentConfirmation enqueues confirmation and schedules 30m reminder', async () => {
+await runTest('sendAppointmentConfirmation enqueues confirmation and schedules 30m and 10m reminders', async () => {
   const futureSlot = new Date(Date.now() + 2 * 60 * 60 * 1000) // 2 hours from now
   const bookingId = `book_test_${Date.now()}`
 
@@ -168,6 +169,16 @@ await runTest('sendAppointmentConfirmation enqueues confirmation and schedules 3
   })
 
   assert(ok === true, 'Appointment confirmation and auto-schedule must succeed')
+
+  const { supabaseAdmin } = await import('../lib/supabaseServer.ts')
+  const { data: reminders } = await supabaseAdmin
+    .from('whatsapp_outbox_queue')
+    .select('idempotency_key, status')
+    .like('idempotency_key', `%_${bookingId}`)
+
+  const keys = (reminders || []).map(r => r.idempotency_key)
+  assert(keys.includes(`consultation_reminder_30m_${bookingId}`), '30m reminder must be queued')
+  assert(keys.includes(`consultation_reminder_10m_${bookingId}`), '10m reminder must be queued')
 })
 
 // 8. Appointment Cancellation Notification

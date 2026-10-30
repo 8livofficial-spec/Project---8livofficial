@@ -32,7 +32,7 @@ async function handleOutboxWorker(request: Request) {
       stats,
     })
   } catch (err: any) {
-    console.error('[WhatsAppOutboxCron] Error processing outbox batch:', err)
-    return NextResponse.json({ error: err.message || 'Worker error' }, { status: 500 })
+    console.error('[WhatsAppOutboxCron] Worker execution error:', err?.message || err)
+    return NextResponse.json({ error: 'Failed to process WhatsApp outbox batch' }, { status: 500 })
   }
 }

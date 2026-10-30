@@ -225,18 +225,35 @@ export class WhatsAppNotificationService {
         },
       })
 
-      // Schedule durable 30-minute reminder if scheduled start is available
+      // Schedule durable 30-minute and 10-minute reminders if scheduled start is available
       if (data.scheduledStart && bookingId !== 'latest') {
         const startTime = new Date(data.scheduledStart).getTime()
-        const reminderTime = new Date(startTime - 30 * 60 * 1000)
+        const now = Date.now()
 
-        // Only schedule if reminder is still in the future
-        if (reminderTime.getTime() > Date.now()) {
-          await this.scheduleConsultationReminder(phone, {
-            ...data,
-            bookingId,
-            reminderTime,
-          })
+        const reminderTime30m = new Date(startTime - 30 * 60 * 1000)
+        if (reminderTime30m.getTime() > now) {
+          await this.scheduleConsultationReminder(
+            phone,
+            {
+              ...data,
+              bookingId,
+              reminderTime: reminderTime30m,
+            },
+            30
+          )
+        }
+
+        const reminderTime10m = new Date(startTime - 10 * 60 * 1000)
+        if (reminderTime10m.getTime() > now) {
+          await this.scheduleConsultationReminder(
+            phone,
+            {
+              ...data,
+              bookingId,
+              reminderTime: reminderTime10m,
+            },
+            10
+          )
         }
       }
 
@@ -248,29 +265,33 @@ export class WhatsAppNotificationService {
   }
 
   /**
-   * 4. Consultation Reminder (30 Minutes Before Slot)
+   * 4. Consultation Reminder (30 Minutes or 10 Minutes Before Slot)
    * Template: consultation_reminder__30_min (UTILITY)
    * Body: "Hello {{1}}, This is a reminder about your upcoming appointment with {{2}} on {{3}} at {{4}}..."
    * Button: Dynamic URL https://www.8liv.in/patient/consultation{{1}}
    */
   public static async scheduleConsultationReminder(
     phone: string,
-    data: AppointmentNotificationData & { reminderTime: Date }
+    data: AppointmentNotificationData & { reminderTime: Date },
+    minutesBefore: 30 | 10 = 30
   ): Promise<boolean> {
     try {
       const normalized = normalizePhoneNumber(phone)
       if (!normalized.e164 || !data.bookingId) return false
 
       const doctorName = data.doctorName ? `Dr. ${data.doctorName.replace(/^Dr\.\s*/i, '')}` : 'your physician specialist'
+      const templateConfig = minutesBefore === 10
+        ? WHATSAPP_CONFIG.templates.consultationReminder10m
+        : WHATSAPP_CONFIG.templates.consultationReminder30m
 
       return await WhatsAppOutbox.enqueue({
-        idempotencyKey: `consultation_reminder_30m_${data.bookingId}`,
+        idempotencyKey: `consultation_reminder_${minutesBefore}m_${data.bookingId}`,
         recipientPhone: normalized.e164,
         nextAttemptAt: data.reminderTime,
         payload: {
           type: 'template',
-          templateName: WHATSAPP_CONFIG.templates.consultationReminder30m.name,
-          languageCode: WHATSAPP_CONFIG.templates.consultationReminder30m.language,
+          templateName: templateConfig.name,
+          languageCode: templateConfig.language,
           components: [
             {
               type: 'body',
@@ -290,7 +311,7 @@ export class WhatsAppNotificationService {
           ],
           metadata: {
             consultationId: data.bookingId,
-            type: 'CONSULTATION_REMINDER_30M',
+            type: `CONSULTATION_REMINDER_${minutesBefore}M`,
           },
         },
       })
