@@ -452,6 +452,13 @@ export default function ConsultationSchedulingPage() {
     }
   }, [activeProviderTab, appointmentType, loadSlotsForDate, patientDataLoading, router])
 
+  // Guard: If in onboarding flow (not an active member follow-up), restrict to Doctor only
+  useEffect(() => {
+    if (isPatientDataReady && !isActiveMemberFollowUp && activeProviderTab !== 'doctor') {
+      setActiveProviderTab('doctor')
+    }
+  }, [isPatientDataReady, isActiveMemberFollowUp, activeProviderTab])
+
   useEffect(() => {
     if (patientDataLoading) return
 
@@ -1407,45 +1414,6 @@ export default function ConsultationSchedulingPage() {
                     : `Select a consultation time that fits your schedule. We will reserve your chosen time with an eligible ${currentTabMeta.label.toLowerCase()}.`}
                 </p>
               </div>
-            </div>
-          </div>
-
-          {/* 3-Tab Care Specialist Switcher */}
-          <div className="mb-6">
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-1.5 bg-slate-200/70 rounded-2xl border border-slate-200/90 shadow-inner">
-              {PROVIDER_TABS.map((tab) => {
-                const Icon = tab.icon
-                const isActive = activeProviderTab === tab.id
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => handleTabSwitch(tab.id)}
-                    className={`py-3 px-3.5 rounded-xl flex items-center gap-3 transition-all cursor-pointer font-sora text-left ${
-                      isActive
-                        ? 'bg-[#061810] text-white shadow-md shadow-emerald-950/20 ring-1 ring-emerald-500/40 scale-[1.01]'
-                        : 'bg-white/80 hover:bg-white text-slate-700 hover:text-slate-900 shadow-xs'
-                    }`}
-                  >
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                      isActive ? 'bg-[#00A884] text-white shadow-sm' : 'bg-slate-100 text-slate-600'
-                    }`}>
-                      <Icon className="w-4 h-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-1.5">
-                        <p className="text-xs sm:text-sm font-bold truncate">{tab.label}</p>
-                        {isActive && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-[#00A884] animate-pulse shrink-0" />
-                        )}
-                      </div>
-                      <p className={`text-[10px] truncate ${isActive ? 'text-teal-300 font-medium' : 'text-slate-400'}`}>
-                        {tab.sublabel}
-                      </p>
-                    </div>
-                  </button>
-                )
-              })}
             </div>
           </div>
 
