@@ -35,29 +35,17 @@ export async function GET(request: Request) {
     }
 
     // 3. Fetch Doctor Prescriptions
-    let rawPrescriptions: any[] = []
-    const { data: rxData, error: rxErr } = await supabaseAdmin
+    const { data: rxData } = await supabaseAdmin
       .from('prescriptions')
-      .select('*, prescription_items(*), pharmacy_orders(id, status, vendor, estimated_delivery_at, courier_name, tracking_number, shipped_at, delivered_at, delivery_address_snapshot, created_at)')
+      .select('*, prescription_items(*)')
       .eq('patient_id', patientId)
       .neq('status', 'DRAFT')
       .order('created_at', { ascending: false })
-
-    if (!rxErr && rxData) {
-      rawPrescriptions = rxData
-    } else {
-      const { data: fallbackRx } = await supabaseAdmin
-        .from('prescriptions')
-        .select('*, prescription_items(*)')
-        .eq('patient_id', patientId)
-        .neq('status', 'DRAFT')
-        .order('created_at', { ascending: false })
-      rawPrescriptions = fallbackRx || []
-    }
+    const rawPrescriptions = rxData || []
 
     // Enrich prescriptions with Doctor details
     const doctorIds = Array.from(new Set(rawPrescriptions.map(rx => rx.doctor_id).filter(Boolean)))
-    let doctorsMap = new Map()
+    const doctorsMap = new Map()
     if (doctorIds.length > 0) {
       const [{ data: docProfiles }, { data: baseProfiles }] = await Promise.all([
         supabaseAdmin.from('doctor_profiles').select('*').in('id', doctorIds),
@@ -162,7 +150,7 @@ export async function GET(request: Request) {
 
     // Enrich with coach profile details if coach_id exists
     const coachIds = Array.from(new Set((fitnessData || []).map((f: any) => f.fitness_coach_id).filter(Boolean)))
-    let coachesMap = new Map()
+    const coachesMap = new Map()
     if (coachIds.length > 0) {
       const { data: coachProfiles } = await supabaseAdmin
         .from('profiles')

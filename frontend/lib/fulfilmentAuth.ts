@@ -31,11 +31,14 @@ export async function assertPatient(request: Request): Promise<AuthenticatedActo
 }
 
 export async function assertConsultationDoctorOwnership(consultationId: string, doctorId: string) {
-  let { data, error } = await supabaseAdmin
+  const consultationResult = await supabaseAdmin
     .from('doctor_consultations')
     .select('id, patient_id, doctor_id, status, booking_date, booking_time, appointment_type')
     .eq('id', consultationId)
     .maybeSingle()
+
+  let data = consultationResult.data
+  const error = consultationResult.error
 
   if (error) throw error
 
@@ -97,7 +100,7 @@ export async function assertPrescriptionOwnership(prescriptionId: string, doctor
 export async function assertPatientPrescriptionOwnership(prescriptionId: string, patientId: string) {
   const { data, error } = await supabaseAdmin
     .from('prescriptions')
-    .select('*, prescription_items(*), pharmacy_orders(*), treatment_cycles(id, cycle_number, status, start_date, end_date)')
+    .select('*, prescription_items(*), treatment_cycles(id, cycle_number, status, start_date, end_date)')
     .eq('id', prescriptionId)
     .eq('patient_id', patientId)
     .maybeSingle()
@@ -108,7 +111,7 @@ export async function assertPatientPrescriptionOwnership(prescriptionId: string,
     // Fallback if treatment_cycles join fails
     const { data: fallback, error: fallbackError } = await supabaseAdmin
       .from('prescriptions')
-      .select('*, prescription_items(*), pharmacy_orders(*)')
+      .select('*, prescription_items(*)')
       .eq('id', prescriptionId)
       .eq('patient_id', patientId)
       .maybeSingle()

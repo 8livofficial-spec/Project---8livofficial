@@ -22,19 +22,6 @@ import {
 } from 'lucide-react'
 import { authedFetch } from '@/lib/apiClient'
 
-const STATUS_LABELS: Record<string, string> = {
-  PENDING_ASSIGNMENT: 'Clinical review pending',
-  RECEIVED: 'E-Prescription signed',
-  ACKNOWLEDGED: 'Prescription ready for download',
-  STOCK_CONFIRMED: 'Verified by physician',
-  PREPARING: 'Processing clinical documentation',
-  DISPATCHED: 'Ready for independent fulfillment',
-  DELIVERED: 'Prescription issued',
-  CLARIFICATION_REQUIRED: 'In clinical review',
-  UNABLE_TO_FULFILL: 'Not clinically indicated',
-  CANCELLED: 'Cancelled',
-}
-
 type SpecialistFilter = 'all' | 'doctor' | 'dietitian' | 'trainer'
 
 export default function PatientPrescriptionsPage() {
@@ -100,7 +87,6 @@ export default function PatientPrescriptionsPage() {
     // Doctor Prescriptions
     if (filter === 'all' || filter === 'doctor') {
       for (const rx of data.prescriptions) {
-        const order = (rx.pharmacy_orders || []).find((o: any) => !['CANCELLED', 'UNABLE_TO_FULFILL'].includes(o.status)) || rx.pharmacy_orders?.[0]
         const isActive = ['ISSUED', 'ACTIVE', 'SIGNED'].includes(rx.status)
         list.push({
           id: rx.id,
@@ -116,8 +102,8 @@ export default function PatientPrescriptionsPage() {
           meta1Value: rx.issued_at ? new Date(rx.issued_at).toLocaleDateString('en-IN') : '-',
           meta2Label: 'Valid Until',
           meta2Value: rx.valid_until ? new Date(rx.valid_until).toLocaleDateString('en-IN') : '-',
-          meta3Label: 'Fulfillment',
-          meta3Value: order?.status ? (STATUS_LABELS[order.status] || order.status) : 'Pending address confirmation',
+          meta3Label: 'Pharmacy',
+          meta3Value: 'Any licensed pharmacy',
         })
       }
     }
@@ -279,7 +265,7 @@ export default function PatientPrescriptionsPage() {
                     href={`/patient/prescriptions/${data.activePrescription.id}`}
                     className="inline-flex items-center gap-2 rounded-xl bg-[#0D9488] hover:bg-[#0B7A6F] text-white px-5 py-2.5 text-xs font-black uppercase tracking-wider transition-all shadow-md"
                   >
-                    View &amp; Fulfill <ArrowRight className="w-3.5 h-3.5" />
+                    View prescription <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
                 </div>
               </div>
@@ -320,15 +306,8 @@ export default function PatientPrescriptionsPage() {
                   </span>
                 </div>
                 <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] block">Fulfillment Status</span>
-                  {(() => {
-                    const order = (data.activePrescription.pharmacy_orders || []).find((o: any) => !['CANCELLED', 'UNABLE_TO_FULFILL'].includes(o.status)) || data.activePrescription.pharmacy_orders?.[0]
-                    return (
-                      <span className={`font-black ${order ? 'text-[#0D9488]' : 'text-[#C4622D]'}`}>
-                        {order ? (STATUS_LABELS[order.status] || order.status) : 'Action Required: Confirm Delivery Address'}
-                      </span>
-                    )
-                  })()}
+                  <span className="text-[10px] font-black uppercase tracking-wider text-[#8896A4] block">Pharmacy</span>
+                  <span className="font-black text-[#0D9488]">Use any licensed pharmacy</span>
                 </div>
               </div>
             </div>

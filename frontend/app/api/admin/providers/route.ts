@@ -194,8 +194,6 @@ export async function POST(request: Request) {
       last_name: lastName || '',
       phone_number: phoneNumber || '',
       role,
-      qualification: qualification || null,
-      specialization: specialization || null,
     })
     if (profileErr) return NextResponse.json({ error: profileErr.message }, { status: 500 })
 

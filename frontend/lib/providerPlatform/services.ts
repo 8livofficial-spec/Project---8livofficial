@@ -141,8 +141,6 @@ export const ProviderInvitationService = {
       last_name: rest.join(' '),
       phone_number: phoneNumber,
       role: legacyRole(body.role),
-      qualification: body.qualification || null,
-      specialization: body.specialization || null,
     })
     if (profileError) throw profileError
 
