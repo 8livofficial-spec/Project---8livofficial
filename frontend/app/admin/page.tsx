@@ -1,11 +1,11 @@
 'use client';
 /* eslint-disable @next/next/no-html-link-for-pages */
 
-import { Suspense, useState, useEffect, useRef, type FormEvent } from 'react';
+import { Suspense, useState, useEffect, useRef, type ChangeEvent, type FormEvent } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine, BarChart, Bar, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
-import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Package, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, RefreshCw, LogOut, Link2, Timer, Trash2, GitMerge, ClipboardList, DollarSign, Calendar, UserCheck, XCircle, TrendingUp, BadgeCheck, Menu, X, Copy, KeyRound, Sparkles, Check, Building2, UserPlus } from 'lucide-react';
+import { ShieldCheck, Users, User, Video, Apple, Dumbbell, Clock, Stethoscope, Pill, Package, Syringe, Activity, CheckCircle2, Home as HomeIcon, PhoneOff, FileText, Scale, Target, ChevronRight, AlertCircle, Wallet, ArrowDownToLine, Upload, RefreshCw, LogOut, Link2, Timer, Trash2, GitMerge, ClipboardList, DollarSign, Calendar, UserCheck, XCircle, TrendingUp, BadgeCheck, Menu, X, Copy, KeyRound, Sparkles, Check, Building2, UserPlus } from 'lucide-react';
 import { motion } from 'framer-motion';
 import SessionMonitor from '@/components/admin/SessionMonitor';
 import { authedFetch } from '@/lib/apiClient';
@@ -57,6 +57,7 @@ function AdminDashboardContent() {
   const [assessments, setAssessments] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [labReportUploading, setLabReportUploading] = useState(false);
+  const [labReportUploadingPatientId, setLabReportUploadingPatientId] = useState<string | null>(null);
   const [patientLogs, setPatientLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeCall, setActiveCall] = useState<string | null>(null);
@@ -1198,15 +1199,29 @@ function AdminDashboardContent() {
   const selectedLabPreference = selectedLabWork.preference || selectedPatient?.lab_preference || 'none';
   const selectedLabReportUrl = selectedLabWork.report_url || selectedPatient?.lab_report_url || '';
 
-  const handleAdminLabReportUpload = async (event: any) => {
+  const handleAdminLabReportUpload = async (event: ChangeEvent<HTMLInputElement>, patient = selectedPatient) => {
     const file = event.target.files?.[0];
     event.target.value = '';
-    if (!file || !selectedPatient?.patient_id) return;
+    if (!file || !patient?.patient_id) return;
+
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/png'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Choose a PDF, JPG, or PNG lab report.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('The lab report must be 10 MB or smaller.');
+      return;
+    }
 
     setLabReportUploading(true);
+    setLabReportUploadingPatientId(patient.patient_id);
+    setSelectedPatient(patient);
     try {
+      const patientLabWork = patient.medical_history?.lab_work || {};
+      const patientLabPreference = patientLabWork.preference || patient.lab_preference || 'none';
       const payload = new FormData();
-      payload.append('patientId', selectedPatient.patient_id);
+      payload.append('patientId', patient.patient_id);
       payload.append('file', file);
 
       const res = await adminFetch('/api/admin/patients/lab-report', {
@@ -1217,21 +1232,22 @@ function AdminDashboardContent() {
       if (!res.ok || data.error) throw new Error(data.error || 'Unable to upload lab report.');
 
       const updatedMedicalHistory = {
-        ...(selectedPatient.medical_history || {}),
+        ...(patient.medical_history || {}),
         lab_work: data.labWork,
       };
       const updatedPatient = {
-        ...selectedPatient,
+        ...patient,
         medical_history: updatedMedicalHistory,
-        lab_preference: data.labWork?.preference || selectedLabPreference,
+        lab_preference: data.labWork?.preference || patientLabPreference,
         lab_report_url: data.reportUrl,
       };
       setSelectedPatient(updatedPatient);
-      setAssessments(current => current.map(patient => patient.patient_id === selectedPatient.patient_id ? updatedPatient : patient));
+      setAssessments(current => current.map(item => item.patient_id === patient.patient_id ? updatedPatient : item));
     } catch (err: any) {
       alert(err.message || 'Unable to upload lab report.');
     } finally {
       setLabReportUploading(false);
+      setLabReportUploadingPatientId(null);
     }
   };
   const hasDietFitnessData = hasLocalFood || hasWorkoutPref;
@@ -2142,17 +2158,41 @@ function AdminDashboardContent() {
                       </div>
                       <span>{assignmentDoctor ? `${assignmentDoctor.first_name} ${assignmentDoctor.last_name}` : 'Auto Assigned'}</span>
                       <span className={patient.consultation_fee_paid ? 'text-[#5C7A6B]' : 'text-[#B7792F]'}>{patient.consultation_fee_paid ? 'Paid' : 'Pending'}</span>
-                      <div>
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedPatient(patient);
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-all shadow-xs"
-                        >
-                          {hasReport ? 'View Report' : labPref === 'third_party' ? 'Upload Report' : 'View File'}
-                        </button>
+                      <div onClick={(event) => event.stopPropagation()}>
+                        {hasReport ? (
+                          <a
+                            href={labWork.report_url || patient.lab_report_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white shadow-xs transition-colors hover:bg-slate-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F766E] focus-visible:ring-offset-2"
+                          >
+                            <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                            View Report
+                          </a>
+                        ) : (
+                          <div>
+                            <input
+                              id={`lab-report-${patient.patient_id}`}
+                              type="file"
+                              accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
+                              className="peer sr-only"
+                              disabled={labReportUploading}
+                              onChange={(event) => void handleAdminLabReportUpload(event, patient)}
+                            />
+                            <label
+                              htmlFor={`lab-report-${patient.patient_id}`}
+                              aria-disabled={labReportUploading}
+                              className={`inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg bg-slate-900 px-3 py-2 text-xs font-bold text-white shadow-xs transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-[#0F766E] peer-focus-visible:ring-offset-2 ${labReportUploading ? 'cursor-not-allowed opacity-60' : 'cursor-pointer hover:bg-slate-800'}`}
+                            >
+                              {labReportUploadingPatientId === patient.patient_id ? (
+                                <RefreshCw className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                              ) : (
+                                <Upload className="h-3.5 w-3.5" aria-hidden="true" />
+                              )}
+                              {labReportUploadingPatientId === patient.patient_id ? 'Uploading…' : 'Upload Report'}
+                            </label>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );

@@ -17,6 +17,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'A lab report file is required.' }, { status: 400 })
     }
 
+    const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png'])
+    if (!allowedTypes.has(file.type)) {
+      return NextResponse.json({ error: 'Lab reports must be PDF, JPG, or PNG files.' }, { status: 400 })
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      return NextResponse.json({ error: 'Lab reports must be 10 MB or smaller.' }, { status: 400 })
+    }
+
     const ext = file.name.split('.').pop()?.toLowerCase() || 'pdf'
     const safeExt = ['pdf', 'jpg', 'jpeg', 'png'].includes(ext) ? ext : 'pdf'
     const path = `lab_reports/${patientId}/${Date.now()}_${Math.random().toString(36).slice(2)}.${safeExt}`
