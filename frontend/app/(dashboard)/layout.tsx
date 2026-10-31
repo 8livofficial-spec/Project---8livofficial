@@ -131,9 +131,11 @@ function DashboardLayoutContent({
         targetPath = consultationPaymentStatus === 'PAID' ? '/appointments/select-slot' : '/consultation-payment'
       }
     } else if (flowStep === 'needs_plan') {
-      if (!isOnboardingPlanPage) targetPath = '/patient/onboarding/plan'
+      // Never redirect away from the consultation room — the patient just ended
+      // their call and is mid-navigation. The room page navigates itself away.
+      if (!isOnboardingPlanPage && !isConsultationRoomPage) targetPath = '/patient/onboarding/plan'
     } else if (flowStep === 'needs_payment') {
-      if (!isOnboardingPaymentPage) targetPath = '/membership-payment'
+      if (!isOnboardingPaymentPage && !isConsultationRoomPage) targetPath = '/membership-payment'
     }
 
     if (targetPath && pathname !== targetPath) {

@@ -232,7 +232,7 @@ export default function OnboardingPaymentPage() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 patientId: session.user.id,
-                paymentType: 'combined',
+                paymentType: 'membership',
                 planId: selectedPlanIdRef.current || selectedPlan?.id,
                 durationMonths: selectedPlan?.durationMonths || 1,
                 amount: total,

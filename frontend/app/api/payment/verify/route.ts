@@ -80,7 +80,11 @@ export async function POST(request: Request) {
     }
 
     // Security Binding 2: Prevent Payment Type Substitution (e.g. ₹1 standard order activating a membership)
-    if (existingTxn.payment_type && existingTxn.payment_type !== paymentType) {
+    const isMembershipLike = (t?: string) => t === 'membership' || t === 'combined'
+    const isPaymentTypeCompatible = existingTxn.payment_type === paymentType || 
+      (isMembershipLike(existingTxn.payment_type) && isMembershipLike(paymentType))
+
+    if (existingTxn.payment_type && !isPaymentTypeCompatible) {
       return NextResponse.json({
         error: `Invalid payment type. Order was created for ${existingTxn.payment_type}, cannot verify as ${paymentType}.`
       }, { status: 400 })
