@@ -131,7 +131,7 @@ function DashboardLayoutContent({
         targetPath = consultationPaymentStatus === 'PAID' ? '/appointments/select-slot' : '/consultation-payment'
       }
     } else if (flowStep === 'needs_plan') {
-      // Never redirect away from the consultation room � the patient just ended
+      // Never redirect away from the consultation room -- the patient just ended
       // their call and is mid-navigation. The room page navigates itself away.
       if (!isOnboardingPlanPage && !isConsultationRoomPage) targetPath = '/patient/onboarding/plan'
     } else if (flowStep === 'needs_payment') {
@@ -223,7 +223,7 @@ function DashboardLayoutContent({
     return Math.min(12, Math.max(1, week))
   }
 
-  // Show real plan name or nothing — never default to 'Silver Plan'
+  // Show real plan name or nothing -- never default to 'Silver Plan'
   const membershipTier = assessment?.membership_tier || ''
   const programWeek = assessment?.created_at ? getProgramWeek(assessment.created_at) : 1
   const totalWeeks = 12
@@ -237,7 +237,7 @@ function DashboardLayoutContent({
     { icon: Package, label: 'Deliveries', href: '/patient/medicine-orders' }
   ]
 
-  // ── Onboarding & consultation booking pages: full-screen, no dashboard chrome ──
+  // -"--"- Onboarding & consultation booking pages: full-screen, no dashboard chrome -"--"-
   if (isStandaloneFlowPage) {
     const canRenderStandalonePage =
       isConsultationRoomPage ||
@@ -331,7 +331,7 @@ function DashboardLayoutContent({
 
   return (
     <div className="min-h-screen bg-[#F8FAF7] flex flex-col lg:flex-row overflow-hidden text-[#11241A] font-sans selection:bg-[#00A884]/20 selection:text-[#00A884]">
-      {/* ── GLOBAL REAL-TIME CALLING ALERT (fixed, any page) ── */}
+      {/* -"--"- GLOBAL REAL-TIME CALLING ALERT (fixed, any page) -"--"- */}
       {globalCallAlert && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-md animate-fade-in">
           <div className="bg-white rounded-3xl p-8 max-w-sm w-full shadow-2xl border border-stone-200/90 text-center space-y-5">
@@ -343,7 +343,7 @@ function DashboardLayoutContent({
             </div>
             <div>
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#00A884] bg-emerald-50 border border-emerald-200/80 px-3 py-1 rounded-full inline-block">
-                🟢 Live Video Session
+                Live Video Session
               </span>
               <h3 className="text-2xl font-extrabold text-[#11241A] mt-3 tracking-tight">Your Doctor is Calling!</h3>
               <p className="text-xs text-slate-500 font-medium mt-2 leading-relaxed">
