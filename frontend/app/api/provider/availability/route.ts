@@ -283,6 +283,8 @@ export async function POST(request: Request) {
     }
 
     serverCache.invalidate(`avail:${provider.user.id}`)
+    invalidateDoctorAvailabilityCache()
+    invalidateSlotsCache()
 
     return NextResponse.json({
       message: 'Manual slot created successfully.',

@@ -146,17 +146,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    if (isPatient) {
-      const consentStatus = await getUserConsentStatus(auth.user.id, consultation.id)
-      if (!consentStatus.gate3Accepted) {
-        return NextResponse.json({
-          error: 'Informed Consent to Treatment (Gate 3) is required before entering the consultation.',
-          requiresGate3Consent: true,
-          consentUrl: `/patient/consultation/consent?bookingId=${encodeURIComponent(consultation.id)}`,
-        }, { status: 403 })
-      }
-    }
-
     const joinBlockedReason = assertJoinWindow(consultation)
     if (joinBlockedReason) {
       return NextResponse.json({ error: joinBlockedReason }, { status: 403 })

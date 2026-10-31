@@ -68,58 +68,12 @@ function Gate3Content() {
   const [otpError, setOtpError] = useState('')
   const [cooldown, setCooldown] = useState(0)
 
-  // 1. Load user profile and verify existing consent
+  // Immediately bypass Gate 3 and route directly into consultation room
   useEffect(() => {
-    let active = true
-
-    async function loadData() {
-      setLoading(true)
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session) {
-          router.replace('/login')
-          return
-        }
-
-        const [profileRes, statusRes, assessmentRes] = await Promise.all([
-          supabase.from('profiles').select('*').eq('id', session.user.id).single(),
-          authedFetch(`/api/consent/status?bookingId=${encodeURIComponent(bookingId)}`),
-          supabase.from('health_assessments').select('phone_number').eq('patient_id', session.user.id).order('created_at', { ascending: false }).limit(1).maybeSingle(),
-        ])
-
-        if (profileRes.data && active) {
-          setPatientProfile(profileRes.data)
-          const phone = profileRes.data.phone_number || profileRes.data.phone || session.user.phone || session.user.user_metadata?.phone_number || session.user.user_metadata?.phone || assessmentRes?.data?.phone_number || ''
-          if (phone) {
-            setUserPhone(phone)
-          }
-
-          // Minor check (under 18)
-          if (profileRes.data.date_of_birth) {
-            const birthDate = new Date(profileRes.data.date_of_birth)
-            const ageDiff = Date.now() - birthDate.getTime()
-            const ageDate = new Date(ageDiff)
-            const calcAge = Math.abs(ageDate.getUTCFullYear() - 1970)
-            if (calcAge < 18) setIsMinor(true)
-          }
-        }
-
-        const statusJson = await statusRes.json()
-        // If already consented for this booking, bypass directly to video room
-        if (statusJson.gate3Accepted && bookingId && active) {
-          router.replace(`/patient/consultation/room?id=${encodeURIComponent(bookingId)}`)
-          return
-        }
-      } catch (err: any) {
-        if (active) setError(err.message || 'Unable to prepare consent document.')
-      } finally {
-        if (active) setLoading(false)
-      }
-    }
-
-    void loadData()
-    return () => {
-      active = false
+    if (bookingId) {
+      router.replace(`/patient/consultation/room?id=${encodeURIComponent(bookingId)}`)
+    } else {
+      router.replace('/patient/appointments')
     }
   }, [bookingId, router])
 

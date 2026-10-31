@@ -289,13 +289,21 @@ export default function ProviderProfileEditor({
     setSavingSig(true)
     setStatusMessage(null)
     try {
-      const fd = new FormData()
-      fd.append('signature', selectedSigFile)
+      let res: Response
+      if (filePreview && typeof filePreview === 'string' && filePreview.startsWith('data:')) {
+        res = await authedFetch('/api/provider/signature', {
+          method: 'POST',
+          body: JSON.stringify({ signatureDataUrl: filePreview }),
+        })
+      } else {
+        const fd = new FormData()
+        fd.append('signature', selectedSigFile)
 
-      const res = await authedFetch('/api/provider/signature', {
-        method: 'POST',
-        body: fd,
-      })
+        res = await authedFetch('/api/provider/signature', {
+          method: 'POST',
+          body: fd,
+        })
+      }
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Failed to upload signature.')
 

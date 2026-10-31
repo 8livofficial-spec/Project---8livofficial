@@ -49,22 +49,9 @@ export async function POST(request: Request) {
     let buffer: Buffer
     let mimeType = 'image/png'
 
-    if (contentType.includes('application/json')) {
-      const body = await request.json()
-      const dataUrl = body.signatureDataUrl || body.dataUrl || ''
-      if (!dataUrl || !dataUrl.includes(',')) {
-        return NextResponse.json({ error: 'Invalid or missing signature drawing data.' }, { status: 400 })
-      }
-
-      const [header, base64Data] = dataUrl.split(',')
-      const matches = header.match(/:(.*?);/)
-      if (matches && matches[1]) {
-        mimeType = matches[1]
-      }
-      buffer = Buffer.from(base64Data, 'base64')
-    } else if (contentType.includes('multipart/form-data')) {
+    if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData()
-      const file = formData.get('signature') as File | null
+      const file = (formData.get('signature') || formData.get('file')) as File | null
       if (!file) {
         return NextResponse.json({ error: 'Signature file is required.' }, { status: 400 })
       }
@@ -73,10 +60,39 @@ export async function POST(request: Request) {
       buffer = Buffer.from(arrayBuffer)
       mimeType = file.type || 'image/png'
     } else {
-      return NextResponse.json({ error: 'Unsupported Content-Type. Please use multipart/form-data or application/json.' }, { status: 400 })
+      // Try JSON parsing first, fallback to formData if content-type was misidentified or payload is multipart
+      try {
+        const body = await request.json()
+        const dataUrl = body.signatureDataUrl || body.dataUrl || ''
+        if (!dataUrl || !dataUrl.includes(',')) {
+          return NextResponse.json({ error: 'Invalid or missing signature drawing data.' }, { status: 400 })
+        }
+
+        const [header, base64Data] = dataUrl.split(',')
+        const matches = header.match(/:(.*?);/)
+        if (matches && matches[1]) {
+          mimeType = matches[1]
+        }
+        buffer = Buffer.from(base64Data, 'base64')
+      } catch (jsonErr) {
+        // Fallback: see if request has formData
+        try {
+          const formData = await request.formData()
+          const file = (formData.get('signature') || formData.get('file')) as File | null
+          if (file) {
+            const arrayBuffer = await file.arrayBuffer()
+            buffer = Buffer.from(arrayBuffer)
+            mimeType = file.type || 'image/png'
+          } else {
+            throw jsonErr
+          }
+        } catch {
+          return NextResponse.json({ error: 'Unable to parse signature payload. Please provide valid image file or drawing data.' }, { status: 400 })
+        }
+      }
     }
 
-    const result = await saveDoctorSignature(auth.user.id, buffer, mimeType, request)
+    const result = await saveDoctorSignature(auth.user.id, buffer, mimeType, request, role)
     const previewUrl = await getDoctorSignatureSignedUrl(auth.user.id)
 
     return NextResponse.json({

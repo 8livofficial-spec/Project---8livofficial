@@ -2,7 +2,7 @@
 
 import { Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { AlertCircle, RefreshCw } from 'lucide-react'
+import { AlertCircle, RefreshCw, PhoneOff } from 'lucide-react'
 import dynamic from 'next/dynamic'
 
 const StreamConsultationCall = dynamic(
@@ -35,11 +35,31 @@ function VideoRoomContent() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col bg-[#0D101C] text-white">
-      <div className="border-b border-white/10 bg-[#1A1F36] px-4 py-3">
-        <p className="text-sm font-black uppercase tracking-wider text-[#C4622D]">8Liv Secure Video</p>
-      </div>
-      <div className="min-h-0 flex-1">
+    <main className="flex min-h-screen flex-col bg-[#0B0F19] text-white select-none">
+      <header className="bg-[#0B0F19]/90 backdrop-blur-xl border-b border-white/[0.08] px-4 sm:px-6 py-3 flex items-center justify-between text-white shrink-0 z-20 shadow-md">
+        <div className="flex items-center gap-3.5">
+          <div className="flex items-center shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand-logo-official.png"
+              alt="8Liv Health"
+              className="h-7 w-auto object-contain brightness-105"
+            />
+          </div>
+          <div className="h-5 w-px bg-white/15" />
+          <h3 className="text-sm font-semibold text-slate-100 tracking-tight">Clinical Consultation</h3>
+        </div>
+
+        <button
+          onClick={() => router.back()}
+          className="bg-white/10 hover:bg-rose-600/90 text-slate-200 hover:text-white font-medium px-4 py-1.5 rounded-full flex items-center gap-1.5 text-xs transition-all border border-white/10 hover:border-rose-500/30 cursor-pointer shadow-xs"
+          title="Leave Consultation"
+        >
+          <PhoneOff className="w-3.5 h-3.5" />
+          <span>End Call</span>
+        </button>
+      </header>
+      <div className="min-h-0 flex-1 relative bg-[#0B0F19]">
         <StreamConsultationCall appointmentId={appointmentId} onLeave={() => router.back()} />
       </div>
     </main>

@@ -277,7 +277,37 @@ export async function loadAvailableDates(params: { patientId: string; role: Book
 
     if (error) throw error
 
-    const futureSlots = (slots || []).filter((slot) => isFutureIndiaSlot(slot.available_date, slot.start_time))
+    let futureSlots = (slots || []).filter((slot) => isFutureIndiaSlot(slot.available_date, slot.start_time))
+
+    // Fallback: If assigned provider has no upcoming available slots, check availability across all active providers of this role
+    if (futureSlots.length === 0 && providerId) {
+      const { data: allActiveProviders } = await supabaseAdmin
+        .from('provider_profiles')
+        .select('provider_id')
+        .eq('role', params.role)
+        .eq('status', 'active')
+      const fallbackProviderIds = (allActiveProviders || []).map((p) => p.provider_id).filter((id) => id !== providerId)
+
+      if (fallbackProviderIds.length > 0) {
+        const { data: fallbackSlots, error: fallbackError } = await supabaseAdmin
+          .from('provider_availability')
+          .select('id, provider_id, provider_role, available_date, start_time, end_time, status, source, slot_duration')
+          .eq('provider_role', params.role)
+          .eq('status', 'AVAILABLE')
+          .eq('is_available', true)
+          .in('provider_id', fallbackProviderIds)
+          .gte('available_date', todayStr)
+          .order('available_date', { ascending: true })
+          .order('start_time', { ascending: true })
+
+        if (!fallbackError && fallbackSlots) {
+          const fallbackFuture = fallbackSlots.filter((slot) => isFutureIndiaSlot(slot.available_date, slot.start_time))
+          if (fallbackFuture.length > 0) {
+            futureSlots = fallbackFuture
+          }
+        }
+      }
+    }
 
     const counts = new Map<string, number>()
     const mappedSlots: AvailableSlot[] = []
@@ -408,7 +438,7 @@ export async function loadAvailableSlots(params: {
 
     if (error) throw error
 
-    const availableSlots = (slots || [])
+    let availableSlots = (slots || [])
       .filter((slot) => isFutureIndiaSlot(slot.available_date, slot.start_time))
       .map((slot) => ({
         slotId: slot.id,
@@ -421,6 +451,47 @@ export async function loadAvailableSlots(params: {
         source: (slot.source || 'GENERATED') === 'MANUAL' ? ('MANUAL' as const) : ('GENERATED' as const),
         slotDuration: Number(slot.slot_duration || 30),
       }))
+
+    // Fallback: If assigned provider has no available slots on this date, check across all active providers of this role
+    if (availableSlots.length === 0 && providerId) {
+      const { data: allActiveProviders } = await supabaseAdmin
+        .from('provider_profiles')
+        .select('provider_id')
+        .eq('role', params.role)
+        .eq('status', 'active')
+      const fallbackProviderIds = (allActiveProviders || []).map((p) => p.provider_id).filter((id) => id !== providerId)
+
+      if (fallbackProviderIds.length > 0) {
+        const { data: fallbackSlots } = await supabaseAdmin
+          .from('provider_availability')
+          .select('id, provider_id, provider_role, available_date, start_time, end_time, status, source, slot_duration')
+          .eq('provider_role', params.role)
+          .eq('status', 'AVAILABLE')
+          .eq('is_available', true)
+          .eq('available_date', params.date)
+          .in('provider_id', fallbackProviderIds)
+          .order('start_time', { ascending: true })
+
+        if (fallbackSlots) {
+          const fallbackAvailable = fallbackSlots
+            .filter((slot) => isFutureIndiaSlot(slot.available_date, slot.start_time))
+            .map((slot) => ({
+              slotId: slot.id,
+              providerId: slot.provider_id,
+              providerRole: String(slot.provider_role).toUpperCase(),
+              date: slot.available_date,
+              startTime: String(slot.start_time).slice(0, 5),
+              endTime: String(slot.end_time).slice(0, 5),
+              status: 'AVAILABLE' as const,
+              source: (slot.source || 'GENERATED') === 'MANUAL' ? ('MANUAL' as const) : ('GENERATED' as const),
+              slotDuration: Number(slot.slot_duration || 30),
+            }))
+          if (fallbackAvailable.length > 0) {
+            availableSlots = fallbackAvailable
+          }
+        }
+      }
+    }
 
     availableSlotsCache.set(cacheKey, { slots: availableSlots, expiresAt: now + 15 * 1000 })
     return { slots: availableSlots }

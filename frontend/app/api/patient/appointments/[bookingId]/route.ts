@@ -114,10 +114,14 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Missing bookingId or patientId' }, { status: 400 })
     }
 
-    const auth = await requireAuthenticatedPatient(request, patientId)
+    const [auth, consultationResult] = await Promise.all([
+      requireAuthenticatedPatient(request, patientId),
+      loadAppointment(bookingId, patientId),
+    ])
+
     if (!auth.ok) return auth.response
 
-    const { data: consultation, error: consultationError } = await loadAppointment(bookingId, patientId)
+    const { data: consultation, error: consultationError } = consultationResult
 
     if (consultationError) {
       console.error('Appointment lookup failed:', consultationError)
@@ -129,81 +133,68 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     const appointment = consultation as ConsultationRow
-    let doctor: DoctorProfile | null = null
+    const doctorId = appointment.doctor_id
 
-    if (appointment.doctor_id) {
-      const { data: prov } = await supabaseAdmin
-        .from('provider_profiles')
-        .select('provider_id, full_name, specialization, qualification')
-        .eq('provider_id', appointment.doctor_id)
-        .maybeSingle()
+    // Parallelize doctor, payment, assessment, and membership lookups to ensure ultra-low latency
+    const [doctor, payment, assessmentsRes, membershipValidity] = await Promise.all([
+      // 1. Doctor Profile resolution
+      (async (): Promise<DoctorProfile | null> => {
+        if (!doctorId) return null
+        const [provRes, profRes, docRes] = await Promise.all([
+          supabaseAdmin.from('provider_profiles').select('provider_id, full_name, specialization, qualification').eq('provider_id', doctorId).maybeSingle(),
+          supabaseAdmin.from('profiles').select('id, first_name, last_name, display_id').eq('id', doctorId).maybeSingle(),
+          supabaseAdmin.from('doctor_profiles').select('id, full_name, specialty').eq('id', doctorId).maybeSingle(),
+        ])
 
-      if (prov?.full_name) {
-        doctor = {
-          id: prov.provider_id,
-          full_name: prov.full_name.startsWith('Dr.') ? prov.full_name : `Dr. ${prov.full_name}`,
-          specialty: prov.specialization || prov.qualification || 'Metabolic Physician Specialist'
+        const prov = provRes.data
+        if (prov?.full_name) {
+          return {
+            id: prov.provider_id,
+            full_name: prov.full_name.startsWith('Dr.') ? prov.full_name : `Dr. ${prov.full_name}`,
+            specialty: prov.specialization || prov.qualification || 'Metabolic Physician Specialist'
+          }
         }
-      } else {
-        const { data: prof } = await supabaseAdmin
-          .from('profiles')
-          .select('id, first_name, last_name, display_id')
-          .eq('id', appointment.doctor_id)
-          .maybeSingle()
-
+        const prof = profRes.data
         if (prof) {
           const name = prof.display_id || `${prof.first_name || ''} ${prof.last_name || ''}`.trim()
-          doctor = {
+          return {
             id: prof.id,
             full_name: name.startsWith('Dr.') ? name : `Dr. ${name}`,
             specialty: 'Metabolic Physician Specialist'
           }
-        } else {
-          const { data: doctorProfile } = await supabaseAdmin
-            .from('doctor_profiles')
-            .select('id, full_name, specialty')
-            .eq('id', appointment.doctor_id)
-            .maybeSingle()
-
-          doctor = (doctorProfile as DoctorProfile | null) || null
         }
-      }
-    }
+        const doctorProfile = docRes.data
+        return (doctorProfile as DoctorProfile | null) || null
+      })(),
 
-    const { data: matchedPayment } = await supabaseAdmin
-      .from('payment_transactions')
-      .select('transaction_id, amount, status, payment_method, payment_provider, created_at')
-      .eq('patient_id', patientId)
-      .eq('payment_type', 'consultation')
-      .contains('metadata', { consultation_id: bookingId })
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+      // 2. Payment Transaction resolution (Single fast query with fallback)
+      (async (): Promise<PaymentTransaction | null> => {
+        const { data: txns } = await supabaseAdmin
+          .from('payment_transactions')
+          .select('transaction_id, amount, status, payment_method, payment_provider, created_at, metadata')
+          .eq('patient_id', patientId)
+          .eq('payment_type', 'consultation')
+          .order('created_at', { ascending: false })
+          .limit(5)
 
-    let payment = (matchedPayment as PaymentTransaction | null) || null
+        if (!txns || txns.length === 0) return null
+        const matched = txns.find((t: any) => t.metadata?.consultation_id === bookingId || t.metadata?.booking_id === bookingId)
+        return (matched || txns[0]) as PaymentTransaction
+      })(),
 
-    if (!payment) {
-      const { data: fallbackPayment } = await supabaseAdmin
-        .from('payment_transactions')
-        .select('transaction_id, amount, status, payment_method, payment_provider, created_at')
+      // 3. Health Assessment tier
+      supabaseAdmin
+        .from('health_assessments')
+        .select('membership_tier')
         .eq('patient_id', patientId)
-        .eq('payment_type', 'consultation')
         .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
+        .limit(1),
 
-      payment = (fallbackPayment as PaymentTransaction | null) || null
-    }
+      // 4. Membership validity
+      getMembershipValidity(patientId),
+    ])
 
-    const { data: assessments } = await supabaseAdmin
-      .from('health_assessments')
-      .select('membership_tier')
-      .eq('patient_id', patientId)
-      .order('created_at', { ascending: false })
-      .limit(1)
-
-    const membershipValidity = await getMembershipValidity(patientId)
-
+    const assessments = assessmentsRes.data
     const selectedMembershipTier = assessments?.[0]?.membership_tier
     const membershipActive = Boolean(selectedMembershipTier && membershipValidity.active)
     const appointmentType = String(appointment.appointment_type || '').toUpperCase()

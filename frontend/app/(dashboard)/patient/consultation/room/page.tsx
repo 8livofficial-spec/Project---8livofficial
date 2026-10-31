@@ -58,25 +58,6 @@ function ConsultationRoomContent() {
 
   const appointmentId = queryId || ''
 
-  // Gate 3 Check: Redirect to informed consent if not yet accepted for this appointment
-  useEffect(() => {
-    if (!queryId) return
-
-    const checkGate3 = async () => {
-      try {
-        const res = await authedFetch(`/api/consent/status?bookingId=${encodeURIComponent(queryId)}`)
-        const data = await res.json()
-        if (data.success && !data.gate3Accepted) {
-          router.replace(`/patient/consultation/consent?bookingId=${encodeURIComponent(queryId)}`)
-        }
-      } catch (err) {
-        console.warn('Gate 3 pre-check notice:', err)
-      }
-    }
-
-    void checkGate3()
-  }, [queryId, router])
-
   const stopCameraStream = useCallback(() => {
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop())
@@ -196,16 +177,6 @@ function ConsultationRoomContent() {
   }
 
   const joinCall = async () => {
-    try {
-      const res = await authedFetch(`/api/consent/status?bookingId=${encodeURIComponent(appointmentId)}`)
-      const data = await res.json()
-      if (data.success && !data.gate3Accepted) {
-        router.replace(`/patient/consultation/consent?bookingId=${encodeURIComponent(appointmentId)}`)
-        return
-      }
-    } catch (err) {
-      console.warn('Gate 3 join verification error:', err)
-    }
     stopCameraStream()
     setPhase('call')
   }
@@ -257,53 +228,41 @@ function ConsultationRoomContent() {
   // Completely occupies the entire screen edge-to-edge without any white/blank margins
   if (phase === 'call') {
     return (
-      <div className="fixed inset-0 z-[100] w-screen h-screen bg-[#0A0D18] flex flex-col overflow-hidden select-none">
-        {/* Header Controls Overlay with Glassmorphism */}
-        <div className="bg-slate-900/90 backdrop-blur-2xl border-b border-white/10 px-4 sm:px-6 py-3 flex items-center justify-between text-white shrink-0 z-20 shadow-xl">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-[#00A884] to-[#10B981] text-white font-black text-sm flex items-center justify-center shadow-lg shadow-[#00A884]/30">
-              {doctorName.split(' ').pop()?.[0] || 'D'}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h3 className="text-sm font-bold font-sora text-white">{doctorName}</h3>
-                <span className="text-[10px] text-emerald-300 font-bold bg-[#00A884]/20 px-2.5 py-0.5 rounded-full border border-[#00A884]/30">
-                  {doctorRole}
-                </span>
-              </div>
-              <p className="text-[10px] text-slate-400 font-medium mt-0.5 flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
-                <span>256-Bit Encrypted Telehealth Call</span>
-              </p>
-            </div>
+      <div className="fixed inset-0 z-[100] w-screen h-screen bg-[#0B0F19] flex flex-col overflow-hidden select-none">
+        {/* Sleek Minimalist Header Bar */}
+        <header className="bg-[#0B0F19]/90 backdrop-blur-xl border-b border-white/[0.08] px-4 sm:px-6 py-3 flex items-center justify-between text-white shrink-0 z-20 shadow-md">
+          {/* Left: 8Liv Official Brand Logo + Divider + Doctor Name */}
+          <div className="flex items-center gap-3.5">
+            <Link href="/patient" className="flex items-center shrink-0 hover:opacity-90 transition-opacity">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand-logo-official.png"
+                alt="8Liv Health"
+                className="h-7 w-auto object-contain brightness-105"
+              />
+            </Link>
+
+            <div className="h-5 w-px bg-white/15" />
+
+            <h3 className="text-sm font-semibold text-slate-100 tracking-tight">{doctorName}</h3>
           </div>
 
+          {/* Right: End Call Action */}
           <div className="flex items-center gap-3">
-            <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 font-bold uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1.5">
-              <span className="w-2 h-2 bg-red-500 rounded-full animate-ping" /> Live Session
-            </span>
             <button
               onClick={leaveCall}
-              className="bg-red-600/90 hover:bg-red-600 text-white font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 text-xs transition-all shadow-md cursor-pointer"
+              className="bg-white/10 hover:bg-rose-600/90 text-slate-200 hover:text-white font-medium px-4 py-1.5 rounded-full flex items-center gap-1.5 text-xs transition-all border border-white/10 hover:border-rose-500/30 cursor-pointer shadow-xs"
               title="Leave Consultation"
             >
-              <PhoneOff className="w-4 h-4" /> End Call
+              <PhoneOff className="w-3.5 h-3.5" />
+              <span>End Call</span>
             </button>
           </div>
-        </div>
-
-        {/* Telehealth Comfort Assurance Sub-strip */}
-        <div className="bg-emerald-950/40 border-b border-emerald-500/15 px-4 sm:px-6 py-1.5 flex items-center justify-between text-[11px] text-emerald-300 font-medium z-10 shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="text-emerald-400">🔒</span>
-            <span>Private 1-on-1 Consultation • Your physician has access to your medical history &amp; health goals.</span>
-          </div>
-          <span className="hidden sm:inline text-emerald-400/80 text-[10px] font-semibold">HD Audio &amp; Video</span>
-        </div>
+        </header>
 
         {/* Fullscreen Video Viewport */}
-        <div className="flex-1 w-full h-full min-h-0 bg-[#0A0D18] relative overflow-hidden flex flex-col">
-          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(0,168,132,0.12),_transparent_75%)] z-0" />
+        <div className="flex-1 w-full h-full min-h-0 bg-[#0B0F19] relative overflow-hidden flex flex-col">
+          <div className="absolute inset-0 pointer-events-none bg-[radial-gradient(ellipse_at_top,_rgba(0,168,132,0.08),_transparent_70%)] z-0" />
           <div className="relative z-10 flex-1 w-full h-full min-h-0 flex flex-col">
             {appointmentId ? (
               <StreamConsultationCall appointmentId={appointmentId} onLeave={leaveCall} />

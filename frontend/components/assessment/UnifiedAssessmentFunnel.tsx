@@ -33,6 +33,8 @@ import {
   Clock,
   Sparkles,
   ChevronRight,
+  ChevronDown,
+  ChevronUp,
   User,
   MapPin,
   Heart,
@@ -288,9 +290,10 @@ export default function UnifiedAssessmentFunnel({
   const [gate1Consents, setGate1Consents] = useState({
     health_data: false,
     care_team_sharing: false,
-    comms: false,
-    research: false,
+    comms: true,
+    research: true,
   })
+  const [showNoticeDetails, setShowNoticeDetails] = useState(false)
 
   // Date of Birth & Age Restriction (18+ only per government regulations)
   const [patientDob, setPatientDob] = useState('')
@@ -628,24 +631,19 @@ export default function UnifiedAssessmentFunnel({
     setIsUploadingLab(true)
     setUploadError('')
     try {
-      const fileExt = file.name.split('.').pop()
-      const fileName = `${Math.random().toString(36).substring(2, 15)}_${Date.now()}.${fileExt}`
-      const filePath = `lab_reports/${fileName}`
+      const formPayload = new FormData()
+      formPayload.append('file', file)
 
-      // Upload to supabase storage bucket 'patient-documents'
-      const { error } = await supabase.storage
-        .from('patient-documents')
-        .upload(filePath, file)
+      const res = await fetch('/api/assessment/upload-report', {
+        method: 'POST',
+        body: formPayload,
+      })
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        throw new Error(data.error || 'Failed to upload file.')
+      }
 
-      if (error) throw error
-
-      // Generate a signed URL for secure, time-limited clinical review
-      const { data: signedData, error: signError } = await supabase.storage
-        .from('patient-documents')
-        .createSignedUrl(filePath, 60 * 60 * 24 * 7)
-
-      const secureUrl = (!signError && signedData?.signedUrl) ? signedData.signedUrl : filePath
-      setFormData(prev => ({ ...prev, lab_report_url: secureUrl }))
+      setFormData(prev => ({ ...prev, lab_report_url: data.url }))
     } catch (err: any) {
       console.error('Upload error:', err)
       setUploadError(err.message || 'Failed to upload file.')
@@ -2494,7 +2492,11 @@ export default function UnifiedAssessmentFunnel({
                     </div>
 
                     {/* File Upload Box */}
-                    <div className="border-2 border-dashed border-emerald-300 bg-white/80 rounded-2xl p-6 text-center hover:bg-emerald-50/30 transition-colors cursor-pointer relative">
+                    <div className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer relative ${
+                      formData.lab_report_url
+                        ? 'border-emerald-500 bg-emerald-50/50'
+                        : 'border-emerald-300 bg-white/80 hover:bg-emerald-50/30'
+                    }`}>
                       <input 
                         type="file" 
                         accept=".pdf,.jpg,.jpeg,.png"
@@ -2508,11 +2510,23 @@ export default function UnifiedAssessmentFunnel({
                             <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-[#00A884] animate-spin mb-2" />
                             <span className="text-sm font-semibold text-slate-700">Uploading to encrypted vault...</span>
                           </>
+                        ) : formData.lab_report_url ? (
+                          <>
+                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mb-2">
+                              <CheckCircle2 className="w-6 h-6" />
+                            </div>
+                            <span className="font-sans text-sm font-extrabold text-emerald-800 text-center px-4">
+                              Report uploaded successfully! ✅
+                            </span>
+                            <span className="text-xs text-emerald-600 font-semibold mt-1">
+                              File safely linked to your assessment. Tap to replace if needed.
+                            </span>
+                          </>
                         ) : (
                           <>
                             <UploadCloud className="w-8 h-8 text-[#00A884] mb-2" />
                             <span className="font-sans text-sm font-bold text-slate-800 text-center px-4">
-                              {formData.lab_report_url ? 'Report uploaded successfully. Tap to replace.' : 'Tap to select PDF, JPG or PNG'}
+                              Tap to select PDF, JPG or PNG
                             </span>
                             <span className="text-xs text-slate-400 mt-1">Encrypted and strictly confidential</span>
                           </>
@@ -2920,88 +2934,106 @@ export default function UnifiedAssessmentFunnel({
 
               {/* Statutory Gate 1 Data Notice Summary Card */}
               <div className="p-4 sm:p-5 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3 mt-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-[#00A884]">
-                    <ShieldCheck className="w-4 h-4" />
+                <div className="flex items-center justify-between pb-0.5">
+                  <div className="flex items-center gap-2 text-slate-800">
+                    <ShieldCheck className="w-4 h-4 text-[#00A884]" />
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-800">Part 4: Data &amp; Privacy Notice</span>
                   </div>
                   <a
                     href="/privacy"
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] font-bold text-[#00A884] hover:underline"
+                    className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#00A884] hover:underline"
                   >
                     <span>Full Policy</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
 
-                <div className="text-[12px] text-slate-600 space-y-1.5 leading-relaxed bg-white p-3 rounded-xl border border-slate-200/70">
-                  <p><strong className="text-slate-800">Who is asking:</strong> 8liv Health Platform (www.8liv.in).</p>
-                  <p><strong className="text-slate-800">What we collect:</strong> Contact details, date of birth, metabolic vitals, lab reports, and clinical consultation records.</p>
-                  <p><strong className="text-slate-800">Why we collect:</strong> Clinical evaluation, doctor-supervised telemedicine, and personalized nutrition &amp; workout protocols.</p>
-                  <p><strong className="text-slate-800">Who sees it:</strong> Exclusively your assigned doctor, dietician, trainer, and authorized clinical operations staff.</p>
-                  <p><strong className="text-slate-800">Retention:</strong> Encrypted and securely maintained for the duration of your care program in accordance with medical standards.</p>
-                  <p><strong className="text-slate-800">Your rights:</strong> You may inspect, download, or withdraw consent at any time via Account Settings &gt; Privacy.</p>
+                {/* Natural Clinical Trust Statement */}
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  Your health information and records are end-to-end encrypted and shared strictly with your assigned doctor, dietician, and trainer for your medical care program. You retain full ownership and can inspect, download, or revoke consent anytime in Account Settings.
+                </p>
+
+                {/* Collapsible Disclosure Details */}
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setShowNoticeDetails((v) => !v)}
+                    className="text-[11px] text-slate-500 hover:text-[#00A884] inline-flex items-center gap-1 font-medium transition-colors cursor-pointer"
+                  >
+                    <span>{showNoticeDetails ? 'Hide notice details' : 'View full statutory disclosures (6 items)'}</span>
+                    {showNoticeDetails ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                  </button>
+
+                  {showNoticeDetails && (
+                    <div className="mt-2 text-[11px] text-slate-600 space-y-1.5 leading-relaxed bg-white p-3 rounded-xl border border-slate-200/70 transition-all">
+                      <p><strong className="text-slate-800">Who is asking:</strong> 8liv Health Platform (www.8liv.in).</p>
+                      <p><strong className="text-slate-800">What we collect:</strong> Contact details, date of birth, metabolic vitals, lab reports, and clinical consultation records.</p>
+                      <p><strong className="text-slate-800">Why we collect:</strong> Clinical evaluation, doctor-supervised telemedicine, and personalized nutrition &amp; workout protocols.</p>
+                      <p><strong className="text-slate-800">Who sees it:</strong> Exclusively your assigned doctor, dietician, trainer, and authorized clinical operations staff.</p>
+                      <p><strong className="text-slate-800">Retention:</strong> Encrypted and securely maintained for the duration of your care program in accordance with medical standards.</p>
+                      <p><strong className="text-slate-800">Your rights:</strong> You may inspect, download, or withdraw consent at any time via Account Settings &gt; Privacy.</p>
+                    </div>
+                  )}
                 </div>
 
-                {/* 4 Consent Checkboxes */}
-                <div className="space-y-2 pt-1">
-                  {/* 1. Required */}
-                  <label className="flex items-start gap-3 p-2.5 rounded-xl bg-white border border-slate-200/80 hover:border-slate-300 transition-colors cursor-pointer">
+                {/* Consolidated Primary Consent Checkbox */}
+                <div className="pt-1">
+                  <label className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer ${
+                    gate1Consents.health_data && gate1Consents.care_team_sharing
+                      ? 'bg-emerald-50/50 border-[#00A884]/60 shadow-xs'
+                      : 'bg-white border-slate-200/90 hover:border-slate-300'
+                  }`}>
                     <input
                       type="checkbox"
-                      checked={gate1Consents.health_data}
-                      onChange={(e) => setGate1Consents((p) => ({ ...p, health_data: e.target.checked }))}
-                      className="w-4 h-4 mt-0.5 rounded text-[#00A884] border-slate-300 focus:ring-[#00A884] cursor-pointer"
+                      checked={gate1Consents.health_data && gate1Consents.care_team_sharing}
+                      onChange={(e) => {
+                        const checked = e.target.checked
+                        setGate1Consents((p) => ({
+                          ...p,
+                          health_data: checked,
+                          care_team_sharing: checked,
+                        }))
+                      }}
+                      className="w-4 h-4 sm:w-5 sm:h-5 mt-0.5 rounded text-[#00A884] border-slate-300 focus:ring-[#00A884] cursor-pointer shrink-0 accent-[#00A884]"
                     />
                     <div className="text-xs text-slate-700 leading-snug">
-                      <span className="inline-block px-1.5 py-0.5 mr-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200">Required</span>
-                      I consent to 8liv collecting and using my personal and health data for the purposes above.
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className="font-bold text-slate-900 text-xs sm:text-[13px]">
+                          I agree to clinical health data collection &amp; care team sharing
+                        </span>
+                        <span className="inline-block px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200">
+                          Required
+                        </span>
+                      </div>
+                      <p className="text-[11px] sm:text-xs text-slate-600 leading-relaxed">
+                        I consent to 8liv collecting my personal health data and securely sharing my medical records and lab reports with my assigned doctor, dietician, and trainer for my personalized care program.
+                      </p>
                     </div>
                   </label>
 
-                  {/* 2. Required */}
-                  <label className="flex items-start gap-3 p-2.5 rounded-xl bg-white border border-slate-200/80 hover:border-slate-300 transition-colors cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={gate1Consents.care_team_sharing}
-                      onChange={(e) => setGate1Consents((p) => ({ ...p, care_team_sharing: e.target.checked }))}
-                      className="w-4 h-4 mt-0.5 rounded text-[#00A884] border-slate-300 focus:ring-[#00A884] cursor-pointer"
-                    />
-                    <div className="text-xs text-slate-700 leading-snug">
-                      <span className="inline-block px-1.5 py-0.5 mr-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-rose-50 text-rose-700 border border-rose-200">Required</span>
-                      I consent to my lab reports and health records being shared with my doctor, dietician and trainer for my care.
-                    </div>
-                  </label>
-
-                  {/* 3. Optional */}
-                  <label className="flex items-start gap-3 p-2.5 rounded-xl bg-white border border-slate-200/80 hover:border-slate-300 transition-colors cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={gate1Consents.comms}
-                      onChange={(e) => setGate1Consents((p) => ({ ...p, comms: e.target.checked }))}
-                      className="w-4 h-4 mt-0.5 rounded text-[#00A884] border-slate-300 focus:ring-[#00A884] cursor-pointer"
-                    />
-                    <div className="text-xs text-slate-600 leading-snug">
-                      <span className="inline-block px-1.5 py-0.5 mr-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">Optional</span>
-                      I would like reminders and health tips by WhatsApp, SMS or email.
-                    </div>
-                  </label>
-
-                  {/* 4. Optional */}
-                  <label className="flex items-start gap-3 p-2.5 rounded-xl bg-white border border-slate-200/80 hover:border-slate-300 transition-colors cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={gate1Consents.research}
-                      onChange={(e) => setGate1Consents((p) => ({ ...p, research: e.target.checked }))}
-                      className="w-4 h-4 mt-0.5 rounded text-[#00A884] border-slate-300 focus:ring-[#00A884] cursor-pointer"
-                    />
-                    <div className="text-xs text-slate-600 leading-snug">
-                      <span className="inline-block px-1.5 py-0.5 mr-1.5 rounded text-[10px] font-bold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">Optional</span>
-                      I consent to my de-identified data being used to improve 8liv&apos;s services.
-                    </div>
-                  </label>
+                  {/* Compact Optional Preferences */}
+                  <div className="pt-2 px-1 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-slate-600">
+                    <label className="flex items-center gap-2 cursor-pointer hover:text-slate-900 select-none">
+                      <input
+                        type="checkbox"
+                        checked={gate1Consents.comms}
+                        onChange={(e) => setGate1Consents((p) => ({ ...p, comms: e.target.checked }))}
+                        className="w-3.5 h-3.5 rounded text-[#00A884] border-slate-300 focus:ring-[#00A884] accent-[#00A884] cursor-pointer"
+                      />
+                      <span>WhatsApp &amp; SMS reminders <span className="text-[10px] text-slate-400 font-medium">(Optional)</span></span>
+                    </label>
+                    <label className="flex items-center gap-2 cursor-pointer hover:text-slate-900 select-none">
+                      <input
+                        type="checkbox"
+                        checked={gate1Consents.research}
+                        onChange={(e) => setGate1Consents((p) => ({ ...p, research: e.target.checked }))}
+                        className="w-3.5 h-3.5 rounded text-[#00A884] border-slate-300 focus:ring-[#00A884] accent-[#00A884] cursor-pointer"
+                      />
+                      <span>De-identified research <span className="text-[10px] text-slate-400 font-medium">(Optional)</span></span>
+                    </label>
+                  </div>
                 </div>
               </div>
 

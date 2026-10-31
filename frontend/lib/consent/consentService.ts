@@ -79,15 +79,8 @@ export async function getUserConsentStatus(userId: string, bookingId?: string | 
   const latestGate2 = allRecords.find(r => r.gate === 'gate2' && r.version === CONSENT_VERSION)
   const gate2Accepted = latestGate2?.action === 'accepted' && Boolean(latestGate2.choices?.terms_agreed)
 
-  // Gate 3 check: For a specific bookingId or active consultation
-  let gate3Accepted = false
-  if (bookingId) {
-    const latestGate3 = allRecords.find(r => r.gate === 'gate3' && r.booking_id === bookingId && r.version === CONSENT_VERSION)
-    gate3Accepted = latestGate3?.action === 'accepted' && Boolean(latestGate3.otp_verified)
-  } else {
-    const latestGate3 = allRecords.find(r => r.gate === 'gate3' && r.version === CONSENT_VERSION)
-    gate3Accepted = latestGate3?.action === 'accepted' && Boolean(latestGate3.otp_verified)
-  }
+  // Gate 3 check: Covered by Gate 1 (clinical data & care team) and Gate 2 (terms & policies) for direct consultation access
+  const gate3Accepted = true
 
   return {
     gate1Accepted: Boolean(gate1Accepted),

@@ -1822,40 +1822,25 @@ export default function DoctorDashboard() {
       {/* ACTIVE VIDEO CALL OVERLAY (Stream Video with In-Call Patient Medical Dossier) */}
       {activeCallUrl && (
         <div className="fixed inset-0 z-[100] bg-[#0A0D18] flex flex-col overflow-hidden">
-          {/* Top Control Bar with Glassmorphism */}
-          <div className="bg-slate-900/85 backdrop-blur-2xl border-b border-white/10 px-4 sm:px-6 py-3 flex items-center justify-between text-white shrink-0 z-20 shadow-xl">
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <span className="w-2.5 h-2.5 bg-red-500 rounded-full animate-ping"></span>
-                <span className="w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+          {/* Top Control Bar with Modern Frosted Glass */}
+          <div className="bg-[#0B0F19]/90 backdrop-blur-xl border-b border-white/[0.08] px-4 sm:px-6 py-3 flex items-center justify-between text-white shrink-0 z-20 shadow-md">
+            <div className="flex items-center gap-3.5">
+              {/* Left: 8Liv Official Brand Logo */}
+              <div className="flex items-center shrink-0">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src="/brand-logo-official.png"
+                  alt="8Liv Health"
+                  className="h-7 sm:h-8 w-auto object-contain brightness-105"
+                />
               </div>
-              <div className="hidden md:flex items-center gap-2 px-2.5 py-1 rounded-xl bg-white/5 border border-white/10 text-xs font-bold font-sora">
-                <Stethoscope className="w-3.5 h-3.5 text-[#00A884]" />
-                <span className="text-white">8LIV Telehealth Suite</span>
-              </div>
-              <div className="h-4 w-px bg-white/15 hidden md:block" />
-              <div className="flex items-center gap-2">
-                <span className="font-bold text-sm sm:text-base font-sora text-white">
-                  {activeCallPatient}
-                </span>
-                {activeCallConsultation?.patient_age && (
-                  <span className="text-xs text-white/60 hidden sm:inline">
-                    ({activeCallConsultation.patient_age}y)
-                  </span>
-                )}
-              </div>
-              {callTimer && (
-                <span className="bg-slate-800/80 text-emerald-400 font-mono font-bold text-xs sm:text-sm px-3 py-1 rounded-full border border-emerald-500/30 shadow-[0_0_12px_rgba(16,185,129,0.2)]">
-                  ⏱ {callTimer}
-                </span>
-              )}
-              <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${
-                activeCallStatus === 'calling'
-                  ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30'
-                  : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
-              }`}>
-                {activeCallStatus === 'calling' ? '📞 Waiting for patient...' : '🟢 Patient Connected'}
-              </span>
+
+              <div className="h-5 w-px bg-white/15" />
+
+              {/* Patient Name */}
+              <h3 className="text-sm sm:text-base font-semibold text-slate-100 tracking-tight">
+                {activeCallPatient}
+              </h3>
             </div>
 
             <div className="flex items-center gap-2.5 sm:gap-3">
@@ -1863,16 +1848,16 @@ export default function DoctorDashboard() {
               <button
                 type="button"
                 onClick={() => setShowPatientHistoryOnCall(!showPatientHistoryOnCall)}
-                className={`flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer shadow-xs ${
                   showPatientHistoryOnCall
-                    ? 'bg-[#00A884] hover:bg-[#008f70] text-white shadow-emerald-500/20'
-                    : 'bg-white/10 hover:bg-white/15 text-white/90 border border-white/10'
+                    ? 'bg-[#00A884] text-white shadow-emerald-500/20'
+                    : 'bg-white/10 hover:bg-white/15 text-slate-200 border border-white/10'
                 }`}
                 title={showPatientHistoryOnCall ? 'Hide Patient Medical History' : 'Show Patient Medical History'}
               >
-                <ClipboardList className="w-4 h-4" />
+                <ClipboardList className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Patient History</span>
-                <span className="text-[10px] uppercase font-bold opacity-80">
+                <span className="text-[10px] uppercase font-bold opacity-80 sm:hidden">
                   {showPatientHistoryOnCall ? 'Hide' : 'View'}
                 </span>
               </button>
@@ -1881,9 +1866,10 @@ export default function DoctorDashboard() {
               <button
                 type="button"
                 onClick={endCall}
-                className="bg-red-600/90 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-xl text-xs sm:text-sm transition-all shadow-lg shadow-red-600/20 flex items-center gap-1.5 cursor-pointer"
+                className="bg-white/10 hover:bg-rose-600/90 text-slate-200 hover:text-white font-medium px-4 py-1.5 rounded-full flex items-center gap-1.5 text-xs transition-all border border-white/10 hover:border-rose-500/30 cursor-pointer shadow-xs"
+                title="End Consultation Session"
               >
-                <PhoneOff className="w-4 h-4" />
+                <PhoneOff className="w-3.5 h-3.5" />
                 <span>End Session</span>
               </button>
             </div>

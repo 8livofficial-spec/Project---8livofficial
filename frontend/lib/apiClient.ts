@@ -48,17 +48,26 @@ export async function authedFetch(url: string, options: RequestInit = {}): Promi
   const fetchPromise = (async () => {
     try {
       const token = await getValidToken()
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        ...((options.headers as Record<string, string>) || {}),
+      const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+
+      const headers = new Headers(options.headers)
+      if (!headers.has('Authorization')) {
+        headers.set('Authorization', `Bearer ${token}`)
+      }
+
+      if (isFormData) {
+        // Let the browser set multipart/form-data with the boundary delimiter automatically
+        headers.delete('Content-Type')
+        headers.delete('content-type')
+      } else if (!headers.has('Content-Type') && !headers.has('content-type')) {
+        headers.set('Content-Type', 'application/json')
       }
 
       // If we have a cached ETag for this URL, send If-None-Match
       if (isCoalesceable && clientETagCache.has(url)) {
         const cached = clientETagCache.get(url)!
-        if (!headers['If-None-Match'] && !headers['if-none-match']) {
-          headers['If-None-Match'] = cached.etag
+        if (!headers.has('If-None-Match') && !headers.has('if-none-match')) {
+          headers.set('If-None-Match', cached.etag)
         }
       }
 

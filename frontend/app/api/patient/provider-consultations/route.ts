@@ -100,9 +100,33 @@ async function getAvailableProviderSlots(patientId: string, role: string, select
     query = query.gte('available_date', today)
   }
 
-  const { data: availability, error: availabilityError } = await query
+  let { data: availability, error: availabilityError } = await query
     .order('available_date', { ascending: true })
     .order('start_time', { ascending: true })
+
+  // Fallback: If assigned provider has no availability, search all active providers of this role
+  if ((!availability || availability.length === 0) && assignedProviderId) {
+    let fallbackQuery = supabaseAdmin
+      .from('provider_availability')
+      .select('id, provider_id, provider_role, available_date, start_time, end_time, slot_duration, max_consultations_per_day, max_consultations_per_hour')
+      .eq('is_available', true)
+      .eq('status', 'AVAILABLE')
+      .in('provider_role', roles)
+
+    if (dateFilter) {
+      fallbackQuery = fallbackQuery.eq('available_date', dateFilter)
+    } else {
+      fallbackQuery = fallbackQuery.gte('available_date', today)
+    }
+
+    const { data: fallbackAvailability } = await fallbackQuery
+      .order('available_date', { ascending: true })
+      .order('start_time', { ascending: true })
+
+    if (fallbackAvailability && fallbackAvailability.length > 0) {
+      availability = fallbackAvailability
+    }
+  }
 
   if (availabilityError) {
     return { providerId: assignedProviderId, slots: [] as ProviderSlot[], error: availabilityError.message }
@@ -279,9 +303,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: `Could not identify provider for this slot.` }, { status: 404 })
     }
 
-    // "Take As You Go" Assignment: If patient does not have an assigned provider for this role, assign the one they just booked!
+    // "Take As You Go" Assignment: If patient does not have an assigned provider (or assigned provider had no slots), assign the one they just booked!
     const assignedProviderId = await getAssignedProviderId(patientId, role)
-    if (!assignedProviderId) {
+    if (!assignedProviderId || assignedProviderId !== providerId) {
       const dbRoleMap: Record<string, string> = {
         'dietitian': 'dietitian_id',
         'nutritionist': 'nutritionist_id',

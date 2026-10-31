@@ -629,6 +629,7 @@ export default function ConsultationSchedulingPage() {
         }
 
         const consult = data.consultation
+        const targetBookingId = consult.id
         setAssignment({
           consultationId: consult.id,
           bookingId: consult.id,
@@ -642,11 +643,38 @@ export default function ConsultationSchedulingPage() {
           meetingType: '1-on-1 Video Session',
         })
         setPaymentStage('confirmed')
-        const { data: { session: activeSession } } = await supabase.auth.getSession()
-        syncSupabaseAuthCookie(activeSession)
-        await reloadData()
-        await loadAvailableSlots()
-        router.replace(`/patient/appointments/${consult.id}`)
+
+        // Cache preview data for instant 0ms render on destination page
+        if (typeof window !== 'undefined') {
+          try {
+            sessionStorage.setItem(`apt_preview_${targetBookingId}`, JSON.stringify({
+              bookingId: targetBookingId,
+              assignedHealthcareProfessional: activeProviderName,
+              specialization: currentTabMeta.defaultSpecialty,
+              date: consult.booking_date,
+              time: consult.booking_time,
+              meetingType: '1-on-1 Video Session',
+              status: 'SCHEDULED',
+              rawStatus: 'scheduled',
+              appointmentType: activeProviderTab === 'trainer' ? 'FITNESS_SESSION' : 'DIET_CONSULTATION',
+              consultationStatus: 'PENDING',
+              membershipStatus: 'ACTIVE',
+              paymentAmount: 0,
+              paymentStatus: 'PAID',
+              paymentId: 'MEMBERSHIP_COVERED',
+              paymentMethod: 'program_included',
+              paymentDate: new Date().toISOString(),
+            }))
+          } catch {}
+        }
+
+        // Sync auth & kick off background cache refresh without blocking instant transition
+        void supabase.auth.getSession().then(({ data: { session: activeSession } }) => {
+          if (activeSession) syncSupabaseAuthCookie(activeSession)
+          void reloadData()
+        })
+
+        router.replace(`/patient/appointments/${targetBookingId}`)
         return
       }
 
@@ -777,13 +805,42 @@ export default function ConsultationSchedulingPage() {
         throw new Error(data.error || 'Failed to book consultation slot')
       }
 
+      const confirmedBookingId = data.bookingId || data.assignment?.bookingId || data.assignment?.consultationId
+
       setAssignment(data.assignment || null)
       setPaymentStage('confirmed')
-      const { data: { session: activeSession } } = await supabase.auth.getSession()
-      syncSupabaseAuthCookie(activeSession)
-      await reloadData()
-      await loadAvailableSlots()
-      router.replace(`/patient/appointments/${data.bookingId || data.assignment?.bookingId || data.assignment?.consultationId}`)
+
+      // Cache preview data for instant 0ms render on destination page
+      if (typeof window !== 'undefined' && confirmedBookingId) {
+        try {
+          sessionStorage.setItem(`apt_preview_${confirmedBookingId}`, JSON.stringify({
+            bookingId: confirmedBookingId,
+            assignedHealthcareProfessional: data.assignment?.doctorName || 'Assigned Doctor',
+            specialization: data.assignment?.specialty || 'Physician Specialist',
+            date: data.assignment?.bookingDate || selectedSlot?.date || (selectedSlot as any)?.available_date || manualDate,
+            time: data.assignment?.bookingTime || selectedSlot?.startTime || (selectedSlot as any)?.start_time || manualTime,
+            meetingType: data.assignment?.meetingType || 'Video Consultation',
+            status: data.assignment?.appointmentStatus || 'SCHEDULED',
+            rawStatus: 'scheduled',
+            appointmentType: data.appointmentType || 'INITIAL_CONSULTATION',
+            consultationStatus: 'PENDING',
+            membershipStatus: 'ACTIVE',
+            paymentAmount: data.assignment?.paymentAmount ?? CONSULTATION_FEE,
+            paymentStatus: data.assignment?.paymentStatus || 'PAID',
+            paymentId: data.paymentId || data.assignment?.paymentId,
+            paymentMethod: paymentMethod,
+            paymentDate: new Date().toISOString(),
+          }))
+        } catch {}
+      }
+
+      // Sync auth & kick off background cache refresh without blocking instant transition
+      void supabase.auth.getSession().then(({ data: { session: activeSession } }) => {
+        if (activeSession) syncSupabaseAuthCookie(activeSession)
+        void reloadData()
+      })
+
+      router.replace(`/patient/appointments/${confirmedBookingId}`)
     } catch (err: unknown) {
       if (err instanceof Error && err.message === SESSION_EXPIRED) {
         router.replace('/login')
@@ -965,54 +1022,47 @@ export default function ConsultationSchedulingPage() {
         /* ═════════════════════════════════════════════════════════════════════
            IN-APP CONSULTATION UI (Active Members / Follow-Up Care)
            ═════════════════════════════════════════════════════════════════════ */
-        <div className="min-h-screen bg-slate-50/70 pb-16 font-sans">
+        <div className="min-h-screen bg-[#F8FAFC] pb-16 font-sans">
           {/* Top Bar Navigation */}
-          <div className="bg-white border-b border-slate-200/80 sticky top-0 z-20 backdrop-blur-md bg-white/90">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+          <div className="bg-white/90 border-b border-slate-200/80 sticky top-0 z-20 backdrop-blur-md">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <button
                   type="button"
                   onClick={() => router.push('/patient')}
-                  className="inline-flex items-center gap-2 text-xs sm:text-sm font-bold text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl transition-colors cursor-pointer font-sora"
+                  className="p-2 -ml-2 rounded-xl text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                  title="Back to Dashboard"
                 >
-                  <span className="text-base leading-none">←</span> Dashboard
+                  <ArrowLeft className="w-5 h-5" />
                 </button>
-                <div className="h-5 w-[1px] bg-slate-200 hidden sm:block" />
-                <span className="text-xs sm:text-sm font-extrabold text-slate-800 font-sora hidden sm:inline-block">
-                  Schedule Care Consultation
-                </span>
+                <div className="h-5 w-px bg-slate-200" />
+                <h1 className="text-sm sm:text-base font-bold text-slate-900 font-sora">
+                  Schedule Consultation
+                </h1>
               </div>
 
               <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold bg-[#0D9488]/10 text-[#0D9488] border border-[#0D9488]/20 font-sora">
-                  <span className="w-2 h-2 rounded-full bg-[#0D9488] animate-pulse" />
-                  Active Member Benefit • ₹0 Covered
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 font-sora">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  Included in membership
                 </span>
               </div>
             </div>
-
-            {/* Emergency Notice (Statutory Requirement) */}
-            <div className="mt-3 py-2 px-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs font-bold font-sora flex items-center justify-between gap-2">
-              <span>This service is not for emergencies. In an emergency, call 112 immediately.</span>
-              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-md bg-rose-100 text-rose-800">Emergency: 112</span>
-            </div>
           </div>
 
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
-            {/* 3-Tab Care Specialist Switcher */}
-            <div className="mb-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-3">
-                <div>
-                  <h2 className="text-base sm:text-lg font-extrabold text-slate-900 font-sora tracking-tight flex items-center gap-2">
-                    <span>Select Specialist to Consult</span>
-                  </h2>
-                  <p className="text-xs text-slate-500">
-                    Switch between your dedicated care team members to schedule your session
-                  </p>
-                </div>
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 pt-6 sm:pt-8">
+            {/* Care Team Specialist Selector */}
+            <div className="mb-8">
+              <div className="mb-3">
+                <h2 className="text-sm font-bold text-slate-800 font-sora uppercase tracking-wider">
+                  Select Care Specialist
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Book a 1:1 dedicated session with any member of your clinical team
+                </p>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-1.5 bg-slate-200/70 rounded-2xl border border-slate-200/90 shadow-inner">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {PROVIDER_TABS.map((tab) => {
                   const Icon = tab.icon
                   const isActive = activeProviderTab === tab.id
@@ -1021,66 +1071,31 @@ export default function ConsultationSchedulingPage() {
                       key={tab.id}
                       type="button"
                       onClick={() => handleTabSwitch(tab.id)}
-                      className={`py-3 px-3.5 rounded-xl flex items-center gap-3 transition-all cursor-pointer font-sora text-left ${
+                      className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative flex items-center gap-3.5 ${
                         isActive
-                          ? 'bg-[#061810] text-white shadow-md shadow-emerald-950/20 ring-1 ring-emerald-500/40 scale-[1.01]'
-                          : 'bg-white/80 hover:bg-white text-slate-700 hover:text-slate-900 shadow-xs'
+                          ? 'bg-white border-[#00A884] ring-2 ring-[#00A884]/20 shadow-sm'
+                          : 'bg-white hover:bg-slate-50/80 border-slate-200/80 shadow-xs hover:border-slate-300'
                       }`}
                     >
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                        isActive ? 'bg-[#00A884] text-white shadow-sm' : 'bg-slate-100 text-slate-600'
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                        isActive ? 'bg-[#00A884] text-white shadow-xs' : 'bg-slate-100 text-slate-600'
                       }`}>
-                        <Icon className="w-4 h-4" />
+                        <Icon className="w-5 h-5" />
                       </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5">
-                          <p className="text-xs sm:text-sm font-bold truncate">{tab.label}</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-1">
+                          <p className="text-sm font-bold text-slate-900 font-sora truncate">{tab.label}</p>
                           {isActive && (
-                            <span className="w-1.5 h-1.5 rounded-full bg-[#00A884] animate-pulse shrink-0" />
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full">
+                              Selected
+                            </span>
                           )}
                         </div>
-                        <p className={`text-[10px] truncate ${isActive ? 'text-teal-300 font-medium' : 'text-slate-400'}`}>
-                          {tab.sublabel}
-                        </p>
+                        <p className="text-xs text-slate-500 truncate mt-0.5">{tab.sublabel}</p>
                       </div>
                     </button>
                   )
                 })}
-              </div>
-            </div>
-
-            {/* Header Hero Banner */}
-            <div className="bg-gradient-to-br from-[#0B1120] via-[#0F172A] to-[#0D9488]/90 rounded-3xl p-6 sm:p-8 text-white relative overflow-hidden shadow-xl shadow-slate-900/10 mb-8">
-              <div className="absolute top-0 right-0 w-80 h-80 bg-[#5EEAD4]/10 rounded-full blur-3xl pointer-events-none" />
-              <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-                <div>
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 border border-white/15 backdrop-blur-md text-[10px] font-extrabold uppercase tracking-widest text-[#5EEAD4] font-sora mb-3">
-                    <currentTabMeta.icon className="w-3.5 h-3.5" /> {currentTabMeta.badgeText}
-                  </div>
-                  <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold font-sora tracking-tight">
-                    Book Your {currentTabMeta.label} Consultation
-                  </h1>
-                  <p className="text-white/70 text-xs sm:text-sm mt-2 max-w-xl font-light leading-relaxed">
-                    {currentTabMeta.description}
-                  </p>
-                </div>
-
-                <div className="bg-white/10 border border-white/15 rounded-2xl p-4 backdrop-blur-md flex items-center gap-4 shrink-0">
-                  <div className="w-12 h-12 rounded-xl bg-[#0D9488] flex items-center justify-center font-bold text-white text-lg font-sora shadow-sm">
-                    {currentTabMeta.avatarInitials}
-                  </div>
-                  <div>
-                    <p className="text-[10px] uppercase font-bold text-white/60 tracking-wider">
-                      {currentTabMeta.roleName}
-                    </p>
-                    <p className="text-sm font-bold font-sora text-white">
-                      {activeProviderName}
-                    </p>
-                    <p className="text-[11px] text-[#5EEAD4] font-medium">
-                      {currentTabMeta.defaultSpecialty}
-                    </p>
-                  </div>
-                </div>
               </div>
             </div>
 
@@ -1092,13 +1107,13 @@ export default function ConsultationSchedulingPage() {
                   <div className="flex items-center justify-between gap-4 mb-6">
                     <div>
                       <h2 className="text-lg sm:text-xl font-extrabold font-sora text-slate-900">
-                        Choose Date & Time
+                        Choose Date &amp; Time
                       </h2>
                       <p className="text-slate-500 text-xs sm:text-sm mt-1">
-                        Select an available slot with your {currentTabMeta.label.toLowerCase()}. Times are in Indian Standard Time (IST).
+                        Select an available slot with {activeProviderName} ({currentTabMeta.label}).
                       </p>
                     </div>
-                    <div className="w-10 h-10 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-[#0D9488] shrink-0">
+                    <div className="w-10 h-10 rounded-2xl bg-teal-50 border border-teal-100 flex items-center justify-center text-[#00A884] shrink-0">
                       <Clock className="w-5 h-5" />
                     </div>
                   </div>
@@ -1142,8 +1157,8 @@ export default function ConsultationSchedulingPage() {
                                 }}
                                 className={`min-w-22 py-3 px-3 rounded-2xl border text-center transition-all cursor-pointer ${
                                   isSelected
-                                    ? 'bg-[#0D9488] border-[#0D9488] text-white shadow-md shadow-[#0D9488]/25 scale-[1.02]'
-                                    : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800'
+                                    ? 'bg-[#00A884] border-[#00A884] text-white shadow-md shadow-[#00A884]/25 scale-[1.02]'
+                                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-800'
                                 }`}
                               >
                                 <span className="block text-[10px] font-bold uppercase tracking-wider opacity-85">
@@ -1201,8 +1216,8 @@ export default function ConsultationSchedulingPage() {
                                           onClick={() => setSelectedSlot(slot)}
                                           className={`py-3 px-3.5 rounded-xl border text-center font-sora text-xs font-bold transition-all cursor-pointer ${
                                             isSelected
-                                              ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-md shadow-[#0D9488]/20 scale-[1.02]'
-                                              : 'bg-white hover:bg-teal-50/50 border-slate-200 text-slate-800 hover:border-teal-300'
+                                              ? 'bg-[#00A884] text-white border-[#00A884] shadow-md shadow-[#00A884]/20 scale-[1.02]'
+                                              : 'bg-white hover:bg-emerald-50/40 border-slate-200 text-slate-800 hover:border-emerald-300'
                                           }`}
                                         >
                                           {formatSlotTime(slot.time_slot)}
@@ -1304,14 +1319,14 @@ export default function ConsultationSchedulingPage() {
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500">Format</span>
                       <span className="font-bold text-slate-900 font-sora flex items-center gap-1">
-                        <Video className="w-3.5 h-3.5 text-[#0D9488]" /> 1:1 Video Call
+                        <Video className="w-3.5 h-3.5 text-[#00A884]" /> 1:1 Video Call
                       </span>
                     </div>
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                       <span className="text-slate-500">Consultation Fee</span>
                       <div className="text-right">
                         <span className="line-through text-slate-400 mr-2 text-[11px]">₹499</span>
-                        <span className="font-extrabold text-[#0D9488] font-sora text-sm">₹0 Free</span>
+                        <span className="font-extrabold text-[#00A884] font-sora text-sm">₹0 Included</span>
                       </div>
                     </div>
                   </div>
@@ -1357,7 +1372,7 @@ export default function ConsultationSchedulingPage() {
                       type="button"
                       onClick={handleConfirmBooking}
                       disabled={!selectedSlot || loading || (!gate2Accepted && !termsCheckboxTicked)}
-                      className="w-full py-4 px-4 rounded-2xl font-bold font-sora text-sm text-white bg-[#0D9488] hover:bg-[#097A70] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-[#0D9488]/20 hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
+                      className="w-full py-4 px-4 rounded-2xl font-bold font-sora text-sm text-white bg-[#00A884] hover:bg-[#008f70] disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-[#00A884]/20 hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2 cursor-pointer"
                     >
                       {loading ? (
                         <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
@@ -1374,6 +1389,14 @@ export default function ConsultationSchedulingPage() {
                   </div>
                 </div>
               </div>
+            </div>
+
+            {/* Statutory Telehealth Emergency Notice */}
+            <div className="mt-10 pt-4 border-t border-slate-200/80 flex items-center justify-center gap-2 text-xs text-slate-400 text-center">
+              <Shield className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span>
+                This telemedicine service is not for acute medical emergencies. In an emergency, please call 112 immediately.
+              </span>
             </div>
           </div>
         </div>

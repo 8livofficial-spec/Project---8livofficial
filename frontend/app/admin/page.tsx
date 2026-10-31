@@ -1243,6 +1243,7 @@ function AdminDashboardContent() {
       };
       setSelectedPatient(updatedPatient);
       setAssessments(current => current.map(item => item.patient_id === patient.patient_id ? updatedPatient : item));
+      alert('Lab report uploaded successfully! Patient has been notified. ✅');
     } catch (err: any) {
       alert(err.message || 'Unable to upload lab report.');
     } finally {

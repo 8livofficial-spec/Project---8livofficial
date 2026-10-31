@@ -47,7 +47,8 @@ export async function saveDoctorSignature(
   doctorId: string,
   fileBuffer: Buffer,
   mimeType: string,
-  request?: Request
+  request?: Request,
+  role = 'doctor'
 ): Promise<{ success: boolean; path: string }> {
   if (!ALLOWED_MIME_TYPES.includes(mimeType.toLowerCase())) {
     throw new Error('Unsupported signature format. Please upload PNG, JPEG, or WebP.')
@@ -67,9 +68,13 @@ export async function saveDoctorSignature(
 
   if (uploadError) throw uploadError
 
-  // Attempt to sync doctor_profiles signature_url
+  // Attempt to sync doctor_profiles and provider profile tables signature_url
   try {
-    await supabaseAdmin.from('doctor_profiles').update({ signature_url: path }).eq('id', doctorId)
+    await Promise.allSettled([
+      supabaseAdmin.from('doctor_profiles').update({ signature_url: path }).eq('id', doctorId),
+      supabaseAdmin.from('provider_profiles_v2').update({ signature_url: path }).eq('user_id', doctorId),
+      supabaseAdmin.from('provider_profiles').update({ signature_url: path }).eq('provider_id', doctorId),
+    ])
   } catch (err) {
     // If column doesn't exist yet, non-fatal
     console.warn('[doctorSignatureService] Non-fatal profile signature_url update note:', err)
@@ -77,7 +82,7 @@ export async function saveDoctorSignature(
 
   await audit({
     actorId: doctorId,
-    actorRole: 'doctor',
+    actorRole: role,
     action: 'DOCTOR_SIGNATURE_UPLOADED',
     newValues: { path, format: ext, size: fileBuffer.length },
     request,

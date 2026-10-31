@@ -85,6 +85,22 @@ export async function POST(request: Request) {
       .eq('id', assessment.id)
 
     if (updateError) throw updateError
+
+    // Notify the patient in their notification center
+    try {
+      await supabaseAdmin
+        .from('patient_notifications')
+        .insert({
+          patient_id: patientId,
+          type: 'lab_report',
+          title: 'Lab Report Uploaded',
+          message: 'Your lab report has been uploaded by the clinical team and is now available in your records.',
+          is_read: false
+        })
+    } catch (notifErr) {
+      console.warn('Failed to insert patient notification:', notifErr)
+    }
+
     invalidatePatientApiDashboardCache(patientId)
 
     return NextResponse.json({

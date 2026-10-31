@@ -23,18 +23,50 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const auth = await assertDoctor(request)
-    const formData = await request.formData()
-    const file = formData.get('signature') as File | null
+    const contentType = request.headers.get('content-type') || ''
+    let buffer: Buffer
+    let mimeType = 'image/png'
 
-    if (!file) {
-      return NextResponse.json({ error: 'Signature image file is required.' }, { status: 400 })
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData()
+      const file = (formData.get('signature') || formData.get('file')) as File | null
+      if (!file) {
+        return NextResponse.json({ error: 'Signature image file is required.' }, { status: 400 })
+      }
+      const arrayBuffer = await file.arrayBuffer()
+      buffer = Buffer.from(arrayBuffer)
+      mimeType = file.type || 'image/png'
+    } else {
+      try {
+        const body = await request.json()
+        const dataUrl = body.signatureDataUrl || body.dataUrl || ''
+        if (!dataUrl || !dataUrl.includes(',')) {
+          return NextResponse.json({ error: 'Invalid or missing signature drawing data.' }, { status: 400 })
+        }
+        const [header, base64Data] = dataUrl.split(',')
+        const matches = header.match(/:(.*?);/)
+        if (matches && matches[1]) {
+          mimeType = matches[1]
+        }
+        buffer = Buffer.from(base64Data, 'base64')
+      } catch (jsonErr) {
+        try {
+          const formData = await request.formData()
+          const file = (formData.get('signature') || formData.get('file')) as File | null
+          if (file) {
+            const arrayBuffer = await file.arrayBuffer()
+            buffer = Buffer.from(arrayBuffer)
+            mimeType = file.type || 'image/png'
+          } else {
+            throw jsonErr
+          }
+        } catch {
+          return NextResponse.json({ error: 'Unable to parse signature payload.' }, { status: 400 })
+        }
+      }
     }
 
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
-    const mimeType = file.type || 'image/png'
-
-    const result = await saveDoctorSignature(auth.user.id, buffer, mimeType, request)
+    const result = await saveDoctorSignature(auth.user.id, buffer, mimeType, request, 'doctor')
     const previewUrl = await getDoctorSignatureSignedUrl(auth.user.id)
 
     return NextResponse.json({

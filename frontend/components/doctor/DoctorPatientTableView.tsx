@@ -759,10 +759,20 @@ export default function DoctorPatientTableView({
       {/* ========================================================================= */}
       {detailModalPatient && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
-          <div className="bg-white rounded-[28px] max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 max-h-[90vh] flex flex-col">
+          <div className="relative bg-white rounded-[28px] max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden my-8 max-h-[90vh] flex flex-col">
             
+            {/* Absolute Top-Right Corner Close Button */}
+            <button
+              onClick={() => setDetailModalPatient(null)}
+              className="absolute top-5 right-5 z-20 w-8 h-8 rounded-full flex items-center justify-center bg-white/90 hover:bg-slate-100 text-slate-400 hover:text-slate-800 border border-slate-200 shadow-xs transition-all hover:scale-105 active:scale-95 cursor-pointer"
+              title="Close modal"
+              aria-label="Close modal"
+            >
+              <X className="w-4 h-4" />
+            </button>
+
             {/* Modal Header */}
-            <div className="p-6 border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-teal-50/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shrink-0">
+            <div className="p-6 pr-16 border-b border-slate-200 bg-gradient-to-r from-slate-50 via-white to-teal-50/20 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 shrink-0">
               <div className="min-w-0">
                 <div className="flex items-center gap-3 flex-wrap">
                   <h3 className="text-2xl font-black text-slate-900 tracking-tight">
@@ -826,13 +836,6 @@ export default function DoctorPatientTableView({
                 >
                   <Pill className="w-3.5 h-3.5" />
                   <span>Issue Rx</span>
-                </button>
-
-                <button
-                  onClick={() => setDetailModalPatient(null)}
-                  className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors ml-2 cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>

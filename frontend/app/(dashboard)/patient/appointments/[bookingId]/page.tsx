@@ -101,8 +101,24 @@ export default function AppointmentDetailsPage() {
   const params = useParams<{ bookingId: string }>()
   const router = useRouter()
   const bookingId = params.bookingId
-  const [appointment, setAppointment] = useState<AppointmentDetails | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [appointment, setAppointment] = useState<AppointmentDetails | null>(() => {
+    if (typeof window !== 'undefined' && bookingId) {
+      try {
+        const cached = sessionStorage.getItem(`apt_preview_${bookingId}`)
+        if (cached) return JSON.parse(cached)
+      } catch {}
+    }
+    return null
+  })
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== 'undefined' && bookingId) {
+      try {
+        const cached = sessionStorage.getItem(`apt_preview_${bookingId}`)
+        if (cached) return false
+      } catch {}
+    }
+    return true
+  })
   const [cancelling, setCancelling] = useState(false)
   const [error, setError] = useState('')
   const [now, setNow] = useState(() => Date.now())
@@ -146,8 +162,12 @@ export default function AppointmentDetailsPage() {
   const [ratingSuccess, setRatingSuccess] = useState('')
 
   useEffect(() => {
+    let isMounted = true
     const loadAppointment = async () => {
-      setLoading(true)
+      // Only show blocking loader if we don't have an instant cached preview
+      if (!appointment) {
+        setLoading(true)
+      }
       setError('')
       try {
         const { data: { session } } = await supabase.auth.getSession()
@@ -166,7 +186,9 @@ export default function AppointmentDetailsPage() {
           throw new Error(data.details ? `${data.error}: ${data.details}` : data.error || 'Unable to load appointment.')
         }
 
-        setAppointment(data.appointment)
+        if (isMounted) {
+          setAppointment(data.appointment)
+        }
         if (data.appointment?.consultationStatus === 'COMPLETED') {
           setRatingLoading(true)
           const ratingRes = await fetch(`/api/patient/appointments/${bookingId}/rating`, {
@@ -191,6 +213,10 @@ export default function AppointmentDetailsPage() {
     }
 
     void loadAppointment()
+
+    return () => {
+      isMounted = false
+    }
   }, [bookingId, router])
 
   useEffect(() => {
