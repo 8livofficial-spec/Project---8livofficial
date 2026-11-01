@@ -310,7 +310,7 @@ export default function BillingPage() {
             <div className="space-y-3">
               {[
                 { date: activeSub?.created_at ? new Date(activeSub.created_at).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }) : 'Recent', desc: `${activeProgram}`, amount: 'Paid' },
-                { date: 'Initial', desc: 'Clinical Doctor Consultation (₹499)', amount: 'Paid' },
+                { date: 'Initial', desc: 'Clinical Doctor Consultation (₹350)', amount: 'Paid' },
               ].map((inv, idx) => (
                 <div key={idx} className="flex justify-between items-center text-xs">
                   <div>

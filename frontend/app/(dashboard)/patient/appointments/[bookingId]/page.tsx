@@ -443,7 +443,7 @@ export default function AppointmentDetailsPage() {
                     href="/patient/consultation"
                     className="mt-3 inline-flex w-full items-center justify-center rounded-xl bg-[#00A884] hover:bg-[#008f70] px-4 py-3 text-xs font-bold uppercase tracking-wider text-white transition-all shadow-sm"
                   >
-                    Pay ₹{(appointment.paymentAmount ?? 499).toLocaleString('en-IN')} and Book Again
+                    Pay ₹{(appointment.paymentAmount ?? 350).toLocaleString('en-IN')} and Book Again
                   </Link>
                 )}
               </div>

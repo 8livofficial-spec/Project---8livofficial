@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 import { appointmentTypeForRole, getAssignedProviderForRole, labelForRole, normalizeProviderRole } from '@/lib/providerConsultations'
 import { getAuthenticatedPatient, isFutureIndiaSlot, invalidateSlotsCache } from '@/lib/appointmentAvailability'
 import { createStreamMeeting } from '@/services/video/meeting.service'
+import { checkPatientConsultationQuota } from '@/lib/subscriptionService'
 
 type ProviderAvailability = {
   id: string
@@ -286,6 +287,16 @@ export async function POST(request: Request) {
     }
     if (existingActive?.id) {
       return NextResponse.json({ error: `You already have an active scheduled ${labelForRole(role)} consultation.` }, { status: 409 })
+    }
+
+    // Quota check: for 1-Month Trial Plan users, restrict each specialist consultation to 1
+    const quota = await checkPatientConsultationQuota(patientId, role as any)
+    if (!quota.allowed) {
+      return NextResponse.json({
+        error: quota.reason || `You have reached the maximum consultation quota for ${labelForRole(role)} on your current plan.`,
+        quotaExceeded: true,
+        role,
+      }, { status: 403 })
     }
 
     const availableResult = await getAvailableProviderSlots(patientId, role, bookingDate)

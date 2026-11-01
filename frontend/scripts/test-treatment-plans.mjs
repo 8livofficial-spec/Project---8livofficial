@@ -89,14 +89,14 @@ const orderSim = simulateRazorpayOrderValidation(dbPlan2m, { amount: 1 });
 assert(orderSim.isForgedRejected === true, 'Client forged amount (₹1) successfully identified and overridden');
 assert(orderSim.authoritativePaise === 285000, `Razorpay order amount strictly bound to authoritative 285,000 paise (₹2,850)`);
 
-// Combined payment with mandatory paid doctor consultation (₹499 + 18% GST)
-const consultFee = 499;
+// Combined payment with mandatory paid doctor consultation (₹350 + 18% GST)
+const consultFee = 350;
 const combinedSubtotal = orderSim.usedAmount + consultFee;
 const combinedGst = Math.round(combinedSubtotal * 0.18);
 const combinedTotalRupees = combinedSubtotal + combinedGst;
-assert(consultFee === 499, 'Initial consultation fee is preserved as ₹499 PAID (intentional business rule)');
-assert(combinedSubtotal === 3349, `Combined subtotal is ₹3,349 (₹2,850 + ₹499)`);
-assert(combinedTotalRupees === 3952, `Combined total with 18% GST (₹603) is ₹3,952`);
+assert(consultFee === 350, 'Initial consultation fee is preserved as ₹350 PAID (intentional business rule)');
+assert(combinedSubtotal === 3200, `Combined subtotal is ₹3,200 (₹2,850 + ₹350)`);
+assert(combinedTotalRupees === 3776, `Combined total with 18% GST (₹576) is ₹3,776`);
 
 // TEST 3: Dynamic Cycle Provisioning Engine
 console.log('\n--- Suite 3: Dynamic Cycle Provisioning Engine ---');

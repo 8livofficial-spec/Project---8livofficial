@@ -257,7 +257,7 @@ function AdminDashboardContent() {
   const [planName, setPlanName] = useState('');
   const [planDurationMonths, setPlanDurationMonths] = useState('1');
   const [planPrice, setPlanPrice] = useState('');
-  const [planConsultFee, setPlanConsultFee] = useState('499');
+  const [planConsultFee, setPlanConsultFee] = useState('350');
   const [planFeatures, setPlanFeatures] = useState('');
   const [planDescription, setPlanDescription] = useState('');
   const [planDisplayOrder, setPlanDisplayOrder] = useState('1');
@@ -599,7 +599,7 @@ function AdminDashboardContent() {
     setPlanName('');
     setPlanDurationMonths('1');
     setPlanPrice('');
-    setPlanConsultFee('499');
+    setPlanConsultFee('350');
     setPlanFeatures('');
     setPlanDescription('');
     setPlanDisplayOrder('1');
@@ -617,7 +617,7 @@ function AdminDashboardContent() {
     setPlanName(p.name || '');
     setPlanDurationMonths(String(p.duration_months || 1));
     setPlanPrice(String(p.base_price ?? p.price_monthly ?? ''));
-    setPlanConsultFee(String(p.consultation_fee ?? 499));
+    setPlanConsultFee(String(p.consultation_fee ?? 350));
     setPlanFeatures(Array.isArray(p.features) ? p.features.join(', ') : (p.features || ''));
     setPlanDescription(p.description || '');
     setPlanDisplayOrder(String(p.display_order ?? 1));
@@ -1680,12 +1680,12 @@ function AdminDashboardContent() {
       title: 'Commercial Rules',
       description: 'Pricing, payouts, and margin controls for the first consultation and care team payouts.',
       items: [
-        { label: 'Consultation Fee', value: 'Rs 499', helper: 'Initial endocrinologist consultation charged to patients.' },
+        { label: 'Consultation Fee', value: 'Rs 350', helper: 'Initial endocrinologist consultation charged to patients.' },
         { label: 'Doctor Payout', value: 'Rs 300', helper: 'Credited only after completed attended consultation.' },
         { label: 'Dietitian Payout', value: 'Configure', helper: 'Used for post-plan care team compensation.' },
         { label: 'Nutritionist Payout', value: 'Configure', helper: 'Applied to nutrition support sessions.' },
         { label: 'Fitness Coach Payout', value: 'Configure', helper: 'Applied to fitness coach sessions.' },
-        { label: 'Platform Commission', value: 'Rs 199', helper: 'Consultation fee minus doctor payout.' },
+        { label: 'Platform Commission', value: 'Rs 50', helper: 'Consultation fee minus doctor payout.' },
       ],
     },
     {
@@ -2074,7 +2074,7 @@ function AdminDashboardContent() {
                 { label: 'Total Patients', value: patientsCount, helper: 'Complete member roster', icon: Users, tone: 'blue' },
                 { label: 'Eligible', value: eligibleCount, helper: 'Approved assessment', icon: ShieldCheck, tone: 'green' },
                 { label: 'Home Lab Requests', value: homeLabOrdersCount, helper: `${homeLabPendingCount} report pending`, icon: Activity, tone: 'amber' },
-                { label: 'Paid Consultation', value: paidCount, helper: 'Rs 499 received', icon: Wallet, tone: 'orange' },
+                { label: 'Paid Consultation', value: paidCount, helper: 'Rs 350 received', icon: Wallet, tone: 'orange' },
                 { label: 'Appointments', value: appointmentCount, helper: 'Booked slots', icon: Calendar, tone: 'blue' },
                 { label: 'Progress Logged', value: progressCount, helper: 'Weight goal present', icon: TrendingUp, tone: 'red' },
               ].map(card => {

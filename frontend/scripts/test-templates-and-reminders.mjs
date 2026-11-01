@@ -146,7 +146,7 @@ await runTest('sendMembershipReceipt formats currency and enqueues template', as
 await runTest('sendConsultationPayment formats consultation receipt without dynamic button parameter', async () => {
   const ok = await WhatsAppNotificationService.sendConsultationPayment('+919123456780', {
     patientName: 'Rahul Verma',
-    amount: 499,
+    amount: 350,
     paymentId: `pay_consult_${Date.now()}`,
     description: 'Doctor Video Consultation',
   })

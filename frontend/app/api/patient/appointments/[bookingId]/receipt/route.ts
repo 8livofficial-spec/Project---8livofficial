@@ -138,7 +138,7 @@ export async function GET(request: Request, context: RouteContext) {
       appointmentTime: appointment.booking_time || 'Scheduled Slot',
       serviceDescription: 'Telemedicine Consultation & Clinical Metabolic Intake',
       sacCode: '999312',
-      amount: Number(payment?.amount || 499),
+      amount: Number(payment?.amount || 350),
       currency: 'INR',
       paymentMethod: payment?.payment_method || 'Online (Razorpay / UPI)',
       paymentStatus: payment?.status ? String(payment.status).toUpperCase() : 'PAID',

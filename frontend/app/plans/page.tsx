@@ -16,7 +16,7 @@ const nutritionSteps = [
   {
     icon: Stethoscope,
     title: 'Doctor-led review first',
-    text: 'Every treatment program begins with an ₹499 initial clinical consultation. Your doctor designs a medical strategy specific to your health history.',
+    text: 'Every treatment program begins with an ₹350 initial clinical consultation. Your doctor designs a medical strategy specific to your health history.',
   },
   {
     icon: Salad,
@@ -91,7 +91,7 @@ export default async function PlansPage() {
               Doctor-led treatment programs designed for sustainable health.
             </h1>
             <p className="mt-6 max-w-2xl text-base leading-7 text-[#475569] sm:text-lg">
-              Start with a ₹499 clinical evaluation by an authorized physician. Following your assessment, select your treatment duration. All active programs provision monthly treatment cycles with included follow-ups and complete care-team support.
+              Start with a ₹350 clinical evaluation by an authorized physician. Following your assessment, select your treatment duration. All active programs provision monthly treatment cycles with included follow-ups and complete care-team support.
             </p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Link href="/assessment" className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-[#0F172A] px-6 py-4 text-sm font-bold text-white transition hover:bg-[#1E293B] sm:w-auto">
@@ -228,7 +228,7 @@ export default async function PlansPage() {
             <div>
               <h2 className="font-sora text-2xl font-bold">Step 1: Check Clinical Eligibility</h2>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-white/70">
-                Complete the preliminary medical assessment, book your ₹499 initial doctor consultation, and select your care program.
+                Complete the preliminary medical assessment, book your ₹350 initial doctor consultation, and select your care program.
               </p>
             </div>
           </div>

@@ -110,7 +110,7 @@ export async function POST(request: Request) {
     // Security Binding 3: Verify paid amount matches authoritative pricing
     let expectedMinAmount = 0
     if (paymentType === 'consultation') {
-      expectedMinAmount = 499
+      expectedMinAmount = 350
     } else if (paymentType === 'membership' || paymentType === 'combined') {
       expectedMinAmount = pricing.finalPrice
     }
@@ -298,7 +298,7 @@ export async function POST(request: Request) {
         if (paymentType === 'consultation') {
           WhatsAppNotificationService.sendConsultationPayment(patientPhone, {
             patientName,
-            amount: amount || 499,
+            amount: amount || 350,
             paymentId: razorpay_payment_id,
             description: 'Doctor Video Consultation',
           }).catch(waErr => console.warn('[WhatsApp] Consultation payment dispatch notice:', waErr))
@@ -313,14 +313,14 @@ export async function POST(request: Request) {
           // Send distinct membership receipt and consultation payment confirmation
           WhatsAppNotificationService.sendMembershipReceipt(patientPhone, {
             patientName,
-            amount: (amount && amount > 499) ? amount - 499 : pricing.finalPrice,
+            amount: (amount && amount > 350) ? amount - 350 : pricing.finalPrice,
             paymentId: `${razorpay_payment_id}_m`,
             planName: programName,
           }).catch(waErr => console.warn('[WhatsApp] Combined membership receipt notice:', waErr))
 
           WhatsAppNotificationService.sendConsultationPayment(patientPhone, {
             patientName,
-            amount: 499,
+            amount: 350,
             paymentId: `${razorpay_payment_id}_c`,
             description: 'Doctor Video Consultation',
           }).catch(waErr => console.warn('[WhatsApp] Combined consultation payment notice:', waErr))

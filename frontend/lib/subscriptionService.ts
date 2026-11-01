@@ -32,86 +32,119 @@ export type SubscriptionPricing = {
   discountPercentage: number
   discountAmount: number
   finalPrice: number
+  gstRate: number
+  gstAmount: number
+  totalWithGst: number
   currency: string
   description?: string | null
   features?: string[]
+  metadata?: Record<string, unknown>
 }
 
-export const DEFAULT_BASE_MONTHLY_RATE = 1999.00
+export const DEFAULT_BASE_MONTHLY_RATE = 1820.00
+export const STATUTORY_GST_RATE = 0.18 // 18% GST
 
-// Fallback seed definitions matching current commercial baseline in case database table is unreachable
+// Authoritative 8Liv Clinical Membership Plans
 export const SEED_PLANS: TreatmentPlanRecord[] = [
   {
     id: 'seed-plan-1m',
     tenant_id: '8liv',
-    name: '1 Month Treatment Program',
+    name: '1-Month Kickstart Trial',
     duration_months: 1,
-    base_price: 1999.00,
-    discount_percentage: 0,
-    discount_amount: 0,
-    final_price: 1999.00,
+    base_price: 1820.00,
+    discount_percentage: 19.23,
+    discount_amount: 350.00,
+    final_price: 1470.00,
     currency: 'INR',
-    description: '1 monthly treatment cycle with comprehensive doctor review, personalized dietary protocol, and initial lifestyle onboarding.',
-    features: ['1 Treatment Cycle with doctor review', 'Free follow-up consultation included', 'Personalized nutrition & diet guidance', 'Fitness coach movement plan', 'Prescription & pharmacy coordination'],
+    description: '1-month trial plan for new users. Exactly 3 consultations included (1 with Doctor, 1 with Nutritionist, 1 with Fitness Coach).',
+    features: [
+      '3 Consultations Total (1 Doctor, 1 Dietitian, 1 Fitness Coach)',
+      '1 Doctor Video Telehealth Consultation',
+      '1 Clinical Dietitian Meal Calibration',
+      '1 Fitness Coach Movement Session',
+      'Official CDSCO Digital E-Prescription',
+      'Customized Indian Diet Plan & Daily Logs',
+    ],
     status: 'ACTIVE',
     display_order: 1,
     valid_from: null,
     valid_until: null,
-    metadata: {},
+    metadata: {
+      is_trial: true,
+      max_consultations: {
+        doctor: 1,
+        dietitian: 1,
+        fitness_coach: 1,
+      },
+      total_consultations: 3,
+      tag: 'New User Trial',
+    },
   },
   {
     id: 'seed-plan-3m',
     tenant_id: '8liv',
-    name: '3 Month Treatment Program',
+    name: '3-Month Metabolic Reset',
     duration_months: 3,
-    base_price: 5997.00,
-    discount_percentage: 0,
-    discount_amount: 0,
-    final_price: 5997.00,
+    base_price: 5460.00,
+    discount_percentage: 10.26,
+    discount_amount: 560.00,
+    final_price: 4900.00,
     currency: 'INR',
-    description: '3 structured treatment cycles to build lasting metabolic habits with consistent doctor monitoring and follow-up reviews.',
-    features: ['3 Treatment Cycles provisioned', 'Included doctor follow-ups each cycle (₹0)', 'Dedicated dietitian & nutritionist support', 'Continuous habit & weight progress tracking', 'Care team messaging & pharmacy dispatch'],
+    description: '3 months of structured clinical metabolic care with recurring doctor reviews and continuous dietitian support.',
+    features: [
+      'Multi-Cycle Physician Follow-ups & Dosage Calibration',
+      'Dedicated Clinical Dietitian Support',
+      'Progressive Resistance & Muscle-Defense Routines',
+      'Continuous Metabolic Telemetry Monitoring',
+      'Care Team In-App Messaging Coordination',
+    ],
     status: 'ACTIVE',
     display_order: 2,
     valid_from: null,
     valid_until: null,
-    metadata: {},
+    metadata: {
+      is_trial: false,
+      max_consultations: {
+        doctor: 3,
+        dietitian: 3,
+        fitness_coach: 3,
+      },
+      total_consultations: 9,
+      tag: 'Recommended Habit Cycle',
+    },
   },
   {
-    id: 'seed-plan-6m',
+    id: 'seed-plan-5m',
     tenant_id: '8liv',
-    name: '6 Month Treatment Program',
-    duration_months: 6,
-    base_price: 11994.00,
-    discount_percentage: 0,
-    discount_amount: 0,
-    final_price: 11994.00,
+    name: '5-Month Sustainable Transformation',
+    duration_months: 5,
+    base_price: 9100.00,
+    discount_percentage: 9.62,
+    discount_amount: 875.00,
+    final_price: 8225.00,
     currency: 'INR',
-    description: '6 monthly treatment cycles for sustained weight reduction, clinical lab monitoring, and habit lock-in.',
-    features: ['6 Treatment Cycles provisioned', 'Included monthly doctor review consultations', 'Advanced metabolic coaching', 'Proactive care team coordination', 'Partner pharmacy fulfillment integration'],
+    description: 'Complete 5-month sustained weight reduction program designed to lock in metabolic health and prevent weight regain.',
+    features: [
+      'Full 5-Month Physician-Supervised Protocol',
+      'Comprehensive Biomarker & Lab Review Cycles',
+      'Dynamic Indian Diet & Habit Lock-In Strategy',
+      'Guided Gym & Home Resistance Routines',
+      'Long-Term Weight Regain Defense Protocol',
+    ],
     status: 'ACTIVE',
     display_order: 3,
     valid_from: null,
     valid_until: null,
-    metadata: {},
-  },
-  {
-    id: 'seed-plan-10m',
-    tenant_id: '8liv',
-    name: '10 Month Treatment Program',
-    duration_months: 10,
-    base_price: 19990.00,
-    discount_percentage: 10,
-    discount_amount: 1999.00,
-    final_price: 17991.00,
-    currency: 'INR',
-    description: 'Full year metabolic reset with 10% instant bulk discount. 10 monthly treatment cycles and priority partner pharmacy fulfillment.',
-    features: ['10 Treatment Cycles provisioned', '10% Instant Bulk Discount Applied', 'Included doctor follow-up review each cycle', 'Full dedicated multi-disciplinary care team', 'Priority pharmacy dispatch & delivery tracking'],
-    status: 'ACTIVE',
-    display_order: 4,
-    valid_from: null,
-    valid_until: null,
-    metadata: {},
+    metadata: {
+      is_trial: false,
+      max_consultations: {
+        doctor: 5,
+        dietitian: 5,
+        fitness_coach: 5,
+      },
+      total_consultations: 15,
+      tag: 'Best Long-Term Value',
+    },
   },
 ]
 
@@ -121,6 +154,8 @@ export function computePlanPricing(basePrice: number, discountPercentage: number
   const duration = Math.max(1, Number(durationMonths) || 1)
   const discountAmount = Math.round((base * discountPct) / 100)
   const finalPrice = Math.max(0, base - discountAmount)
+  const gstAmount = Math.round(finalPrice * STATUTORY_GST_RATE)
+  const totalWithGst = finalPrice + gstAmount
   const monthlyEquivalent = Math.round(finalPrice / duration)
 
   return {
@@ -128,6 +163,9 @@ export function computePlanPricing(basePrice: number, discountPercentage: number
     discountPercentage: discountPct,
     discountAmount,
     finalPrice,
+    gstRate: STATUTORY_GST_RATE,
+    gstAmount,
+    totalWithGst,
     monthlyEquivalent,
     durationMonths: duration,
   }
@@ -235,9 +273,13 @@ export async function getAuthoritativeSubscriptionPricing(planIdOrDuration: stri
       discountPercentage: calc.discountPercentage,
       discountAmount: calc.discountAmount,
       finalPrice: calc.finalPrice,
+      gstRate: calc.gstRate,
+      gstAmount: calc.gstAmount,
+      totalWithGst: calc.totalWithGst,
       currency: plan.currency || 'INR',
       description: plan.description,
       features: plan.features,
+      metadata: plan.metadata,
     }
   }
 
@@ -254,7 +296,112 @@ export async function getAuthoritativeSubscriptionPricing(planIdOrDuration: stri
     discountPercentage: 0,
     discountAmount: 0,
     finalPrice: calc.finalPrice,
+    gstRate: calc.gstRate,
+    gstAmount: calc.gstAmount,
+    totalWithGst: calc.totalWithGst,
     currency: 'INR',
+  }
+}
+
+/**
+ * Checks whether a patient has remaining consultation quota for a specific role (doctor, dietitian, fitness_coach).
+ * Under the 1-Month Trial Plan, the quota is exactly 1 Doctor, 1 Dietitian, 1 Fitness Coach consultation (total 3).
+ */
+export async function checkPatientConsultationQuota(
+  patientId: string,
+  role: 'doctor' | 'dietitian' | 'fitness_coach' | 'trainer' | 'nutritionist'
+): Promise<{
+  allowed: boolean
+  maxAllowed: number
+  usedCount: number
+  isTrial: boolean
+  planName: string
+  reason?: string
+}> {
+  try {
+    // 1. Identify active subscription / treatment plan
+    const { data: sub } = await supabaseAdmin
+      .from('subscriptions')
+      .select('*, treatment_plans(*)')
+      .eq('patient_id', patientId)
+      .eq('status', 'ACTIVE')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    // Fallback: check latest successful payment transaction
+    const { data: txn } = await supabaseAdmin
+      .from('payment_transactions')
+      .select('metadata, plan_name_snapshot, created_at')
+      .eq('patient_id', patientId)
+      .in('payment_type', ['membership', 'combined'])
+      .in('status', ['success', 'paid'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const planMetadata = (sub?.treatment_plans?.metadata || txn?.metadata || {}) as Record<string, any>
+    const planName = sub?.treatment_plans?.name || txn?.plan_name_snapshot || '1-Month Kickstart Trial'
+    const durationMonths = sub?.treatment_plans?.duration_months || txn?.metadata?.duration_months || 1
+
+    const isTrial = Boolean(planMetadata?.is_trial || durationMonths === 1 || /trial/i.test(planName))
+    const maxConsultationsForRole = isTrial ? 1 : Math.max(1, durationMonths)
+
+    // 2. Count existing non-cancelled bookings
+    const isDoctor = role === 'doctor'
+    let usedCount = 0
+
+    if (isDoctor) {
+      const { data: consults } = await supabaseAdmin
+        .from('doctor_consultations')
+        .select('id, status')
+        .eq('patient_id', patientId)
+        .in('status', ['scheduled', 'calling', 'attended', 'approved', 'completed'])
+
+      usedCount = consults?.length || 0
+    } else {
+      const staffRoles = (role === 'dietitian' || role === 'nutritionist')
+        ? ['dietitian', 'nutritionist']
+        : ['fitness_coach', 'trainer']
+
+      const { data: consults } = await supabaseAdmin
+        .from('staff_consultations')
+        .select('id, status')
+        .eq('patient_id', patientId)
+        .in('staff_role', staffRoles)
+        .in('status', ['scheduled', 'calling', 'attended', 'completed'])
+
+      usedCount = consults?.length || 0
+    }
+
+    if (isTrial && usedCount >= maxConsultationsForRole) {
+      const roleDisplay = isDoctor ? 'Doctor' : (role === 'dietitian' || role === 'nutritionist' ? 'Clinical Dietitian' : 'Fitness Coach')
+      return {
+        allowed: false,
+        maxAllowed: maxConsultationsForRole,
+        usedCount,
+        isTrial: true,
+        planName,
+        reason: `Your 1-Month Trial Plan includes exactly 1 ${roleDisplay} Consultation, which has already been booked. Please renew or upgrade to our 3-Month or 5-Month Care Plan to schedule additional sessions.`,
+      }
+    }
+
+    return {
+      allowed: true,
+      maxAllowed: maxConsultationsForRole,
+      usedCount,
+      isTrial,
+      planName,
+    }
+  } catch (err) {
+    console.warn('[checkPatientConsultationQuota] Failed to check quota:', err)
+    return {
+      allowed: true,
+      maxAllowed: 1,
+      usedCount: 0,
+      isTrial: false,
+      planName: 'Care Plan',
+    }
   }
 }
 

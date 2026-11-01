@@ -8,7 +8,7 @@ import { createStreamMeeting } from '@/services/video/meeting.service'
 import { APP_CONFIG } from '@/lib/appConfig'
 import { recordCycleConsultationUsage } from '@/lib/treatmentCycleService'
 
-const CONSULTATION_FEE = 499
+const CONSULTATION_FEE = 350
 
 type AppointmentType = typeof INITIAL_DOCTOR_CONSULTATION | typeof DOCTOR_FOLLOW_UP
 

@@ -2884,7 +2884,7 @@ export default function DoctorDashboard() {
                                 ? 'text-[#40516A] bg-[#8896A4]/15 border-[#8896A4]/20'
                                 : 'text-[#C4622D] bg-[#C4622D]/10 border-[#C4622D]/15'
                               }`}>
-                              💰 Escrow Paid: ₹499
+                              💰 Escrow Paid: ₹350
                             </p>
                           </div>
                           {isClaimedByOther ? (

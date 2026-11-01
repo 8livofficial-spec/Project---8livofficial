@@ -280,7 +280,7 @@ export async function GET(request: Request, context: RouteContext) {
         roomUrl: null,
         callId: joinDisabled ? null : callId,
         callType: joinDisabled ? null : callType,
-        paymentAmount: payment?.amount ? Number(payment.amount) : ((consultation as any)?.consultation_fee ? Number((consultation as any).consultation_fee) : 499),
+        paymentAmount: payment?.amount ? Number(payment.amount) : ((consultation as any)?.consultation_fee ? Number((consultation as any).consultation_fee) : 350),
         paymentStatus: payment?.status === 'success' || payment?.status === 'paid' ? 'PAID' : (payment?.status || 'PENDING').toUpperCase(),
         paymentId: payment?.transaction_id || null,
         paymentMethod: payment?.payment_method || null,

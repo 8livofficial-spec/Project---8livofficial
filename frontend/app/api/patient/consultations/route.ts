@@ -8,9 +8,10 @@ import { finalizeConsultationAssignment, reserveDoctorForInitialConsultation } f
 import { getAuthenticatedPatient, getIndiaSlotTimestamp, isFutureIndiaSlot } from '@/lib/appointmentAvailability'
 import { FOLLOW_UP_CONSULTATION, INITIAL_CONSULTATION, getAssignedProviderForRole } from '@/lib/providerConsultations'
 import { getMembershipValidity } from '@/lib/membershipServer'
+import { checkPatientConsultationQuota } from '@/lib/subscriptionService'
 import { createStreamMeeting } from '@/services/video/meeting.service'
 
-const CONSULTATION_FEE = 499
+const CONSULTATION_FEE = 350
 
 function generateTxnId(): string {
   return `TXN8LIV${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, '0')}`
@@ -217,6 +218,16 @@ export async function POST(request: Request) {
 
     if (!isInitialConsultation && !hasActiveMembership) {
       return NextResponse.json({ error: 'Active membership is required to book follow-up consultations.' }, { status: 403 })
+    }
+
+    // Quota check: for 1-Month Trial Plan users, restrict doctor consultation to 1
+    const quota = await checkPatientConsultationQuota(patientId, 'doctor')
+    if (!quota.allowed) {
+      return NextResponse.json({
+        error: quota.reason || 'You have reached the maximum consultation quota for your current plan.',
+        quotaExceeded: true,
+        role: 'doctor',
+      }, { status: 403 })
     }
 
     if (isInitialConsultation) {

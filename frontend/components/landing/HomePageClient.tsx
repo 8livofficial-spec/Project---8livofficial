@@ -9,6 +9,7 @@ import Footer from '@/components/landing/Footer'
 import Hero from '@/components/home/Hero'
 import ScienceResults from '@/components/home/ScienceResults'
 import PersonalizedCare from '@/components/home/PersonalizedCare'
+import PricingPlans from '@/components/home/PricingPlans'
 import RealStories from '@/components/home/RealStories'
 import FAQ from '@/components/home/FAQ'
 
@@ -77,7 +78,10 @@ export default function HomePageClient() {
       {/* 04. PERSONALIZED CARE ANYTIME YOU NEED (VIDEO CONSULT & BODY WEIGHT GRAPH) */}
       <PersonalizedCare />
 
-      {/* 05. REAL STORIES REAL TRANSFORMATIONS & COUPLE BANNER */}
+      {/* 05. DOCTOR-SUPERVISED CARE PLANS & PRICING */}
+      <PricingPlans />
+
+      {/* 06. REAL STORIES REAL TRANSFORMATIONS & COUPLE BANNER */}
       <RealStories />
 
       {/* 07. FREQUENTLY ASKED QUESTIONS */}

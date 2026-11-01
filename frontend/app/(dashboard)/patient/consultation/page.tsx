@@ -8,7 +8,7 @@ import { usePatientData } from '@/hooks/usePatientData'
 import { supabase, syncSupabaseAuthCookie } from '@/lib/supabaseClient'
 import ConsultationSkeleton from '@/components/patient/ConsultationSkeleton'
 
-const CONSULTATION_FEE = 499
+const CONSULTATION_FEE = 350
 const SESSION_EXPIRED = 'SESSION_EXPIRED'
 const INITIAL_DOCTOR_CONSULTATION = 'INITIAL_DOCTOR_CONSULTATION'
 const DOCTOR_FOLLOW_UP = 'DOCTOR_FOLLOW_UP'
@@ -1325,7 +1325,7 @@ export default function ConsultationSchedulingPage() {
                     <div className="flex items-center justify-between pt-2 border-t border-slate-100">
                       <span className="text-slate-500">Consultation Fee</span>
                       <div className="text-right">
-                        <span className="line-through text-slate-400 mr-2 text-[11px]">₹499</span>
+                        <span className="line-through text-slate-400 mr-2 text-[11px]">₹350</span>
                         <span className="font-extrabold text-[#00A884] font-sora text-sm">₹0 Included</span>
                       </div>
                     </div>

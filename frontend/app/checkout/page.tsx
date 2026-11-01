@@ -6,7 +6,7 @@ import { ShieldCheck, CheckCircle2, ArrowLeft, CreditCard } from 'lucide-react'
 import { RazorpayCheckoutButton } from '@/components/payments/RazorpayCheckoutButton'
 
 export default function CheckoutPage() {
-  const [amount, setAmount] = useState<number>(499)
+  const [amount, setAmount] = useState<number>(350)
   const [customerName, setCustomerName] = useState<string>('')
   const [customerEmail, setCustomerEmail] = useState<string>('')
   const [customerContact, setCustomerContact] = useState<string>('')
@@ -79,7 +79,7 @@ export default function CheckoutPage() {
                 Select Test Amount
               </label>
               <div className="grid grid-cols-3 gap-2">
-                {[1, 499, 1999].map((val) => (
+                {[1, 350, 1999].map((val) => (
                   <button
                     key={val}
                     type="button"

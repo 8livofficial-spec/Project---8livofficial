@@ -85,14 +85,15 @@ export async function POST(request: Request) {
     const lookupKey = planId || (rawDuration > 0 ? rawDuration : 1)
     const isStandardOrder = paymentType === 'standard'
 
-    let amount = isStandardOrder ? Number(body?.amount) / 100 : 499
+    let amount = isStandardOrder ? Number(body?.amount) / 100 : 350
     let selectedPricing: any = null
 
     if (isStandardOrder && !Number.isFinite(Number(body?.amount))) {
       return NextResponse.json({ error: 'Amount is required in paise.' }, { status: 400 })
     } else if (paymentType === 'membership' || paymentType === 'combined') {
       selectedPricing = await getAuthoritativeSubscriptionPricing(lookupKey)
-      amount = selectedPricing.finalPrice
+      // Statutory 18% GST added during payment for each membership plan
+      amount = selectedPricing.totalWithGst || Math.round(selectedPricing.finalPrice * 1.18)
     }
 
     const amountInPaise = isStandardOrder ? Math.round(Number(body.amount)) : Math.round(amount * 100)
@@ -111,6 +112,10 @@ export async function POST(request: Request) {
           paymentType,
           planId: selectedPricing?.planId || planId || '',
           durationMonths: selectedPricing?.durationMonths || rawDuration || 1,
+          basePrice: selectedPricing?.finalPrice || amount,
+          gstRate: '18%',
+          gstAmount: selectedPricing?.gstAmount || Math.round((selectedPricing?.finalPrice || amount) * 0.18),
+          totalWithGst: amount,
         },
       })
 
@@ -120,6 +125,10 @@ export async function POST(request: Request) {
         paymentType,
         planId: selectedPricing?.planId || planId || '',
         durationMonths: selectedPricing?.durationMonths || rawDuration || 1,
+        basePrice: selectedPricing?.finalPrice || amount,
+        gstRate: '18%',
+        gstAmount: selectedPricing?.gstAmount || Math.round((selectedPricing?.finalPrice || amount) * 0.18),
+        totalWithGst: amount,
       })
 
       if (isPatientAuth) {

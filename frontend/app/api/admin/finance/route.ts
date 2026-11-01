@@ -8,7 +8,7 @@ const successStatuses = ['success', 'paid', 'captured', 'completed', 'authorized
 const pendingStatuses = ['pending', 'created', 'processing']
 const failedStatuses = ['failed', 'cancelled', 'declined', 'error']
 
-const CONSULTATION_FEE_DEFAULT = 499
+const CONSULTATION_FEE_DEFAULT = 350
 const DOCTOR_PAYOUT_PER_CONSULT = 300
 
 // In-memory cache for aggregated finance dashboard

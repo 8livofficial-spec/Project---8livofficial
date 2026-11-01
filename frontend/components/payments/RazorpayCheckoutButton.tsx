@@ -3,7 +3,7 @@
 import React, { useState } from 'react'
 
 export interface RazorpayCheckoutButtonProps {
-  amount?: number // Amount in INR (e.g. 499) or in paise if isPaise is true
+  amount?: number // Amount in INR (e.g. 350) or in paise if isPaise is true
   isPaise?: boolean
   currency?: string
   receipt?: string
@@ -44,7 +44,7 @@ function loadScript(src: string): Promise<boolean> {
 }
 
 export function RazorpayCheckoutButton({
-  amount = 499,
+  amount = 350,
   isPaise = false,
   currency = 'INR',
   receipt,

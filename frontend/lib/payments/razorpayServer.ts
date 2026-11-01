@@ -95,6 +95,10 @@ export function buildRazorpayOrderMetadata(params: {
   paymentType: string
   planId?: string
   durationMonths?: number
+  basePrice?: number
+  gstRate?: string
+  gstAmount?: number
+  totalWithGst?: number
 }) {
   return {
     razorpay_order_id: params.orderId,
@@ -102,6 +106,10 @@ export function buildRazorpayOrderMetadata(params: {
     paymentType: params.paymentType,
     planId: params.planId || '',
     durationMonths: params.durationMonths || 1,
+    basePrice: params.basePrice,
+    gstRate: params.gstRate,
+    gstAmount: params.gstAmount,
+    totalWithGst: params.totalWithGst,
     created_at: new Date().toISOString(),
   }
 }

@@ -72,7 +72,7 @@ CREATE TABLE public.membership_plans (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL UNIQUE,          -- 'Silver Plan', 'Gold Plan'
   price_monthly NUMERIC(10,2) NOT NULL,
-  consultation_fee NUMERIC(10,2) DEFAULT 499.00,
+  consultation_fee NUMERIC(10,2) DEFAULT 350.00,
   features TEXT[] NOT NULL,           -- ['Bi-weekly video consultations', 'Priority chat']
   is_active BOOLEAN DEFAULT true,
   discount_code TEXT,

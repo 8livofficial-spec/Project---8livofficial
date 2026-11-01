@@ -86,6 +86,7 @@ export default function Navbar() {
     { label: 'BMI Calculator', href: '#results-and-science' },
     { label: 'Treatments', href: '#treatments' },
     { label: 'Care', href: '#telehealth-care' },
+    { label: 'Plans', href: '#pricing' },
     { label: 'Results', href: '#testimonials' },
   ]
 
