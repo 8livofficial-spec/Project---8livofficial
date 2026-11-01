@@ -83,7 +83,7 @@ export default function Navbar() {
 
   const navItems = [
     { label: 'Home', href: '#hero' },
-    { label: 'About', href: '#results-and-science' },
+    { label: 'BMI Calculator', href: '#results-and-science' },
     { label: 'Treatments', href: '#treatments' },
     { label: 'Care', href: '#telehealth-care' },
     { label: 'Results', href: '#testimonials' },

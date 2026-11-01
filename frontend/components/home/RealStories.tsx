@@ -140,10 +140,11 @@ export default function RealStories() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-12 sm:mt-16">
         <ScrollRevealBox variant="fade-up" delay={0.15} duration={0.8} className="relative rounded-[2rem] sm:rounded-[2.5rem] overflow-hidden min-h-[380px] sm:min-h-0 sm:aspect-[16/7] md:aspect-[16/6] shadow-2xl flex items-center justify-center text-center p-6 sm:p-10 py-12 sm:py-14 group">
           <img
-            src="/images/burnex/couple_banner.jpg"
-            alt="Active couple smiling outdoors"
-            className="absolute inset-0 w-full h-full object-cover object-center filter brightness-[0.4] saturate-[1.2] group-hover:scale-103 transition-transform duration-700 ease-out"
+            src="/images/burnex/vitality_sunset_dog.jpg"
+            alt="Mindful athletic wellness at sunset"
+            className="absolute inset-0 w-full h-full object-cover object-center filter brightness-[0.75] saturate-[1.1] group-hover:scale-103 transition-transform duration-700 ease-out"
           />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/35 to-black/40 pointer-events-none" />
           <div className="relative z-10 max-w-2xl mx-auto text-white px-2">
             <h3 className="font-sans text-2xl xs:text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight leading-tight mb-3.5 sm:mb-4 drop-shadow-md">
               Transform Your Body,<br />

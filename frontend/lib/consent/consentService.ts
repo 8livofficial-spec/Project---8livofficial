@@ -69,14 +69,14 @@ export async function getUserConsentStatus(userId: string, bookingId?: string | 
 
   const allRecords = records || []
 
-  // Gate 1 check: Most recent gate1 record for data_notice v4.0 is accepted
-  const latestGate1 = allRecords.find(r => r.gate === 'gate1' && r.document_id === 'data_notice' && r.version === CONSENT_VERSION)
+  // Gate 1 check: Most recent gate1 record for data_notice is accepted
+  const latestGate1 = allRecords.find(r => r.gate === 'gate1' && r.document_id === 'data_notice' && (r.version === CONSENT_VERSION || r.version === 'v4.0'))
   const gate1Accepted = latestGate1?.action === 'accepted' && 
     Boolean(latestGate1.choices?.consent_health_data) && 
     Boolean(latestGate1.choices?.consent_care_team_share)
 
-  // Gate 2 check: Most recent gate2 record for terms v4.0 is accepted
-  const latestGate2 = allRecords.find(r => r.gate === 'gate2' && r.version === CONSENT_VERSION)
+  // Gate 2 check: Most recent gate2 record for terms is accepted
+  const latestGate2 = allRecords.find(r => r.gate === 'gate2' && (r.version === CONSENT_VERSION || r.version === 'v4.0'))
   const gate2Accepted = latestGate2?.action === 'accepted' && Boolean(latestGate2.choices?.terms_agreed)
 
   // Gate 3 check: Covered by Gate 1 (clinical data & care team) and Gate 2 (terms & policies) for direct consultation access

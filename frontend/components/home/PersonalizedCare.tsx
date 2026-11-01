@@ -1,219 +1,137 @@
+'use client'
+
 import React from 'react'
 import Link from 'next/link'
-import { ArrowRight, Globe, Mic, PhoneOff, Video, Volume2, ShieldCheck } from 'lucide-react'
+import {
+  ArrowRight,
+  Video,
+  FileCheck2,
+  UtensilsCrossed,
+  CalendarCheck,
+} from 'lucide-react'
 import KineticText from '@/components/ui/KineticText'
 import ScrollRevealBox from '@/components/ui/ScrollRevealBox'
+
+interface WorkflowStep {
+  step: string
+  title: string
+  description: string
+  icon: React.ReactNode
+}
+
+const WORKFLOW_STEPS: WorkflowStep[] = [
+  {
+    step: '01',
+    title: 'Doctor Video Consultation',
+    description:
+      'Direct 1-on-1 video session with a licensed Indian physician to analyze your metabolic history, lifestyle, and clinical candidacy.',
+    icon: <Video className="w-5 h-5 text-[#00A884]" />,
+  },
+  {
+    step: '02',
+    title: 'Prescription in Your Orders',
+    description:
+      'Official digitally signed e-prescription issued directly to your patient portal. Download and fulfill conveniently at your preferred licensed pharmacy.',
+    icon: <FileCheck2 className="w-5 h-5 text-[#00A884]" />,
+  },
+  {
+    step: '03',
+    title: 'Dietitian, Gym & Food Logs',
+    description:
+      'Dedicated clinical dietitian calibrating Indian meals (roti, dal, sabzi) paired with muscle-defense workouts and real-time food logging.',
+    icon: <UtensilsCrossed className="w-5 h-5 text-[#00A884]" />,
+  },
+  {
+    step: '04',
+    title: 'Continuous Follow-ups',
+    description:
+      'Regular clinical review check-ins, dosage adjustments, blood-sugar monitoring, and sustainable maintenance without weight rebound.',
+    icon: <CalendarCheck className="w-5 h-5 text-[#00A884]" />,
+  },
+]
 
 export default function PersonalizedCare() {
   return (
     <section
       id="telehealth-care"
       aria-label="Personalized Care Anytime You Need"
-      className="relative isolate w-full py-14 sm:py-20 lg:py-28 overflow-hidden"
+      className="py-16 sm:py-20 lg:py-28 bg-[#FAFBF9] border-b border-slate-200/80 scroll-mt-20"
     >
-      {/* Background with Lush Green Botanical Leaf Texture */}
-      <div className="absolute inset-0 pointer-events-none z-0">
-        <img
-          src="/images/burnex/bg_leaves.jpg"
-          alt="Lush green botanical backdrop"
-          className="w-full h-full object-cover object-center filter brightness-[0.55] saturate-[1.6] contrast-[1.1]"
-        />
-        <div className="absolute inset-0 bg-[#0B2416]/75 backdrop-blur-xs" />
-      </div>
-
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         
-        {/* Header */}
-        <div className="flex flex-col lg:flex-row lg:items-end justify-between mb-8 sm:mb-12 lg:mb-16 gap-5 sm:gap-6">
-          <div className="max-w-xl">
+        {/* Responsive 2-Column Layout: Left Sticky Header + Right Vertical Timeline */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-14 items-start">
+          
+          {/* ========================================================= */}
+          {/* LEFT COLUMN: STICKY SECTION HEADER & CTA                  */}
+          {/* ========================================================= */}
+          <div className="lg:col-span-5 lg:sticky lg:top-28 lg:self-start">
             <KineticText
               as="h2"
-              className="font-sans text-[26px] xs:text-[30px] sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-tight mb-4 sm:mb-6"
+              className="font-sans text-[28px] xs:text-[32px] sm:text-4xl lg:text-5xl font-extrabold text-[#11241A] tracking-tight leading-tight mb-4 sm:mb-6"
             >
               Personalized Care, Anytime You Need
             </KineticText>
-            <ScrollRevealBox variant="fade-up" delay={0.2}>
+            
+            <ScrollRevealBox variant="fade-up" delay={0.15}>
+              <p className="text-slate-600 font-sans text-base sm:text-lg leading-relaxed mb-8">
+                Build trust with continuous, customized medical & coaching support, expert physician guidance, real progress tracking, and ongoing 1-on-1 care.
+              </p>
+            </ScrollRevealBox>
+
+            <ScrollRevealBox variant="fade-up" delay={0.25}>
               <Link
                 href="/assessment"
-                className="inline-flex items-center gap-2.5 px-7 sm:px-10 py-3.5 sm:py-4 rounded-full bg-[#00A884] hover:bg-[#008f70] text-white font-sans font-bold text-sm sm:text-base shadow-[0_0_25px_rgba(0,168,132,0.45)] transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
+                className="inline-flex items-center gap-2.5 px-8 sm:px-10 py-3.5 sm:py-4 rounded-full bg-[#00A884] hover:bg-[#008f70] text-white font-sans font-bold text-sm sm:text-base shadow-lg hover:shadow-[0_0_30px_rgba(0,168,132,0.5)] transition-all cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
               >
                 <span>Talk to an Expert</span>
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </ScrollRevealBox>
           </div>
-          <ScrollRevealBox variant="fade-up" delay={0.25} className="max-w-md">
-            <p className="text-slate-100 font-sans text-sm sm:text-base lg:text-lg leading-relaxed">
-              Build trust with continuous, customized medical & coaching support, expert physician guidance, real progress tracking, and ongoing 1-on-1 care.
-            </p>
-          </ScrollRevealBox>
-        </div>
 
-        {/* 3 Telehealth Dashboard Cards with Staggered Entrance */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-6 items-stretch w-full">
-          
-          {/* ── CARD 1 (LEFT - COL 4): BODY WEIGHT (KG) GRAPH ── */}
-          <ScrollRevealBox variant="stagger-scale" delay={0.1} className="w-full min-w-0 lg:col-span-4 rounded-3xl bg-white/15 backdrop-blur-xl border border-white/25 p-5 xs:p-6 sm:p-7 text-white flex flex-col justify-between shadow-2xl hover:-translate-y-1 transition-all duration-300">
-            <div>
-              <h3 className="font-sans font-bold text-base sm:text-lg text-white mb-0.5 sm:mb-1">Body Weight (kg)</h3>
-              <p className="text-xs sm:text-sm text-slate-200 font-sans mb-4 sm:mb-6">Last 6 month</p>
+          {/* ========================================================= */}
+          {/* RIGHT COLUMN: VERTICAL CONNECTED WORKFLOW TIMELINE        */}
+          {/* ========================================================= */}
+          <div className="lg:col-span-7">
+            <div className="relative">
+              {/* Vertical Spine Progress Rail */}
+              <div className="absolute left-5 sm:left-6 top-6 bottom-6 w-[2px] bg-emerald-200 pointer-events-none" />
 
-              {/* Exact Graph from Reference Image 3 (Bracket Axis + Two Interwoven Waves + Reference Numbers) */}
-              <div className="w-full h-36 xs:h-40 sm:h-44 relative pl-1 sm:pl-2 pr-1">
-                <svg viewBox="0 0 300 140" className="w-full h-full overflow-visible">
-                  {/* Left and Bottom Bracket Axis Line with Rounded Corner */}
-                  <path
-                    d="M 25 15 L 25 105 Q 25 118, 38 118 L 285 118"
-                    fill="none"
-                    stroke="rgba(255,255,255,0.7)"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                  />
+              {/* Vertical Step Cards */}
+              <div className="space-y-6 sm:space-y-7">
+                {WORKFLOW_STEPS.map((step, idx) => (
+                  <ScrollRevealBox
+                    key={step.step}
+                    variant="fade-up"
+                    delay={0.1 + idx * 0.1}
+                    className="relative flex items-start gap-4 sm:gap-6 group"
+                  >
+                    {/* Step Number Circle on the Spine */}
+                    <div className="relative z-10 w-10 sm:w-12 h-10 sm:h-12 rounded-2xl bg-white border-2 border-[#00A884] flex items-center justify-center font-mono font-extrabold text-sm sm:text-base text-[#00A884] shadow-md group-hover:scale-105 group-hover:bg-[#00A884] group-hover:text-white transition-all shrink-0">
+                      {step.step}
+                    </div>
 
-                  {/* Horizontal Fine Grid Guidelines */}
-                  <line x1="38" y1="35" x2="285" y2="35" stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeDasharray="3 3" />
-                  <line x1="38" y1="75" x2="285" y2="75" stroke="rgba(255,255,255,0.12)" strokeWidth="1" strokeDasharray="3 3" />
+                    {/* Step Content Card */}
+                    <div className="flex-1 bg-white rounded-2xl sm:rounded-3xl border border-slate-200/80 p-5 sm:p-7 shadow-xs hover:shadow-xl hover:border-emerald-500/40 transition-all duration-300">
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-[#00A884] shrink-0">
+                          {step.icon}
+                        </div>
+                        <h3 className="font-sans font-bold text-base sm:text-lg text-slate-900 group-hover:text-[#00A884] transition-colors">
+                          {step.title}
+                        </h3>
+                      </div>
 
-                  {/* Interwoven Wave 1 (Soft White / Subtle) */}
-                  <path
-                    d="M 35 85 Q 85 105, 140 70 T 240 65 T 280 85"
-                    fill="none"
-                    stroke="rgba(255,255,255,0.6)"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                  />
-
-                  {/* Interwoven Wave 2 (Brand Teal #00A884 with Glowing Indicator) */}
-                  <path
-                    d="M 35 75 Q 90 65, 145 90 T 245 60 T 280 50"
-                    fill="none"
-                    stroke="#00A884"
-                    strokeWidth="3.5"
-                    strokeLinecap="round"
-                    className="drop-shadow-[0_0_10px_rgba(0,168,132,0.8)]"
-                  />
-                  <circle cx="280" cy="50" r="4.5" fill="#00A884" />
-                </svg>
-
-                {/* Reference Numbers along Bottom: 250 100 220 30 90 10 0 */}
-                <div className="flex justify-between text-[11px] xs:text-xs text-slate-200 font-mono mt-2 pl-4 sm:pl-6 pr-1">
-                  <span>250</span>
-                  <span>100</span>
-                  <span>220</span>
-                  <span>30</span>
-                  <span>90</span>
-                  <span>10</span>
-                  <span>0</span>
-                </div>
+                      <p className="font-sans text-xs sm:text-sm text-slate-600 leading-relaxed">
+                        {step.description}
+                      </p>
+                    </div>
+                  </ScrollRevealBox>
+                ))}
               </div>
             </div>
-
-            <div className="mt-4 pt-3 border-t border-white/15 flex justify-between items-center text-xs sm:text-sm text-slate-200">
-              <span>Target Achieved</span>
-              <span className="font-bold text-sm sm:text-base text-[#00A884]">-16.5 kg</span>
-            </div>
-          </ScrollRevealBox>
-
-          {/* ── CARD 2 (CENTER - COL 5): OUTLINED DOCTOR VIDEO CALL SCREEN ── */}
-          <ScrollRevealBox variant="stagger-scale" delay={0.2} className="w-full min-w-0 lg:col-span-5 rounded-3xl overflow-hidden shadow-2xl border border-white/30 relative min-h-[340px] xs:min-h-[360px] sm:min-h-[380px] bg-slate-950 flex flex-col justify-between group hover:-translate-y-1 transition-all duration-300">
-            {/* Main Video Stream: Friendly Doctor */}
-            <img
-              src="/images/burnex/doctor_video.jpg"
-              alt="Licensed doctor telehealth consultation"
-              className="absolute inset-0 w-full h-full object-cover object-top filter brightness-[0.95]"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-transparent to-slate-950/40 pointer-events-none" />
-
-            {/* Top Bar: Call Timer & PIP Patient Avatar */}
-            <div className="relative z-10 p-3 sm:p-4 flex justify-between items-start">
-              <span className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white font-mono text-xs sm:text-sm font-semibold">
-                04:12
-              </span>
-
-              {/* Patient Picture-in-Picture */}
-              <div className="w-13 h-17 xs:w-14 xs:h-18 sm:w-16 sm:h-20 rounded-xl sm:rounded-2xl overflow-hidden border-2 border-white/70 shadow-2xl bg-slate-800">
-                <img
-                  src="/images/burnex/patient_video.jpg"
-                  alt="Patient"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-            </div>
-
-            {/* Bottom Floating Frosted Glass Call Controls */}
-            <div className="relative z-10 p-3 sm:p-4">
-              <div className="bg-black/60 backdrop-blur-xl border border-white/25 rounded-full px-3.5 xs:px-4 sm:px-5 py-2 sm:py-2.5 flex items-center justify-between max-w-[280px] xs:max-w-xs sm:max-w-sm mx-auto shadow-2xl gap-2">
-                <button className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors shrink-0" aria-label="Mute mic">
-                  <Mic className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
-                <button className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-[#00A884] hover:bg-[#008f70] flex items-center justify-center text-white transition-colors shadow-lg shrink-0" aria-label="End call">
-                  <PhoneOff className="w-4 h-4" />
-                </button>
-                <button className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors shrink-0" aria-label="Camera toggle">
-                  <Video className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
-                <button className="w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center text-white transition-colors shrink-0" aria-label="Volume">
-                  <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
-              </div>
-            </div>
-          </ScrollRevealBox>
-
-          {/* ── CARD 3 (RIGHT - COL 3): DEDICATED CARE TEAM ── */}
-          <ScrollRevealBox variant="stagger-scale" delay={0.3} className="w-full min-w-0 lg:col-span-3 rounded-3xl bg-white/15 backdrop-blur-xl border border-white/25 p-5 xs:p-6 sm:p-7 text-white flex flex-col justify-between shadow-2xl hover:-translate-y-1 transition-all duration-300">
-            <div>
-              <div className="flex items-center justify-between mb-4 sm:mb-5">
-                <h3 className="font-sans font-bold text-base sm:text-lg text-white">Dedicated Care Team</h3>
-                <ShieldCheck className="w-5 h-5 text-[#00A884]" />
-              </div>
-
-              {/* Care Team Roles - Spacious & Uncongested */}
-              <div className="space-y-3">
-                {/* Lead Physician */}
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-white/10 border border-white/15">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-sans font-bold text-sm text-white">Lead Physician</span>
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-teal-300 bg-teal-900/40 px-2 py-0.5 rounded-full border border-teal-500/30">
-                      Doctor-Led
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    General Medicine · Endocrinology · Internal Medicine
-                  </p>
-                </div>
-
-                {/* Clinical Dietitian */}
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-white/10 border border-white/15">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-sans font-bold text-sm text-white">Clinical Dietitian</span>
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-teal-300 bg-teal-900/40 px-2 py-0.5 rounded-full border border-teal-500/30">
-                      Nutrition
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    Metabolic Specialist · Zero-Starvation Indian Meal Plans
-                  </p>
-                </div>
-
-                {/* Fitness Coach */}
-                <div className="p-3.5 sm:p-4 rounded-2xl bg-white/10 border border-white/15">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="font-sans font-bold text-sm text-white">Fitness Coach</span>
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-teal-300 bg-teal-900/40 px-2 py-0.5 rounded-full border border-teal-500/30">
-                      Movement
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-300 leading-relaxed">
-                    Lean Muscle Retention & Guided Resistance Routines
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4 pt-3 border-t border-white/15">
-              <span className="text-xs text-slate-200">Board-Certified Telehealth Platform</span>
-            </div>
-          </ScrollRevealBox>
+          </div>
 
         </div>
 

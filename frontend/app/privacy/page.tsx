@@ -1,53 +1,59 @@
 import React from 'react'
 import Link from 'next/link'
 import { Metadata } from 'next'
-import { Shield, Clock, FileText, CheckCircle2, AlertTriangle, ArrowLeft, Lock } from 'lucide-react'
-import { CONSENT_VERSION, CONSENT_EFFECTIVE_DATE } from '@/lib/consent/constants'
+import { ArrowLeft, Clock, FileText, Mail, Phone, Lock, AlertTriangle } from 'lucide-react'
+import {
+  CONSENT_VERSION,
+  CONSENT_EFFECTIVE_DATE,
+  COMPANY_DETAILS,
+  PRIVACY_DATA_TABLE,
+  PRIVACY_SECTIONS,
+} from '@/lib/consent/constants'
 
 export const metadata: Metadata = {
-  title: 'Privacy Policy | 8liv Health',
-  description: 'Statutory Privacy Policy and Data Notice for 8liv telehealth and clinical care operations.',
+  title: 'Privacy Policy | 8liv',
+  description: 'Statutory Privacy Policy & Data Fiduciary Disclosure under DPDPA 2023 for 8liv, operated by LONGLIV PRIVATE LIMITED.',
 }
 
 export default function PrivacyPage() {
   return (
     <div className="min-h-screen bg-[#FBF9F5] text-slate-900 selection:bg-[#00A884]/20 selection:text-[#11241A]">
       {/* Top Emergency Notice */}
-      <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2.5 text-center text-xs font-semibold text-amber-900 flex items-center justify-center gap-2">
-        <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-        <span>This service is not for emergencies. In a medical emergency, call 112 immediately.</span>
+      <div className="bg-amber-500/10 border-b border-amber-500/20 px-4 py-2.5 text-center text-xs font-medium text-amber-900 flex items-center justify-center gap-2">
+        <AlertTriangle className="w-4 h-4 text-amber-700 shrink-0" />
+        <span>This service is not for emergencies. In a medical emergency, immediately call 112 or visit the nearest hospital.</span>
       </div>
 
-      <header className="border-b border-slate-200/80 bg-white/80 backdrop-blur-md sticky top-0 z-30">
+      {/* Navigation Header */}
+      <header className="border-b border-slate-200/80 bg-white/90 backdrop-blur-md sticky top-0 z-30">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-between">
           <Link
             href="/"
-            className="inline-flex items-center gap-2 text-xs font-bold text-slate-600 hover:text-[#00A884] transition-colors"
+            className="inline-flex items-center gap-2 text-xs font-semibold text-slate-600 hover:text-[#00A884] transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>Return to 8liv</span>
           </Link>
-          <div className="flex items-center gap-2 text-xs font-bold font-mono text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Active Standard · {CONSENT_VERSION}</span>
+          <div className="flex items-center gap-2 text-xs font-medium text-emerald-800 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200/70">
+            <span>Part 2 · Version {CONSENT_VERSION}</span>
           </div>
         </div>
       </header>
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 py-10 sm:py-16 space-y-8">
+      {/* Main Content */}
+      <main className="max-w-3xl mx-auto px-4 sm:px-6 py-12 sm:py-16 space-y-10">
         {/* Document Header */}
         <div className="space-y-4">
-          <div className="inline-flex items-center gap-2 text-xs font-bold tracking-wider uppercase text-[#00A884] font-mono">
-            <Shield className="w-4 h-4" />
-            <span>Statutory Legal Document · Part 2 &amp; Part 4</span>
-          </div>
+          <p className="text-xs font-bold tracking-wider uppercase text-[#00A884]">
+            Part 2 · Statutory Privacy Disclosure
+          </p>
           <h1 className="text-3xl sm:text-4xl font-extrabold text-[#11241A] tracking-tight">
-            Privacy Policy &amp; Data Notice
+            Privacy Policy
           </h1>
-          <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-slate-500 pt-1">
+          <div className="flex flex-wrap items-center gap-4 text-xs text-slate-500 pt-1">
             <span className="flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-slate-400" />
-              Effective: {CONSENT_EFFECTIVE_DATE} (October 18, 2026)
+              Last updated: {CONSENT_EFFECTIVE_DATE}
             </span>
             <span className="text-slate-300">·</span>
             <span className="flex items-center gap-1.5">
@@ -55,143 +61,133 @@ export default function PrivacyPage() {
               Document Version: {CONSENT_VERSION}
             </span>
             <span className="text-slate-300">·</span>
-            <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 font-mono">
-              DPDP Act &amp; DISHA Compliant
-            </span>
+            <span className="text-slate-600">Standard: DPDPA 2023 Compliant</span>
           </div>
         </div>
 
-        {/* Clinical Data Notice Summary Box */}
-        <div className="p-5 sm:p-6 rounded-3xl bg-white border border-slate-200/80 shadow-xs space-y-4">
-          <div className="flex items-center gap-2 text-xs font-bold text-slate-800">
-            <Lock className="w-4 h-4 text-[#00A884]" />
-            <span>Data Notice Summary (Part 4)</span>
+        {/* Fiduciary Preamble */}
+        <div className="p-5 sm:p-6 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3 text-sm text-slate-700 leading-relaxed">
+          <p>
+            <strong>{COMPANY_DETAILS.legalName}</strong> (&ldquo;8liv&rdquo;) is the <strong>Data Fiduciary</strong> for the personal and clinical data described in this policy.
+          </p>
+          <p className="text-xs text-slate-500">
+            This policy outlines what data we collect, our statutory legal grounds for processing, who accesses it, how long records are maintained, and your legal rights to inspect, correct, and withdraw consent.
+          </p>
+        </div>
+
+        {/* Data We Collect Matrix Table */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-[#11241A] tracking-tight">
+              1. Data We Collect Matrix
+            </h2>
+            <span className="text-xs text-slate-500">Statutory Inventory</span>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs text-slate-600">
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-              <strong className="text-slate-900 block mb-0.5">Who is collecting your data?</strong>
-              8liv Health Platform (www.8liv.in), a clinical telehealth technology platform.
-            </div>
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-              <strong className="text-slate-900 block mb-0.5">What is collected?</strong>
-              Contact information, date of birth, biometric indicators, lab diagnostics, and consultation records.
-            </div>
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-              <strong className="text-slate-900 block mb-0.5">Who has access?</strong>
-              Exclusively your dedicated care team: your assigned physician, clinical dietician, and fitness coach.
-            </div>
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-              <strong className="text-slate-900 block mb-0.5">Your consent rights:</strong>
-              Inspect, download, or withdraw optional and required consents under Account Settings &gt; Privacy.
+
+          <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs sm:text-sm">
+                <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-semibold">
+                  <tr>
+                    <th className="py-3 px-4 w-1/4">Data Type</th>
+                    <th className="py-3 px-4 w-2/5">Examples</th>
+                    <th className="py-3 px-4">Why We Collect &amp; Use It</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-slate-600">
+                  {PRIVACY_DATA_TABLE.map((row) => (
+                    <tr key={row.type} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="py-3.5 px-4 font-semibold text-slate-900 align-top">
+                        {row.type}
+                      </td>
+                      <td className="py-3.5 px-4 text-xs sm:text-sm leading-relaxed align-top">
+                        {row.examples}
+                      </td>
+                      <td className="py-3.5 px-4 text-xs sm:text-sm leading-relaxed text-slate-500 align-top">
+                        {row.purpose}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
 
-        {/* Full Privacy Policy Text */}
-        <article className="p-6 sm:p-10 rounded-3xl bg-white border border-slate-200 shadow-sm space-y-8 text-slate-700 leading-relaxed text-sm sm:text-base">
-          <section className="space-y-3">
-            <h2 className="text-lg sm:text-xl font-bold text-[#11241A] tracking-tight">
-              1. Information We Collect
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-              We collect information provided directly by you during intake assessments, booking, payment, and clinical video consultations. This includes identity details (name, email, mobile number, date of birth), health metrics (height, weight, waist circumference, medical history, allergies, existing medications, and blood lab reports), as well as consultation transcripts, clinical notes, and physician-signed digital prescriptions.
-            </p>
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-lg sm:text-xl font-bold text-[#11241A] tracking-tight">
-              2. Minor Patients &amp; Guardian Consent
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-              For any patient under 18 years of age, 8liv requires the explicit, verified consent of a parent or legal guardian. Guardian identity and mobile number are verified via cryptographic WhatsApp/SMS one-time password (OTP) before any medical or personal data is collected or stored.
-            </p>
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-lg sm:text-xl font-bold text-[#11241A] tracking-tight">
-              3. Purpose of Processing &amp; Care Team Sharing
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-              Your health data is processed solely to: (a) evaluate your clinical suitability for doctor-supervised metabolic programs; (b) conduct encrypted video consultations with registered medical practitioners; and (c) coordinate multidisciplinary care between your doctor, clinical dietician, and trainer. We do not sell or rent patient health data under any circumstances.
-            </p>
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-lg sm:text-xl font-bold text-[#11241A] tracking-tight">
-              4. Storage, Cryptography &amp; Append-Only Audit Records
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-              All health records and consent acceptances are stored with end-to-end encryption in transit (TLS 1.3) and at rest (AES-256). All consent actions (Gates 1, 2, 3, and withdrawals) are recorded in an append-only audit trail capturing version, timestamp, SHA-256 document content hash, IP address, user agent, and OTP verification state. Records are never deleted or modified.
-            </p>
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-lg sm:text-xl font-bold text-[#11241A] tracking-tight">
-              5. Consent Withdrawal &amp; Data Rights
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-              In accordance with the Digital Personal Data Protection Act, you have the right to withdraw your consent at any time. You can view your active consents and execute withdrawals directly from your patient portal under <strong>Account Settings &gt; Privacy</strong>. Withdrawing treatment consent will terminate active telehealth sessions and pause care plan coordination.
-            </p>
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-lg sm:text-xl font-bold text-[#11241A] tracking-tight">
-              6. Data Protection Officer (DPO) Contact
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
-              For inquiries regarding personal data processing or to exercise legal data rights, contact our Data Protection Officer at <strong>dpo@8liv.in</strong> or via written notice to 8liv Health Legal Department, Bengaluru, Karnataka, India.
-            </p>
-          </section>
-        </article>
-
-        {/* Version Archive Table */}
-        <div className="space-y-3 pt-4">
-          <h3 className="text-sm font-bold text-[#11241A] uppercase tracking-wider">
-            Version Archive &amp; Audit Trail
-          </h3>
-          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-            <table className="w-full text-xs text-left">
-              <thead className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200">
-                <tr>
-                  <th className="px-4 py-3">Version</th>
-                  <th className="px-4 py-3">Effective Date</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Scope</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium text-slate-600">
-                <tr className="bg-emerald-50/40">
-                  <td className="px-4 py-3 font-bold text-emerald-800 font-mono">v4.0</td>
-                  <td className="px-4 py-3">October 18, 2026</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-100 text-emerald-800">
-                      Active
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">Statutory 4-step consent tracking, append-only audit trail, minor OTP verification</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3 font-mono text-slate-400">v3.2</td>
-                  <td className="px-4 py-3 text-slate-400">July 14, 2026</td>
-                  <td className="px-4 py-3">
-                    <span className="inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-100 text-slate-500">
-                      Archived
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-slate-400">Previous telehealth intake privacy terms</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+        {/* 10 Numbered Privacy Policy Sections */}
+        <div className="space-y-6">
+          {PRIVACY_SECTIONS.slice(1).map((section) => (
+            <section
+              key={section.number}
+              id={`section-${section.number}`}
+              className="p-6 sm:p-8 rounded-2xl bg-white border border-slate-200 shadow-xs space-y-3 scroll-mt-24 transition-colors hover:border-slate-300"
+            >
+              <div className="flex items-baseline gap-3">
+                <span className="text-xs font-mono font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/60">
+                  {section.number}
+                </span>
+                <h2 className="text-base sm:text-lg font-bold text-[#11241A] tracking-tight">
+                  {section.title}
+                </h2>
+              </div>
+              <p className="text-sm text-slate-600 leading-relaxed pl-0 sm:pl-9">
+                {section.content}
+              </p>
+            </section>
+          ))}
         </div>
 
-        {/* Footer Legal Links */}
-        <div className="pt-8 border-t border-slate-200 flex flex-wrap items-center justify-between gap-4 text-xs font-semibold text-slate-500">
-          <p>© 2026 8liv Health Platform. All rights reserved.</p>
+        {/* Data Protection / Grievance Officer Card */}
+        <div className="p-6 sm:p-8 rounded-2xl bg-slate-900 text-white space-y-4">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-emerald-400 text-xs font-semibold uppercase tracking-wider">
+              <Lock className="w-3.5 h-3.5" />
+              <span>Data Protection &amp; Redressal</span>
+            </div>
+            <h3 className="text-base font-bold text-white">Data Protection / Grievance Officer</h3>
+            <p className="text-xs text-slate-300 leading-relaxed">
+              For inquiries regarding data inspection, correction, consent withdrawal, or privacy grievances, reach out directly:
+            </p>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs pt-1">
+            <div className="flex items-center gap-2 text-white/90">
+              <span className="font-semibold text-emerald-400">Officer:</span>
+              <span>{COMPANY_DETAILS.grievanceOfficer.name}</span>
+            </div>
+            <div className="flex items-center gap-2 text-white/90">
+              <span className="font-semibold text-emerald-400">Entity:</span>
+              <span>{COMPANY_DETAILS.legalName}</span>
+            </div>
+            <div className="flex items-center gap-2 text-white/90">
+              <Mail className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <a href={`mailto:${COMPANY_DETAILS.grievanceOfficer.email}`} className="hover:underline">
+                {COMPANY_DETAILS.grievanceOfficer.email}
+              </a>
+            </div>
+            <div className="flex items-center gap-2 text-white/90">
+              <Phone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+              <a href={`tel:${COMPANY_DETAILS.grievanceOfficer.phonePrivacy}`} className="hover:underline">
+                +91 {COMPANY_DETAILS.grievanceOfficer.phonePrivacy}
+              </a>
+            </div>
+          </div>
+
+          <p className="text-xs text-slate-400 pt-2 border-t border-slate-800">
+            If we do not resolve your concern to your satisfaction, you retain the statutory right to escalate to the Data Protection Board of India once operational.
+          </p>
+        </div>
+
+        {/* Quick Links to Other Parts */}
+        <div className="p-5 rounded-2xl bg-slate-100 border border-slate-200/80 flex flex-wrap items-center justify-between gap-4 text-xs font-semibold text-slate-700">
+          <span>Other Statutory Policies:</span>
           <div className="flex items-center gap-4">
-            <Link href="/terms" className="hover:text-[#00A884]">Terms of Service</Link>
-            <Link href="/prescription-policy" className="hover:text-[#00A884]">Prescription Policy</Link>
-            <Link href="/patient/settings" className="hover:text-[#00A884]">Manage Privacy Settings</Link>
+            <Link href="/terms" className="text-[#00A884] hover:underline">
+              Part 1: Terms of Service &rarr;
+            </Link>
+            <Link href="/prescription-policy" className="text-[#00A884] hover:underline">
+              Part 5: Prescription Policy &rarr;
+            </Link>
           </div>
         </div>
       </main>
