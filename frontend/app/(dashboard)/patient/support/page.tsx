@@ -4,7 +4,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import { 
   LifeBuoy, Plus, MessageSquare, Send, Paperclip, FileText, CheckCircle2,
   Clock, AlertCircle, Calendar, RefreshCw, Upload, ShieldCheck, ChevronRight,
-  Pill, ArrowRight, X, ExternalLink, HelpCircle, Check, Sparkles
+  Pill, ArrowRight, X, ExternalLink, HelpCircle, Check, Sparkles,
+  Phone, PhoneCall, PhoneForwarded, MessageCircle
 } from 'lucide-react'
 import { authedFetch } from '@/lib/apiClient'
 import { usePatientData } from '@/hooks/usePatientData'
@@ -92,6 +93,59 @@ export default function PatientSupportPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploadingReport, setUploadingReport] = useState(false)
   const [uploadSuccessMsg, setUploadSuccessMsg] = useState('')
+
+  // Phone callback modal
+  const [isCallbackModalOpen, setIsCallbackModalOpen] = useState(false)
+  const [callbackPhone, setCallbackPhone] = useState('')
+  const [callbackTopic, setCallbackTopic] = useState('Doctor Consultation / Reschedule')
+  const [callbackWindow, setCallbackWindow] = useState('Immediate (within 15–30 mins)')
+  const [callbackNotes, setCallbackNotes] = useState('')
+  const [requestingCallback, setRequestingCallback] = useState(false)
+  const [callbackSuccessMsg, setCallbackSuccessMsg] = useState('')
+
+  useEffect(() => {
+    if (profile?.phone_number && !callbackPhone) {
+      setCallbackPhone(profile.phone_number)
+    }
+  }, [profile?.phone_number, callbackPhone])
+
+  const handleRequestCallback = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!callbackPhone.trim()) {
+      alert('Please enter your mobile phone number.')
+      return
+    }
+    setRequestingCallback(true)
+    setCallbackSuccessMsg('')
+    try {
+      const res = await authedFetch('/api/support/tickets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category: 'booking',
+          priority: 'urgent',
+          subject: `[Phone Callback Request] ${callbackTopic}`,
+          description: `Patient requested direct phone call from 8Liv Care Team.\n\nPhone: ${callbackPhone}\nTopic: ${callbackTopic}\nPreferred Time Window: ${callbackWindow}\nNotes: ${callbackNotes.trim() || 'None'}`
+        })
+      })
+      const data = await res.json()
+      if (res.ok && data.ticket) {
+        setCallbackSuccessMsg(`Callback scheduled! Our care coordinator will call you at ${callbackPhone} shortly.`)
+        fetchTickets()
+        setTimeout(() => {
+          setIsCallbackModalOpen(false)
+          setCallbackSuccessMsg('')
+          setCallbackNotes('')
+        }, 3000)
+      } else {
+        alert(data.error || 'Failed to place callback request.')
+      }
+    } catch (err: any) {
+      alert(err.message || 'Connection failed.')
+    } finally {
+      setRequestingCallback(false)
+    }
+  }
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatBottomRef = useRef<HTMLDivElement>(null)
@@ -330,6 +384,63 @@ export default function PatientSupportPage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-8 mt-6">
+        {/* Direct Voice & WhatsApp Care Concierge Banner */}
+        <div className="bg-gradient-to-r from-[#163824] via-[#1a442d] to-[#0D9488] rounded-2xl p-4 sm:p-6 text-white shadow-lg shadow-emerald-950/10 mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5 border border-emerald-800/40">
+          <div className="flex items-start sm:items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-white/10 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/20">
+              <PhoneCall className="w-6 h-6 text-emerald-300 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap mb-1">
+                <span className="text-[10px] font-black uppercase tracking-wider bg-emerald-400/20 text-emerald-300 px-2.5 py-0.5 rounded-full border border-emerald-400/30">
+                  Direct Care Helpline
+                </span>
+                <span className="text-xs text-emerald-100 font-medium">Daily 8:00 AM – 10:00 PM IST</span>
+              </div>
+              <h2 className="text-base sm:text-lg font-black tracking-tight text-white">
+                Contact the 8Liv Care &amp; Support Team
+              </h2>
+              <p className="text-xs text-emerald-100/80 mt-0.5 max-w-xl">
+                Have an urgent question about your doctor consultation, diet chart, blood report, or medicine delivery? Connect directly via voice call or WhatsApp.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 flex-wrap sm:flex-nowrap shrink-0">
+            {/* Direct Phone Call */}
+            <a
+              href="tel:+919944023986"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white text-[#163824] hover:bg-emerald-50 rounded-xl text-xs sm:text-sm font-extrabold shadow-sm transition-all active:scale-95"
+            >
+              <Phone size={16} className="text-emerald-700" />
+              <span>Call Helpline</span>
+            </a>
+
+            {/* Direct WhatsApp */}
+            <a
+              href="https://wa.me/919944023986?text=Hi%208Liv%20Support%2C%20I%20am%20calling%20regarding%20my%20care%20plan%20and%20health%20assistance."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-xl text-xs sm:text-sm font-extrabold shadow-sm transition-all active:scale-95"
+            >
+              <MessageCircle size={16} />
+              <span>WhatsApp Chat</span>
+            </a>
+
+            {/* Request Callback */}
+            <button
+              onClick={() => {
+                if (profile?.phone_number && !callbackPhone) setCallbackPhone(profile.phone_number)
+                setIsCallbackModalOpen(true)
+              }}
+              className="flex-1 sm:flex-initial inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-xl text-xs sm:text-sm font-extrabold border border-white/20 transition-all cursor-pointer"
+            >
+              <PhoneForwarded size={15} />
+              <span>Request Callback</span>
+            </button>
+          </div>
+        </div>
+
         {/* Quick Common Action Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div 
@@ -902,6 +1013,123 @@ export default function PatientSupportPage() {
                   >
                     {uploadingReport ? <RefreshCw size={14} className="animate-spin" /> : <Upload size={14} />}
                     <span>Upload & Notify Doctor</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Request Urgent Phone Callback */}
+      {isCallbackModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 relative animate-in fade-in zoom-in-95 duration-200">
+            <button
+              onClick={() => setIsCallbackModalOpen(false)}
+              className="absolute top-5 right-5 p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-2.5 mb-5">
+              <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-[#00A884] flex items-center justify-center font-bold">
+                <PhoneCall size={20} />
+              </div>
+              <div>
+                <h3 className="text-base sm:text-lg font-black text-slate-900">
+                  Request a Phone Callback
+                </h3>
+                <p className="text-xs text-slate-500">
+                  An 8Liv Care Coordinator will ring you directly.
+                </p>
+              </div>
+            </div>
+
+            {callbackSuccessMsg ? (
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-center py-6">
+                <CheckCircle2 size={32} className="text-[#00A884] mx-auto mb-2" />
+                <h4 className="text-sm font-extrabold text-emerald-950">Callback Scheduled</h4>
+                <p className="text-xs text-emerald-700 mt-1">{callbackSuccessMsg}</p>
+              </div>
+            ) : (
+              <form onSubmit={handleRequestCallback} className="space-y-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+                    Your Mobile Number *
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="+91 9876543210"
+                    value={callbackPhone}
+                    onChange={(e) => setCallbackPhone(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs sm:text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#00A884]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+                    What is this regarding? *
+                  </label>
+                  <select
+                    value={callbackTopic}
+                    onChange={(e) => setCallbackTopic(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs sm:text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#00A884]"
+                  >
+                    <option value="Doctor Consultation / Reschedule">📅 Doctor Consultation / Reschedule</option>
+                    <option value="Dietitian & Fitness Guidance">🥗 Dietitian & Fitness Guidance</option>
+                    <option value="Blood Report Question">🧪 Blood Report & Lab Test Question</option>
+                    <option value="Prescription & Medicine Delivery">💊 Prescription & Medicine Delivery</option>
+                    <option value="Billing & Invoicing">💳 Billing, Subscription & Invoices</option>
+                    <option value="General Health Desk Inquiry">⚙️ General Health Desk Inquiry</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+                    Preferred Callback Window
+                  </label>
+                  <select
+                    value={callbackWindow}
+                    onChange={(e) => setCallbackWindow(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-3 text-xs sm:text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#00A884]"
+                  >
+                    <option value="Immediate (within 15–30 mins)">⚡ Immediate (within 15–30 mins)</option>
+                    <option value="Today Afternoon (1:00 PM – 4:00 PM)">☀️ Today Afternoon (1:00 PM – 4:00 PM)</option>
+                    <option value="Today Evening (5:00 PM – 8:00 PM)">🌆 Today Evening (5:00 PM – 8:00 PM)</option>
+                    <option value="Tomorrow Morning (9:00 AM – 12:00 PM)">🌅 Tomorrow Morning (9:00 AM – 12:00 PM)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-700 mb-1.5 block">
+                    Brief Note (Optional)
+                  </label>
+                  <textarea
+                    rows={2}
+                    placeholder="Any specific note for the care coordinator..."
+                    value={callbackNotes}
+                    onChange={(e) => setCallbackNotes(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#00A884] resize-none"
+                  />
+                </div>
+
+                <div className="pt-2 flex items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setIsCallbackModalOpen(false)}
+                    className="px-4 py-2 rounded-xl text-xs sm:text-sm font-bold text-slate-600 hover:bg-slate-100 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={requestingCallback}
+                    className="px-5 py-2.5 bg-[#00A884] hover:bg-[#0A8F70] disabled:opacity-50 text-white rounded-xl text-xs sm:text-sm font-bold flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20"
+                  >
+                    {requestingCallback ? <RefreshCw size={14} className="animate-spin" /> : <PhoneCall size={14} />}
+                    <span>Request Callback</span>
                   </button>
                 </div>
               </form>

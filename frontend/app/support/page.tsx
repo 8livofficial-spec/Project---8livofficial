@@ -673,7 +673,29 @@ export default function SupportWorkspacePage() {
                           </span>
                         </div>
                         <div className="text-xs text-slate-500 space-y-0.5">
-                          <p className="flex items-center gap-1.5"><Phone className="w-3 h-3" /> {p.phone || 'No phone'}</p>
+                          <div className="flex items-center justify-between">
+                            <p className="flex items-center gap-1.5"><Phone className="w-3 h-3" /> {p.phone || 'No phone'}</p>
+                            {p.phone && (
+                              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                <a
+                                  href={`tel:${p.phone}`}
+                                  className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold flex items-center gap-1"
+                                  title="Call"
+                                >
+                                  <Phone className="w-2.5 h-2.5" /> Call
+                                </a>
+                                <a
+                                  href={`https://wa.me/${p.phone.replace(/\D/g, '')}?text=Hello%20${encodeURIComponent(p.fullName)}%2C%20this%20is%208Liv%20Customer%20Care.`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center gap-1"
+                                  title="WhatsApp"
+                                >
+                                  <MessageSquare className="w-2.5 h-2.5" /> WA
+                                </a>
+                              </div>
+                            )}
+                          </div>
                           <p className="flex items-center gap-1.5"><Mail className="w-3 h-3" /> {p.email}</p>
                         </div>
                         {p.bmi && (
@@ -733,6 +755,32 @@ export default function SupportWorkspacePage() {
                   <h2 className="text-base sm:text-lg font-extrabold text-slate-900">
                     {ticketDetails.subject}
                   </h2>
+                  <div className="flex items-center gap-2.5 mt-1 text-xs text-slate-500">
+                    <span className="font-semibold text-slate-700">{ticketDetails.patient?.fullName || 'Patient'}</span>
+                    {ticketDetails.patient?.phone && (
+                      <>
+                        <span>•</span>
+                        <a
+                          href={`tel:${ticketDetails.patient.phone}`}
+                          className="inline-flex items-center gap-1 font-bold text-emerald-700 hover:text-emerald-900"
+                          title="Call patient"
+                        >
+                          <Phone className="w-3 h-3 text-emerald-600" />
+                          <span>{ticketDetails.patient.phone}</span>
+                        </a>
+                        <a
+                          href={`https://wa.me/${ticketDetails.patient.phone.replace(/\D/g, '')}?text=Hello%20${encodeURIComponent(ticketDetails.patient.fullName || 'Patient')}%2C%20this%20is%208Liv%20Customer%20Care%20regarding%20ticket%20%23${ticketDetails.ticket_number}.`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-bold text-[#25D366] hover:text-[#20ba59]"
+                          title="Chat on WhatsApp"
+                        >
+                          <MessageSquare className="w-3 h-3" />
+                          <span>WhatsApp</span>
+                        </a>
+                      </>
+                    )}
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-2 flex-wrap">
@@ -888,11 +936,24 @@ export default function SupportWorkspacePage() {
             ) : (
               <div className="space-y-6">
                 {/* 1. Header Metrics Card */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Patient</span>
                     <strong className="text-xs sm:text-sm text-slate-900 font-bold block truncate">{patient360.patient.fullName}</strong>
-                    <span className="text-[11px] text-slate-500 block truncate">{patient360.patient.phone}</span>
+                    <div className="flex items-center gap-2 mt-1">
+                      {patient360.patient.phone ? (
+                        <a
+                          href={`tel:${patient360.patient.phone}`}
+                          className="text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1"
+                          title="Call patient phone"
+                        >
+                          <Phone className="w-3 h-3" />
+                          <span>{patient360.patient.phone}</span>
+                        </a>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">No phone</span>
+                      )}
+                    </div>
                   </div>
                   <div>
                     <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Active Plan</span>
@@ -909,14 +970,39 @@ export default function SupportWorkspacePage() {
                     <span className="text-[10px] text-slate-500 block">{patient360.health.weightKg || '--'} kg · {patient360.health.heightCm || '--'} cm</span>
                   </div>
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Quick Action</span>
-                    <button
-                      onClick={() => setUploadModalOpen(true)}
-                      className="w-full py-1.5 px-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1"
-                    >
-                      <Upload className="w-3 h-3" />
-                      <span>Upload Report</span>
-                    </button>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Contact & Actions</span>
+                    <div className="flex items-center gap-1.5">
+                      {patient360.patient.phone && (
+                        <>
+                          <a
+                            href={`tel:${patient360.patient.phone}`}
+                            className="flex-1 py-1 px-2 bg-[#163824] hover:bg-[#11241A] text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-xs"
+                            title="Direct Phone Call"
+                          >
+                            <Phone className="w-3 h-3" />
+                            <span>Call</span>
+                          </a>
+                          <a
+                            href={`https://wa.me/${patient360.patient.phone.replace(/\D/g, '')}?text=Hello%20${encodeURIComponent(patient360.patient.fullName)}%2C%20this%20is%208Liv%20Customer%20Care%20team.`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex-1 py-1 px-2 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-xs"
+                            title="Chat on WhatsApp"
+                          >
+                            <MessageSquare className="w-3 h-3" />
+                            <span>WhatsApp</span>
+                          </a>
+                        </>
+                      )}
+                      <button
+                        onClick={() => setUploadModalOpen(true)}
+                        className="py-1 px-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1"
+                        title="Upload Blood Report"
+                      >
+                        <Upload className="w-3 h-3" />
+                        <span className="hidden sm:inline">Report</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 

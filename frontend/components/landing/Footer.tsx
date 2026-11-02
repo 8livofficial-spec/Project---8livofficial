@@ -40,10 +40,11 @@ export default function Footer() {
           </div>
 
           <div>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-900 mb-4">Support &amp; Grievances</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-900 mb-4">Support &amp; Care Desk</h3>
             <ul className="space-y-3 text-sm">
-              <li><a href="mailto:rohith@8liv.in" className="text-[#475569] transition-colors hover:text-[#0F766E]">rohith@8liv.in</a></li>
-              <li><a href="tel:9944023986" className="text-[#475569] transition-colors hover:text-[#0F766E]">+91 9944023986</a></li>
+              <li><a href="mailto:support@8liv.in" className="text-[#475569] transition-colors hover:text-[#0F766E]">support@8liv.in</a></li>
+              <li><a href="tel:+919944023986" className="text-[#475569] transition-colors hover:text-[#0F766E] font-medium">+91 99440 23986 (Voice Line)</a></li>
+              <li><a href="https://wa.me/919944023986?text=Hi%208Liv%20Support%2C%20I%20need%20assistance." target="_blank" rel="noopener noreferrer" className="text-emerald-700 transition-colors hover:text-emerald-900 font-medium">WhatsApp Support Desk</a></li>
               <li className="text-xs text-[#64748B]">Emergency: In a medical emergency, call 112 immediately</li>
             </ul>
           </div>
