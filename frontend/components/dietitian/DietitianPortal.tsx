@@ -42,6 +42,7 @@ import {
   AlertTriangle,
   CalendarDays,
   Trash2,
+  Upload,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import ProviderProfileEditor from '@/components/provider/ProviderProfileEditor'
@@ -76,6 +77,7 @@ type AvailabilitySlot = {
 
 type ProviderConsultation = {
   id: string
+  patient_id?: string
   patientName: string
   staff_role?: string
   roleLabel?: string
@@ -277,6 +279,40 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
   const [consultationsTotalPages, setConsultationsTotalPages] = useState(1)
   const [savingAvailability, setSavingAvailability] = useState(false)
 
+  // Quick Slot State
+  const [showQuickSlotModal, setShowQuickSlotModal] = useState(false)
+  const [quickSlotDate, setQuickSlotDate] = useState(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 1)
+    return d.toISOString().split('T')[0]
+  })
+  const [quickSlotTime, setQuickSlotTime] = useState('10:00')
+  const [quickSlotDuration, setQuickSlotDuration] = useState(30)
+  const [savingQuickSlot, setSavingQuickSlot] = useState(false)
+
+  // Upload Nutrition Plan State
+  const [showUploadPlanModal, setShowUploadPlanModal] = useState(false)
+  const [uploadPlanPatientId, setUploadPlanPatientId] = useState('')
+  const [uploadPlanTitle, setUploadPlanTitle] = useState('Personalized Clinical Nutrition Plan')
+  const [uploadPlanCalories, setUploadPlanCalories] = useState('1600')
+  const [uploadPlanWater, setUploadPlanWater] = useState('2.5')
+  const [uploadPlanNotes, setUploadPlanNotes] = useState('')
+  const [uploadPlanFile, setUploadPlanFile] = useState<File | null>(null)
+  const [uploadingPlan, setUploadingPlan] = useState(false)
+
+  const allPatientOptions = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>()
+    for (const p of patients) {
+      map.set(p.id, { id: p.id, name: p.patient_name || p.email || 'Patient' })
+    }
+    for (const c of dietitianConsultations) {
+      if (c.patient_id && !map.has(c.patient_id)) {
+        map.set(c.patient_id, { id: c.patient_id, name: c.patientName || 'Patient' })
+      }
+    }
+    return Array.from(map.values())
+  }, [patients, dietitianConsultations])
+
   // 1. Initial Authentication & User Verification
   useEffect(() => {
     async function checkAuth() {
@@ -330,7 +366,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
       }
 
       // Patients
-      if (activeSection === 'patients' || activeSection === 'dashboard') {
+      if (activeSection === 'patients' || activeSection === 'dashboard' || activeSection === 'plans') {
         const res = await fetch(`/api/dietitian/patients?search=${encodeURIComponent(patientSearch)}`, { headers })
         const json = await res.json()
         if (json.success) {
@@ -532,6 +568,97 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
       await loadData()
     } catch (err: any) {
       setError(err.message || 'Unable to cancel slot.')
+    }
+  }
+
+  const handleCreateQuickSlot = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSavingQuickSlot(true)
+    setError('')
+    setSuccess('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || ''
+      const res = await fetch('/api/provider/availability', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          scheduleMode: 'MANUAL',
+          date: quickSlotDate,
+          startTime: quickSlotTime,
+          duration: Number(quickSlotDuration),
+          providerRole: 'dietitian',
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Unable to create slot.')
+      setSuccess('Availability slot created successfully.')
+      setShowQuickSlotModal(false)
+      await loadData()
+    } catch (err: any) {
+      setError(err.message || 'Unable to create slot.')
+    } finally {
+      setSavingQuickSlot(false)
+    }
+  }
+
+  const handleUploadNutritionPlan = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!uploadPlanPatientId) {
+      setError('Please select a patient.')
+      return
+    }
+    if (!uploadPlanFile) {
+      setError('Please select a nutrition plan file (PDF, image, or spreadsheet).')
+      return
+    }
+    setUploadingPlan(true)
+    setError('')
+    setSuccess('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || ''
+
+      const formData = new FormData()
+      formData.append('file', uploadPlanFile)
+      formData.append('patientId', uploadPlanPatientId)
+      formData.append('planType', 'diet')
+
+      const uploadRes = await fetch('/api/provider/plans/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      })
+      const uploadData = await uploadRes.json()
+      if (!uploadRes.ok) throw new Error(uploadData.error || 'Failed to upload plan file.')
+
+      const planRes = await fetch('/api/provider/plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          patientId: uploadPlanPatientId,
+          title: uploadPlanTitle,
+          description: uploadPlanNotes || 'Dietitian uploaded nutrition protocol',
+          attachmentUrl: uploadData.attachmentUrl,
+          attachmentType: uploadData.attachmentType,
+          notes: uploadPlanNotes,
+          caloriesPerDay: Number(uploadPlanCalories) || 1600,
+          hydrationGoal: `${uploadPlanWater} L`,
+          mealSchedule: 'Follow personalized schedule in attached document',
+        }),
+      })
+      const planResult = await planRes.json()
+      if (!planRes.ok) throw new Error(planResult.error || 'Failed to assign nutrition plan to patient.')
+
+      setSuccess('Nutrition plan successfully uploaded and assigned to patient!')
+      setShowUploadPlanModal(false)
+      setUploadPlanFile(null)
+      setUploadPlanNotes('')
+      await loadData()
+    } catch (err: any) {
+      setError(err.message || 'Unable to upload nutrition plan.')
+    } finally {
+      setUploadingPlan(false)
     }
   }
 
@@ -1424,19 +1551,31 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                   <div className="space-y-6">
                     <div className="flex items-center justify-between">
                       <h3 className="text-base font-black text-[#1A1F36]">Nutrition Plans History</h3>
-                      <button
-                        onClick={() => {
-                          setEditingPlan({
-                            patient_id: selectedPatient.id,
-                            plan_name: `Plan for ${selectedPatient.patient_name}`,
-                            meals: [],
-                          })
-                          setActiveSection('plans')
-                        }}
-                        className="px-4 py-2 rounded-full bg-[#0D9488] text-white text-xs font-bold hover:bg-[#0F766E]"
-                      >
-                        + Create New Plan Draft
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setUploadPlanPatientId(selectedPatient.id)
+                            setShowUploadPlanModal(true)
+                          }}
+                          className="px-4 py-2 rounded-full bg-[#1A1F36] text-white text-xs font-bold hover:bg-slate-800 flex items-center gap-1.5 shadow-sm"
+                        >
+                          <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                          <span>Upload Plan File</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingPlan({
+                              patient_id: selectedPatient.id,
+                              plan_name: `Plan for ${selectedPatient.patient_name}`,
+                              meals: [],
+                            })
+                            setActiveSection('plans')
+                          }}
+                          className="px-4 py-2 rounded-full bg-[#0D9488] text-white text-xs font-bold hover:bg-[#0F766E]"
+                        >
+                          + Create New Plan Draft
+                        </button>
+                      </div>
                     </div>
 
                     {workspaceData?.plans && workspaceData.plans.length > 0 ? (
@@ -1573,22 +1712,36 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                 <h1 className="text-2xl font-black text-[#1A1F36]">Clinical Nutrition Plans</h1>
                 <p className="text-xs text-slate-500 font-semibold">Immutable versioned dietary protocols & meal builders</p>
               </div>
-              <button
-                onClick={() => setEditingPlan({
-                  plan_name: 'Metabolic Nutrition Protocol',
-                  daily_calorie_target: 1600,
-                  water_target_liters: 2.5,
-                  meals: [
-                    { id: '1', name: 'Breakfast', time: '08:30 AM', items: [{ food: 'Vegetable Oats + Boiled Eggs', portion: '1 bowl', unit: 'serving' }] },
-                    { id: '2', name: 'Lunch', time: '01:30 PM', items: [{ food: 'Millet Roti + Dal + Green Salad', portion: '1 plate', unit: 'serving' }] },
-                    { id: '3', name: 'Dinner', time: '08:00 PM', items: [{ food: 'Clear Lentil Soup + Grilled Tofu/Fish', portion: '1 bowl', unit: 'serving' }] },
-                  ]
-                })}
-                className="rounded-full bg-[#0D9488] hover:bg-[#0F766E] text-white px-5 py-2.5 text-xs font-bold flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                <span>New Plan Builder</span>
-              </button>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    if (allPatientOptions.length > 0 && !uploadPlanPatientId) {
+                      setUploadPlanPatientId(allPatientOptions[0].id)
+                    }
+                    setShowUploadPlanModal(true)
+                  }}
+                  className="rounded-full bg-[#1A1F36] hover:bg-slate-800 text-white px-5 py-2.5 text-xs font-bold flex items-center gap-2 shadow-sm"
+                >
+                  <Upload className="w-4 h-4 text-emerald-400" />
+                  <span>Upload Nutrition Plan</span>
+                </button>
+                <button
+                  onClick={() => setEditingPlan({
+                    plan_name: 'Metabolic Nutrition Protocol',
+                    daily_calorie_target: 1600,
+                    water_target_liters: 2.5,
+                    meals: [
+                      { id: '1', name: 'Breakfast', time: '08:30 AM', items: [{ food: 'Vegetable Oats + Boiled Eggs', portion: '1 bowl', unit: 'serving' }] },
+                      { id: '2', name: 'Lunch', time: '01:30 PM', items: [{ food: 'Millet Roti + Dal + Green Salad', portion: '1 plate', unit: 'serving' }] },
+                      { id: '3', name: 'Dinner', time: '08:00 PM', items: [{ food: 'Clear Lentil Soup + Grilled Tofu/Fish', portion: '1 bowl', unit: 'serving' }] },
+                    ]
+                  })}
+                  className="rounded-full bg-[#0D9488] hover:bg-[#0F766E] text-white px-5 py-2.5 text-xs font-bold flex items-center gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>New Plan Builder</span>
+                </button>
+              </div>
             </div>
 
             {/* Editing / Creating Plan Builder Modal/Card */}
@@ -2253,9 +2406,18 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                     <CalendarDays className="w-4 h-4 text-[#0D9488]" />
                     Upcoming Available Slots
                   </h3>
-                  <span className="text-xs font-bold text-slate-400">
-                    {availability.filter(s => new Date(`${s.available_date}T${s.start_time}`).getTime() > Date.now()).length} Slots
-                  </span>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      onClick={() => setShowQuickSlotModal(true)}
+                      className="px-3.5 py-1.5 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>+ New Slot</span>
+                    </button>
+                    <span className="text-xs font-bold text-slate-400">
+                      {availability.filter(s => new Date(`${s.available_date}T${s.start_time}`).getTime() > Date.now()).length} Slots
+                    </span>
+                  </div>
                 </div>
                 {(() => {
                   const now = Date.now()
@@ -2487,6 +2649,217 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
               <ProviderProfileEditor provider={providerUser} copy={{ label: 'Dietitian', accent: '#0D9488' }} onProfileUpdated={() => loadData()} />
             </div>
 
+          </div>
+        )}
+        {/* Quick Slot Modal */}
+        {showQuickSlotModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+            <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="w-5 h-5 text-[#0D9488]" />
+                  <h3 className="text-lg font-black text-[#1A1F36]">Add Availability Slot</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowQuickSlotModal(false)}
+                  className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleCreateQuickSlot} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Date</label>
+                  <input
+                    type="date"
+                    required
+                    min={new Date().toISOString().split('T')[0]}
+                    value={quickSlotDate}
+                    onChange={(e) => setQuickSlotDate(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Start Time</label>
+                    <input
+                      type="time"
+                      required
+                      value={quickSlotTime}
+                      onChange={(e) => setQuickSlotTime(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Duration</label>
+                    <select
+                      value={quickSlotDuration}
+                      onChange={(e) => setQuickSlotDuration(Number(e.target.value))}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                    >
+                      <option value={15}>15 minutes</option>
+                      <option value={30}>30 minutes</option>
+                      <option value={45}>45 minutes</option>
+                      <option value={60}>60 minutes</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowQuickSlotModal(false)}
+                    className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={savingQuickSlot}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-md shadow-emerald-900/20 transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {savingQuickSlot ? 'Publishing...' : 'Publish Slot'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* Upload Nutrition Plan Modal */}
+        {showUploadPlanModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+            <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2">
+                  <Upload className="w-5 h-5 text-[#0D9488]" />
+                  <h3 className="text-lg font-black text-[#1A1F36]">Upload Patient Nutrition Plan</h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowUploadPlanModal(false)}
+                  className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+                >
+                  <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              <form onSubmit={handleUploadNutritionPlan} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Select Patient *</label>
+                  <select
+                    required
+                    value={uploadPlanPatientId}
+                    onChange={(e) => setUploadPlanPatientId(e.target.value)}
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                  >
+                    <option value="">-- Choose patient --</option>
+                    {allPatientOptions.map((pat) => (
+                      <option key={pat.id} value={pat.id}>{pat.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Plan Title *</label>
+                  <input
+                    type="text"
+                    required
+                    value={uploadPlanTitle}
+                    onChange={(e) => setUploadPlanTitle(e.target.value)}
+                    placeholder="e.g. Personalized Indian Nutrition & Calorie Chart"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Daily Calories (kcal)</label>
+                    <input
+                      type="number"
+                      value={uploadPlanCalories}
+                      onChange={(e) => setUploadPlanCalories(e.target.value)}
+                      placeholder="1600"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Hydration Goal (Liters)</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      value={uploadPlanWater}
+                      onChange={(e) => setUploadPlanWater(e.target.value)}
+                      placeholder="2.5"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Clinical Notes / Instructions</label>
+                  <textarea
+                    rows={3}
+                    value={uploadPlanNotes}
+                    onChange={(e) => setUploadPlanNotes(e.target.value)}
+                    placeholder="Follow the attached meal schedule, maintain daily hydration, avoid refined sugars..."
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Plan Document / Chart (PDF, Image, Excel) *</label>
+                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 hover:bg-slate-50 transition">
+                    <div className="space-y-2 text-center">
+                      <Upload className="mx-auto h-8 w-8 text-slate-400" />
+                      <div className="flex text-xs text-slate-600 justify-center">
+                        <label
+                          htmlFor="plan-upload-input"
+                          className="relative cursor-pointer rounded-md font-bold text-[#0D9488] hover:text-[#0F766E] focus-within:outline-none"
+                        >
+                          <span>Choose file</span>
+                          <input
+                            id="plan-upload-input"
+                            type="file"
+                            required
+                            accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls"
+                            onChange={(e) => setUploadPlanFile(e.target.files?.[0] || null)}
+                            className="sr-only"
+                          />
+                        </label>
+                        <p className="pl-1 font-medium">or drag and drop</p>
+                      </div>
+                      <p className="text-[11px] text-slate-400">PDF, JPG, PNG, WEBP, XLSX up to 10MB</p>
+                      {uploadPlanFile && (
+                        <p className="text-xs font-bold text-[#0D9488] mt-2 bg-emerald-50 py-1 px-2.5 rounded-lg inline-block">
+                          ✓ {uploadPlanFile.name} ({(uploadPlanFile.size / (1024 * 1024)).toFixed(2)} MB)
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowUploadPlanModal(false)}
+                    className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={uploadingPlan}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-md shadow-emerald-900/20 transition disabled:opacity-50 cursor-pointer"
+                  >
+                    {uploadingPlan ? 'Uploading & Assigning...' : 'Upload & Assign Plan'}
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         )}
       </main>

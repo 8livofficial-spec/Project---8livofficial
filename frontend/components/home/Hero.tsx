@@ -136,8 +136,8 @@ export default function Hero() {
               {/* Product Photo: Wholesome Indian Meal */}
               <div className="relative aspect-[4/3] rounded-2xl overflow-hidden bg-slate-50 mb-6 flex items-center justify-center">
                 <img
-                  src="/images/burnex/dietitian_meal.jpg"
-                  alt="Wholesome balanced Indian nutrition plate with rice, dal, and fresh vegetables"
+                  src="/images/burnex/dietitian_meal.webp"
+                  alt="Wholesome balanced Indian nutrition plate with rice, curry, boiled egg, sprouted beans, and fresh salad"
                   className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-500"
                 />
               </div>

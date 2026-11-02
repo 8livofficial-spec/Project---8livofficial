@@ -19,6 +19,7 @@ function boundedNumber(value: unknown, label: string, min: number, max: number, 
 }
 
 async function verifyAssignment(patientId: string, providerId: string, role: string) {
+  if (role === 'admin') return true
   const assignmentColumn = assignmentColumnForRole(role as any)
   const fallbackColumn = trainerFallbackColumnForRole(role as any)
   if (!assignmentColumn) return false
@@ -30,9 +31,31 @@ async function verifyAssignment(patientId: string, providerId: string, role: str
     .maybeSingle()
 
   const assignment = data as unknown as Record<string, string | null>
-  if (!assignment) return false
-  if (assignment[assignmentColumn] === providerId) return true
-  if (fallbackColumn && assignment[fallbackColumn] === providerId) return true
+  if (assignment) {
+    if (assignment[assignmentColumn] === providerId) return true
+    if (fallbackColumn && assignment[fallbackColumn] === providerId) return true
+  }
+
+  const { data: consult } = await supabaseAdmin
+    .from('staff_consultations')
+    .select('id')
+    .eq('patient_id', patientId)
+    .eq('staff_id', providerId)
+    .limit(1)
+    .maybeSingle()
+
+  if (consult) {
+    await supabaseAdmin
+      .from('care_team_assignments')
+      .upsert({
+        patient_id: patientId,
+        [assignmentColumn]: providerId,
+        status: 'active',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'patient_id' })
+    return true
+  }
+
   return false
 }
 

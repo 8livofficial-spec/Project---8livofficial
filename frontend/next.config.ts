@@ -12,9 +12,6 @@ const nextConfig: NextConfig = {
   images: {
     qualities: [72, 75, 78, 85, 90],
   },
-  turbopack: {
-    root: path.resolve(process.cwd()),
-  },
   async rewrites() {
     return [
       {

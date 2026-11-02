@@ -50,21 +50,42 @@ export async function POST(request: Request) {
     const assignmentColumn = assignmentColumnForRole(providerRole)
     const fallbackColumn = trainerFallbackColumnForRole(providerRole)
 
-    if (!assignmentColumn) {
-      return NextResponse.json({ error: 'Invalid provider role for plan assignment' }, { status: 403 })
+    let isAssigned = providerRole === 'admin'
+
+    if (!isAssigned && assignmentColumn) {
+      const { data: assignment } = await supabaseAdmin
+        .from('care_team_assignments')
+        .select('*')
+        .eq('patient_id', patientId)
+        .maybeSingle()
+
+      if (assignment) {
+        isAssigned = assignment[assignmentColumn] === providerId || Boolean(fallbackColumn && assignment[fallbackColumn] === providerId)
+      }
+
+      if (!isAssigned) {
+        const { data: consult } = await supabaseAdmin
+          .from('staff_consultations')
+          .select('id')
+          .eq('patient_id', patientId)
+          .eq('staff_id', providerId)
+          .limit(1)
+          .maybeSingle()
+
+        if (consult) {
+          isAssigned = true
+          await supabaseAdmin
+            .from('care_team_assignments')
+            .upsert({
+              patient_id: patientId,
+              [assignmentColumn]: providerId,
+              status: 'active',
+              updated_at: new Date().toISOString()
+            }, { onConflict: 'patient_id' })
+        }
+      }
     }
 
-    const { data: assignment, error: assignmentError } = await supabaseAdmin
-      .from('care_team_assignments')
-      .select('*')
-      .eq('patient_id', patientId)
-      .maybeSingle()
-
-    if (assignmentError || !assignment) {
-      return NextResponse.json({ error: 'No active care team assignment found for this patient.' }, { status: 403 })
-    }
-
-    const isAssigned = assignment[assignmentColumn] === providerId || (fallbackColumn && assignment[fallbackColumn] === providerId)
     if (!isAssigned) {
       return NextResponse.json({ error: 'You are not assigned to this patient.' }, { status: 403 })
     }

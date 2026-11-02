@@ -7,10 +7,8 @@ import "./globals.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700", "800"],
   variable: "--font-plus-jakarta",
   display: "swap",
-  preload: false,
 });
 
 const cormorant = Cormorant_Garamond({

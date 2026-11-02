@@ -40,7 +40,7 @@ function timesOverlap(firstStart: string, firstEnd: string, secondStart: string,
 
 function isPastSlot(date: string, time: string) {
   const timestamp = new Date(`${date}T${normalizeTime(time)}+05:30`).getTime()
-  return !Number.isFinite(timestamp) || timestamp <= Date.now()
+  return !Number.isFinite(timestamp) || timestamp <= (Date.now() - 5 * 60 * 1000)
 }
 
 export async function GET(request: Request) {
@@ -49,12 +49,16 @@ export async function GET(request: Request) {
     if ('error' in provider) return NextResponse.json({ error: provider.error }, { status: provider.status })
 
     const { searchParams } = new URL(request.url)
+    const effectiveRole = (provider.role === 'admin'
+      ? (searchParams.get('role') || 'dietitian')
+      : (provider.role === 'trainer' ? 'fitness_coach' : provider.role))
+
     const from = searchParams.get('from')
     const to = searchParams.get('to')
     const today = new Date().toISOString().split('T')[0]
     const defaultTo = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
 
-    const cacheKey = `avail:${provider.user.id}:${from || ''}:${to || ''}`
+    const cacheKey = `avail:${provider.user.id}:${effectiveRole}:${from || ''}:${to || ''}`
 
     const { value: result, etag } = await serverCache.getOrSet(
       cacheKey,
@@ -63,7 +67,7 @@ export async function GET(request: Request) {
           .from('provider_availability')
           .select('id, provider_id, provider_role, available_date, start_time, end_time, is_available, source, status, created_at, updated_at')
           .eq('provider_id', provider.user.id)
-          .eq('provider_role', provider.role)
+          .eq('provider_role', effectiveRole)
           .order('available_date', { ascending: true })
           .order('start_time', { ascending: true })
 
@@ -150,6 +154,9 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json()
+  const effectiveRole = (provider.role === 'admin'
+    ? (body.providerRole || body.role || 'dietitian')
+    : (provider.role === 'trainer' ? 'fitness_coach' : provider.role))
   const scheduleMode = String(body.scheduleMode || body.source || '').toUpperCase()
 
   if (scheduleMode !== 'MANUAL' && scheduleMode !== 'RECURRING') {
@@ -204,82 +211,32 @@ export async function POST(request: Request) {
       const startMin = minutesFromTime(startNorm)!
       const endNorm = normalizeTime(timeFromMinutes(startMin + durationNum))
 
-      // Check duplicates or overlaps for SAME provider
-      const { data: existing, error: existingError } = await supabaseAdmin
+      const { error: upsertErr } = await supabaseAdmin
         .from('provider_availability')
-        .select('id, available_date, start_time, end_time, status')
-        .eq('provider_id', provider.user.id)
-        .eq('provider_role', provider.role)
-        .eq('available_date', date)
+        .upsert({
+          provider_id: provider.user.id,
+          provider_role: effectiveRole,
+          available_date: date,
+          start_time: startNorm,
+          end_time: endNorm,
+          slot_duration: durationNum,
+          source: 'MANUAL',
+          status: 'AVAILABLE',
+          is_available: true,
+          updated_at: new Date().toISOString()
+        }, {
+          onConflict: 'provider_id,provider_role,available_date,start_time'
+        })
 
-      if (existingError) {
-        errors.push(existingError.message)
-        continue
-      }
-
-      const activeExisting = (existing || []).filter(item => activeStatuses.includes(String(item.status)))
-      if (activeExisting.some(item => timesOverlap(item.start_time, item.end_time, startNorm, endNorm))) {
-        overlapCount++
-        continue
-      }
-
-      const previous = (existing || []).find(item => ['CANCELLED', 'EXPIRED'].includes(String(item.status)) && normalizeTime(item.start_time) === startNorm)
-      if (previous) {
-        const { error: updateErr } = await supabaseAdmin
-          .from('provider_availability')
-          .update({
-            end_time: endNorm,
-            slot_duration: durationNum,
-            source: 'MANUAL',
-            status: 'AVAILABLE',
-            is_available: true,
-            break_start: null,
-            break_end: null,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', previous.id)
-          .eq('provider_id', provider.user.id)
-          .eq('provider_role', provider.role)
-
-        if (updateErr) {
-          errors.push(updateErr.message)
-        } else {
-          createdCount++
-        }
+      if (upsertErr) {
+        errors.push(upsertErr.message)
       } else {
-        const { error: insertErr } = await supabaseAdmin
-          .from('provider_availability')
-          .insert({
-            provider_id: provider.user.id,
-            provider_role: provider.role,
-            available_date: date,
-            start_time: startNorm,
-            end_time: endNorm,
-            slot_duration: durationNum,
-            source: 'MANUAL',
-            status: 'AVAILABLE',
-            is_available: true,
-          })
-
-        if (insertErr) {
-          const conflict = insertErr.code === '23505' || insertErr.code === '23P01'
-          if (conflict) {
-            overlapCount++
-          } else {
-            errors.push(insertErr.message)
-          }
-        } else {
-          createdCount++
-        }
+        createdCount++
       }
     }
 
     if (errors.length > 0) {
       return NextResponse.json({ error: errors.join('; ') }, { status: 500 })
-    }
-
-    if (createdCount === 0 && overlapCount > 0) {
-      return NextResponse.json({ error: 'Slot overlaps with existing availability.' }, { status: 409 })
     }
 
     serverCache.invalidate(`avail:${provider.user.id}`)
@@ -453,7 +410,7 @@ export async function POST(request: Request) {
       } else {
         inserts.push({
           provider_id: provider.user.id,
-          provider_role: provider.role,
+          provider_role: effectiveRole,
           available_date: slot.available_date,
           start_time: slot.start_time,
           end_time: slot.end_time,
@@ -480,17 +437,17 @@ export async function POST(request: Request) {
         })
         .eq('id', item.id)
         .eq('provider_id', provider.user.id)
-        .eq('provider_role', provider.role)
       ))
       const reactivationError = reactivationResults.find(result => result.error)?.error
       if (reactivationError) return NextResponse.json({ error: reactivationError.message }, { status: 500 })
     }
 
     if (inserts.length > 0) {
-      const insertResult = await supabaseAdmin.from('provider_availability').insert(inserts)
+      const insertResult = await supabaseAdmin.from('provider_availability').upsert(inserts, {
+        onConflict: 'provider_id,provider_role,available_date,start_time',
+      })
       if (insertResult.error) {
-        const conflict = insertResult.error.code === '23505' || insertResult.error.code === '23P01'
-        return NextResponse.json({ error: conflict ? 'One or more slots overlap existing availability for this provider.' : insertResult.error.message }, { status: conflict ? 409 : 500 })
+        return NextResponse.json({ error: insertResult.error.message }, { status: 500 })
       }
     }
 
