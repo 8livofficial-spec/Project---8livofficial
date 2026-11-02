@@ -9,15 +9,34 @@ type RouteContext = { params: Promise<{ bookingId: string }> }
 const completedStatuses = ['approved', 'rejected', 'completed']
 
 async function getCompletedConsultation(bookingId: string, patientId: string) {
-  const { data, error } = await supabaseAdmin
+  const { data: docData, error: docError } = await supabaseAdmin
     .from('doctor_consultations')
     .select('id, patient_id, doctor_id, status')
     .eq('id', bookingId)
     .eq('patient_id', patientId)
     .maybeSingle()
 
-  if (error) throw error
-  return data
+  if (docError && docError.code !== 'PGRST204') throw docError
+  if (docData) return docData
+
+  const { data: staffData, error: staffError } = await supabaseAdmin
+    .from('staff_consultations')
+    .select('id, patient_id, staff_id, status')
+    .eq('id', bookingId)
+    .eq('patient_id', patientId)
+    .maybeSingle()
+
+  if (staffError && staffError.code !== 'PGRST204') throw staffError
+  if (staffData) {
+    return {
+      id: staffData.id,
+      patient_id: staffData.patient_id,
+      doctor_id: staffData.staff_id,
+      status: staffData.status
+    }
+  }
+
+  return null
 }
 
 function ratingTableUnavailable(error: { code?: string; message?: string } | null) {

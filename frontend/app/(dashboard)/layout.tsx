@@ -58,6 +58,29 @@ function DashboardLayoutContent({
 
       if (!active) return
 
+      const handleIncomingCall = (rec: { id?: string; status?: string }) => {
+        if (rec.status === 'calling' && rec.id) {
+          setGlobalCallAlert({ roomUrl: rec.id, consultationId: rec.id })
+          try {
+            if (!callingAudioRef.current) {
+              // Simple inline beep via AudioContext (no external file needed)
+              const ctx = new AudioContext()
+              const osc = ctx.createOscillator()
+              const gain = ctx.createGain()
+              osc.connect(gain)
+              gain.connect(ctx.destination)
+              osc.frequency.value = 440
+              gain.gain.setValueAtTime(0.3, ctx.currentTime)
+              gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5)
+              osc.start(ctx.currentTime)
+              osc.stop(ctx.currentTime + 0.5)
+            }
+          } catch {}
+        } else if (rec.status === 'attended' || rec.status === 'completed') {
+          setGlobalCallAlert(null)
+        }
+      }
+
       channel = supabase
         .channel(channelName)
         .on('postgres_changes', {
@@ -66,27 +89,15 @@ function DashboardLayoutContent({
           table: 'doctor_consultations',
           filter: `patient_id=eq.${patientId}`,
         }, (payload) => {
-          const rec = payload.new as { id?: string; status?: string }
-          if (rec.status === 'calling' && rec.id) {
-            setGlobalCallAlert({ roomUrl: rec.id, consultationId: rec.id })
-            try {
-              if (!callingAudioRef.current) {
-                // Simple inline beep via AudioContext (no external file needed)
-                const ctx = new AudioContext()
-                const osc = ctx.createOscillator()
-                const gain = ctx.createGain()
-                osc.connect(gain)
-                gain.connect(ctx.destination)
-                osc.frequency.value = 440
-                gain.gain.setValueAtTime(0.3, ctx.currentTime)
-                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5)
-                osc.start(ctx.currentTime)
-                osc.stop(ctx.currentTime + 0.5)
-              }
-            } catch {}
-          } else if (rec.status === 'attended' || rec.status === 'completed') {
-            setGlobalCallAlert(null)
-          }
+          handleIncomingCall(payload.new as { id?: string; status?: string })
+        })
+        .on('postgres_changes', {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'staff_consultations',
+          filter: `patient_id=eq.${patientId}`,
+        }, (payload) => {
+          handleIncomingCall(payload.new as { id?: string; status?: string })
         })
       
       channel.subscribe()
@@ -234,7 +245,7 @@ function DashboardLayoutContent({
     { icon: LayoutDashboard, label: 'Overview', href: '/patient' },
     { icon: Calendar, label: 'Appointments', href: '/patient/appointments' },
     { icon: TrendingDown, label: 'Progress', href: '/patient/progress' },
-    { icon: Package, label: 'Deliveries', href: '/patient/medicine-orders' }
+    { icon: Package, label: 'Deliveries', href: '/patient/prescriptions' }
   ]
 
   // -"--"- Onboarding & consultation booking pages: full-screen, no dashboard chrome -"--"-
@@ -345,9 +356,9 @@ function DashboardLayoutContent({
               <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-[#00A884] bg-emerald-50 border border-emerald-200/80 px-3 py-1 rounded-full inline-block">
                 Live Video Session
               </span>
-              <h3 className="text-2xl font-extrabold text-[#11241A] mt-3 tracking-tight">Your Doctor is Calling!</h3>
+              <h3 className="text-2xl font-extrabold text-[#11241A] mt-3 tracking-tight">Your Healthcare Specialist is Calling!</h3>
               <p className="text-xs text-slate-500 font-medium mt-2 leading-relaxed">
-                Your assigned physician has initiated your clinical video consultation. Join now to enter the secure room.
+                Your assigned clinician has initiated your secure video consultation. Join now to enter the room.
               </p>
             </div>
             <div className="flex flex-col gap-3">

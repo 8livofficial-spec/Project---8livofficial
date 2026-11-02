@@ -6,6 +6,7 @@ import { invalidateDoctorAvailabilityCache } from '@/lib/patientAppointmentBooki
 import { invalidateSlotsCache } from '@/lib/appointmentAvailability'
 import { invalidatePatientApiDashboardCache } from '@/lib/patientDashboardCache'
 import { WhatsAppNotificationService } from '@/lib/whatsapp/whatsappNotificationService'
+import { appointmentTypeForRole, labelForRole, normalizeProviderRole } from '@/lib/providerConsultations'
 
 type RouteContext = {
   params: Promise<{ bookingId: string }>
@@ -15,6 +16,9 @@ type ConsultationRow = {
   id: string
   patient_id: string
   doctor_id?: string | null
+  staff_id?: string | null
+  staff_role?: string | null
+  table_source: 'doctor_consultations' | 'staff_consultations'
   booking_date?: string | null
   booking_time?: string | null
   status?: string | null
@@ -27,6 +31,7 @@ type ConsultationRow = {
   created_by?: string | null
   meeting_status?: string | null
   appointment_type?: string | null
+  consultation_fee?: number | null
 }
 
 type DoctorProfile = {
@@ -74,28 +79,89 @@ async function requireAuthenticatedPatient(request: Request, patientId: string) 
   return { ok: true as const }
 }
 
-async function loadAppointment(bookingId: string, patientId: string) {
-  const fullSelect = 'id, patient_id, doctor_id, booking_date, booking_time, status, room_url, meeting_provider, meeting_room, meeting_url, call_id, call_type, created_by, meeting_status, appointment_type'
-  const legacySelect = 'id, patient_id, doctor_id, booking_date, booking_time, status, room_url'
+async function loadAppointment(bookingId: string, patientId: string): Promise<{ data: ConsultationRow | null; error: any }> {
+  const doctorSelect = 'id, patient_id, doctor_id, booking_date, booking_time, status, room_url, meeting_provider, meeting_room, meeting_url, call_id, call_type, created_by, meeting_status, appointment_type'
 
-  const { data, error } = await supabaseAdmin
+  const { data: docData, error: docError } = await supabaseAdmin
     .from('doctor_consultations')
-    .select(fullSelect)
+    .select(doctorSelect)
     .eq('id', bookingId)
     .eq('patient_id', patientId)
     .maybeSingle()
 
-  if (!error) return { data: data as ConsultationRow | null, error: null }
+  if (docError && docError.code !== 'PGRST204') {
+    const legacySelect = 'id, patient_id, doctor_id, booking_date, booking_time, status, room_url'
+    const { data: legacyData, error: legacyError } = await supabaseAdmin
+      .from('doctor_consultations')
+      .select(legacySelect)
+      .eq('id', bookingId)
+      .eq('patient_id', patientId)
+      .maybeSingle()
 
-  const { data: legacyData, error: legacyError } = await supabaseAdmin
-    .from('doctor_consultations')
-    .select(legacySelect)
+    if (!legacyError && legacyData) {
+      return {
+        data: {
+          ...legacyData,
+          table_source: 'doctor_consultations'
+        } as ConsultationRow,
+        error: null
+      }
+    }
+  }
+
+  if (docData) {
+    return {
+      data: {
+        ...docData,
+        table_source: 'doctor_consultations'
+      } as ConsultationRow,
+      error: null
+    }
+  }
+
+  // Fallback: check staff_consultations (e.g. dietitian, nutritionist, fitness coach consultations)
+  const staffSelect = 'id, patient_id, staff_id, staff_role, booking_date, booking_time, status, room_url, meeting_provider, meeting_room, meeting_url, call_id, call_type, created_by, meeting_status, appointment_type'
+  const { data: staffData, error: staffError } = await supabaseAdmin
+    .from('staff_consultations')
+    .select(staffSelect)
     .eq('id', bookingId)
     .eq('patient_id', patientId)
     .maybeSingle()
 
-  if (legacyError) return { data: null, error: legacyError }
-  return { data: legacyData as ConsultationRow | null, error: null }
+  if (staffError && staffError.code !== 'PGRST204') {
+    const legacyStaffSelect = 'id, patient_id, staff_id, staff_role, booking_date, booking_time, status, room_url'
+    const { data: legacyStaffData, error: legacyStaffError } = await supabaseAdmin
+      .from('staff_consultations')
+      .select(legacyStaffSelect)
+      .eq('id', bookingId)
+      .eq('patient_id', patientId)
+      .maybeSingle()
+
+    if (legacyStaffError) return { data: null, error: legacyStaffError }
+    if (legacyStaffData) {
+      return {
+        data: {
+          ...legacyStaffData,
+          doctor_id: legacyStaffData.staff_id,
+          table_source: 'staff_consultations'
+        } as ConsultationRow,
+        error: null
+      }
+    }
+  }
+
+  if (staffData) {
+    return {
+      data: {
+        ...staffData,
+        doctor_id: staffData.staff_id,
+        table_source: 'staff_consultations'
+      } as ConsultationRow,
+      error: null
+    }
+  }
+
+  return { data: null, error: null }
 }
 
 function getSlotTimestamp(slotDate?: string | null, slotTime?: string | null): number | null {
@@ -133,38 +199,52 @@ export async function GET(request: Request, context: RouteContext) {
     }
 
     const appointment = consultation as ConsultationRow
-    const doctorId = appointment.doctor_id
+    const isStaff = appointment.table_source === 'staff_consultations' || Boolean(appointment.staff_role)
+    const staffRole = appointment.staff_role ? normalizeProviderRole(appointment.staff_role) : null
+    const providerId = appointment.doctor_id || appointment.staff_id
 
-    // Parallelize doctor, payment, assessment, and membership lookups to ensure ultra-low latency
+    // Parallelize doctor/provider, payment, assessment, and membership lookups to ensure ultra-low latency
     const [doctor, payment, assessmentsRes, membershipValidity] = await Promise.all([
-      // 1. Doctor Profile resolution
+      // 1. Doctor/Provider Profile resolution
       (async (): Promise<DoctorProfile | null> => {
-        if (!doctorId) return null
+        if (!providerId) return null
         const [provRes, profRes, docRes] = await Promise.all([
-          supabaseAdmin.from('provider_profiles').select('provider_id, full_name, specialization, qualification').eq('provider_id', doctorId).maybeSingle(),
-          supabaseAdmin.from('profiles').select('id, first_name, last_name, display_id').eq('id', doctorId).maybeSingle(),
-          supabaseAdmin.from('doctor_profiles').select('id, full_name, specialty').eq('id', doctorId).maybeSingle(),
+          supabaseAdmin.from('provider_profiles').select('provider_id, full_name, specialization, qualification, role').eq('provider_id', providerId).maybeSingle(),
+          supabaseAdmin.from('profiles').select('id, first_name, last_name, display_id, role').eq('id', providerId).maybeSingle(),
+          supabaseAdmin.from('doctor_profiles').select('id, full_name, specialty').eq('id', providerId).maybeSingle(),
         ])
 
         const prov = provRes.data
         if (prov?.full_name) {
+          const role = staffRole || (prov.role ? normalizeProviderRole(prov.role) : 'doctor')
+          const isDoctor = role === 'doctor'
+          const roleLabelText = labelForRole(role)
           return {
             id: prov.provider_id,
-            full_name: prov.full_name.startsWith('Dr.') ? prov.full_name : `Dr. ${prov.full_name}`,
-            specialty: prov.specialization || prov.qualification || 'Metabolic Physician Specialist'
+            full_name: isDoctor ? (prov.full_name.startsWith('Dr.') ? prov.full_name : `Dr. ${prov.full_name}`) : prov.full_name,
+            specialty: prov.specialization || prov.qualification || (isDoctor ? 'Metabolic Physician Specialist' : `${roleLabelText} Specialist`)
           }
         }
         const prof = profRes.data
         if (prof) {
           const name = prof.display_id || `${prof.first_name || ''} ${prof.last_name || ''}`.trim()
+          const role = staffRole || (prof.role ? normalizeProviderRole(prof.role) : 'doctor')
+          const isDoctor = role === 'doctor'
+          const roleLabelText = labelForRole(role)
           return {
             id: prof.id,
-            full_name: name.startsWith('Dr.') ? name : `Dr. ${name}`,
-            specialty: 'Metabolic Physician Specialist'
+            full_name: isDoctor ? (name.startsWith('Dr.') ? name : `Dr. ${name}`) : name,
+            specialty: isDoctor ? 'Metabolic Physician Specialist' : `${roleLabelText} Specialist`
           }
         }
         const doctorProfile = docRes.data
-        return (doctorProfile as DoctorProfile | null) || null
+        if (doctorProfile) return doctorProfile as DoctorProfile
+        const fallbackRole = staffRole ? labelForRole(staffRole) : 'Doctor'
+        return {
+          id: providerId,
+          full_name: `Assigned ${fallbackRole}`,
+          specialty: `${fallbackRole} Specialist`
+        }
       })(),
 
       // 2. Payment Transaction resolution (Single fast query with fallback)
@@ -173,13 +253,12 @@ export async function GET(request: Request, context: RouteContext) {
           .from('payment_transactions')
           .select('transaction_id, amount, status, payment_method, payment_provider, created_at, metadata')
           .eq('patient_id', patientId)
-          .eq('payment_type', 'consultation')
           .order('created_at', { ascending: false })
-          .limit(5)
+          .limit(10)
 
         if (!txns || txns.length === 0) return null
         const matched = txns.find((t: any) => t.metadata?.consultation_id === bookingId || t.metadata?.booking_id === bookingId)
-        return (matched || txns[0]) as PaymentTransaction
+        return (matched || (isStaff ? null : txns[0])) as PaymentTransaction | null
       })(),
 
       // 3. Health Assessment tier
@@ -197,7 +276,7 @@ export async function GET(request: Request, context: RouteContext) {
     const assessments = assessmentsRes.data
     const selectedMembershipTier = assessments?.[0]?.membership_tier
     const membershipActive = Boolean(selectedMembershipTier && membershipValidity.active)
-    const appointmentType = String(appointment.appointment_type || '').toUpperCase()
+    const appointmentType = String(appointment.appointment_type || (staffRole ? appointmentTypeForRole(staffRole) : '')).toUpperCase()
     const rawStatus = (appointment.status || 'scheduled').toLowerCase()
     const consultationCompleted = ['approved', 'rejected', 'completed'].includes(rawStatus)
     const joinDisabled = consultationCompleted || ['cancelled_by_doctor', 'cancelled_by_patient', 'missed_by_patient'].includes(rawStatus)
@@ -227,19 +306,21 @@ export async function GET(request: Request, context: RouteContext) {
     let callType = appointment.call_type || null
 
     if (!joinDisabled && (!callId || meetingProvider !== 'STREAM')) {
+      const providerRole = staffRole || 'doctor'
       const streamMeeting = createStreamMeeting({
         appointmentId: appointment.id,
-        providerRole: 'doctor',
+        providerRole,
         patientId,
-        providerId: appointment.doctor_id || '',
+        providerId: providerId || '',
         createdBy: patientId,
       })
       meetingProvider = streamMeeting.meetingProvider
       callId = streamMeeting.callId
       callType = streamMeeting.callType
 
+      const targetTable = appointment.table_source || (isStaff ? 'staff_consultations' : 'doctor_consultations')
       const { error: meetingUpdateError } = await supabaseAdmin
-        .from('doctor_consultations')
+        .from(targetTable)
         .update({
           meeting_provider: meetingProvider,
           call_id: callId,
@@ -259,14 +340,17 @@ export async function GET(request: Request, context: RouteContext) {
       }
     }
 
+    const fallbackRoleName = staffRole ? labelForRole(staffRole) : 'Doctor'
+    const consultationFee = appointment.consultation_fee != null ? Number(appointment.consultation_fee) : null
+
     return NextResponse.json({
       appointment: {
         bookingId: appointment.id,
-        assignedHealthcareProfessional: doctor?.full_name || 'Assigned Doctor',
-        specialization: doctor?.specialty || 'Physician Specialist',
+        assignedHealthcareProfessional: doctor?.full_name || `Assigned ${fallbackRoleName}`,
+        specialization: doctor?.specialty || `${fallbackRoleName} Specialist`,
         date: appointment.booking_date,
         time: appointment.booking_time,
-        meetingType: 'Video Consultation',
+        meetingType: staffRole ? `${labelForRole(staffRole)} Video Consultation` : 'Video Consultation',
         status: appointmentStatus,
         rawStatus,
         appointmentType: appointmentType || null,
@@ -280,16 +364,22 @@ export async function GET(request: Request, context: RouteContext) {
         roomUrl: null,
         callId: joinDisabled ? null : callId,
         callType: joinDisabled ? null : callType,
-        paymentAmount: payment?.amount ? Number(payment.amount) : ((consultation as any)?.consultation_fee ? Number((consultation as any).consultation_fee) : 350),
-        paymentStatus: payment?.status === 'success' || payment?.status === 'paid' ? 'PAID' : (payment?.status || 'PENDING').toUpperCase(),
+        paymentAmount: payment?.amount
+          ? Number(payment.amount)
+          : consultationFee !== null
+            ? consultationFee
+            : (isStaff ? 0 : 350),
+        paymentStatus: payment?.status === 'success' || payment?.status === 'paid'
+          ? 'PAID'
+          : (isStaff && !payment ? 'PAID' : (payment?.status || 'PENDING').toUpperCase()),
         paymentId: payment?.transaction_id || null,
-        paymentMethod: payment?.payment_method || null,
+        paymentMethod: payment?.payment_method || (isStaff && !payment ? 'Membership Care Protocol' : null),
         paymentProvider: payment?.payment_provider || null,
         paymentDate: payment?.created_at || null,
         freeRescheduleEligible,
         requiresNewPayment: freeRescheduleStatuses.includes(rawStatus) && !freeRescheduleEligible,
         cancellationReason: rawStatus === 'cancelled_by_doctor'
-          ? 'Doctor cancelled this appointment. Your consultation payment remains paid and can be reused.'
+          ? `${fallbackRoleName} cancelled this appointment. Your consultation payment remains paid and can be reused.`
           : rawStatus === 'cancelled_by_patient'
             ? 'This appointment was cancelled before the cutoff. You can reschedule using the same payment.'
             : rawStatus === 'missed_by_patient'
@@ -319,14 +409,38 @@ export async function PATCH(request: Request, context: RouteContext) {
     const auth = await requireAuthenticatedPatient(request, patientId)
     if (!auth.ok) return auth.response
 
-    const { data: consultation, error: lookupErr } = await supabaseAdmin
+    let consultation: any = null
+    let targetTable: 'doctor_consultations' | 'staff_consultations' = 'doctor_consultations'
+
+    const { data: docConsult, error: lookupErr } = await supabaseAdmin
       .from('doctor_consultations')
       .select('id, patient_id, doctor_id, booking_date, booking_time, status')
       .eq('id', bookingId)
       .eq('patient_id', patientId)
       .maybeSingle()
 
-    if (lookupErr) throw lookupErr
+    if (lookupErr && lookupErr.code !== 'PGRST204') throw lookupErr
+    if (docConsult) {
+      consultation = docConsult
+      targetTable = 'doctor_consultations'
+    } else {
+      const { data: staffConsult, error: staffErr } = await supabaseAdmin
+        .from('staff_consultations')
+        .select('id, patient_id, staff_id, staff_role, booking_date, booking_time, status')
+        .eq('id', bookingId)
+        .eq('patient_id', patientId)
+        .maybeSingle()
+
+      if (staffErr && staffErr.code !== 'PGRST204') throw staffErr
+      if (staffConsult) {
+        consultation = {
+          ...staffConsult,
+          doctor_id: staffConsult.staff_id,
+        }
+        targetTable = 'staff_consultations'
+      }
+    }
+
     if (!consultation) {
       return NextResponse.json({ error: 'Appointment not found.' }, { status: 404 })
     }
@@ -341,18 +455,22 @@ export async function PATCH(request: Request, context: RouteContext) {
     const now = new Date().toISOString()
 
     const { error: updateErr } = await supabaseAdmin
-      .from('doctor_consultations')
+      .from(targetTable)
       .update({ status: nextStatus, updated_at: now })
       .eq('id', bookingId)
 
     if (updateErr) throw updateErr
 
     if (beforeCutoff) {
+      const providerRole = targetTable === 'staff_consultations'
+        ? normalizeProviderRole(consultation.staff_role || 'dietitian')
+        : 'doctor'
+
       await supabaseAdmin
         .from('provider_availability')
         .update({ status: 'AVAILABLE', is_available: true, updated_at: new Date().toISOString() })
         .eq('provider_id', consultation.doctor_id)
-        .eq('provider_role', 'doctor')
+        .eq('provider_role', providerRole)
         .eq('available_date', consultation.booking_date)
         .eq('start_time', consultation.booking_time)
       invalidateDoctorAvailabilityCache()
@@ -385,7 +503,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     // Non-blocking WhatsApp Cancellation Notification and Reminder Invalidation
     Promise.resolve().then(async () => {
       try {
-        const [{ data: patientProfile }, { data: doctorProfile }] = await Promise.all([
+        const [{ data: patientProfile }, { data: providerProfile }] = await Promise.all([
           supabaseAdmin
             .from('profiles')
             .select('first_name, last_name, display_id, phone_number')
@@ -402,8 +520,11 @@ export async function PATCH(request: Request, context: RouteContext) {
 
         const patientPhone = patientProfile?.phone_number
         if (patientPhone) {
+          const isDr = targetTable === 'doctor_consultations'
+          const roleLabelText = labelForRole(consultation.staff_role || 'doctor')
+          const fallbackProviderName = isDr ? 'Assigned Physician' : `Assigned ${roleLabelText}`
           const patientName = [patientProfile?.first_name, patientProfile?.last_name].filter(Boolean).join(' ') || 'Patient'
-          const doctorName = [doctorProfile?.first_name, doctorProfile?.last_name].filter(Boolean).join(' ') || 'Assigned Physician'
+          const doctorName = [providerProfile?.first_name, providerProfile?.last_name].filter(Boolean).join(' ') || fallbackProviderName
 
           await WhatsAppNotificationService.sendAppointmentCancelled(patientPhone, {
             patientName,

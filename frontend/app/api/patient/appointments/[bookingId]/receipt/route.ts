@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { getAuthenticatedUser } from '@/lib/apiSecurity'
 import { generateReceiptPdf, ReceiptData } from '@/lib/receiptPdfService'
+import { labelForRole, normalizeProviderRole } from '@/lib/providerConsultations'
 
 type RouteContext = { params: Promise<{ bookingId: string }> }
 
@@ -17,22 +18,46 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: 'Missing bookingId' }, { status: 400 })
     }
 
-    // 1. Fetch consultation record
-    const { data: appointment, error: apptError } = await supabaseAdmin
+    // 1. Fetch consultation record from doctor_consultations or staff_consultations
+    let appointment: any = null
+    let isStaff = false
+
+    const { data: docAppt, error: docError } = await supabaseAdmin
       .from('doctor_consultations')
       .select('id, patient_id, doctor_id, booking_date, booking_time, status, appointment_type, created_at')
       .eq('id', bookingId)
       .maybeSingle()
 
-    if (apptError || !appointment) {
+    if (docError && docError.code !== 'PGRST204') throw docError
+
+    if (docAppt) {
+      appointment = docAppt
+    } else {
+      const { data: staffAppt, error: staffError } = await supabaseAdmin
+        .from('staff_consultations')
+        .select('id, patient_id, staff_id, staff_role, booking_date, booking_time, status, appointment_type, created_at')
+        .eq('id', bookingId)
+        .maybeSingle()
+
+      if (staffError && staffError.code !== 'PGRST204') throw staffError
+      if (staffAppt) {
+        appointment = {
+          ...staffAppt,
+          doctor_id: staffAppt.staff_id,
+        }
+        isStaff = true
+      }
+    }
+
+    if (!appointment) {
       return NextResponse.json({ error: 'Appointment consultation record not found.' }, { status: 404 })
     }
 
-    // Ensure authorization (patient must own appointment, or be admin or assigned doctor)
+    // Ensure authorization (patient must own appointment, or be admin or assigned provider)
     const isOwner = appointment.patient_id === authUser.user.id
     const isAdmin = authUser.role === 'admin'
-    const isDoctor = authUser.user.id === appointment.doctor_id
-    if (!isOwner && !isAdmin && !isDoctor) {
+    const isProvider = authUser.user.id === appointment.doctor_id
+    if (!isOwner && !isAdmin && !isProvider) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
@@ -43,41 +68,35 @@ export async function GET(request: Request, context: RouteContext) {
       .eq('id', appointment.patient_id)
       .maybeSingle()
 
-    // 3. Fetch doctor profile
-    let doctorName = '8LIV Medical Specialist'
-    let doctorSpecialty = 'Consultant Physician & Endocrinologist'
-    if (appointment.doctor_id) {
-      const { data: prov } = await supabaseAdmin
-        .from('provider_profiles')
-        .select('provider_id, full_name, specialization, qualification')
-        .eq('provider_id', appointment.doctor_id)
-        .maybeSingle()
+    // 3. Fetch doctor/provider profile
+    const staffRole = isStaff && appointment.staff_role ? normalizeProviderRole(appointment.staff_role) : null
+    const roleLabelText = staffRole ? labelForRole(staffRole) : 'Doctor'
+    let doctorName = isStaff ? `8LIV ${roleLabelText} Specialist` : '8LIV Medical Specialist'
+    let doctorSpecialty = isStaff ? `${roleLabelText} & Clinical Nutritionist` : 'Consultant Physician & Endocrinologist'
 
+    if (appointment.doctor_id) {
+      const [provRes, profRes, docRes] = await Promise.all([
+        supabaseAdmin.from('provider_profiles').select('provider_id, full_name, specialization, qualification, role').eq('provider_id', appointment.doctor_id).maybeSingle(),
+        supabaseAdmin.from('profiles').select('id, first_name, last_name, display_id, role').eq('id', appointment.doctor_id).maybeSingle(),
+        supabaseAdmin.from('doctor_profiles').select('id, full_name, specialty').eq('id', appointment.doctor_id).maybeSingle(),
+      ])
+
+      const prov = provRes.data
       if (prov?.full_name) {
-        doctorName = prov.full_name.startsWith('Dr.') ? prov.full_name : `Dr. ${prov.full_name}`
+        const isDoc = !isStaff && (prov.role === 'doctor' || prov.full_name.startsWith('Dr.'))
+        doctorName = isDoc ? (prov.full_name.startsWith('Dr.') ? prov.full_name : `Dr. ${prov.full_name}`) : prov.full_name
         doctorSpecialty = prov.specialization || prov.qualification || doctorSpecialty
       } else {
-        const { data: prof } = await supabaseAdmin
-          .from('profiles')
-          .select('id, first_name, last_name, display_id')
-          .eq('id', appointment.doctor_id)
-          .maybeSingle()
-
+        const prof = profRes.data
         if (prof) {
           const name = prof.display_id || `${prof.first_name || ''} ${prof.last_name || ''}`.trim()
           if (name) {
-            doctorName = name.startsWith('Dr.') ? name : `Dr. ${name}`
+            const isDoc = !isStaff && name.startsWith('Dr.')
+            doctorName = isDoc ? name : (isStaff ? name : `Dr. ${name}`)
           }
-        } else {
-          const { data: doc } = await supabaseAdmin
-            .from('doctor_profiles')
-            .select('full_name, specialty')
-            .eq('id', appointment.doctor_id)
-            .maybeSingle()
-          if (doc?.full_name) {
-            doctorName = doc.full_name.startsWith('Dr.') ? doc.full_name : `Dr. ${doc.full_name}`
-            doctorSpecialty = doc.specialty || doctorSpecialty
-          }
+        } else if (docRes.data?.full_name) {
+          doctorName = docRes.data.full_name.startsWith('Dr.') ? docRes.data.full_name : `Dr. ${docRes.data.full_name}`
+          doctorSpecialty = docRes.data.specialty || doctorSpecialty
         }
       }
     }
@@ -95,7 +114,7 @@ export async function GET(request: Request, context: RouteContext) {
 
     let payment = matchedPayment
 
-    if (!payment) {
+    if (!payment && !isStaff) {
       const { data: fallbackPayment } = await supabaseAdmin
         .from('payment_transactions')
         .select('id, transaction_id, amount, status, payment_method, payment_provider, created_at, metadata')
@@ -136,11 +155,11 @@ export async function GET(request: Request, context: RouteContext) {
       doctorSpecialty,
       appointmentDate: appointment.booking_date || 'Scheduled Date',
       appointmentTime: appointment.booking_time || 'Scheduled Slot',
-      serviceDescription: 'Telemedicine Consultation & Clinical Metabolic Intake',
+      serviceDescription: isStaff ? `${roleLabelText} Consultation & Nutritional Intake` : 'Telemedicine Consultation & Clinical Metabolic Intake',
       sacCode: '999312',
-      amount: Number(payment?.amount || 350),
+      amount: Number(payment?.amount || (isStaff ? 0 : 350)),
       currency: 'INR',
-      paymentMethod: payment?.payment_method || 'Online (Razorpay / UPI)',
+      paymentMethod: payment?.payment_method || (isStaff ? 'Membership Clinical Entitlement' : 'Online (Razorpay / UPI)'),
       paymentStatus: payment?.status ? String(payment.status).toUpperCase() : 'PAID',
     }
 

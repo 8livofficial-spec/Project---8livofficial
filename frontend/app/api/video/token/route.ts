@@ -73,6 +73,11 @@ function assertJoinWindow(consultation: ConsultationRecord) {
     return 'This consultation is no longer available to join.'
   }
 
+  // Clinician initiated call or room is currently live -- allow joining immediately
+  if (consultation.status === 'calling' || consultation.meeting_status === 'LIVE') {
+    return null
+  }
+
   const slotTime = getIndiaSlotTimestamp(consultation.booking_date, consultation.booking_time)
   if (!slotTime) return null
 

@@ -98,13 +98,13 @@ function getCategory(appointment: AppointmentRecord): Exclude<FilterKey, 'all'> 
 function canJoin(appointment: AppointmentRecord) {
   if (!appointment.bookingDate || !appointment.bookingTime) return false
   if (getCategory(appointment) !== 'upcoming') return false
+  if (normalizeStatus(appointment.status) === 'calling') return true
 
   const start = new Date(`${appointment.bookingDate} ${appointment.bookingTime}`).getTime()
   return Number.isFinite(start) && Date.now() >= start - 15 * 60 * 1000
 }
 
 function canCancel(appointment: AppointmentRecord) {
-  if (appointment.source !== 'doctor') return false
   return ['scheduled', 'calling'].includes(normalizeStatus(appointment.status))
 }
 
@@ -247,7 +247,7 @@ export default function AppointmentsPage() {
   }, [appointments])
 
   const handleCancel = async () => {
-    if (!cancelTarget || cancelTarget.source !== 'doctor') return
+    if (!cancelTarget) return
     setCancelling(true)
     try {
       const { data: sessionData } = await supabase.auth.getSession()
@@ -279,7 +279,7 @@ export default function AppointmentsPage() {
 
   const renderActions = (appointment: AppointmentRecord) => {
     const category = getCategory(appointment)
-    const detailsHref = appointment.source === 'doctor' ? `/patient/appointments/${appointment.id}` : '/patient/appointments'
+    const detailsHref = `/patient/appointments/${appointment.id}`
 
     if (category === 'missed') {
       return (
