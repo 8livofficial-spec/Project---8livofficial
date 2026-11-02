@@ -218,7 +218,14 @@ export default function ConsultationSchedulingPage() {
   const isBookingPending = onboardingState.appointmentStatus === 'BOOKING_PENDING' || onboardingState.consultationPaymentStatus === 'PAID'
   const appointmentType = isActiveMemberFollowUp ? DOCTOR_FOLLOW_UP : INITIAL_DOCTOR_CONSULTATION
 
-  const [activeProviderTab, setActiveProviderTab] = useState<ProviderRoleTab>('doctor')
+  const requestedRole = searchParams.get('role') || searchParams.get('tab')
+  const initialTab: ProviderRoleTab = (requestedRole === 'dietitian' || requestedRole === 'nutritionist')
+    ? 'dietitian'
+    : (requestedRole === 'fitness_coach' || requestedRole === 'trainer')
+      ? 'trainer'
+      : 'doctor'
+
+  const [activeProviderTab, setActiveProviderTab] = useState<ProviderRoleTab>(initialTab)
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [selectedDateSlots, setSelectedDateSlots] = useState<AvailableDoctorSlot[]>([])
   const [selectedDate, setSelectedDate] = useState('')
@@ -452,12 +459,17 @@ export default function ConsultationSchedulingPage() {
     }
   }, [activeProviderTab, appointmentType, loadSlotsForDate, patientDataLoading, router])
 
-  // Guard: If in onboarding flow (not an active member follow-up), restrict to Doctor only
+  // Sync tab if URL search parameter changes
   useEffect(() => {
-    if (isPatientDataReady && !isActiveMemberFollowUp && activeProviderTab !== 'doctor') {
+    const roleParam = searchParams.get('role') || searchParams.get('tab')
+    if (roleParam === 'dietitian' || roleParam === 'nutritionist') {
+      setActiveProviderTab('dietitian')
+    } else if (roleParam === 'fitness_coach' || roleParam === 'trainer') {
+      setActiveProviderTab('trainer')
+    } else if (roleParam === 'doctor') {
       setActiveProviderTab('doctor')
     }
-  }, [isPatientDataReady, isActiveMemberFollowUp, activeProviderTab])
+  }, [searchParams])
 
   useEffect(() => {
     if (patientDataLoading) return
@@ -1018,7 +1030,7 @@ export default function ConsultationSchedulingPage() {
       )}
 
       {/* Main Content */}
-      {isActiveMemberFollowUp ? (
+      {(isActiveMemberFollowUp || activeProviderTab !== 'doctor') ? (
         /* ═════════════════════════════════════════════════════════════════════
            IN-APP CONSULTATION UI (Active Members / Follow-Up Care)
            ═════════════════════════════════════════════════════════════════════ */
@@ -1437,6 +1449,54 @@ export default function ConsultationSchedulingPage() {
                     : `Select a consultation time that fits your schedule. We will reserve your chosen time with an eligible ${currentTabMeta.label.toLowerCase()}.`}
                 </p>
               </div>
+            </div>
+          </div>
+
+          {/* Care Team Specialist Selector */}
+          <div className="mb-8">
+            <div className="mb-3">
+              <h2 className="text-sm font-bold text-slate-800 font-sora uppercase tracking-wider">
+                Select Care Specialist
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Book a 1:1 dedicated session with any member of your clinical team
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              {PROVIDER_TABS.map((tab) => {
+                const Icon = tab.icon
+                const isActive = activeProviderTab === tab.id
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => handleTabSwitch(tab.id)}
+                    className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative flex items-center gap-3.5 ${
+                      isActive
+                        ? 'bg-white border-[#00A884] ring-2 ring-[#00A884]/20 shadow-sm'
+                        : 'bg-white hover:bg-slate-50/80 border-slate-200/80 shadow-xs hover:border-slate-300'
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
+                      isActive ? 'bg-[#00A884] text-white shadow-xs' : 'bg-slate-100 text-slate-600'
+                    }`}>
+                      <Icon className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-1">
+                        <p className="text-sm font-bold text-slate-900 font-sora truncate">{tab.label}</p>
+                        {isActive && (
+                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full">
+                            Selected
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 truncate mt-0.5">{tab.sublabel}</p>
+                    </div>
+                  </button>
+                )
+              })}
             </div>
           </div>
 

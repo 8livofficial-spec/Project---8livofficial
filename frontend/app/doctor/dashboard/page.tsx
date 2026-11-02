@@ -20,7 +20,6 @@ const StaffChat = dynamic(() => import('@/components/StaffChat'), { ssr: false }
 const DoctorPrescriptionBuilderModal = dynamic(() => import('@/components/doctor/DoctorPrescriptionBuilderModal'), { ssr: false });
 const OfficialPrescriptionModal = dynamic(() => import('@/components/doctor/OfficialPrescriptionModal'), { ssr: false });
 const RevokePrescriptionModal = dynamic(() => import('@/components/doctor/RevokePrescriptionModal'), { ssr: false });
-const ReferDietitianModal = dynamic(() => import('@/components/doctor/ReferDietitianModal'), { ssr: false });
 const ProviderProfileEditor = dynamic(() => import('@/components/provider/ProviderProfileEditor'), { ssr: false });
 const PatientProfileSidebar = dynamic(() => import('@/components/doctor/PatientProfileSidebar'), { ssr: false });
 const DoctorPatientTableView = dynamic(() => import('@/components/doctor/DoctorPatientTableView'), { ssr: false });
@@ -583,8 +582,6 @@ export default function DoctorDashboard() {
   const [patients, setPatients] = useState<any[]>([]);
   const [selectedPatient, setSelectedPatient] = useState<any>(null);
   const [showPatientProfileSidebar, setShowPatientProfileSidebar] = useState(false);
-  const [showReferDietitianModal, setShowReferDietitianModal] = useState(false);
-  const [referDietitianPatient, setReferDietitianPatient] = useState<any>(null);
 
   // Pagination & Search States
   const [consultationsPage, setConsultationsPage] = useState(1);
@@ -3212,18 +3209,6 @@ export default function DoctorDashboard() {
                               }
                               return null;
                             })()}
-                            {['attended', 'approved', 'completed'].includes(c.status) && (
-                              <button
-                                onClick={() => {
-                                  setReferDietitianPatient({ id: c.patient_id, full_name: c.patient_name, name: c.patient_name, age: c.patient_age });
-                                  setShowReferDietitianModal(true);
-                                }}
-                                className="bg-[#0D9488]/10 hover:bg-[#0D9488]/20 text-[#0D9488] border border-[#0D9488]/30 font-bold py-2 px-4 rounded-xl text-sm flex items-center gap-2 transition-all shadow-xs cursor-pointer"
-                                title="Refer patient for Clinical Medical Nutrition Therapy"
-                              >
-                                <Apple className="w-4 h-4" /> Refer to Dietitian
-                              </button>
-                            )}
                             {/* Reject */}
                             {c.status === 'attended' && (
                               <button onClick={() => setRejectCase(c)}
@@ -3916,11 +3901,6 @@ export default function DoctorDashboard() {
                 onViewRx={(rx) => {
                   setOfficialRxView(rx);
                 }}
-                onReferDietitian={(patient) => {
-                  setSelectedPatient(patient);
-                  setReferDietitianPatient(patient);
-                  setShowReferDietitianModal(true);
-                }}
                 doctorPrescriptions={doctorPrescriptions}
                 onRefresh={() => {
                   if (doctor) loadPatients(doctor.id, patientsPage, patientsSearch);
@@ -3944,10 +3924,6 @@ export default function DoctorDashboard() {
                 setBuilderConsultation(null);
                 setBuilderPatient(selectedPatient);
                 setShowRxBuilderModal(true);
-              }}
-              onReferDietitian={() => {
-                setReferDietitianPatient(selectedPatient);
-                setShowReferDietitianModal(true);
               }}
             />
           )}
@@ -4158,19 +4134,6 @@ export default function DoctorDashboard() {
               loadDoctorPrescriptions();
             }}
             prescription={revokingRx}
-          />
-
-          {/* ── REFER TO CLINICAL DIETITIAN MODAL ── */}
-          <ReferDietitianModal
-            isOpen={showReferDietitianModal}
-            onClose={() => {
-              setShowReferDietitianModal(false);
-              setReferDietitianPatient(null);
-            }}
-            patient={referDietitianPatient || selectedPatient}
-            onSuccess={() => {
-              // Notification/refresh
-            }}
           />
         </motion.main>
       </div>

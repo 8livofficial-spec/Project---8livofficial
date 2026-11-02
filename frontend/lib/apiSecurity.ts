@@ -236,6 +236,23 @@ export async function assertDietitianPatientAccess(request: Request, patientId: 
     return auth
   }
 
+  // Also verify if this patient has a booked or attended consultation with this dietitian
+  try {
+    const { data: consultation } = await supabaseAdmin
+      .from('staff_consultations')
+      .select('id')
+      .eq('patient_id', patientId)
+      .eq('staff_id', auth.user.id)
+      .limit(1)
+      .maybeSingle()
+
+    if (consultation) {
+      return auth
+    }
+  } catch (err) {
+    console.warn('Error checking dietitian staff consultation access:', err)
+  }
+
   // Also verify if there is an accepted doctor referral for this dietitian & patient
   try {
     const { data: referral } = await supabaseAdmin

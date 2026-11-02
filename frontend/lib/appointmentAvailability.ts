@@ -107,14 +107,16 @@ export function isFutureIndiaSlot(date: string, time: string) {
 async function authorizeRequestedProvider(patientId: string, role: BookableRole, providerId?: string | null) {
   const requestedProviderId = String(providerId || '').trim()
   if (requestedProviderId) {
-    const assignedProvider = await getAssignedProviderForRole(patientId, role)
-    if (assignedProvider && assignedProvider !== requestedProviderId) {
-      return { error: 'This provider is not assigned to the patient.', status: 403 as const }
-    }
     return { providerId: requestedProviderId }
   }
 
-  // If no specific provider requested, check if patient has an assigned provider for this role
+  // If role is dietitian or fitness_coach, do not lock to a single assigned provider!
+  // Any patient can view and book all available slots published by any active dietitian/fitness coach.
+  if (role === 'dietitian' || role === 'fitness_coach') {
+    return { providerId: null }
+  }
+
+  // If no specific provider requested, check if patient has an assigned provider for this role (e.g. doctor continuity)
   const assignedProvider = await getAssignedProviderForRole(patientId, role)
   if (assignedProvider) {
     return { providerId: assignedProvider }
@@ -218,6 +220,7 @@ export async function loadAvailableDates(params: { patientId: string; role: Book
     }
 
     const providerId = authorization.providerId
+    const roleList = params.role === 'dietitian' ? ['dietitian', 'nutritionist'] : (params.role === 'fitness_coach' ? ['fitness_coach', 'trainer'] : [params.role])
 
     // 1. Get active provider IDs for this role
     let activeDoctorIds: string[] = []
@@ -236,7 +239,7 @@ export async function loadAvailableDates(params: { patientId: string; role: Book
           .from('profiles')
           .select('id')
           .eq('id', providerId)
-          .eq('role', params.role)
+          .in('role', roleList)
           .maybeSingle()
         if (legacyProfile) activeDoctorIds = [providerId]
       }
@@ -244,17 +247,17 @@ export async function loadAvailableDates(params: { patientId: string; role: Book
       const { data: activeProviders } = await supabaseAdmin
         .from('provider_profiles')
         .select('provider_id')
-        .eq('role', params.role)
+        .in('role', roleList)
         .eq('status', 'active')
-      activeDoctorIds = (activeProviders || []).map((p) => p.provider_id)
+      const activeIds = (activeProviders || []).map((p) => p.provider_id)
 
-      if (activeDoctorIds.length === 0) {
-        const { data: legacyProfiles } = await supabaseAdmin
-          .from('profiles')
-          .select('id')
-          .eq('role', params.role)
-        activeDoctorIds = (legacyProfiles || []).map((p) => p.id)
-      }
+      const { data: legacyProfiles } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .in('role', roleList)
+      const legacyIds = (legacyProfiles || []).map((p) => p.id)
+
+      activeDoctorIds = Array.from(new Set([...activeIds, ...legacyIds]))
     }
 
     if (activeDoctorIds.length === 0) {
@@ -267,7 +270,7 @@ export async function loadAvailableDates(params: { patientId: string; role: Book
     const { data: slots, error } = await supabaseAdmin
       .from('provider_availability')
       .select('id, provider_id, provider_role, available_date, start_time, end_time, status, source, slot_duration')
-      .eq('provider_role', params.role)
+      .in('provider_role', roleList)
       .eq('status', 'AVAILABLE')
       .eq('is_available', true)
       .in('provider_id', activeDoctorIds)
@@ -381,6 +384,7 @@ export async function loadAvailableSlots(params: {
     }
 
     const providerId = authorization.providerId
+    const roleList = params.role === 'dietitian' ? ['dietitian', 'nutritionist'] : (params.role === 'fitness_coach' ? ['fitness_coach', 'trainer'] : [params.role])
 
     // 1. Get active provider IDs
     let activeDoctorIds: string[] = []
@@ -399,7 +403,7 @@ export async function loadAvailableSlots(params: {
           .from('profiles')
           .select('id')
           .eq('id', providerId)
-          .eq('role', params.role)
+          .in('role', roleList)
           .maybeSingle()
         if (legacyProfile) activeDoctorIds = [providerId]
       }
@@ -407,17 +411,17 @@ export async function loadAvailableSlots(params: {
       const { data: activeProviders } = await supabaseAdmin
         .from('provider_profiles')
         .select('provider_id')
-        .eq('role', params.role)
+        .in('role', roleList)
         .eq('status', 'active')
-      activeDoctorIds = (activeProviders || []).map((p) => p.provider_id)
+      const activeIds = (activeProviders || []).map((p) => p.provider_id)
 
-      if (activeDoctorIds.length === 0) {
-        const { data: legacyProfiles } = await supabaseAdmin
-          .from('profiles')
-          .select('id')
-          .eq('role', params.role)
-        activeDoctorIds = (legacyProfiles || []).map((p) => p.id)
-      }
+      const { data: legacyProfiles } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .in('role', roleList)
+      const legacyIds = (legacyProfiles || []).map((p) => p.id)
+
+      activeDoctorIds = Array.from(new Set([...activeIds, ...legacyIds]))
     }
 
     if (activeDoctorIds.length === 0) {
@@ -429,7 +433,7 @@ export async function loadAvailableSlots(params: {
     const { data: slots, error } = await supabaseAdmin
       .from('provider_availability')
       .select('id, provider_id, provider_role, available_date, start_time, end_time, status, source, slot_duration')
-      .eq('provider_role', params.role)
+      .in('provider_role', roleList)
       .eq('status', 'AVAILABLE')
       .eq('is_available', true)
       .eq('available_date', params.date)

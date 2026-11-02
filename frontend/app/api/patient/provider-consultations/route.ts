@@ -77,12 +77,10 @@ async function getAssignedProviderId(patientId: string, role: string) {
 }
 
 async function getAvailableProviderSlots(patientId: string, role: string, selectedDate?: string) {
-  const assignedProviderId = await getAssignedProviderId(patientId, role)
-
   const today = new Date().toISOString().split('T')[0]
   const dateFilter = selectedDate && isDate(selectedDate) ? selectedDate : ''
   const normalizedRole = normalizeProviderRole(role)
-  const roles = normalizedRole === 'fitness_coach' ? ['fitness_coach', 'trainer'] : [normalizedRole]
+  const roles = normalizedRole === 'fitness_coach' ? ['fitness_coach', 'trainer'] : (normalizedRole === 'dietitian' ? ['dietitian', 'nutritionist'] : [normalizedRole])
 
   let query = supabaseAdmin
     .from('provider_availability')
@@ -90,10 +88,6 @@ async function getAvailableProviderSlots(patientId: string, role: string, select
     .eq('is_available', true)
     .eq('status', 'AVAILABLE')
     .in('provider_role', roles)
-
-  if (assignedProviderId) {
-    query = query.eq('provider_id', assignedProviderId)
-  }
 
   if (dateFilter) {
     query = query.eq('available_date', dateFilter)
@@ -105,35 +99,11 @@ async function getAvailableProviderSlots(patientId: string, role: string, select
     .order('available_date', { ascending: true })
     .order('start_time', { ascending: true })
 
-  // Fallback: If assigned provider has no availability, search all active providers of this role
-  if ((!availability || availability.length === 0) && assignedProviderId) {
-    let fallbackQuery = supabaseAdmin
-      .from('provider_availability')
-      .select('id, provider_id, provider_role, available_date, start_time, end_time, slot_duration, max_consultations_per_day, max_consultations_per_hour')
-      .eq('is_available', true)
-      .eq('status', 'AVAILABLE')
-      .in('provider_role', roles)
-
-    if (dateFilter) {
-      fallbackQuery = fallbackQuery.eq('available_date', dateFilter)
-    } else {
-      fallbackQuery = fallbackQuery.gte('available_date', today)
-    }
-
-    const { data: fallbackAvailability } = await fallbackQuery
-      .order('available_date', { ascending: true })
-      .order('start_time', { ascending: true })
-
-    if (fallbackAvailability && fallbackAvailability.length > 0) {
-      availability = fallbackAvailability
-    }
-  }
-
   if (availabilityError) {
-    return { providerId: assignedProviderId, slots: [] as ProviderSlot[], error: availabilityError.message }
+    return { providerId: null, slots: [] as ProviderSlot[], error: availabilityError.message }
   }
 
-  if (!availability?.length) return { providerId: assignedProviderId, slots: [] as ProviderSlot[] }
+  if (!availability?.length) return { providerId: null, slots: [] as ProviderSlot[] }
 
   const dates = Array.from(new Set((availability as ProviderAvailability[]).map((row) => row.available_date)))
   const allProviderIds = Array.from(new Set((availability as ProviderAvailability[]).map(r => r.provider_id)))
@@ -200,7 +170,7 @@ async function getAvailableProviderSlots(patientId: string, role: string, select
 
   const unique = new Map(slots.map((slot) => [`${slot.provider_id}-${slot.available_date}-${slot.time_slot}`, slot]))
   return {
-    providerId: assignedProviderId,
+    providerId: null,
     slots: Array.from(unique.values()).sort((a, b) => {
       return new Date(`${a.available_date}T${a.time_slot}:00`).getTime() - new Date(`${b.available_date}T${b.time_slot}:00`).getTime()
     }),

@@ -369,19 +369,6 @@ export default function PatientProfileSidebar({
             </button>
           ) : null}
 
-          {onReferDietitian && (
-            <button
-              onClick={() => {
-                onClose();
-                onReferDietitian();
-              }}
-              className="flex-1 py-3 px-3 rounded-xl bg-[#FAF8F5] text-[#0D9488] border border-[#0D9488]/30 font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#0D9488]/10 transition-colors cursor-pointer whitespace-nowrap"
-              title="Refer to clinical dietitian for medical nutrition therapy"
-            >
-              <Apple className="w-4 h-4 text-[#0D9488]" /> Refer Dietitian
-            </button>
-          )}
-
           <button
             onClick={onClose}
             className="py-3 px-4 rounded-xl border border-[#1A1F36]/15 text-[#40516A] font-bold text-xs hover:bg-[#F5F0EB] transition-colors cursor-pointer"

@@ -503,7 +503,7 @@ export default function PatientDashboardHome() {
               </div>
 
               <Link
-                href="/patient/consultation"
+                href="/patient/consultation?role=doctor"
                 className="text-xs font-bold px-3 py-1.5 rounded-full bg-white hover:bg-emerald-50 border border-slate-200 text-[#00A884] transition-colors shrink-0"
               >
                 Telehealth
@@ -525,7 +525,7 @@ export default function PatientDashboardHome() {
               </div>
 
               <Link
-                href="/patient/consultation"
+                href="/patient/consultation?role=dietitian"
                 className="text-xs font-bold px-3 py-1.5 rounded-full bg-white hover:bg-emerald-50 border border-slate-200 text-[#00A884] transition-colors shrink-0"
               >
                 Diet Plan
@@ -547,7 +547,7 @@ export default function PatientDashboardHome() {
               </div>
 
               <Link
-                href="/patient/consultation"
+                href="/patient/consultation?role=trainer"
                 className="text-xs font-bold px-3 py-1.5 rounded-full bg-white hover:bg-emerald-50 border border-slate-200 text-[#00A884] transition-colors shrink-0"
               >
                 Guidance

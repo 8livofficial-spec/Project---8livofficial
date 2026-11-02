@@ -57,7 +57,7 @@ interface DoctorPatientTableViewProps {
   onViewProfile: (patient: Patient) => void;
   onIssueRx: (patient: Patient) => void;
   onViewRx?: (rx: any) => void;
-  onReferDietitian: (patient: Patient) => void;
+  onReferDietitian?: (patient: Patient) => void;
   doctorPrescriptions?: any[];
   onRefresh?: () => void;
 }
@@ -667,16 +667,6 @@ export default function DoctorPatientTableView({
                                   </button>
                                 )}
 
-                                <button
-                                  onClick={() => {
-                                    setActiveMenuPatientId(null);
-                                    onReferDietitian(p);
-                                  }}
-                                  className="w-full flex items-center gap-2.5 px-3.5 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-slate-900 transition-colors"
-                                >
-                                  <Apple className="w-3.5 h-3.5 text-teal-600" />
-                                  <span>Refer to Dietitian</span>
-                                </button>
 
                                 <div className="border-t border-slate-100 my-1" />
 
@@ -921,18 +911,6 @@ export default function DoctorPatientTableView({
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => {
-                      const p = detailModalPatient;
-                      setDetailModalPatient(null);
-                      onReferDietitian(p);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-bold rounded-xl border border-teal-300 bg-teal-50 hover:bg-teal-100 text-teal-800 transition-colors cursor-pointer"
-                  >
-                    <Apple className="w-3.5 h-3.5 text-teal-600" />
-                    <span>Refer to Dietitian</span>
-                  </button>
-
                   <button
                     onClick={() => {
                       const p = detailModalPatient;
