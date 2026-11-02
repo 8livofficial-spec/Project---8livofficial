@@ -2150,7 +2150,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                                   <a
                                     href={session.meetingUrl}
                                     target="_blank"
-                                    rel="noreferrer"
+                                    rel="opener"
                                     className="px-3.5 py-1.5 rounded-lg bg-[#0D9488] text-white text-xs font-bold hover:bg-[#0F766E] shadow-sm"
                                   >
                                     Join Call

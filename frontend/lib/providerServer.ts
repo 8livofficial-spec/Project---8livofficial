@@ -18,7 +18,7 @@ export async function getCurrentProvider(request: Request) {
     throw err
   }
 
-  const allowedRoles = ['doctor', 'dietitian', 'fitness_coach', 'nutritionist', 'trainer']
+  const allowedRoles = ['doctor', 'dietitian', 'fitness_coach', 'nutritionist', 'trainer', 'admin']
   if (!allowedRoles.includes(auth.role)) {
     const err = new Error('Forbidden')
     ;(err as any).status = 403

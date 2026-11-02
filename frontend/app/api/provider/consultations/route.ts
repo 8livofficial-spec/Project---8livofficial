@@ -156,22 +156,56 @@ export async function PATCH(request: Request) {
     cancel: 'cancelled_by_doctor',
   }
   const nextStatus = statusByAction[action]
+  const now = new Date().toISOString()
+  const isComplete = action === 'complete'
 
-  const { data, error } = await supabaseAdmin
+  let staffQuery = supabaseAdmin
     .from('staff_consultations')
     .update({
       status: nextStatus,
-      is_completed: action === 'complete',
-      completed_at: action === 'complete' ? new Date().toISOString() : null,
+      is_completed: isComplete,
+      completed_at: isComplete ? now : null,
+      call_ended_at: isComplete ? now : null,
+      meeting_status: isComplete ? 'ENDED' : 'CANCELLED',
       consultation_notes: notes || null,
     })
     .eq('id', consultationId)
-    .eq('staff_id', provider.user.id)
+
+  if (provider.role !== 'admin') {
+    staffQuery = staffQuery.eq('staff_id', provider.user.id)
+  }
+
+  const { data: staffData, error: staffError } = await staffQuery
     .select()
     .maybeSingle()
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  if (!data) return NextResponse.json({ error: 'Consultation not found.' }, { status: 404 })
+  if (staffError) return NextResponse.json({ error: staffError.message }, { status: 500 })
+
+  let data = staffData
+
+  if (!data) {
+    let docQuery = supabaseAdmin
+      .from('doctor_consultations')
+      .update({
+        status: isComplete ? 'attended' : nextStatus,
+        meeting_status: isComplete ? 'COMPLETED' : 'CANCELLED',
+        call_ended_at: isComplete ? now : null,
+        updated_at: now,
+      })
+      .eq('id', consultationId)
+
+    if (provider.role !== 'admin') {
+      docQuery = docQuery.eq('doctor_id', provider.user.id)
+    }
+
+    const { data: docData, error: docError } = await docQuery.select().maybeSingle()
+    if (docError) return NextResponse.json({ error: docError.message }, { status: 500 })
+    if (docData) {
+      return NextResponse.json({ consultation: docData })
+    }
+
+    return NextResponse.json({ error: 'Consultation not found.' }, { status: 404 })
+  }
 
   await supabaseAdmin
     .from('patient_notifications')

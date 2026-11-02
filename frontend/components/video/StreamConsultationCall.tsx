@@ -7,6 +7,7 @@ import {
   StreamVideo,
   StreamVideoClient,
   useCallStateHooks,
+  useCall,
 } from '@stream-io/video-react-sdk'
 import '@stream-io/video-react-sdk/dist/css/styles.css'
 import {
@@ -32,12 +33,15 @@ type VideoTokenResponse = {
   callType: string
   appointmentId: string
   patientId?: string
+  providerRole?: string
+  participantRole?: string
 }
 
 type Props = {
   appointmentId: string
   patientId?: string
   onLeave: () => void
+  onSessionReady?: (meta: { providerRole?: string; participantRole?: string }) => void
 }
 
 function CustomCallControls({
@@ -49,9 +53,11 @@ function CustomCallControls({
   onToggleProtocols: () => void
   showProtocols: boolean
 }) {
+  const call = useCall()
   const { useMicrophoneState, useCameraState } = useCallStateHooks()
   const { microphone, isMute: isMicMuted } = useMicrophoneState()
   const { camera, isMute: isCamMuted } = useCameraState()
+  const [leaving, setLeaving] = useState(false)
 
   const toggleMic = async () => {
     try {
@@ -67,6 +73,17 @@ function CustomCallControls({
     } catch (e) {
       console.warn('Could not toggle camera:', e)
     }
+  }
+
+  const handleEndCall = async () => {
+    if (leaving) return
+    setLeaving(true)
+    try {
+      await call?.leave()
+    } catch (e) {
+      console.warn('Stream call leave error:', e)
+    }
+    onLeave()
   }
 
   return (
@@ -122,17 +139,18 @@ function CustomCallControls({
       {/* End Call Button */}
       <button
         type="button"
-        onClick={onLeave}
-        title="Leave consultation call"
-        className="w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/40 transition-all active:scale-95 cursor-pointer"
+        onClick={handleEndCall}
+        disabled={leaving}
+        title="Leave and conclude consultation call"
+        className="w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center bg-rose-600 hover:bg-rose-700 text-white shadow-lg shadow-rose-600/40 transition-all active:scale-95 cursor-pointer disabled:opacity-60"
       >
-        <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />
+        {leaving ? <RefreshCw className="w-4 h-4 animate-spin text-white" /> : <PhoneOff className="w-4 h-4 sm:w-5 sm:h-5" />}
       </button>
     </div>
   )
 }
 
-export default function StreamConsultationCall({ appointmentId, patientId, onLeave }: Props) {
+export default function StreamConsultationCall({ appointmentId, patientId, onLeave, onSessionReady }: Props) {
   const [tokenData, setTokenData] = useState<VideoTokenResponse | null>(null)
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
@@ -163,7 +181,13 @@ export default function StreamConsultationCall({ appointmentId, patientId, onLea
           }
           throw new Error(data.error || 'Unable to prepare secure video session.')
         }
-        if (active) setTokenData(data)
+        if (active) {
+          setTokenData(data)
+          onSessionReady?.({
+            providerRole: data.providerRole,
+            participantRole: data.participantRole,
+          })
+        }
       } catch (err) {
         if (active) setError(err instanceof Error ? err.message : 'Unable to prepare secure video session.')
       } finally {
