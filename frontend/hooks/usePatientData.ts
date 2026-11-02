@@ -19,16 +19,29 @@ async function fetchPatientStatus(userId: string, accessToken: string, force = f
     return patientStatusRequests.get(userId)!
   }
 
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 8000)
+
   const request = fetch(`/api/patient/status?patientId=${userId}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal: controller.signal,
   })
     .then(async (res) => {
+      clearTimeout(timeoutId)
       if (!res.ok) throw new Error("Failed to fetch patient onboarding status from backend API")
       const data = await res.json()
       patientStatusCache = { userId, data, fetchedAt: Date.now() }
       return data
     })
+    .catch((err) => {
+      clearTimeout(timeoutId)
+      if (patientStatusCache?.userId === userId) {
+        return patientStatusCache.data
+      }
+      throw err
+    })
     .finally(() => {
+      clearTimeout(timeoutId)
       patientStatusRequests.delete(userId)
     })
 
@@ -36,7 +49,7 @@ async function fetchPatientStatus(userId: string, accessToken: string, force = f
   return request
 }
 
-const PATIENT_DASHBOARD_CACHE_MS = 15000
+const PATIENT_DASHBOARD_CACHE_MS = 30000
 let patientDashboardCache: { userId: string; data: any; fetchedAt: number } | null = null
 const patientDashboardRequests = new Map<string, Promise<any>>()
 
@@ -50,16 +63,29 @@ async function fetchPatientDashboard(userId: string, accessToken: string, force 
     return patientDashboardRequests.get(userId)!
   }
 
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 8000)
+
   const request = fetch(`/api/patient/dashboard?patientId=${userId}${force ? '&force=true' : ''}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
+    signal: controller.signal,
   })
     .then(async (res) => {
+      clearTimeout(timeoutId)
       if (!res.ok) throw new Error("Failed to fetch patient dashboard from backend API")
       const data = await res.json()
       patientDashboardCache = { userId, data, fetchedAt: Date.now() }
       return data
     })
+    .catch((err) => {
+      clearTimeout(timeoutId)
+      if (patientDashboardCache?.userId === userId) {
+        return patientDashboardCache.data
+      }
+      throw err
+    })
     .finally(() => {
+      clearTimeout(timeoutId)
       patientDashboardRequests.delete(userId)
     })
 
@@ -388,6 +414,10 @@ function usePatientDataInternal() {
 
         const journeyFlowStep: FlowStep = dashboardAccess
           || (membershipStatus === 'ACTIVE' && firstConsultationCompleted)
+          || Boolean(assessRow?.onboarding_completed)
+          || Boolean(assessRow?.booking_date)
+          || (dashboardData.staffConsultations && dashboardData.staffConsultations.length > 0)
+          || (dashboardData.consultations && dashboardData.consultations.length > 0)
           ? 'ready'
           : assessmentStatus !== 'COMPLETED'
             ? 'needs_assessment'
@@ -463,6 +493,9 @@ function usePatientDataInternal() {
 
         const journeyFlowStep: FlowStep = dashboardAccess
           || (membershipStatus === 'ACTIVE' && firstConsultationCompleted)
+          || Boolean(assessRow?.onboarding_completed)
+          || Boolean(assessRow?.booking_date)
+          || (statusData.staffConsultations && statusData.staffConsultations.length > 0)
           ? 'ready'
           : assessmentStatus !== 'COMPLETED'
             ? 'needs_assessment'

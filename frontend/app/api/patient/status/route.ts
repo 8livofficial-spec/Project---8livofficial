@@ -114,7 +114,7 @@ export async function GET(request: Request) {
       getMembershipValidity(patientId),
       supabaseAdmin
         .from('prescriptions')
-        .select('*, prescription_items(*), pharmacy_orders(*)')
+        .select('id, prescription_number, status, diagnosis, valid_until, issued_at, created_at, signed_pdf_path, canonical_data, prescription_items(id, medicine_name, dosage, frequency, duration)')
         .eq('patient_id', patientId)
         .not('status', 'in', '("DRAFT","REVOKED","CANCELLED","REPLACED")')
         .order('created_at', { ascending: false })
@@ -285,7 +285,13 @@ export async function GET(request: Request) {
         : persistedJourney?.membership_status === 'SELECTED' || assessment?.membership_tier
           ? 'SELECTED'
           : 'NOT_SELECTED'
-    const effectiveDashboardAccess = membershipActive && firstConsultationCompleted
+    const effectiveDashboardAccess = Boolean(
+      (membershipActive && firstConsultationCompleted) ||
+      persistedJourney?.dashboard_access ||
+      onboardingCompleted ||
+      has_attended_doctor_session ||
+      staffConsults.length > 0
+    )
     const currentJourneyStep = getCurrentJourneyStep({
       assessmentStatus,
       eligibilityStatus,

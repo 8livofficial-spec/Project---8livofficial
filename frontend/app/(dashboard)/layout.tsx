@@ -126,27 +126,43 @@ function DashboardLayoutContent({
     if (loading) return
 
     let targetPath: string | null = null
-    if (flowStep === 'needs_assessment') {
-      targetPath = '/assessment'
-    } else if (flowStep === 'not_eligible') {
-      targetPath = consultationPaymentStatus === 'PAID' ? '/appointments/select-slot' : '/consultation-payment'
-    } else if (dashboardAccess && pathname.startsWith('/patient/onboarding')) {
-      targetPath = '/patient'
-    } else if (flowStep === 'appointment_scheduled') {
-      const canAccessRescheduleBooking = isConsultationBookingPage && ['MISSED_BY_PATIENT', 'CANCELLED_BY_DOCTOR', 'CANCELLED_BY_PATIENT'].includes(appointmentStatus)
-      if (!isAppointmentDetailsPage && !isConsultationRoomPage && !isConsultationConsentPage && !canAccessRescheduleBooking) {
-        targetPath = bookingId ? `/patient/appointments/${bookingId}` : '/patient/appointments'
+    const isStandardDashboardPage = pathname === '/patient' || 
+      pathname.startsWith('/patient/support') || 
+      pathname.startsWith('/patient/profile') || 
+      pathname.startsWith('/patient/settings') || 
+      pathname.startsWith('/patient/appointments') || 
+      pathname.startsWith('/patient/consultation') || 
+      pathname.startsWith('/patient/billing') || 
+      pathname.startsWith('/patient/prescriptions') || 
+      pathname.startsWith('/patient/progress')
+
+    if (isStandardDashboardPage) {
+      if (flowStep === 'needs_assessment') {
+        targetPath = '/assessment'
       }
-    } else if (flowStep === 'needs_consultation') {
-      if (!isConsultationBookingPage && !isAppointmentDetailsPage) {
+    } else {
+      if (flowStep === 'needs_assessment') {
+        targetPath = '/assessment'
+      } else if (flowStep === 'not_eligible') {
         targetPath = consultationPaymentStatus === 'PAID' ? '/appointments/select-slot' : '/consultation-payment'
+      } else if (dashboardAccess && pathname.startsWith('/patient/onboarding')) {
+        targetPath = '/patient'
+      } else if (flowStep === 'appointment_scheduled') {
+        const canAccessRescheduleBooking = isConsultationBookingPage && ['MISSED_BY_PATIENT', 'CANCELLED_BY_DOCTOR', 'CANCELLED_BY_PATIENT'].includes(appointmentStatus)
+        if (!isAppointmentDetailsPage && !isConsultationRoomPage && !isConsultationConsentPage && !canAccessRescheduleBooking) {
+          targetPath = bookingId ? `/patient/appointments/${bookingId}` : '/patient/appointments'
+        }
+      } else if (flowStep === 'needs_consultation') {
+        if (!isConsultationBookingPage && !isAppointmentDetailsPage) {
+          targetPath = consultationPaymentStatus === 'PAID' ? '/appointments/select-slot' : '/consultation-payment'
+        }
+      } else if (flowStep === 'needs_plan') {
+        // Never redirect away from the consultation room -- the patient just ended
+        // their call and is mid-navigation. The room page navigates itself away.
+        if (!isOnboardingPlanPage && !isConsultationRoomPage) targetPath = '/patient/onboarding/plan'
+      } else if (flowStep === 'needs_payment') {
+        if (!isOnboardingPaymentPage && !isConsultationRoomPage) targetPath = '/membership-payment'
       }
-    } else if (flowStep === 'needs_plan') {
-      // Never redirect away from the consultation room -- the patient just ended
-      // their call and is mid-navigation. The room page navigates itself away.
-      if (!isOnboardingPlanPage && !isConsultationRoomPage) targetPath = '/patient/onboarding/plan'
-    } else if (flowStep === 'needs_payment') {
-      if (!isOnboardingPaymentPage && !isConsultationRoomPage) targetPath = '/membership-payment'
     }
 
     if (targetPath && pathname !== targetPath) {
@@ -465,9 +481,9 @@ function DashboardLayoutContent({
                 </div>
               </div>
             </div>
-          ) : (loading || flowStep !== 'ready') ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#F5F0EB]/50 backdrop-blur-sm z-10">
-              <div className="w-10 h-10 border-4 border-[#C4622D] border-t-transparent rounded-full animate-spin" />
+          ) : (loading) ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-[#F8FAF7]/60 backdrop-blur-sm z-10">
+              <div className="w-10 h-10 border-4 border-[#00A884] border-t-transparent rounded-full animate-spin" />
             </div>
           ) : (
             children

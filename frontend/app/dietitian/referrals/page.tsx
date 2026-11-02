@@ -1,5 +1,5 @@
-import DietitianPortal from '@/components/dietitian/DietitianPortal'
+import { redirect } from 'next/navigation'
 
 export default function DietitianReferralsPage() {
-  return <DietitianPortal defaultSection="referrals" />
+  redirect('/dietitian/consultations')
 }

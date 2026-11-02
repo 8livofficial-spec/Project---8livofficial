@@ -61,7 +61,6 @@ type SectionKey =
   | 'progress'
   | 'consultations'
   | 'schedule'
-  | 'referrals'
   | 'wallet'
   | 'profile'
 
@@ -177,25 +176,6 @@ type FoodLogRecord = {
   }
 }
 
-type ReferralRecord = {
-  id: string
-  patient_id: string
-  doctor_id: string
-  reason: string
-  priority: string
-  clinical_notes?: string | null
-  status: string
-  created_at: string
-  patient?: {
-    full_name?: string
-    gender?: string
-    age?: number
-  }
-  doctor?: {
-    full_name?: string
-  }
-}
-
 function formatInr(val: number) {
   return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(val || 0)
 }
@@ -247,8 +227,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
   const [editingPlan, setEditingPlan] = useState<Partial<PlanRecord> | null>(null)
   const [isPublishing, setIsPublishing] = useState(false)
 
-  // Referrals & Food Logs State
-  const [referrals, setReferrals] = useState<ReferralRecord[]>([])
+  // Food Logs State
   const [foodLogs, setFoodLogs] = useState<FoodLogRecord[]>([])
   const [foodLogFilter, setFoodLogFilter] = useState<'all' | 'unreviewed'>('all')
   const [reviewComment, setReviewComment] = useState('')
@@ -386,13 +365,6 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
         if (tmplJson.success) setTemplates(tmplJson.templates || [])
       }
 
-      // Referrals
-      if (activeSection === 'referrals' || activeSection === 'dashboard') {
-        const res = await fetch('/api/dietitian/referrals', { headers })
-        const json = await res.json()
-        if (json.success) setReferrals(json.referrals || [])
-      }
-
       // Food Logs
       if (activeSection === 'food-logs') {
         const res = await fetch(`/api/dietitian/food-logs?filter=${foodLogFilter}`, { headers })
@@ -462,28 +434,6 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
       }
     } catch (err) {
       console.warn('Error loading workspace:', err)
-    }
-  }
-
-  // 4. Doctor Referral Accept/Decline
-  const handleReferralAction = async (referralId: string, action: 'ACCEPT' | 'DECLINE') => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch(`/api/dietitian/referrals/${referralId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session?.access_token || ''}`,
-        },
-        body: JSON.stringify({ action }),
-      })
-      const json = await res.json()
-      if (json.success) {
-        setSuccess(`Referral ${action === 'ACCEPT' ? 'accepted and patient assigned' : 'declined'} successfully!`)
-        loadData()
-      }
-    } catch (err: any) {
-      setError(err.message || 'Error processing referral')
     }
   }
 
@@ -852,23 +802,6 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
           </button>
 
           <button
-            onClick={() => { setActiveSection('referrals'); setSelectedPatient(null) }}
-            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
-              activeSection === 'referrals' ? 'bg-[#0D9488] text-white shadow-sm' : 'text-slate-300 hover:bg-[#252C48]'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              <UserCheck className="w-4 h-4" />
-              <span>Doctor Referrals</span>
-            </div>
-            {referrals.filter(r => r.status === 'PENDING').length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-[#C4622D] text-white font-black animate-pulse">
-                {referrals.filter(r => r.status === 'PENDING').length}
-              </span>
-            )}
-          </button>
-
-          <button
             onClick={() => { setActiveSection('consultations'); setSelectedPatient(null) }}
             className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all ${
               activeSection === 'consultations' ? 'bg-[#0D9488] text-white shadow-sm' : 'text-slate-300 hover:bg-[#252C48]'
@@ -1004,9 +937,11 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
               </div>
 
               <div className="rounded-2xl border border-[#E8DED4] bg-white p-4 shadow-sm">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Doctor Referrals</p>
-                <p className="mt-2 text-2xl md:text-3xl font-black text-[#C4622D]">{dashboardMetrics?.newReferrals ?? referrals.filter(r => r.status === 'PENDING').length}</p>
-                <p className="text-[10px] font-semibold text-slate-400 mt-1">Awaiting acceptance</p>
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Available Slots</p>
+                <p className="mt-2 text-2xl md:text-3xl font-black text-[#0D9488]">
+                  {availability.filter(s => s.status === 'AVAILABLE' && s.is_available).length}
+                </p>
+                <p className="text-[10px] font-semibold text-slate-400 mt-1">Open for patient booking</p>
               </div>
 
               <div className="rounded-2xl border border-[#E8DED4] bg-white p-4 shadow-sm">
@@ -1050,8 +985,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                         </div>
                         <button
                           onClick={() => {
-                            if (action.type === 'REFERRAL') setActiveSection('referrals')
-                            else if (action.type === 'PLAN_REVIEW') setActiveSection('plans')
+                            if (action.type === 'PLAN_REVIEW') setActiveSection('plans')
                             else router.push(action.actionUrl)
                           }}
                           className="px-3 py-1.5 rounded-lg bg-[#0D9488] text-white text-[11px] font-bold hover:bg-[#0F766E] transition-colors whitespace-nowrap"
@@ -1215,7 +1149,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                     <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
                     <h3 className="text-sm font-bold text-[#1A1F36]">No patients assigned yet</h3>
                     <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                      Assigned patients from care programs or accepted doctor referrals will appear here.
+                      Assigned patients from care programs and direct consultation bookings will appear here.
                     </p>
                   </div>
                 )}
@@ -2133,67 +2067,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
           </div>
         )}
 
-        {/* SECTION 5: DOCTOR REFERRALS */}
-        {activeSection === 'referrals' && (
-          <div className="space-y-6">
-            <div>
-              <h1 className="text-2xl font-black text-[#1A1F36]">Doctor Referrals</h1>
-              <p className="text-xs text-slate-500 font-semibold">Incoming referrals from attending physicians for Medical Nutrition Therapy</p>
-            </div>
 
-            {referrals.length > 0 ? (
-              <div className="space-y-4">
-                {referrals.map((ref) => (
-                  <div key={ref.id} className="p-5 rounded-2xl border border-[#E8DED4] bg-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-base text-[#1A1F36]">{ref.patient?.full_name || 'Patient'}</span>
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                          ref.priority === 'URGENT' ? 'bg-[#FEE2E2] text-[#991B1B]' : 'bg-[#E0F2FE] text-[#0369A1]'
-                        }`}>
-                          {ref.priority} Priority
-                        </span>
-                        <span className="text-xs text-slate-400">• Referred by {ref.doctor?.full_name || 'Attending Physician'}</span>
-                      </div>
-                      <p className="text-xs font-semibold text-slate-700 mt-1">Reason: {ref.reason}</p>
-                      {ref.clinical_notes && (
-                        <p className="text-xs text-slate-500 mt-1 italic">Notes: "{ref.clinical_notes}"</p>
-                      )}
-                    </div>
-                    {ref.status === 'PENDING' ? (
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => handleReferralAction(ref.id, 'ACCEPT')}
-                          className="px-4 py-2 rounded-xl bg-[#0D9488] text-white text-xs font-bold hover:bg-[#0F766E] transition-colors"
-                        >
-                          Accept Referral
-                        </button>
-                        <button
-                          onClick={() => handleReferralAction(ref.id, 'DECLINE')}
-                          className="px-4 py-2 rounded-xl border border-[#E8DED4] text-[#B94D4D] text-xs font-bold hover:bg-slate-50 transition-colors"
-                        >
-                          Decline
-                        </button>
-                      </div>
-                    ) : (
-                      <span className={`px-3 py-1 rounded-full text-xs font-black uppercase ${
-                        ref.status === 'ACCEPTED' ? 'bg-[#DCFCE7] text-[#166534]' : 'bg-slate-100 text-slate-500'
-                      }`}>
-                        {ref.status}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-[#E8DED4] p-12 text-center bg-white">
-                <UserCheck className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                <h3 className="text-sm font-bold text-[#1A1F36]">No doctor referrals pending</h3>
-                <p className="text-xs text-slate-400 mt-1">New patient referrals from doctors will appear here.</p>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* SECTION 6: CONSULTATIONS */}
         {activeSection === 'consultations' && (
