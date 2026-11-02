@@ -35,7 +35,7 @@ export async function GET(request: Request, context: RouteContext) {
     } else {
       const { data: staffAppt, error: staffError } = await supabaseAdmin
         .from('staff_consultations')
-        .select('id, patient_id, staff_id, staff_role, booking_date, booking_time, status, appointment_type, created_at')
+        .select('id, patient_id, staff_id, staff_role, booking_date, booking_time, status, created_at')
         .eq('id', bookingId)
         .maybeSingle()
 

@@ -105,7 +105,7 @@ async function ensureStreamMeeting(consultation: ConsultationRecord, createdBy: 
     createdBy,
   })
 
-  const payload = {
+  const payload: Record<string, any> = {
     meeting_provider: meeting.meetingProvider,
     call_id: meeting.callId,
     call_type: meeting.callType,
@@ -114,7 +114,9 @@ async function ensureStreamMeeting(consultation: ConsultationRecord, createdBy: 
     meeting_url: null,
     meeting_room: null,
     room_url: null,
-    updated_at: new Date().toISOString(),
+  }
+  if (consultation.table === 'doctor_consultations') {
+    payload.updated_at = new Date().toISOString()
   }
 
   const { error } = await supabaseAdmin
@@ -164,7 +166,7 @@ export async function POST(request: Request) {
       meeting_status: isProvider ? 'LIVE' : 'WAITING',
       status: isProvider ? 'calling' : undefined,
       call_started_at: isProvider ? new Date().toISOString() : undefined,
-      updated_at: new Date().toISOString(),
+      ...(consultation.table === 'doctor_consultations' ? { updated_at: new Date().toISOString() } : {}),
     }).filter(([, value]) => value !== undefined))
 
     await supabaseAdmin

@@ -113,8 +113,7 @@ export async function POST(req: Request) {
           .update({
             status: nextStatus,
             meeting_status: 'COMPLETED',
-            call_ended_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
+            call_ended_at: new Date().toISOString()
           })
           .eq('id', staffConsult.id);
 

@@ -120,7 +120,7 @@ async function loadAppointment(bookingId: string, patientId: string): Promise<{ 
   }
 
   // Fallback: check staff_consultations (e.g. dietitian, nutritionist, fitness coach consultations)
-  const staffSelect = 'id, patient_id, staff_id, staff_role, booking_date, booking_time, status, room_url, meeting_provider, meeting_room, meeting_url, call_id, call_type, created_by, meeting_status, appointment_type'
+  const staffSelect = 'id, patient_id, staff_id, staff_role, booking_date, booking_time, status, room_url, meeting_provider, meeting_room, meeting_url, call_id, call_type, created_by, meeting_status'
   const { data: staffData, error: staffError } = await supabaseAdmin
     .from('staff_consultations')
     .select(staffSelect)
@@ -319,19 +319,23 @@ export async function GET(request: Request, context: RouteContext) {
       callType = streamMeeting.callType
 
       const targetTable = appointment.table_source || (isStaff ? 'staff_consultations' : 'doctor_consultations')
+      const meetingPayload: Record<string, any> = {
+        meeting_provider: meetingProvider,
+        call_id: callId,
+        call_type: callType,
+        created_by: streamMeeting.createdBy,
+        meeting_status: streamMeeting.meetingStatus,
+        meeting_room: null,
+        meeting_url: null,
+        room_url: null,
+      }
+      if (targetTable === 'doctor_consultations') {
+        meetingPayload.updated_at = new Date().toISOString()
+      }
+
       const { error: meetingUpdateError } = await supabaseAdmin
         .from(targetTable)
-        .update({
-          meeting_provider: meetingProvider,
-          call_id: callId,
-          call_type: callType,
-          created_by: streamMeeting.createdBy,
-          meeting_status: streamMeeting.meetingStatus,
-          meeting_room: null,
-          meeting_url: null,
-          room_url: null,
-          updated_at: new Date().toISOString()
-        })
+        .update(meetingPayload)
         .eq('id', appointment.id)
         .eq('patient_id', patientId)
 
@@ -454,9 +458,14 @@ export async function PATCH(request: Request, context: RouteContext) {
     const nextStatus = beforeCutoff ? 'cancelled_by_patient' : 'missed_by_patient'
     const now = new Date().toISOString()
 
+    const cancelPayload: Record<string, any> = { status: nextStatus }
+    if (targetTable === 'doctor_consultations') {
+      cancelPayload.updated_at = now
+    }
+
     const { error: updateErr } = await supabaseAdmin
       .from(targetTable)
-      .update({ status: nextStatus, updated_at: now })
+      .update(cancelPayload)
       .eq('id', bookingId)
 
     if (updateErr) throw updateErr
