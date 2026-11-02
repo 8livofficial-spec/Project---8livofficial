@@ -13,7 +13,7 @@ export async function GET(
     }
     const { patientId } = await params
     const role = String(auth.role || '').toLowerCase()
-    const isStaff = ['support_agent', 'care_coordinator', 'admin'].includes(role)
+    const isStaff = ['support_agent', 'care_coordinator', 'admin', 'customer_care', 'support'].includes(role)
     if (!isStaff && auth.user.id !== patientId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
@@ -52,7 +52,7 @@ export async function POST(
     }
 
     const role = String(auth.role || '').toLowerCase()
-    const isStaff = ['support_agent', 'care_coordinator', 'admin'].includes(role)
+    const isStaff = ['support_agent', 'care_coordinator', 'admin', 'customer_care', 'support'].includes(role)
     if (!isStaff && auth.user.id !== patientId) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }

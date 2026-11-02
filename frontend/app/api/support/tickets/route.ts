@@ -13,7 +13,7 @@ export async function GET(request: Request) {
     const status = searchParams.get('status')
     const category = searchParams.get('category')
     const role = String(auth.role || '').toLowerCase()
-    const isStaff = ['support_agent', 'care_coordinator', 'admin'].includes(role)
+    const isStaff = ['support_agent', 'care_coordinator', 'admin', 'customer_care', 'support'].includes(role)
 
     let query = supabaseAdmin
       .from('support_tickets')
@@ -91,7 +91,7 @@ export async function POST(request: Request) {
 
     const body = await request.json()
     const role = String(auth.role || '').toLowerCase()
-    const isStaff = ['support_agent', 'care_coordinator', 'admin'].includes(role)
+    const isStaff = ['support_agent', 'care_coordinator', 'admin', 'customer_care', 'support'].includes(role)
 
     const patientId = isStaff ? (body.patientId || auth.user.id) : auth.user.id
     const { category, subject, description, priority } = body

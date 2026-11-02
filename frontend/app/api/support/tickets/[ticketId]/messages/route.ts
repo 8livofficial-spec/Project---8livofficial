@@ -14,7 +14,7 @@ export async function POST(
 
     const { ticketId } = await params
     const role = String(auth.role || '').toLowerCase()
-    const isStaff = ['support_agent', 'care_coordinator', 'admin'].includes(role)
+    const isStaff = ['support_agent', 'care_coordinator', 'admin', 'customer_care', 'support'].includes(role)
 
     // Verify ticket exists
     const { data: ticket, error: ticketError } = await supabaseAdmin

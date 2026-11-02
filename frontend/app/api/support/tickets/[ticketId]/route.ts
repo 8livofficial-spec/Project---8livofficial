@@ -14,7 +14,7 @@ export async function GET(
 
     const { ticketId } = await params
     const role = String(auth.role || '').toLowerCase()
-    const isStaff = ['support_agent', 'care_coordinator', 'admin'].includes(role)
+    const isStaff = ['support_agent', 'care_coordinator', 'admin', 'customer_care', 'support'].includes(role)
 
     // 1. Fetch ticket
     const { data: ticket, error } = await supabaseAdmin
@@ -91,7 +91,7 @@ export async function PATCH(
 
     const { ticketId } = await params
     const role = String(auth.role || '').toLowerCase()
-    const isStaff = ['support_agent', 'care_coordinator', 'admin'].includes(role)
+    const isStaff = ['support_agent', 'care_coordinator', 'admin', 'customer_care', 'support'].includes(role)
 
     const body = await request.json()
     const updates: Record<string, any> = {

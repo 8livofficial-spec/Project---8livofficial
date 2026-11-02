@@ -262,7 +262,7 @@ export async function assertSupportAgent(request: Request) {
     throw new Error('Unauthorized')
   }
   const role = String(auth.role || '').toLowerCase()
-  if (!['support_agent', 'care_coordinator', 'admin'].includes(role)) {
+  if (!['support_agent', 'care_coordinator', 'admin', 'customer_care', 'support'].includes(role)) {
     throw new Error('Forbidden')
   }
   return auth

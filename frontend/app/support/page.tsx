@@ -110,10 +110,28 @@ export default function SupportWorkspacePage() {
   const [isInternalNote, setIsInternalNote] = useState(false)
   const [sendingReply, setSendingReply] = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [currentUserEmail, setCurrentUserEmail] = useState<string | null>(null)
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
+  const [searchErrorMessage, setSearchErrorMessage] = useState<string | null>(null)
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      if (data?.user) setCurrentUserId(data.user.id)
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session?.user) {
+        setIsAuthenticated(true)
+        setCurrentUserId(session.user.id)
+        setCurrentUserEmail(session.user.email || null)
+        supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', session.user.id)
+          .single()
+          .then(({ data }) => {
+            if (data?.role) setCurrentUserRole(data.role)
+          })
+      } else {
+        setIsAuthenticated(false)
+      }
     })
   }, [])
 
@@ -207,6 +225,7 @@ export default function SupportWorkspacePage() {
     if (!query || query.length < 2) return
     setActiveTab('search')
     setSearching(true)
+    setSearchErrorMessage(null)
     try {
       const res = await authedFetch(`/api/support/patients/search?q=${encodeURIComponent(query)}`)
       if (res.ok) {
@@ -216,9 +235,23 @@ export default function SupportWorkspacePage() {
         if (patients.length > 0) {
           setSelectedPatientId(patients[0].id)
         }
+      } else {
+        const errJson = await res.json().catch(() => ({}))
+        if (res.status === 401 || errJson.error === 'Unauthorized') {
+          setSearchErrorMessage('Authentication required: Please sign in with an Admin or Support Agent account.')
+        } else if (res.status === 403 || errJson.error === 'Forbidden') {
+          setSearchErrorMessage('Access Denied: You must be logged in as an Admin or Support Agent to access patient records.')
+        } else {
+          setSearchErrorMessage(errJson.error || 'Failed to search patients.')
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Search error:', err)
+      if (err.message?.includes('sign in')) {
+        setSearchErrorMessage('Please sign in with an Admin or Support Agent account to search patient records.')
+      } else {
+        setSearchErrorMessage(err.message || 'Error connecting to search service.')
+      }
     } finally {
       setSearching(false)
     }
@@ -434,8 +467,52 @@ export default function SupportWorkspacePage() {
           >
             Ticket Queues ({tickets.length})
           </button>
+
+          {/* User profile / Auth status */}
+          <div className="hidden sm:flex items-center pl-2 border-l border-slate-200">
+            {isAuthenticated ? (
+              <div className="flex items-center gap-2">
+                <div className="w-7 h-7 rounded-full bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-xs">
+                  {currentUserRole ? currentUserRole.charAt(0).toUpperCase() : 'U'}
+                </div>
+                <div className="text-left text-xs">
+                  <div className="font-bold text-slate-800 leading-tight">
+                    {currentUserRole === 'admin' ? 'Admin' : currentUserRole === 'support_agent' ? 'Support Agent' : currentUserRole || 'Staff'}
+                  </div>
+                  <div className="text-[10px] text-slate-500 leading-tight truncate max-w-[120px]">
+                    {currentUserEmail || 'Online'}
+                  </div>
+                </div>
+              </div>
+            ) : isAuthenticated === false ? (
+              <Link
+                href="/login?redirect=/support"
+                className="px-3 py-1.5 bg-[#163824] hover:bg-[#11241A] text-white text-xs font-bold rounded-lg transition-all"
+              >
+                Sign In
+              </Link>
+            ) : null}
+          </div>
         </div>
       </header>
+
+      {/* Auth Banner if not authenticated */}
+      {isAuthenticated === false && (
+        <div className="bg-amber-500 text-white px-4 py-2 text-xs font-semibold flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>You are viewing Customer Care Hub in signed-out mode. Sign in with an Admin or Support Agent account to access live patient records and tickets.</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/login?redirect=/support" className="px-2.5 py-1 bg-white text-slate-900 rounded-md font-bold hover:bg-amber-50 transition-all text-xs">
+              Log In
+            </Link>
+            <Link href="/admin/login" className="px-2.5 py-1 bg-slate-900 text-white rounded-md font-bold hover:bg-black transition-all text-xs">
+              Admin Portal
+            </Link>
+          </div>
+        </div>
+      )}
 
       {/* Main Content Workspace */}
       <main className="flex-1 max-w-[1600px] w-full mx-auto p-4 sm:p-6 grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
@@ -548,6 +625,23 @@ export default function SupportWorkspacePage() {
               </div>
 
               <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+                {searchErrorMessage && (
+                  <div className="p-4 m-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-bold">{searchErrorMessage}</p>
+                      <div className="mt-2 flex gap-2">
+                        <Link href="/login?redirect=/support" className="px-3 py-1 bg-[#163824] text-white rounded-lg font-bold hover:bg-[#11241A] transition-all">
+                          Sign In
+                        </Link>
+                        <Link href="/admin/login" className="px-3 py-1 bg-slate-200 text-slate-800 rounded-lg font-bold hover:bg-slate-300 transition-all">
+                          Admin Login
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {searching ? (
                   <div className="p-8 text-center text-xs text-slate-400">Searching records...</div>
                 ) : searchResults.length === 0 ? (
