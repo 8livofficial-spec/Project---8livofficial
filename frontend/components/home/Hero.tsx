@@ -14,7 +14,7 @@ export default function Hero() {
       {/* ========================================================= */}
       <section
         id="hero"
-        aria-label="Doctor-Led GLP-1 Care for Sustainable Weight Loss"
+        aria-label="Doctor-Led Medical Care for Sustainable Weight Loss"
         className="relative isolate w-full min-h-[100svh] overflow-hidden flex flex-col justify-center items-center px-4 sm:px-6 pt-24 pb-16 sm:pb-20"
       >
         {/* Fullscreen Video Backdrop with light, radiant overlay */}
@@ -45,14 +45,14 @@ export default function Hero() {
               delay={0.1}
               stagger={0.06}
             >
-              Doctor-Led GLP-1 Care for Sustainable Weight Loss
+              Doctor-Led Medical Care for Sustainable Weight Loss
             </KineticText>
           </div>
 
           {/* Supporting Clinical Value Subtitle */}
           <ScrollRevealBox variant="fade-up" delay={0.25} duration={0.65}>
             <p className="text-white/95 font-sans text-base sm:text-lg md:text-xl max-w-2xl mx-auto leading-relaxed mb-8 sm:mb-10 font-normal drop-shadow-[0_2px_15px_rgba(0,0,0,0.7)]">
-              Prescription GLP-1 medication combined with Indian metabolic nutrition and lean-muscle coaching — continuously monitored by your dedicated care team.
+              Physician-prescribed treatments combined with Indian metabolic nutrition and lean-muscle coaching — continuously monitored by your dedicated care team.
             </p>
           </ScrollRevealBox>
 
@@ -79,7 +79,7 @@ export default function Hero() {
       {/* ========================================================= */}
       <section
         id="treatments"
-        aria-label="Redefining Weight Loss Through Comprehensive Well-Being"
+        aria-label="Transform Your Life, Not Just Your Weight"
         className="py-20 sm:py-24 lg:py-28 bg-[#FAFBF9] border-b border-slate-200/80 scroll-mt-20"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -89,11 +89,11 @@ export default function Hero() {
               as="h2"
               className="font-sans text-[28px] xs:text-[32px] sm:text-4xl lg:text-5xl font-extrabold text-[#11241A] tracking-tight leading-tight mb-4"
             >
-              Redefining Weight Loss Through Comprehensive Well-Being
+              Transform Your Life, Not Just Your Weight
             </KineticText>
             <ScrollRevealBox variant="fade-up" delay={0.15}>
               <p className="text-slate-600 font-sans text-base sm:text-lg leading-relaxed">
-                Scientifically formulated solutions to help you achieve real, lasting results — safe, effective, and personalized to your goals.
+                Professionally designed protocols tailored to your specific needs, providing safe, effective, and sustainable pathways toward your ultimate wellness.
               </p>
             </ScrollRevealBox>
           </div>

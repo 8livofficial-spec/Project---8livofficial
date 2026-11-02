@@ -10,7 +10,7 @@ export async function GET(request: Request) {
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .select('id, first_name, last_name, role, phone_number, email')
-      .in('role', ['admin', 'doctor', 'dietitian', 'nutritionist', 'fitness_coach', 'trainer'])
+      .in('role', ['admin', 'doctor', 'dietitian', 'nutritionist', 'fitness_coach', 'trainer', 'support_agent', 'care_coordinator', 'support'])
       .order('role', { ascending: true })
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })

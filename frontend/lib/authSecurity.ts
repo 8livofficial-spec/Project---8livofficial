@@ -171,7 +171,7 @@ export async function getUserRole(
     if (profile?.role) {
       const pRole = String(profile.role).toLowerCase()
       if (pRole === 'pharmacy' || pRole.includes('pharmacy')) return 'pharmacy'
-      if (['admin', 'doctor', 'dietitian', 'trainer', 'fitness_coach', 'nutritionist', 'patient'].includes(pRole)) {
+      if (['admin', 'doctor', 'dietitian', 'trainer', 'fitness_coach', 'nutritionist', 'patient', 'support_agent', 'care_coordinator'].includes(pRole)) {
         return pRole
       }
     }

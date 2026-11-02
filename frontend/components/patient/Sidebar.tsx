@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { 
   Home, Calendar, Pill, MessageSquare, CreditCard, Settings, LogOut, User,
-  ChevronLeft, ChevronRight, ShieldCheck, ArrowRight, Stethoscope
+  ChevronLeft, ChevronRight, ShieldCheck, ArrowRight, Stethoscope, LifeBuoy
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
@@ -45,6 +45,7 @@ export default function Sidebar({
     { icon: ShieldCheck, label: 'Care Protocols', href: '/patient/prescriptions' },
     { icon: MessageSquare, label: 'Consultations', href: '/patient/consultation' },
     { icon: CreditCard, label: 'Billing', href: '/patient/billing' },
+    { icon: LifeBuoy, label: 'Help & Support', href: '/patient/support' },
     { icon: User, label: 'Profile', href: '/patient/profile' },
     { icon: Settings, label: 'Settings', href: '/patient/settings' },
   ]

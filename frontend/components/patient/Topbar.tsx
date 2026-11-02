@@ -67,6 +67,7 @@ export default function Topbar({
       { keywords: ['prescription', 'medicine', 'medication', 'refill', 'dose', 'drug', 'glp'], category: 'Prescriptions', title: 'Prescriptions & Protocol', subtitle: 'View current medications and e-prescriptions', link: '/patient/prescriptions' },
       { keywords: ['consultation', 'consult', 'call', 'video', 'meeting'], category: 'Consultations', title: 'Doctor Consultations', subtitle: 'View past consultation history and notes', link: '/patient/consultation' },
       { keywords: ['bill', 'billing', 'invoice', 'payment', 'receipt', 'charge', 'money'], category: 'Billing', title: 'Billing & Invoices', subtitle: 'Download receipts and invoices', link: '/patient/billing' },
+      { keywords: ['support', 'help', 'ticket', 'care', 'blood report', 'reschedule', 'coordinator', 'issue'], category: 'Support', title: 'Help & Support Desk', subtitle: 'Contact care coordinators, raise tickets & track lab reports', link: '/patient/support' },
       { keywords: ['profile', 'account', 'phone', 'address', 'email', 'name', 'biometrics'], category: 'Profile', title: 'Clinical Profile & Biometrics', subtitle: 'Manage personal details and biometrics', link: '/patient/profile' },
       { keywords: ['setting', 'settings', 'password', 'security'], category: 'Settings', title: 'Account Settings', subtitle: 'Security and communication preferences', link: '/patient/settings' },
     ]

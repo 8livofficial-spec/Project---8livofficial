@@ -17,6 +17,7 @@ export default function Navbar() {
   const resolveDashboardUrl = (userRole: string) => {
     const r = (userRole || 'patient').toLowerCase().trim()
     if (r === 'admin') return '/admin'
+    if (r === 'support_agent' || r === 'care_coordinator' || r === 'support') return '/support'
     if (r === 'doctor') return '/doctor/dashboard'
     if (r === 'dietitian') return '/dietitian/dashboard'
     if (r === 'trainer' || r === 'fitness_coach' || r === 'coach') return '/trainer/dashboard'

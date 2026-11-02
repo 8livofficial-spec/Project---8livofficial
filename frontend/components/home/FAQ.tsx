@@ -1,8 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
-import Link from 'next/link'
-import { ArrowRight, CheckCircle2, MessageCircleQuestion, ChevronDown } from 'lucide-react'
+import { ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 import AnimatedList from '@/components/ui/AnimatedList'
 import KineticText from '@/components/ui/KineticText'
@@ -10,24 +9,44 @@ import ScrollRevealBox from '@/components/ui/ScrollRevealBox'
 
 const faqs = [
   {
-    question: 'What is 8Liv and how does doctor-supervised care work?',
+    question: 'What is 8LIV and how does it work?',
     answer:
-      '8Liv is a modern telehealth platform connecting you with licensed physicians, clinical dietitians, and dedicated fitness coaches. We combine 1-on-1 doctor video consultations, personalized Indian meal plans, continuous metabolic monitoring, and authenticated digital GLP-1 e-prescriptions when clinically appropriate.',
+      '8Liv is a doctor-led telehealth platform connecting you with registered physicians, clinical dietitians, and dedicated fitness coaches. Following an online clinical assessment, you meet 1-on-1 with a physician via video consultation. Your doctor designs a medical strategy specific to your health history, prescribes treatments if clinically indicated, and pairs your care with Indian metabolic meal planning and progressive fitness coaching.',
   },
   {
-    question: 'Who is the 8Liv program designed for?',
+    question: 'Who is the programme designed for?',
     answer:
-      'The 8Liv program is designed for adults struggling with stubborn weight, sluggish metabolism, pre-diabetes, insulin resistance, or PCOS who want evidence-based, doctor-supervised medical care rather than crash diets. A licensed doctor reviews every patient individually before recommending any treatment.',
+      'The 8Liv programme is designed for adults struggling with stubborn weight, sluggish metabolism, pre-diabetes, insulin resistance, or PCOS who want evidence-based, doctor-supervised medical care rather than crash diets. A licensed doctor reviews every patient individually before recommending any treatment protocol.',
   },
   {
-    question: 'How are prescriptions and GLP-1 medications handled?',
+    question: 'Will I be given a prescription?',
     answer:
-      'When clinically appropriate, your licensed 8Liv physician issues an authenticated digital e-prescription after your comprehensive assessment. You can conveniently fulfill your prescription at any registered or licensed pharmacy of your choice across India.',
+      'Not automatically. Your doctor decides after a full consultation whether any medicine is appropriate, and may decide it is not. If a medicine is prescribed, you receive a signed e-prescription from the physician. We don’t sell any medicines, you have to buy it from a registered pharmacy. And we don’t charge for the medicines.',
   },
   {
-    question: 'How does Indian meal planning work? Do I have to starve?',
+    question: 'How does Indian meal planning work?',
     answer:
-      'Never. Our registered clinical dietitians adapt your meal blueprint around authentic Indian home cooking—incorporating paneer, dal, household spices, and family dinners. We focus on continuous metabolic satiety and blood sugar stability with zero starvation.',
+      'Our registered clinical dietitians adapt your meal blueprint around authentic Indian home cooking—incorporating roti, dal, sabzi, paneer, regional dishes, and family dinners. We focus on continuous metabolic satiety, practical protein targets, and blood sugar stability with zero starvation.',
+  },
+  {
+    question: 'What does it cost?',
+    answer:
+      'Every journey begins with an initial clinical doctor consultation for ₹350. Following evaluation, you can choose from structured care plans: the 1-Month Trial Plan at ₹1,470 (including 3 consultations: doctor, dietitian, and fitness coach), 3-Month Metabolic Reset at ₹4,900, or 5-Month Transformation at ₹8,225 (+ 18% statutory GST at checkout). 8Liv does not sell or mark up medicines—you purchase prescribed medications independently at your preferred licensed pharmacy.',
+  },
+  {
+    question: 'What happens after treatment?',
+    answer:
+      'After completing your active treatment duration, you transition into our structured metabolic maintenance and weight regain defense protocol. Your clinical dietitian and coach help you sustain healthy metabolic setpoints, preserve lean muscle, and transition off treatments safely under physician supervision.',
+  },
+  {
+    question: 'How is my health data protected?',
+    answer:
+      'Your medical records and personal data are strictly protected under the Digital Personal Data Protection Act (DPDPA), 2023 and Indian Telemedicine Practice Guidelines. Data is encrypted in transit and at rest. We never sell your data or share it with third-party pharmacies. Access is strictly restricted to your assigned care team of treating doctors, dietitians, and coaches.',
+  },
+  {
+    question: 'How do refunds work?',
+    answer:
+      'A full refund is automatically issued if a consultation is cancelled by 8Liv or the physician. Free rescheduling is permitted up to 72 hours before your scheduled appointment. Once a clinical consultation has taken place or customized nutrition blueprints have been delivered, fees are non-refundable. Approved refunds are credited back to your original payment method within 3 working days.',
   },
 ]
 
@@ -135,16 +154,6 @@ export default function FAQ() {
             {/* Dedicated Answer Showcase Card (Desktop) */}
             <div className="hidden lg:block lg:col-span-6 sticky top-24">
               <div className="bg-white rounded-3xl p-8 border border-slate-200/90 shadow-sm relative overflow-hidden">
-                <div className="flex items-center justify-between mb-4">
-                  <span className="text-xs font-bold uppercase tracking-wider text-[#065F46] font-sora bg-emerald-50 px-3 py-1 rounded-full border border-emerald-200">
-                    Question {String(selectedIndex + 1).padStart(2, '0')} of {String(faqs.length).padStart(2, '0')}
-                  </span>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium">
-                    <CheckCircle2 size={14} className="text-[#0F766E]" />
-                    <span>Clinical Team Verified</span>
-                  </div>
-                </div>
-
                 {/* Ultra smooth cross-fade when question changes */}
                 <AnimatePresence mode="wait">
                   <motion.div
@@ -158,25 +167,11 @@ export default function FAQ() {
                       {activeFaq.question}
                     </h3>
 
-                    <div className="text-sm sm:text-base text-slate-600 font-light leading-relaxed mb-8">
+                    <div className="text-sm sm:text-base text-slate-600 font-normal leading-relaxed">
                       {activeFaq.answer}
                     </div>
                   </motion.div>
                 </AnimatePresence>
-
-                <div className="pt-6 border-t border-slate-100 flex items-center justify-between gap-4">
-                  <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
-                    <MessageCircleQuestion size={16} className="text-[#0F766E]" />
-                    <span>Need personalized advice?</span>
-                  </div>
-                  <Link
-                    href="/assessment"
-                    className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-[#0F766E] hover:bg-[#0D655E] text-white font-sora font-semibold text-xs transition-all shadow-xs cursor-pointer active:scale-95"
-                  >
-                    <span>Check Eligibility</span>
-                    <ArrowRight size={14} />
-                  </Link>
-                </div>
               </div>
             </div>
           </div>

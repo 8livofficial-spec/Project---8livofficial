@@ -15,6 +15,7 @@ type AdminTab =
   | 'patients'
   | 'providers'
   | 'doctors'
+  | 'staff'
   | 'dietitians'
   | 'nutritionists'
   | 'appointments'
@@ -213,7 +214,7 @@ function AdminDashboardContent() {
   // ── Staff Form state ────────────────────────────────────────────────────
   const [staffEmail, setStaffEmail] = useState('');
   const [staffPassword, setStaffPassword] = useState('');
-  const [staffRole, setStaffRole] = useState<'admin' | 'doctor' | 'dietitian' | 'trainer'>('doctor');
+  const [staffRole, setStaffRole] = useState<'admin' | 'doctor' | 'dietitian' | 'trainer' | 'support_agent' | 'care_coordinator'>('doctor');
   const [staffFirstName, setStaffFirstName] = useState('');
   const [staffLastName, setStaffLastName] = useState('');
   const [staffPhone, setStaffPhone] = useState('');
@@ -297,7 +298,7 @@ function AdminDashboardContent() {
   useEffect(() => {
     const tab = searchParams.get('tab') as AdminTab | null;
     const validTabs: AdminTab[] = [
-      'dashboard', 'patients', 'providers', 'doctors', 'dietitians', 'nutritionists', 'appointments',
+      'dashboard', 'patients', 'providers', 'doctors', 'staff', 'dietitians', 'nutritionists', 'appointments',
       'video-consultations', 'memberships', 'analytics', 'payments', 'provider-wallets',
       'reports', 'notifications', 'audit-logs', 'platform-settings', 'admin-profile',
     ];
@@ -791,7 +792,7 @@ function AdminDashboardContent() {
   }, [adminTab, adminUser]);
 
   useEffect(() => {
-    if (!adminUser || (adminTab !== 'dietitians' && adminTab !== 'nutritionists')) return;
+    if (!adminUser || (adminTab !== 'staff' && adminTab !== 'dietitians' && adminTab !== 'nutritionists')) return;
     fetchStaffProfiles();
   }, [adminTab, adminUser]);
 
@@ -1261,7 +1262,7 @@ function AdminDashboardContent() {
     adminTab === 'memberships' ? 'membership-plans' :
     adminTab === 'payments' ? 'payments' :
     adminTab === 'provider-wallets' ? 'provider-wallets' :
-    adminTab === 'dietitians' || adminTab === 'nutritionists' ? 'staff' :
+    adminTab === 'staff' || adminTab === 'dietitians' || adminTab === 'nutritionists' ? 'staff' :
     'placeholder';
 
   const todayKey = new Date().toISOString().split('T')[0];
@@ -1633,6 +1634,7 @@ function AdminDashboardContent() {
       items: [
         { id: 'patients', label: 'Patients', icon: Users },
         { id: 'providers', label: 'Providers', icon: Stethoscope },
+        { id: 'staff', label: 'Staff & Care Team', icon: UserCheck },
       ],
     },
     {
@@ -3548,7 +3550,8 @@ function AdminDashboardContent() {
                 </div>
               </div>
             ) : (
-              <div className="bg-white/80 backdrop-blur-xl p-10 rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
+              <>
+                <div className="bg-white/80 backdrop-blur-xl p-10 rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100">
                 <h2 className="text-3xl font-black text-slate-900 mb-2 tracking-tight flex items-center gap-3">
                   <ShieldCheck className="w-8 h-8 text-indigo-500 bg-indigo-50/80 p-1.5 rounded-xl"/> Appoint New Clinician / Staff
                 </h2>
@@ -3675,6 +3678,8 @@ function AdminDashboardContent() {
                         <option value="doctor">Doctor (Physician)</option>
                         <option value="dietitian">Dietitian</option>
                         <option value="trainer">Fitness Coach</option>
+                        <option value="support_agent">Support Agent (Customer Care)</option>
+                        <option value="care_coordinator">Care Coordinator</option>
                         <option value="admin">Administrator</option>
                       </select>
                     </div>
@@ -3761,14 +3766,102 @@ function AdminDashboardContent() {
                     <button
                       type="submit"
                       disabled={staffSubmitting}
-                      className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black py-4 px-6 rounded-2xl transition-all shadow-lg hover:-translate-y-0.5 active:scale-95 text-sm flex items-center justify-center gap-2"
+                      className="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black py-4 px-6 rounded-2xl transition-all shadow-lg hover:-translate-y-0.5 active:scale-95 text-sm flex items-center justify-center gap-2 cursor-pointer"
                     >
-                      {staffSubmitting ? 'Appointing Clinician...' : 'Appoint Staff Member'}
+                      {staffSubmitting ? 'Appointing Staff...' : 'Appoint Staff Member'}
                     </button>
                   </div>
                 </form>
               </div>
-            )}
+
+              {/* Staff & Care Team Directory */}
+              <div className="bg-white/80 backdrop-blur-xl p-8 rounded-[3rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 mt-8">
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight flex items-center gap-2.5">
+                      <Users className="w-5 h-5 text-indigo-600" />
+                      Active Staff & Care Team Directory
+                    </h3>
+                    <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                      Currently registered clinicians, dietitians, fitness coaches, and customer care personnel.
+                    </p>
+                  </div>
+                  <span className="text-xs font-black bg-indigo-50 text-indigo-700 px-3 py-1 rounded-full border border-indigo-100">
+                    {allStaff.length} Members
+                  </span>
+                </div>
+
+                {allStaff.length === 0 ? (
+                  <p className="text-xs text-slate-400 text-center py-8 font-semibold">
+                    No staff members loaded yet.
+                  </p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left border-collapse">
+                      <thead>
+                        <tr className="border-b border-slate-100 text-[11px] font-black text-slate-400 uppercase tracking-wider">
+                          <th className="py-3 px-4">Staff Member</th>
+                          <th className="py-3 px-4">Role</th>
+                          <th className="py-3 px-4">Contact</th>
+                          <th className="py-3 px-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-xs">
+                        {allStaff.map((staff: any) => {
+                          const role = String(staff.role || '').toLowerCase()
+                          const roleBadgeStyle = 
+                            role === 'support_agent' ? 'bg-emerald-100 text-emerald-800 border-emerald-200' :
+                            role === 'care_coordinator' ? 'bg-teal-100 text-teal-800 border-teal-200' :
+                            role === 'doctor' ? 'bg-blue-100 text-blue-800 border-blue-200' :
+                            role === 'dietitian' ? 'bg-amber-100 text-amber-800 border-amber-200' :
+                            role === 'trainer' || role === 'fitness_coach' ? 'bg-indigo-100 text-indigo-800 border-indigo-200' :
+                            role === 'admin' ? 'bg-purple-100 text-purple-800 border-purple-200' :
+                            'bg-slate-100 text-slate-800 border-slate-200'
+
+                          const roleLabel =
+                            role === 'support_agent' ? 'Support Agent (Customer Care)' :
+                            role === 'care_coordinator' ? 'Care Coordinator' :
+                            role === 'doctor' ? 'Doctor (Physician)' :
+                            role === 'dietitian' ? 'Dietitian' :
+                            role === 'trainer' || role === 'fitness_coach' ? 'Fitness Coach' :
+                            role === 'admin' ? 'Administrator' :
+                            role.toUpperCase()
+
+                          return (
+                            <tr key={staff.id} className="hover:bg-slate-50/70 transition-colors">
+                              <td className="py-3 px-4">
+                                <p className="font-extrabold text-slate-900">
+                                  {staff.first_name} {staff.last_name}
+                                </p>
+                                <p className="text-[11px] text-slate-400 font-mono mt-0.5">{staff.email}</p>
+                              </td>
+                              <td className="py-3 px-4">
+                                <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border inline-block ${roleBadgeStyle}`}>
+                                  {roleLabel}
+                                </span>
+                              </td>
+                              <td className="py-3 px-4 font-semibold text-slate-600">
+                                {staff.phone_number || '—'}
+                              </td>
+                              <td className="py-3 px-4 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedStaff(staff)}
+                                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl transition-all cursor-pointer"
+                                >
+                                  View / Manage
+                                </button>
+                              </td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
           </motion.div>
         ) : activeView === 'membership-plans' ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }} className="p-8 md:p-12 max-w-6xl mx-auto space-y-10">

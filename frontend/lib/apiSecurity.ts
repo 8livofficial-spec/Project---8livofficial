@@ -256,3 +256,15 @@ export async function assertDietitianPatientAccess(request: Request, patientId: 
   throw new Error('Forbidden')
 }
 
+export async function assertSupportAgent(request: Request) {
+  const auth = await getAuthenticatedUser(request)
+  if (!auth) {
+    throw new Error('Unauthorized')
+  }
+  const role = String(auth.role || '').toLowerCase()
+  if (!['support_agent', 'care_coordinator', 'admin'].includes(role)) {
+    throw new Error('Forbidden')
+  }
+  return auth
+}
+
