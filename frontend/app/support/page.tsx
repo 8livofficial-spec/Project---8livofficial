@@ -88,6 +88,28 @@ const REPORT_CATEGORIES = [
   { id: 'general_blood', label: 'General Metabolic Blood Work' },
 ]
 
+function formatConsultationDateTime(dateStr: string, timeStr?: string) {
+  try {
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return `${dateStr} ${timeStr || ''}`.trim()
+    const formattedDate = d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })
+    if (timeStr) {
+      const parts = timeStr.split(':')
+      if (parts.length >= 2) {
+        const hours = parseInt(parts[0], 10)
+        const minutes = parts[1]
+        const ampm = hours >= 12 ? 'PM' : 'AM'
+        const h12 = hours % 12 || 12
+        return `${formattedDate} · ${h12}:${minutes} ${ampm}`
+      }
+      return `${formattedDate} · ${timeStr}`
+    }
+    return formattedDate
+  } catch {
+    return `${dateStr} ${timeStr || ''}`.trim()
+  }
+}
+
 export default function SupportWorkspacePage() {
   const [activeTab, setActiveTab] = useState<'tickets' | 'search'>('tickets')
   const [searchQuery, setSearchQuery] = useState('')
@@ -523,7 +545,7 @@ export default function SupportWorkspacePage() {
         <div className="lg:col-span-5 flex flex-col gap-4">
           
           {activeTab === 'tickets' ? (
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col h-[calc(100vh-140px)]">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col min-h-[480px] lg:h-[calc(100vh-130px)]">
               {/* Queue Header & Filters */}
               <div className="p-4 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
                 <div>
@@ -565,8 +587,8 @@ export default function SupportWorkspacePage() {
                       <div
                         key={t.id}
                         onClick={() => setSelectedTicketId(t.id)}
-                        className={`p-4 cursor-pointer transition-colors text-left ${
-                          isSelected ? 'bg-emerald-50/60 border-l-4 border-l-[#00A884]' : 'hover:bg-slate-50'
+                        className={`p-3.5 rounded-xl border transition-all text-left cursor-pointer ${
+                          isSelected ? 'bg-emerald-50/60 border-[#00A884] shadow-xs ring-1 ring-[#00A884]/20' : 'bg-white border-slate-200/90 hover:bg-slate-50'
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2 mb-1.5">
@@ -605,28 +627,40 @@ export default function SupportWorkspacePage() {
             </div>
           ) : (
             /* Patient Search Results */
-            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col h-[calc(100vh-140px)]">
-              <div className="p-4 border-b border-slate-100 bg-slate-50/70">
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col min-h-[480px] lg:h-[calc(100vh-130px)]">
+              <div className="p-3.5 border-b border-slate-100 bg-slate-50/70">
                 <form onSubmit={handleSearch} className="flex gap-2">
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search by phone, email, or order ID..."
-                    className="flex-1 px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-[#00A884]/20"
-                  />
+                  <div className="relative flex-1">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Search phone (+91), email, name..."
+                      className="w-full pl-8 pr-7 py-2 rounded-xl bg-white border border-slate-200 text-xs text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-[#00A884]/20"
+                    />
+                    {searchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => { setSearchQuery(''); setSearchResults([]); }}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs cursor-pointer"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-[#163824] hover:bg-[#11241A] text-white rounded-xl text-xs font-bold transition-all"
+                    className="px-3.5 py-2 bg-[#163824] hover:bg-[#11241A] text-white rounded-xl text-xs font-bold transition-all shrink-0 cursor-pointer"
                   >
                     Search
                   </button>
                 </form>
               </div>
 
-              <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
+              <div className="flex-1 overflow-y-auto divide-y divide-slate-100 p-2 sm:p-2.5 space-y-2">
                 {searchErrorMessage && (
-                  <div className="p-4 m-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5">
+                  <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2.5 mb-2">
                     <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                     <div className="flex-1">
                       <p className="font-bold">{searchErrorMessage}</p>
@@ -662,72 +696,67 @@ export default function SupportWorkspacePage() {
                       <div
                         key={p.id}
                         onClick={() => setSelectedPatientId(p.id)}
-                        className={`p-4 cursor-pointer transition-colors text-left ${
-                          isSelected ? 'bg-emerald-50/60 border-l-4 border-l-[#00A884]' : 'hover:bg-slate-50'
+                        className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-emerald-50/70 border-[#00A884] shadow-xs ring-1 ring-[#00A884]/30'
+                            : 'bg-white border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/60'
                         }`}
                       >
-                        <div className="flex items-center justify-between mb-1">
-                          <h4 className="text-xs sm:text-sm font-bold text-slate-900">{p.fullName}</h4>
-                          <span className="text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                            {p.activePlan}
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <h4 className="text-xs sm:text-sm font-bold text-slate-900 truncate">{p.fullName}</h4>
+                          <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0 ${
+                            p.planStatus === 'active' || (p.activePlan && p.activePlan !== 'None')
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-slate-100 text-slate-600'
+                          }`}>
+                            {p.activePlan || 'No Active Plan'}
                           </span>
                         </div>
-                        <div className="text-xs text-slate-500 space-y-0.5">
-                          <div className="flex items-center justify-between">
-                            <p className="flex items-center gap-1.5"><Phone className="w-3 h-3" /> {p.phone || 'No phone'}</p>
-                            {p.phone && (
-                              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                <a
-                                  href={`tel:${p.phone}`}
-                                  className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold flex items-center gap-1"
-                                  title="Call"
-                                >
-                                  <Phone className="w-2.5 h-2.5" /> Call
-                                </a>
-                                <a
-                                  href={`https://wa.me/${p.phone.replace(/\D/g, '')}?text=Hello%20${encodeURIComponent(p.fullName)}%2C%20this%20is%208Liv%20Customer%20Care.`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="px-1.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[10px] font-bold flex items-center gap-1"
-                                  title="WhatsApp"
-                                >
-                                  <MessageSquare className="w-2.5 h-2.5" /> WA
-                                </a>
-                              </div>
-                            )}
-                          </div>
-                          <p className="flex items-center gap-1.5"><Mail className="w-3 h-3" /> {p.email}</p>
+
+                        <div className="text-xs text-slate-500 space-y-0.5 mb-2">
+                          <p className="flex items-center gap-1.5 truncate">
+                            <Phone className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span>{p.phone || 'No phone'}</span>
+                          </p>
+                          <p className="flex items-center gap-1.5 truncate">
+                            <Mail className="w-3 h-3 text-slate-400 shrink-0" />
+                            <span className="truncate">{p.email}</span>
+                          </p>
                         </div>
-                        {p.bmi && (
-                          <div className="mt-2 text-[11px] text-slate-600 flex items-center gap-3">
-                            <span>BMI: <strong>{p.bmi}</strong></span>
-                            {p.hasLabReport && (
-                              <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded text-[10px] font-semibold">
-                                ✓ Lab Report Attached
-                              </span>
-                            )}
-                          </div>
-                        )}
+
+                        <div className="pt-2 border-t border-slate-100 flex items-center justify-between gap-2 text-[11px]">
+                          <span className="text-slate-500 font-medium truncate">
+                            {p.bmi ? `BMI ${p.bmi}` : 'Clinical Record'}
+                            {p.hasLabReport && ' · Lab Attached'}
+                          </span>
+
+                          {p.phone && (
+                            <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <a
+                                href={`tel:${p.phone}`}
+                                className="px-2 py-0.5 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-bold flex items-center gap-1 transition-all"
+                                title="Direct Phone Call"
+                              >
+                                <Phone className="w-2.5 h-2.5" />
+                                <span>Call</span>
+                              </a>
+                              <a
+                                href={`https://wa.me/${p.phone.replace(/\D/g, '')}?text=Hello%20${encodeURIComponent(p.fullName)}%2C%20this%20is%208Liv%20Customer%20Care.`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="px-2 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold flex items-center gap-1 transition-all"
+                                title="WhatsApp Chat"
+                              >
+                                <MessageSquare className="w-2.5 h-2.5" />
+                                <span>WA</span>
+                              </a>
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )
                   })
                 )}
-              </div>
-            </div>
-          )}
-
-          {/* Quick Operations Strip under Left Column */}
-          {selectedPatientId && (
-            <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between gap-3">
-              <span className="text-xs font-bold text-slate-800">Common Operations:</span>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => setUploadModalOpen(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold transition-all shadow-xs"
-                >
-                  <Upload className="w-3.5 h-3.5" />
-                  <span>Upload Blood Report</span>
-                </button>
               </div>
             </div>
           )}
@@ -936,71 +965,82 @@ export default function SupportWorkspacePage() {
             ) : (
               <div className="space-y-6">
                 {/* 1. Header Metrics Card */}
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 bg-slate-50 p-4 rounded-xl border border-slate-200/80">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Patient</span>
-                    <strong className="text-xs sm:text-sm text-slate-900 font-bold block truncate">{patient360.patient.fullName}</strong>
-                    <div className="flex items-center gap-2 mt-1">
-                      {patient360.patient.phone ? (
-                        <a
-                          href={`tel:${patient360.patient.phone}`}
-                          className="text-xs font-bold text-emerald-700 hover:text-emerald-900 flex items-center gap-1"
-                          title="Call patient phone"
-                        >
-                          <Phone className="w-3 h-3" />
-                          <span>{patient360.patient.phone}</span>
-                        </a>
-                      ) : (
-                        <span className="text-[11px] text-slate-400">No phone</span>
-                      )}
+                <div className="bg-slate-50 p-4 sm:p-5 rounded-2xl border border-slate-200/90 flex flex-col gap-4">
+                  {/* Row 1: Key Metadata Metrics */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Patient Profile</span>
+                      <strong className="text-sm font-bold text-slate-900 block truncate">{patient360.patient.fullName}</strong>
+                      <div className="flex items-center gap-2 mt-1">
+                        {patient360.patient.phone ? (
+                          <a
+                            href={`tel:${patient360.patient.phone}`}
+                            className="text-xs font-semibold text-emerald-700 hover:text-emerald-900 flex items-center gap-1"
+                            title="Call patient"
+                          >
+                            <Phone className="w-3 h-3" />
+                            <span>{patient360.patient.phone}</span>
+                          </a>
+                        ) : (
+                          <span className="text-xs text-slate-400">No phone</span>
+                        )}
+                      </div>
+                      <span className="text-xs text-slate-500 block truncate mt-0.5">{patient360.patient.email}</span>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Membership Plan</span>
+                      <span className="inline-block text-xs font-bold text-emerald-800 bg-emerald-100 px-2.5 py-0.5 rounded-md">
+                        {patient360.membership.planName}
+                      </span>
+                      <span className="text-xs text-slate-500 block mt-1">
+                        {patient360.membership.active ? 'Active Subscription' : 'No Active Plan'}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Health Metrics</span>
+                      <strong className="text-sm text-slate-900 block font-bold">
+                        {patient360.health.bmi ? `${patient360.health.bmi} kg/m²` : 'BMI Not Recorded'}
+                      </strong>
+                      <span className="text-xs text-slate-500 block mt-0.5">
+                        {patient360.health.weightKg ? `${patient360.health.weightKg} kg` : '--'} · {patient360.health.heightCm ? `${patient360.health.heightCm} cm` : '--'}
+                      </span>
                     </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">Active Plan</span>
-                    <span className="inline-block text-[11px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">
-                      {patient360.membership.planName}
-                    </span>
-                    <span className="text-[10px] text-slate-500 block mt-0.5">
-                      {patient360.membership.active ? 'Active Subscription' : 'No Active Plan'}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-0.5">BMI / Metrics</span>
-                    <strong className="text-xs sm:text-sm text-slate-900 block font-bold">{patient360.health.bmi || 'N/A'} kg/m²</strong>
-                    <span className="text-[10px] text-slate-500 block">{patient360.health.weightKg || '--'} kg · {patient360.health.heightCm || '--'} cm</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block mb-1">Contact & Actions</span>
-                    <div className="flex items-center gap-1.5">
+
+                  {/* Row 2: Dedicated Contact & Actions Toolbar */}
+                  <div className="pt-3 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2.5">
+                    <span className="text-xs font-bold text-slate-600">Quick Actions:</span>
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
                       {patient360.patient.phone && (
                         <>
                           <a
                             href={`tel:${patient360.patient.phone}`}
-                            className="flex-1 py-1 px-2 bg-[#163824] hover:bg-[#11241A] text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-xs"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#163824] hover:bg-[#11241A] text-white rounded-xl text-xs font-bold transition-all shadow-xs shrink-0"
                             title="Direct Phone Call"
                           >
-                            <Phone className="w-3 h-3" />
+                            <Phone className="w-3.5 h-3.5" />
                             <span>Call</span>
                           </a>
                           <a
-                            href={`https://wa.me/${patient360.patient.phone.replace(/\D/g, '')}?text=Hello%20${encodeURIComponent(patient360.patient.fullName)}%2C%20this%20is%208Liv%20Customer%20Care%20team.`}
+                            href={`https://wa.me/${patient360.patient.phone.replace(/\D/g, '')}?text=Hello%20${encodeURIComponent(patient360.patient.fullName)}%2C%20this%20is%208Liv%20Customer%20Care.`}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex-1 py-1 px-2 bg-[#25D366] hover:bg-[#20ba59] text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1 shadow-xs"
-                            title="Chat on WhatsApp"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-[#00A884] hover:bg-[#009272] text-white rounded-xl text-xs font-bold transition-all shadow-xs shrink-0"
+                            title="WhatsApp Chat"
                           >
-                            <MessageSquare className="w-3 h-3" />
+                            <MessageSquare className="w-3.5 h-3.5" />
                             <span>WhatsApp</span>
                           </a>
                         </>
                       )}
                       <button
                         onClick={() => setUploadModalOpen(true)}
-                        className="py-1 px-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-lg text-xs font-bold shadow-xs transition-all flex items-center justify-center gap-1"
-                        title="Upload Blood Report"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-xl text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer"
                       >
-                        <Upload className="w-3 h-3" />
-                        <span className="hidden sm:inline">Report</span>
+                        <Upload className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Upload Lab Report</span>
                       </button>
                     </div>
                   </div>
@@ -1077,7 +1117,7 @@ export default function SupportWorkspacePage() {
                         >
                           <div>
                             <div className="flex items-center gap-2">
-                              <strong className="text-slate-900">{app.date} at {app.time}</strong>
+                              <strong className="text-slate-900 font-semibold">{formatConsultationDateTime(app.date, app.time)}</strong>
                               <span className="text-[10px] font-bold uppercase px-1.5 py-0.2 rounded bg-slate-200 text-slate-700">
                                 {app.status}
                               </span>
