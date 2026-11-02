@@ -44,6 +44,9 @@ export async function POST(request: Request) {
     }
 
     // 2. Register user using service role client to bypass email confirmation blocks
+    let newUserId: string = ''
+    let isNewlyCreated = false
+
     const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -55,10 +58,28 @@ export async function POST(request: Request) {
     })
 
     if (authErr) {
-      return NextResponse.json({ error: authErr.message }, { status: 500 })
+      if (authErr.message?.toLowerCase().includes('already') || authErr.message?.toLowerCase().includes('registered')) {
+        const { data: listData } = await supabaseAdmin.auth.admin.listUsers()
+        const existingUser = listData?.users?.find(u => u.email?.toLowerCase() === email.toLowerCase())
+        if (existingUser) {
+          newUserId = existingUser.id
+          await supabaseAdmin.auth.admin.updateUserById(newUserId, {
+            password,
+            user_metadata: {
+              display_id: `${firstName} ${lastName}`.trim(),
+              role: role
+            }
+          })
+        } else {
+          return NextResponse.json({ error: authErr.message }, { status: 400 })
+        }
+      } else {
+        return NextResponse.json({ error: authErr.message }, { status: 500 })
+      }
+    } else {
+      newUserId = authData.user.id
+      isNewlyCreated = true
     }
-
-    const newUserId = authData.user.id
 
     // 3. Upsert profiles table
     const { error: profileErr } = await supabaseAdmin
@@ -73,6 +94,16 @@ export async function POST(request: Request) {
       })
 
     if (profileErr) {
+      if (isNewlyCreated) {
+        await supabaseAdmin.auth.admin.deleteUser(newUserId).catch(() => {})
+      }
+
+      if (profileErr.message.includes('profiles_role_check')) {
+        return NextResponse.json({
+          error: `Database role check error: The role "${role}" is not permitted by profiles_role_check yet. Run the SQL script "Database/customer_care_support_migration.sql" in your Supabase SQL Editor to allow customer care & support staff.`
+        }, { status: 400 })
+      }
+
       return NextResponse.json({ error: profileErr.message }, { status: 500 })
     }
 

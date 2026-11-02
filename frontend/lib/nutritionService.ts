@@ -504,6 +504,24 @@ export async function getDietitianDashboardData(dietitianId: string, tenantId: s
     }
   }
 
+  // Also include any patients who have booked consultations with this dietitian
+  try {
+    const { data: consultPatients } = await supabaseAdmin
+      .from('staff_consultations')
+      .select('patient_id')
+      .eq('staff_id', dietitianId)
+
+    if (consultPatients && consultPatients.length > 0) {
+      for (const cp of consultPatients) {
+        if (cp.patient_id && !assignedPatientIds.includes(cp.patient_id)) {
+          assignedPatientIds.push(cp.patient_id)
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('staff_consultations patient fetch notice:', err)
+  }
+
   // 2. Fetch Sessions from staff_consultations / doctor_consultations
   const todayStr = new Date().toISOString().split('T')[0]
   let todaySessionsCount = 0
@@ -513,14 +531,17 @@ export async function getDietitianDashboardData(dietitianId: string, tenantId: s
   try {
     const { data: cons } = await supabaseAdmin
       .from('staff_consultations')
-      .select('id, patient_id, booking_date, booking_time, status, appointment_type')
-      .eq('provider_id', dietitianId)
+      .select('id, patient_id, booking_date, booking_time, status, staff_role')
+      .eq('staff_id', dietitianId)
       .gte('booking_date', todayStr)
       .not('status', 'in', '("cancelled","missed")')
       .order('booking_date', { ascending: true })
 
     if (cons) {
-      consultationsList = cons
+      consultationsList = cons.map((c: any) => ({
+        ...c,
+        appointment_type: 'DIETITIAN_CONSULTATION',
+      }))
       todaySessionsCount = cons.filter((c: any) => c.booking_date === todayStr).length
       upcomingSessionsCount = cons.filter((c: any) => c.booking_date > todayStr).length
     }
@@ -776,6 +797,24 @@ export async function getAssignedDietitianPatients(
         patientIds.push(r.patient_id)
       }
     }
+  }
+
+  // Also include any patients who have booked consultations with this dietitian
+  try {
+    const { data: consultPatients } = await supabaseAdmin
+      .from('staff_consultations')
+      .select('patient_id')
+      .eq('staff_id', dietitianId)
+
+    if (consultPatients && consultPatients.length > 0) {
+      for (const cp of consultPatients) {
+        if (cp.patient_id && !patientIds.includes(cp.patient_id)) {
+          patientIds.push(cp.patient_id)
+        }
+      }
+    }
+  } catch (err) {
+    console.warn('staff_consultations patient fetch notice in getAssignedDietitianPatients:', err)
   }
 
   // Fallback: If no assignments exist yet, also include any patient who has a nutrition plan or assessment with this dietitian

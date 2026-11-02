@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { assertSupportAgent } from '@/lib/apiSecurity'
 import { supabaseAdmin } from '@/lib/supabaseServer'
-import { ilikePattern } from '@/lib/queryFilters'
+import { ilikePattern, patientSearchOrFilter } from '@/lib/queryFilters'
 
 export async function GET(request: Request) {
   try {
@@ -15,11 +15,35 @@ export async function GET(request: Request) {
 
     const pattern = ilikePattern(query)
 
-    // 1. Search profiles by name, email, or phone
+    // Build comprehensive search filter supporting text, email, and sanitized phone digits
+    const trimmed = query.trim()
+    const digitsOnly = trimmed.replace(/\D/g, '')
+    const last10 = digitsOnly.length >= 10 ? digitsOnly.slice(-10) : digitsOnly
+
+    const orConditions: string[] = []
+    const cleanText = trimmed.replace(/[,%()]/g, ' ').replace(/\s+/g, ' ').trim()
+    if (cleanText) {
+      orConditions.push(`first_name.ilike.%${cleanText}%`)
+      orConditions.push(`last_name.ilike.%${cleanText}%`)
+      orConditions.push(`email.ilike.%${cleanText}%`)
+      orConditions.push(`phone_number.ilike.%${cleanText}%`)
+    }
+
+    // If query has digits, also search by sanitized phone digits and last 10 digits
+    if (last10 && last10.length >= 4) {
+      orConditions.push(`phone_number.ilike.%${last10}%`)
+    }
+    if (digitsOnly && digitsOnly.length >= 5 && digitsOnly !== last10) {
+      orConditions.push(`phone_number.ilike.%${digitsOnly}%`)
+    }
+
+    const filter = orConditions.join(',')
+
+    // 1. Search profiles by first_name, last_name, email, or phone_number
     const { data: profiles, error: profileErr } = await supabaseAdmin
       .from('profiles')
-      .select('id, full_name, email, phone, role, created_at')
-      .or(`full_name.ilike.${pattern},email.ilike.${pattern},phone.ilike.${pattern}`)
+      .select('id, first_name, last_name, email, phone_number, role, created_at')
+      .or(filter)
       .limit(20)
 
     if (profileErr) {
@@ -49,10 +73,16 @@ export async function GET(request: Request) {
     }
 
     // 3. Hydrate matching patients with recent assessment and active plan
-    const [{ data: hydratedProfiles }, { data: assessments }, { data: memberships }, { data: appointments }] = await Promise.all([
+    const [
+      { data: hydratedProfiles }, 
+      { data: assessments }, 
+      { data: subscriptions }, 
+      { data: docConsultations },
+      { data: staffConsultations }
+    ] = await Promise.all([
       supabaseAdmin
         .from('profiles')
-        .select('id, full_name, email, phone, role, created_at')
+        .select('id, first_name, last_name, email, phone_number, role, created_at')
         .in('id', patientIds),
       supabaseAdmin
         .from('health_assessments')
@@ -60,38 +90,50 @@ export async function GET(request: Request) {
         .in('patient_id', patientIds)
         .order('created_at', { ascending: false }),
       supabaseAdmin
-        .from('patient_memberships')
-        .select('patient_id, plan_name, status, expires_at, created_at')
+        .from('subscriptions')
+        .select('patient_id, plan_name, status, end_date, created_at')
         .in('patient_id', patientIds)
         .order('created_at', { ascending: false }),
       supabaseAdmin
-        .from('appointments')
-        .select('id, patient_id, booking_date, booking_time, status, appointment_type')
+        .from('doctor_consultations')
+        .select('id, patient_id, booking_date, booking_time, status')
         .in('patient_id', patientIds)
         .order('booking_date', { ascending: false })
-        .limit(50),
+        .limit(25),
+      supabaseAdmin
+        .from('staff_consultations')
+        .select('id, patient_id, booking_date, booking_time, status, staff_role')
+        .in('patient_id', patientIds)
+        .order('booking_date', { ascending: false })
+        .limit(25),
     ])
+
+    const allConsultations = [
+      ...(docConsultations || []).map((c: any) => ({ ...c, appointment_type: 'DOCTOR_CONSULTATION' })),
+      ...(staffConsultations || []).map((c: any) => ({ ...c, appointment_type: c.staff_role === 'trainer' ? 'FITNESS_COACH_CONSULTATION' : 'DIETITIAN_CONSULTATION' })),
+    ]
 
     const results = (hydratedProfiles || []).map((prof: any) => {
       const pAssessments = (assessments || []).filter((a: any) => a.patient_id === prof.id)
       const latestAssessment = pAssessments[0] || null
-      const pMembership = (memberships || []).find((m: any) => m.patient_id === prof.id && m.status === 'ACTIVE') || (memberships || []).find((m: any) => m.patient_id === prof.id) || null
-      const pAppointments = (appointments || []).filter((app: any) => app.patient_id === prof.id)
+      const pSubscription = (subscriptions || []).find((s: any) => s.patient_id === prof.id && s.status === 'ACTIVE') || (subscriptions || []).find((s: any) => s.patient_id === prof.id) || null
+      const pAppointments = allConsultations.filter((app: any) => app.patient_id === prof.id)
       const nextAppointment = pAppointments.find((app: any) => ['scheduled', 'calling'].includes(String(app.status || '').toLowerCase())) || pAppointments[0] || null
 
       const hasLabReport = Boolean(latestAssessment?.medical_history?.lab_work?.report_url)
+      const fullName = `${prof.first_name || ''} ${prof.last_name || ''}`.trim() || prof.email || 'Anonymous Patient'
 
       return {
         id: prof.id,
-        fullName: prof.full_name || 'Anonymous Patient',
+        fullName,
         email: prof.email || 'No email',
-        phone: prof.phone || 'No phone',
+        phone: prof.phone_number || 'No phone',
         registeredAt: prof.created_at,
         bmi: latestAssessment?.bmi ? Number(latestAssessment.bmi).toFixed(1) : null,
         primaryGoal: latestAssessment?.primary_goal || null,
-        activePlan: pMembership?.plan_name || 'No Active Plan',
-        planStatus: pMembership?.status || 'INACTIVE',
-        planExpiresAt: pMembership?.expires_at || null,
+        activePlan: pSubscription?.plan_name || 'No Active Plan',
+        planStatus: pSubscription?.status || 'INACTIVE',
+        planExpiresAt: pSubscription?.end_date || null,
         hasLabReport,
         nextAppointment: nextAppointment ? {
           date: nextAppointment.booking_date,

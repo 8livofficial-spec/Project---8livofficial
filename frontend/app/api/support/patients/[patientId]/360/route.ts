@@ -19,8 +19,7 @@ export async function GET(
       { data: profile },
       { data: assessments },
       membershipValidity,
-      { data: appointments },
-      { data: providerConsultations },
+      consultations,
       { data: prescriptions },
       { data: transactions },
       { data: labReports },
@@ -38,18 +37,33 @@ export async function GET(
         .order('created_at', { ascending: false })
         .limit(3),
       getMembershipValidity(patientId),
-      supabaseAdmin
-        .from('appointments')
-        .select('*')
-        .eq('patient_id', patientId)
-        .order('booking_date', { ascending: false })
-        .limit(20),
-      supabaseAdmin
-        .from('provider_consultations')
-        .select('*')
-        .eq('patient_id', patientId)
-        .order('booking_date', { ascending: false })
-        .limit(20),
+      Promise.all([
+        supabaseAdmin
+          .from('doctor_consultations')
+          .select('*')
+          .eq('patient_id', patientId)
+          .order('booking_date', { ascending: false })
+          .limit(20),
+        supabaseAdmin
+          .from('staff_consultations')
+          .select('*')
+          .eq('patient_id', patientId)
+          .order('booking_date', { ascending: false })
+          .limit(20),
+      ]).then(([doc, staff]) => {
+        return [
+          ...(doc.data || []).map((c: any) => ({
+            ...c,
+            appointment_type: 'Doctor Consultation',
+            provider_role: 'Doctor',
+          })),
+          ...(staff.data || []).map((c: any) => ({
+            ...c,
+            appointment_type: c.staff_role === 'trainer' ? 'Fitness Coach Session' : 'Dietitian Consultation',
+            provider_role: c.staff_role === 'trainer' ? 'Fitness Coach' : 'Dietitian',
+          })),
+        ].sort((a, b) => new Date(`${b.booking_date} ${b.booking_time}`).getTime() - new Date(`${a.booking_date} ${a.booking_time}`).getTime())
+      }),
       supabaseAdmin
         .from('prescriptions')
         .select('*')
@@ -81,12 +95,15 @@ export async function GET(
     // Extract any lab report embedded in the latest assessment
     const embeddedLabWork = latestAssessment?.medical_history?.lab_work || null
 
+    const fullName = `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || profile?.email || 'Anonymous Patient'
+    const phone = profile?.phone_number || profile?.phone || ''
+
     return NextResponse.json({
       patient: {
         id: patientId,
-        fullName: profile?.full_name || 'Anonymous Patient',
+        fullName,
         email: profile?.email || '',
-        phone: profile?.phone || '',
+        phone,
         role: profile?.role || 'patient',
         registeredAt: profile?.created_at,
         metadata: profile?.metadata || {},
@@ -105,7 +122,7 @@ export async function GET(
         expiresAt: membershipValidity.expiresAt || null,
         status: membershipValidity.active ? 'ACTIVE' : 'EXPIRED',
       },
-      appointments: (appointments || []).map((app: any) => ({
+      appointments: (consultations || []).map((app: any) => ({
         id: app.id,
         date: app.booking_date,
         time: app.booking_time,
@@ -116,14 +133,14 @@ export async function GET(
         paymentStatus: app.payment_status || 'PAID',
         createdAt: app.created_at,
       })),
-      providerConsultations: (providerConsultations || []).map((pc: any) => ({
+      providerConsultations: (consultations || []).map((pc: any) => ({
         id: pc.id,
         role: pc.provider_role,
-        providerId: pc.provider_id,
+        providerId: pc.staff_id || pc.doctor_id,
         date: pc.booking_date,
         time: pc.booking_time,
         status: pc.status,
-        notes: pc.notes,
+        notes: pc.consultation_notes || pc.notes,
         createdAt: pc.created_at,
       })),
       prescriptions: (prescriptions || []).map((rx: any) => ({

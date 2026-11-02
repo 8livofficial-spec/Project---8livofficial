@@ -94,7 +94,7 @@ export async function GET(request: Request) {
       patientName,
       roleLabel: labelForRole(session.staff_role),
       canJoin: canJoinConsultation(session.booking_date, session.booking_time, session.status),
-      meetingUrl: null,
+      meetingUrl: `/video/room?id=${session.id}`,
       meetingProvider: session.meeting_provider || 'STREAM',
       appointmentType: session.appointment_type || `${String(session.staff_role || provider.role).toUpperCase()}_CONSULTATION`,
     }

@@ -2,6 +2,24 @@
 -- 8LIV CUSTOMER CARE & PATIENT HELPDESK MIGRATION
 -- =============================================================================
 
+-- 0. Update profiles table role check to allow Customer Care & Support roles
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
+ALTER TABLE public.profiles
+  ADD CONSTRAINT profiles_role_check
+  CHECK (role IN (
+    'admin', 
+    'doctor', 
+    'dietitian', 
+    'nutritionist', 
+    'fitness_coach', 
+    'trainer', 
+    'patient',
+    'support_agent',
+    'care_coordinator',
+    'customer_care',
+    'support'
+  ));
+
 -- 1. Support Tickets Table
 CREATE TABLE IF NOT EXISTS support_tickets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -79,9 +97,18 @@ ALTER TABLE support_ticket_messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE patient_lab_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE support_audit_logs ENABLE ROW LEVEL SECURITY;
 
--- Service role full access
+-- Service role full access (idempotent with DROP POLICY IF EXISTS)
+DROP POLICY IF EXISTS service_role_support_tickets ON support_tickets;
 CREATE POLICY service_role_support_tickets ON support_tickets FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS service_role_support_ticket_messages ON support_ticket_messages;
 CREATE POLICY service_role_support_ticket_messages ON support_ticket_messages FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS service_role_patient_lab_reports ON patient_lab_reports;
 CREATE POLICY service_role_patient_lab_reports ON patient_lab_reports FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS service_role_support_audit_logs ON support_audit_logs;
 CREATE POLICY service_role_support_audit_logs ON support_audit_logs FOR ALL USING (true) WITH CHECK (true);
+
+NOTIFY pgrst, 'reload schema';
 

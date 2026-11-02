@@ -1,6 +1,7 @@
 'use client'
 
 import React, { useState } from 'react'
+import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 import AnimatedList from '@/components/ui/AnimatedList'
@@ -103,15 +104,15 @@ export default function FAQ() {
                     <div
                       className={`p-4 sm:p-4.5 rounded-2xl border transition-all duration-200 text-left cursor-pointer active:scale-[0.99] ${
                         isSelected
-                          ? 'bg-white border-[#00A884] shadow-md ring-2 ring-[#00A884]/20'
-                          : 'bg-white/90 border-slate-200/90 hover:bg-white hover:border-slate-300 shadow-xs'
+                          ? 'bg-[#EAF7F2] border-2 border-[#00A884] shadow-xs'
+                          : 'bg-white border border-slate-200 hover:border-slate-300 shadow-xs'
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex-1">
                           <p
-                            className={`font-sora text-sm sm:text-base font-semibold leading-snug m-0 transition-colors ${
-                              isSelected ? 'text-[#0F766E]' : 'text-slate-900'
+                            className={`font-sans text-sm sm:text-base font-semibold leading-snug m-0 transition-colors ${
+                              isSelected ? 'text-[#0B2616] font-bold' : 'text-slate-800'
                             }`}
                           >
                             {question}
@@ -121,7 +122,7 @@ export default function FAQ() {
                         {/* Mobile Chevron toggle indicator */}
                         <span
                           className={`lg:hidden shrink-0 w-6 h-6 rounded-full flex items-center justify-center transition-transform duration-200 ${
-                            isMobileOpen ? 'rotate-180 text-[#0F766E] bg-emerald-50' : 'text-slate-500'
+                            isMobileOpen ? 'rotate-180 text-[#00A884] bg-emerald-50' : 'text-slate-400'
                           }`}
                         >
                           <ChevronDown size={14} />
@@ -139,8 +140,21 @@ export default function FAQ() {
                             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                             className="overflow-hidden lg:hidden"
                           >
-                            <div className="mt-3 pt-3 border-t border-slate-100 text-sm sm:text-base text-slate-600 font-normal leading-relaxed">
-                              {faqs[index].answer}
+                            <div className="mt-3.5 pt-3.5 border-t border-slate-150 flex flex-col gap-3">
+                              <p className="text-sm sm:text-base text-slate-700 font-normal leading-relaxed">
+                                {faqs[index].answer}
+                              </p>
+                              <div className="pt-2 flex flex-col gap-2">
+                                <Link
+                                  href="/assessment"
+                                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-full bg-[#00A884] hover:bg-[#008f70] text-white font-sans font-bold text-sm shadow-sm transition-all"
+                                >
+                                  Book a doctor consultation
+                                </Link>
+                                <span className="text-xs text-slate-500 italic">
+                                  Your doctor decides whether treatment is right for you.
+                                </span>
+                              </div>
                             </div>
                           </motion.div>
                         )}
@@ -153,7 +167,7 @@ export default function FAQ() {
 
             {/* Dedicated Answer Showcase Card (Desktop) */}
             <div className="hidden lg:block lg:col-span-6 sticky top-24">
-              <div className="bg-white rounded-3xl p-8 border border-slate-200/90 shadow-sm relative overflow-hidden">
+              <div className="bg-[#F3F8F5] rounded-3xl p-8 sm:p-9 border border-[#DCE8E1] shadow-xs relative overflow-hidden flex flex-col justify-between min-h-[380px]">
                 {/* Ultra smooth cross-fade when question changes */}
                 <AnimatePresence mode="wait">
                   <motion.div
@@ -162,13 +176,34 @@ export default function FAQ() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.18, ease: 'easeOut' }}
+                    className="flex flex-col justify-between h-full"
                   >
-                    <h3 className="font-sora text-xl sm:text-2xl font-bold text-slate-900 mb-4 leading-snug">
-                      {activeFaq.question}
-                    </h3>
+                    <div>
+                      {/* Step index badge: QUESTION 0X OF 08 */}
+                      <span className="inline-block text-[#00A884] font-bold text-xs tracking-wider uppercase mb-3">
+                        QUESTION {String(selectedIndex + 1).padStart(2, '0')} OF {String(faqs.length).padStart(2, '0')}
+                      </span>
 
-                    <div className="text-sm sm:text-base text-slate-600 font-normal leading-relaxed">
-                      {activeFaq.answer}
+                      <h3 className="font-sans text-2xl sm:text-3xl font-extrabold text-[#11241A] mb-5 leading-tight tracking-tight">
+                        {activeFaq.question}
+                      </h3>
+
+                      <p className="text-base sm:text-[17px] text-slate-700 font-normal leading-relaxed">
+                        {activeFaq.answer}
+                      </p>
+                    </div>
+
+                    {/* Book a doctor consultation button + disclaimer */}
+                    <div className="pt-8 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+                      <Link
+                        href="/assessment"
+                        className="inline-flex items-center justify-center px-7 py-3.5 rounded-full bg-[#00A884] hover:bg-[#008f70] text-white font-sans font-bold text-sm sm:text-base shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
+                      >
+                        Book a doctor consultation
+                      </Link>
+                      <span className="text-xs sm:text-sm text-slate-500 italic">
+                        Your doctor decides whether treatment is right for you.
+                      </span>
                     </div>
                   </motion.div>
                 </AnimatePresence>

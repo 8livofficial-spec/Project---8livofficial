@@ -59,7 +59,9 @@ export function canJoinConsultation(bookingDate?: string | null, bookingTime?: s
   const terminal = ['completed', 'cancelled', 'cancelled_by_doctor', 'cancelled_by_patient', 'missed', 'missed_by_patient'].includes(normalized)
   if (terminal || !bookingDate || !bookingTime) return false
 
-  const start = new Date(`${bookingDate} ${bookingTime}`).getTime()
+  const normalizedTime = String(bookingTime || '').slice(0, 5)
+  const istTimestamp = new Date(`${bookingDate}T${normalizedTime}:00+05:30`).getTime()
+  const start = Number.isFinite(istTimestamp) ? istTimestamp : new Date(`${bookingDate} ${bookingTime}`).getTime()
   if (Number.isNaN(start)) return false
   const now = Date.now()
   return now >= start - 15 * 60 * 1000

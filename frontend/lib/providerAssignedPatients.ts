@@ -77,6 +77,29 @@ export async function loadAssignedProviderPatients(providerId: string, role: Pro
     totalAssigned = assignments.length
   }
 
+  // Also include any patients who have consultations with this provider
+  try {
+    let consultQuery = supabaseAdmin
+      .from('staff_consultations')
+      .select('patient_id')
+      .eq('staff_id', providerId)
+    if (options.patientIds?.length) consultQuery = consultQuery.in('patient_id', options.patientIds)
+    const { data: consultationPatients } = await consultQuery
+
+    if (consultationPatients && consultationPatients.length) {
+      const seen = new Set(assignments.map((row) => row.patient_id))
+      for (const cp of consultationPatients) {
+        if (cp.patient_id && !seen.has(cp.patient_id)) {
+          seen.add(cp.patient_id)
+          assignments.push({ patient_id: cp.patient_id })
+        }
+      }
+      totalAssigned = assignments.length
+    }
+  } catch (consultErr) {
+    console.warn('staff_consultations query in loadAssignedProviderPatients notice:', consultErr)
+  }
+
   if (!assignments.length) {
     return {
       patients: [],
