@@ -8,7 +8,7 @@ import { finalizeConsultationAssignment, reserveDoctorForInitialConsultation } f
 import { getAuthenticatedPatient, getIndiaSlotTimestamp, isFutureIndiaSlot } from '@/lib/appointmentAvailability'
 import { FOLLOW_UP_CONSULTATION, INITIAL_CONSULTATION, getAssignedProviderForRole } from '@/lib/providerConsultations'
 import { getMembershipValidity } from '@/lib/membershipServer'
-import { checkPatientConsultationQuota } from '@/lib/subscriptionService'
+import { checkPatientConsultationQuota, invalidatePatientQuotaCache } from '@/lib/subscriptionService'
 import { createStreamMeeting } from '@/services/video/meeting.service'
 
 const CONSULTATION_FEE = 350
@@ -484,6 +484,7 @@ export async function POST(request: Request) {
     }
 
     const txnId = isInitialConsultation ? (reusedPayment?.transaction_id || generateTxnId()) : ''
+    invalidatePatientQuotaCache(patientId)
 
     const response = NextResponse.json({
       success: true,

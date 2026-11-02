@@ -257,6 +257,9 @@ function AdminDashboardContent() {
   const [planId, setPlanId] = useState('');
   const [planName, setPlanName] = useState('');
   const [planDurationMonths, setPlanDurationMonths] = useState('1');
+  const [planDoctorConsultations, setPlanDoctorConsultations] = useState('1');
+  const [planDietitianConsultations, setPlanDietitianConsultations] = useState('1');
+  const [planFitnessCoachConsultations, setPlanFitnessCoachConsultations] = useState('1');
   const [planPrice, setPlanPrice] = useState('');
   const [planConsultFee, setPlanConsultFee] = useState('350');
   const [planFeatures, setPlanFeatures] = useState('');
@@ -599,6 +602,9 @@ function AdminDashboardContent() {
     setPlanId('');
     setPlanName('');
     setPlanDurationMonths('1');
+    setPlanDoctorConsultations('1');
+    setPlanDietitianConsultations('1');
+    setPlanFitnessCoachConsultations('1');
     setPlanPrice('');
     setPlanConsultFee('350');
     setPlanFeatures('');
@@ -616,7 +622,13 @@ function AdminDashboardContent() {
     setSelectedPlan(p);
     setPlanId(p.id || '');
     setPlanName(p.name || '');
-    setPlanDurationMonths(String(p.duration_months || 1));
+    const dur = p.duration_months || 1;
+    setPlanDurationMonths(String(dur));
+    const meta = (p.metadata || {}) as Record<string, any>;
+    const maxC = meta.max_consultations || {};
+    setPlanDoctorConsultations(String(maxC.doctor ?? (dur === 1 ? 1 : dur)));
+    setPlanDietitianConsultations(String(maxC.dietitian ?? (dur === 1 ? 1 : dur)));
+    setPlanFitnessCoachConsultations(String(maxC.fitness_coach ?? (dur === 1 ? 1 : dur)));
     setPlanPrice(String(p.base_price ?? p.price_monthly ?? ''));
     setPlanConsultFee(String(p.consultation_fee ?? 350));
     setPlanFeatures(Array.isArray(p.features) ? p.features.join(', ') : (p.features || ''));
@@ -3925,6 +3937,7 @@ function AdminDashboardContent() {
                       <th className="py-4 px-6">Base Price</th>
                       <th className="py-4 px-6">Discount</th>
                       <th className="py-4 px-6">Final Price</th>
+                      <th className="py-4 px-6">Calls Quota</th>
                       <th className="py-4 px-6">Order</th>
                       <th className="py-4 px-6 text-right">Actions</th>
                     </tr>
@@ -3969,6 +3982,15 @@ function AdminDashboardContent() {
                           </td>
                           <td className="py-4 px-6 font-black text-slate-900">
                             ₹{Number(finalPr).toLocaleString('en-IN')}
+                          </td>
+                          <td className="py-4 px-6">
+                            <span className="inline-flex items-center gap-1.5 text-xs font-bold text-slate-800 bg-slate-100 px-2.5 py-1 rounded-lg">
+                              <span title="Doctor Calls">👨‍⚕️ {p.metadata?.max_consultations?.doctor ?? (duration === 1 ? 1 : duration)}</span>
+                              <span className="text-slate-300">|</span>
+                              <span title="Dietitian Calls">🥗 {p.metadata?.max_consultations?.dietitian ?? (duration === 1 ? 1 : duration)}</span>
+                              <span className="text-slate-300">|</span>
+                              <span title="Fitness Coach Calls">💪 {p.metadata?.max_consultations?.fitness_coach ?? (duration === 1 ? 1 : duration)}</span>
+                            </span>
                           </td>
                           <td className="py-4 px-6 text-xs font-bold text-slate-400">
                             #{p.display_order ?? 0}
@@ -4072,6 +4094,9 @@ function AdminDashboardContent() {
                         id: planId || undefined,
                         name: planName,
                         durationMonths: parseInt(planDurationMonths),
+                        doctorConsultations: parseInt(planDoctorConsultations) || parseInt(planDurationMonths) || 1,
+                        dietitianConsultations: parseInt(planDietitianConsultations) || parseInt(planDurationMonths) || 1,
+                        fitnessCoachConsultations: parseInt(planFitnessCoachConsultations) || parseInt(planDurationMonths) || 1,
                         basePrice: parseFloat(planPrice),
                         discountPercentage: parseFloat(planDiscountPercent || '0'),
                         description: planDescription,
@@ -4173,6 +4198,66 @@ function AdminDashboardContent() {
                     <label htmlFor="planIsActiveCheckbox" className="text-sm font-bold text-slate-700 cursor-pointer">
                       Plan is Active (Visible during checkout)
                     </label>
+                  </div>
+                </div>
+
+                <div className="bg-slate-100/70 border border-slate-200/80 rounded-2xl p-5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-black text-slate-700 uppercase tracking-wider">
+                      Consultation Limits Per Care Specialist (Strict Quota)
+                    </p>
+                    <span className="text-[11px] font-bold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100">
+                      Total: {(parseInt(planDoctorConsultations) || 0) + (parseInt(planDietitianConsultations) || 0) + (parseInt(planFitnessCoachConsultations) || 0)} calls
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>👨‍⚕️</span> Doctor Calls Included *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        value={planDoctorConsultations}
+                        onChange={(e) => setPlanDoctorConsultations(e.target.value)}
+                        placeholder="e.g. 1"
+                        className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3.5 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <p className="text-[10px] text-slate-400">1 mo = 1, 3 mo = 3, 5 mo = 5</p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>🥗</span> Dietitian Calls Included *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        value={planDietitianConsultations}
+                        onChange={(e) => setPlanDietitianConsultations(e.target.value)}
+                        placeholder="e.g. 1"
+                        className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3.5 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <p className="text-[10px] text-slate-400">1 mo = 1, 3 mo = 3, 5 mo = 5</p>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[11px] font-extrabold text-slate-600 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>💪</span> Fitness Coach Calls Included *
+                      </label>
+                      <input
+                        type="number"
+                        required
+                        min="0"
+                        value={planFitnessCoachConsultations}
+                        onChange={(e) => setPlanFitnessCoachConsultations(e.target.value)}
+                        placeholder="e.g. 1"
+                        className="w-full bg-white border border-slate-200 rounded-xl py-2.5 px-3.5 text-sm font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <p className="text-[10px] text-slate-400">1 mo = 1, 3 mo = 3, 5 mo = 5</p>
+                    </div>
                   </div>
                 </div>
 

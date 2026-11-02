@@ -4,7 +4,7 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 import { appointmentTypeForRole, getAssignedProviderForRole, labelForRole, normalizeProviderRole } from '@/lib/providerConsultations'
 import { getAuthenticatedPatient, isFutureIndiaSlot, invalidateSlotsCache } from '@/lib/appointmentAvailability'
 import { createStreamMeeting } from '@/services/video/meeting.service'
-import { checkPatientConsultationQuota } from '@/lib/subscriptionService'
+import { checkPatientConsultationQuota, invalidatePatientQuotaCache } from '@/lib/subscriptionService'
 
 type ProviderAvailability = {
   id: string
@@ -405,6 +405,7 @@ export async function POST(request: Request) {
 
     const response = NextResponse.json({ success: true, consultation })
     invalidateSlotsCache()
+    invalidatePatientQuotaCache(patientId)
 
     // Execute non-critical tasks in background
     Promise.resolve().then(async () => {

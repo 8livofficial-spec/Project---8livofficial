@@ -171,11 +171,22 @@ export function computePlanPricing(basePrice: number, discountPercentage: number
   }
 }
 
+let activePlansCache: { data: TreatmentPlanRecord[]; expiresAt: number } | null = null
+
+export function invalidateTreatmentPlansCache() {
+  activePlansCache = null
+}
+
 /**
- * Fetch all active treatment plans from the database.
+ * Fetch all active treatment plans from the database with in-memory caching.
  * Falls back to seed plans if table is not yet migrated.
  */
 export async function getActiveTreatmentPlans(tenantId = '8liv'): Promise<TreatmentPlanRecord[]> {
+  const nowMs = Date.now()
+  if (activePlansCache && activePlansCache.expiresAt > nowMs) {
+    return activePlansCache.data
+  }
+
   try {
     const now = new Date().toISOString()
     const { data, error } = await supabaseAdmin
@@ -187,16 +198,19 @@ export async function getActiveTreatmentPlans(tenantId = '8liv'): Promise<Treatm
 
     if (!error && data && data.length > 0) {
       // Filter validity window if configured
-      return data.filter((plan: TreatmentPlanRecord) => {
+      const filtered = data.filter((plan: TreatmentPlanRecord) => {
         if (plan.valid_from && new Date(plan.valid_from).toISOString() > now) return false
         if (plan.valid_until && new Date(plan.valid_until).toISOString() < now) return false
         return true
       })
+      activePlansCache = { data: filtered, expiresAt: nowMs + 60_000 }
+      return filtered
     }
   } catch (err) {
     console.warn('[subscriptionService] Error fetching treatment_plans from DB:', err)
   }
 
+  activePlansCache = { data: SEED_PLANS, expiresAt: nowMs + 60_000 }
   return SEED_PLANS
 }
 
@@ -303,9 +317,31 @@ export async function getAuthoritativeSubscriptionPricing(planIdOrDuration: stri
   }
 }
 
+const quotaCache = new Map<string, { data: any; expiresAt: number }>()
+
+export function invalidatePatientQuotaCache(patientId?: string) {
+  if (patientId) {
+    for (const key of Array.from(quotaCache.keys())) {
+      if (key.startsWith(`${patientId}:`)) {
+        quotaCache.delete(key)
+      }
+    }
+  } else {
+    quotaCache.clear()
+  }
+}
+
 /**
- * Checks whether a patient has remaining consultation quota for a specific role (doctor, dietitian, fitness_coach).
- * Under the 1-Month Trial Plan, the quota is exactly 1 Doctor, 1 Dietitian, 1 Fitness Coach consultation (total 3).
+ * Checks whether a patient has remaining consultation quota for a specific specialist role:
+ * - 'doctor'
+ * - 'dietitian' / 'nutritionist'
+ * - 'fitness_coach' / 'trainer'
+ * 
+ * Rules:
+ * - Default 1-Month: 1 Doctor, 1 Dietitian, 1 Fitness Coach (3 Total)
+ * - Default 3-Month: 3 Doctor, 3 Dietitian, 3 Fitness Coach (9 Total)
+ * - Default 5-Month: 5 Doctor, 5 Dietitian, 5 Fitness Coach (15 Total)
+ * - Admin-configurable: Any custom quota set by Admin in treatment_plans.metadata.max_consultations
  */
 export async function checkPatientConsultationQuota(
   patientId: string,
@@ -318,81 +354,97 @@ export async function checkPatientConsultationQuota(
   planName: string
   reason?: string
 }> {
-  try {
-    // 1. Identify active subscription / treatment plan
-    const { data: sub } = await supabaseAdmin
-      .from('subscriptions')
-      .select('*, treatment_plans(*)')
-      .eq('patient_id', patientId)
-      .eq('status', 'ACTIVE')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+  const normalizedRole = (role === 'nutritionist' ? 'dietitian' : (role === 'trainer' ? 'fitness_coach' : role)) as 'doctor' | 'dietitian' | 'fitness_coach'
+  const cacheKey = `${patientId}:${normalizedRole}`
+  const now = Date.now()
 
-    // Fallback: check latest successful payment transaction
-    const { data: txn } = await supabaseAdmin
-      .from('payment_transactions')
-      .select('metadata, plan_name_snapshot, created_at')
-      .eq('patient_id', patientId)
-      .in('payment_type', ['membership', 'combined'])
-      .in('status', ['success', 'paid'])
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
+  const cached = quotaCache.get(cacheKey)
+  if (cached && cached.expiresAt > now) {
+    return cached.data
+  }
+
+  try {
+    // 1. Fetch subscription details and counts in parallel for optimal speed
+    const isDoctor = normalizedRole === 'doctor'
+    const staffRoles = normalizedRole === 'dietitian' ? ['dietitian', 'nutritionist'] : ['fitness_coach', 'trainer']
+
+    const [subRes, txnRes, consultCountRes] = await Promise.all([
+      supabaseAdmin
+        .from('subscriptions')
+        .select('*, treatment_plans(*)')
+        .eq('patient_id', patientId)
+        .eq('status', 'ACTIVE')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('payment_transactions')
+        .select('metadata, plan_name_snapshot, created_at')
+        .eq('patient_id', patientId)
+        .in('payment_type', ['membership', 'combined'])
+        .in('status', ['success', 'paid'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      isDoctor
+        ? supabaseAdmin
+            .from('doctor_consultations')
+            .select('id', { count: 'exact', head: true })
+            .eq('patient_id', patientId)
+            .in('status', ['scheduled', 'calling', 'attended', 'approved', 'completed'])
+        : supabaseAdmin
+            .from('staff_consultations')
+            .select('id', { count: 'exact', head: true })
+            .eq('patient_id', patientId)
+            .in('staff_role', staffRoles)
+            .in('status', ['scheduled', 'calling', 'attended', 'completed'])
+    ])
+
+    const sub = subRes.data
+    const txn = txnRes.data
+    const usedCount = consultCountRes.count || 0
 
     const planMetadata = (sub?.treatment_plans?.metadata || txn?.metadata || {}) as Record<string, any>
     const planName = sub?.treatment_plans?.name || txn?.plan_name_snapshot || '1-Month Kickstart Trial'
-    const durationMonths = sub?.treatment_plans?.duration_months || txn?.metadata?.duration_months || 1
+    const durationMonths = Number(sub?.treatment_plans?.duration_months || txn?.metadata?.duration_months || 1)
 
     const isTrial = Boolean(planMetadata?.is_trial || durationMonths === 1 || /trial/i.test(planName))
-    const maxConsultationsForRole = isTrial ? 1 : Math.max(1, durationMonths)
 
-    // 2. Count existing non-cancelled bookings
-    const isDoctor = role === 'doctor'
-    let usedCount = 0
+    // Dynamically retrieve configured quota for this role or fall back to duration
+    const configuredRoleQuotas = planMetadata?.max_consultations as Record<string, number> | undefined
+    let maxConsultationsForRole = 1
 
-    if (isDoctor) {
-      const { data: consults } = await supabaseAdmin
-        .from('doctor_consultations')
-        .select('id, status')
-        .eq('patient_id', patientId)
-        .in('status', ['scheduled', 'calling', 'attended', 'approved', 'completed'])
-
-      usedCount = consults?.length || 0
+    if (configuredRoleQuotas && typeof configuredRoleQuotas[normalizedRole] === 'number') {
+      maxConsultationsForRole = Math.max(1, configuredRoleQuotas[normalizedRole])
     } else {
-      const staffRoles = (role === 'dietitian' || role === 'nutritionist')
-        ? ['dietitian', 'nutritionist']
-        : ['fitness_coach', 'trainer']
-
-      const { data: consults } = await supabaseAdmin
-        .from('staff_consultations')
-        .select('id, status')
-        .eq('patient_id', patientId)
-        .in('staff_role', staffRoles)
-        .in('status', ['scheduled', 'calling', 'attended', 'completed'])
-
-      usedCount = consults?.length || 0
+      // Default: 1 for trial / 1M, otherwise equal to durationMonths (e.g. 3 for 3M, 5 for 5M)
+      maxConsultationsForRole = isTrial ? 1 : Math.max(1, durationMonths)
     }
 
-    if (isTrial && usedCount >= maxConsultationsForRole) {
-      const roleDisplay = isDoctor ? 'Doctor' : (role === 'dietitian' || role === 'nutritionist' ? 'Clinical Dietitian' : 'Fitness Coach')
-      return {
+    const roleDisplay = isDoctor ? 'Doctor' : (normalizedRole === 'dietitian' ? 'Clinical Dietitian' : 'Fitness Coach')
+
+    if (usedCount >= maxConsultationsForRole) {
+      const result = {
         allowed: false,
         maxAllowed: maxConsultationsForRole,
         usedCount,
-        isTrial: true,
+        isTrial,
         planName,
-        reason: `Your 1-Month Trial Plan includes exactly 1 ${roleDisplay} Consultation, which has already been booked. Please renew or upgrade to our 3-Month or 5-Month Care Plan to schedule additional sessions.`,
+        reason: `Your ${planName} includes ${maxConsultationsForRole} ${roleDisplay} Consultation(s), which have already been scheduled or completed. Please upgrade or renew your treatment plan to schedule additional sessions.`,
       }
+      quotaCache.set(cacheKey, { data: result, expiresAt: now + 10_000 })
+      return result
     }
 
-    return {
+    const result = {
       allowed: true,
       maxAllowed: maxConsultationsForRole,
       usedCount,
       isTrial,
       planName,
     }
+    quotaCache.set(cacheKey, { data: result, expiresAt: now + 10_000 })
+    return result
   } catch (err) {
     console.warn('[checkPatientConsultationQuota] Failed to check quota:', err)
     return {
@@ -402,6 +454,26 @@ export async function checkPatientConsultationQuota(
       isTrial: false,
       planName: 'Care Plan',
     }
+  }
+}
+
+/**
+ * Returns a high-speed complete summary of consultation quotas for Doctor, Dietitian, and Fitness Coach.
+ */
+export async function getPatientConsultationSummary(patientId: string) {
+  const [doctorQuota, dietitianQuota, fitnessQuota] = await Promise.all([
+    checkPatientConsultationQuota(patientId, 'doctor'),
+    checkPatientConsultationQuota(patientId, 'dietitian'),
+    checkPatientConsultationQuota(patientId, 'fitness_coach'),
+  ])
+
+  return {
+    doctor: doctorQuota,
+    dietitian: dietitianQuota,
+    fitness_coach: fitnessQuota,
+    totalAllowed: doctorQuota.maxAllowed + dietitianQuota.maxAllowed + fitnessQuota.maxAllowed,
+    totalUsed: doctorQuota.usedCount + dietitianQuota.usedCount + fitnessQuota.usedCount,
+    planName: doctorQuota.planName,
   }
 }
 

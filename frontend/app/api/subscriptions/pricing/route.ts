@@ -18,6 +18,15 @@ export async function GET() {
     const plans = await getActiveTreatmentPlans()
     const tiers = plans.map(p => {
       const calc = computePlanPricing(p.base_price, p.discount_percentage, p.duration_months)
+      const meta = (p.metadata || {}) as Record<string, any>
+      const duration = p.duration_months || 1
+      const maxConsultations = meta.max_consultations || {
+        doctor: duration === 1 ? 1 : duration,
+        dietitian: duration === 1 ? 1 : duration,
+        fitness_coach: duration === 1 ? 1 : duration,
+      }
+      const totalConsultations = meta.total_consultations || (maxConsultations.doctor + maxConsultations.dietitian + maxConsultations.fitness_coach)
+
       return {
         id: p.id,
         name: p.name,
@@ -31,6 +40,8 @@ export async function GET() {
         description: p.description,
         features: p.features || [],
         displayOrder: p.display_order,
+        maxConsultations,
+        totalConsultations,
       }
     })
 

@@ -149,8 +149,11 @@ export async function POST(request: Request) {
     if (profileError && profileError.code !== '23505') {
       return NextResponse.json({ error: `Provider profile setup failed: ${profileError.message}` }, { status: 500 })
     }
-  } else if (provider.providerProfile.status !== 'active') {
-    return NextResponse.json({ error: 'Inactive providers cannot publish availability.' }, { status: 403 })
+  } else {
+    const rawStatus = String(provider.providerProfile.status || '').toLowerCase()
+    if (['suspended', 'rejected', 'inactive'].includes(rawStatus)) {
+      return NextResponse.json({ error: 'Your provider profile is currently inactive or suspended. Please contact support.' }, { status: 403 })
+    }
   }
 
   const body = await request.json()

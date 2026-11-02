@@ -226,6 +226,34 @@ export default function ConsultationSchedulingPage() {
       : 'doctor'
 
   const [activeProviderTab, setActiveProviderTab] = useState<ProviderRoleTab>(initialTab)
+  const [quotas, setQuotas] = useState<{
+    doctor?: { allowed: boolean; maxAllowed: number; usedCount: number; reason?: string };
+    dietitian?: { allowed: boolean; maxAllowed: number; usedCount: number; reason?: string };
+    fitness_coach?: { allowed: boolean; maxAllowed: number; usedCount: number; reason?: string };
+  } | null>(null)
+
+  useEffect(() => {
+    let active = true
+    async function loadQuotas() {
+      try {
+        const res = await patientFetch('/api/patient/consultations/quota')
+        if (res.ok) {
+          const data = await res.json()
+          if (active && data.success) {
+            setQuotas(data)
+          }
+        }
+      } catch (e) {
+        // Non-blocking
+      }
+    }
+    loadQuotas()
+    return () => { active = false }
+  }, [])
+
+  const currentRoleQuotaKey = activeProviderTab === 'doctor' ? 'doctor' : activeProviderTab === 'dietitian' ? 'dietitian' : 'fitness_coach'
+  const currentQuota = quotas ? quotas[currentRoleQuotaKey] : null
+  const isCurrentQuotaExhausted = Boolean(currentQuota && !currentQuota.allowed)
   const [availableDates, setAvailableDates] = useState<string[]>([])
   const [selectedDateSlots, setSelectedDateSlots] = useState<AvailableDoctorSlot[]>([])
   const [selectedDate, setSelectedDate] = useState('')
@@ -578,6 +606,10 @@ export default function ConsultationSchedulingPage() {
   }
 
   const handlePaidBooking = async () => {
+    if (isCurrentQuotaExhausted) {
+      setPaymentError(currentQuota?.reason || 'You have reached the consultation limit for this specialist under your current treatment plan.')
+      return
+    }
     if (bookingMode === 'slot' && !selectedSlot) {
       setPaymentError('Please select a consultation time before payment.')
       return
@@ -1104,6 +1136,24 @@ export default function ConsultationSchedulingPage() {
                           )}
                         </div>
                         <p className="text-xs text-slate-500 truncate mt-0.5">{tab.sublabel}</p>
+                        {(() => {
+                          const qKey = tab.id === 'doctor' ? 'doctor' : tab.id === 'dietitian' ? 'dietitian' : 'fitness_coach'
+                          const q = quotas ? quotas[qKey] : null
+                          if (!q) return null
+                          const remaining = Math.max(0, q.maxAllowed - q.usedCount)
+                          const exhausted = !q.allowed || remaining <= 0
+                          return (
+                            <div className="mt-1.5 flex items-center gap-1.5">
+                              <span className={`text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                                exhausted
+                                  ? 'bg-rose-50 text-rose-600 border-rose-200/80'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200/80'
+                              }`}>
+                                {exhausted ? 'Limit Reached' : `${remaining} of ${q.maxAllowed} Calls Available`}
+                              </span>
+                            </div>
+                          )
+                        })()}
                       </div>
                     </button>
                   )
@@ -1115,6 +1165,28 @@ export default function ConsultationSchedulingPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Left 2 Cols: Slot Selection & Calendar */}
               <div className="lg:col-span-2 space-y-6">
+                {isCurrentQuotaExhausted && (
+                  <div className="rounded-3xl border border-rose-200/90 bg-rose-50/70 p-6 sm:p-7 shadow-xs space-y-3">
+                    <div className="flex items-center gap-3 text-rose-700 font-extrabold text-sm sm:text-base">
+                      <div className="w-9 h-9 rounded-xl bg-rose-100 flex items-center justify-center shrink-0">
+                        <AlertCircle className="w-5 h-5 text-rose-600" />
+                      </div>
+                      <span>Consultation Quota Exhausted for {currentTabMeta.roleName}</span>
+                    </div>
+                    <p className="text-xs sm:text-sm text-slate-600 leading-relaxed pl-12">
+                      {currentQuota?.reason || `Your treatment program includes ${currentQuota?.maxAllowed || 1} ${currentTabMeta.roleName} consultation(s), which have already been scheduled or completed.`}
+                    </p>
+                    <div className="pl-12 pt-1 flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => router.push('/patient/billing')}
+                        className="rounded-full bg-slate-900 hover:bg-black text-white px-5 py-2 text-xs font-bold transition-all cursor-pointer shadow-xs"
+                      >
+                        Upgrade or Renew Program &rarr;
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div className="bg-white rounded-3xl p-6 sm:p-8 border border-slate-200/80 shadow-xs">
                   <div className="flex items-center justify-between gap-4 mb-6">
                     <div>

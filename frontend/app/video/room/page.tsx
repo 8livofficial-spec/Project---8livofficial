@@ -26,7 +26,7 @@ function VideoRoomContent() {
   const [hasEnded, setHasEnded] = useState(false)
   const [concluding, setConcluding] = useState(false)
   const [countdown, setCountdown] = useState(3)
-  const [returnPath, setReturnPath] = useState('/dietitian')
+  const [returnPath, setReturnPath] = useState('/dietitian/consultations')
   const [sessionTitle, setSessionTitle] = useState('Clinical Consultation')
 
   const handleSessionReady = useCallback((meta: { providerRole?: string; participantRole?: string }) => {
@@ -34,13 +34,13 @@ function VideoRoomContent() {
       setReturnPath('/patient/appointments')
       setSessionTitle('Consultation')
     } else if (meta.providerRole === 'dietitian') {
-      setReturnPath('/dietitian')
+      setReturnPath('/dietitian/consultations')
       setSessionTitle('Dietitian Consultation')
     } else if (meta.providerRole === 'doctor') {
       setReturnPath('/doctor/dashboard')
       setSessionTitle('Doctor Consultation')
     } else if (meta.providerRole === 'fitness_coach' || meta.providerRole === 'trainer') {
-      setReturnPath('/provider')
+      setReturnPath('/provider/consultations')
       setSessionTitle('Fitness Consultation')
     }
   }, [])
@@ -56,19 +56,24 @@ function VideoRoomContent() {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       }
 
-      // 1. Notify provider consultations API to mark as completed / ended
-      await fetch('/api/provider/consultations', {
-        method: 'PATCH',
-        headers,
-        body: JSON.stringify({ consultationId: appointmentId, action: 'complete' }),
-      }).catch((err) => console.warn('Provider complete error:', err))
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 2500)
 
-      // 2. Also notify patient conclude API
-      await fetch('/api/patient/conclude-consultation', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ appointmentId, forceStatus: 'completed' }),
-      }).catch((err) => console.warn('Patient conclude error:', err))
+      await Promise.allSettled([
+        fetch('/api/provider/consultations', {
+          method: 'PATCH',
+          headers,
+          body: JSON.stringify({ consultationId: appointmentId, action: 'complete' }),
+          signal: controller.signal,
+        }),
+        fetch('/api/patient/conclude-consultation', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ appointmentId, forceStatus: 'completed' }),
+          signal: controller.signal,
+        }),
+      ])
+      clearTimeout(timeoutId)
     } catch (err) {
       console.error('Error concluding consultation:', err)
     } finally {
@@ -77,7 +82,9 @@ function VideoRoomContent() {
 
       // Attempt window close if opened as new tab/window
       try {
-        window.close()
+        if (window.opener) {
+          window.close()
+        }
       } catch (e) {
         console.warn('Window close blocked:', e)
       }

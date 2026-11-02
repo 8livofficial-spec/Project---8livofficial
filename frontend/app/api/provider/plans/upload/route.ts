@@ -82,6 +82,24 @@ export async function POST(request: Request) {
               status: 'active',
               updated_at: new Date().toISOString()
             }, { onConflict: 'patient_id' })
+        } else {
+          const { data: patientProfile } = await supabaseAdmin
+            .from('profiles')
+            .select('id')
+            .eq('id', patientId)
+            .maybeSingle()
+
+          if (patientProfile) {
+            isAssigned = true
+            await supabaseAdmin
+              .from('care_team_assignments')
+              .upsert({
+                patient_id: patientId,
+                [assignmentColumn]: providerId,
+                status: 'active',
+                updated_at: new Date().toISOString()
+              }, { onConflict: 'patient_id' })
+          }
         }
       }
     }

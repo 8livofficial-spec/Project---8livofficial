@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { assertAdmin } from '@/lib/apiSecurity'
-import { SEED_PLANS, computePlanPricing } from '@/lib/subscriptionService'
+import { SEED_PLANS, computePlanPricing, invalidateTreatmentPlansCache } from '@/lib/subscriptionService'
 
 export async function GET(request: Request) {
   try {
@@ -41,6 +41,9 @@ export async function POST(request: Request) {
       displayOrder = 0,
       validFrom,
       validUntil,
+      doctorConsultations,
+      dietitianConsultations,
+      fitnessCoachConsultations,
     } = body
 
     if (!name || basePrice === undefined || durationMonths === undefined) {
@@ -77,6 +80,23 @@ export async function POST(request: Request) {
       oldValues = existing || null
     }
 
+    const docCalls = Number(doctorConsultations) > 0 ? Number(doctorConsultations) : (duration === 1 ? 1 : duration)
+    const dietCalls = Number(dietitianConsultations) > 0 ? Number(dietitianConsultations) : (duration === 1 ? 1 : duration)
+    const fitCalls = Number(fitnessCoachConsultations) > 0 ? Number(fitnessCoachConsultations) : (duration === 1 ? 1 : duration)
+    const totalCalls = docCalls + dietCalls + fitCalls
+
+    const existingMetadata = ((oldValues?.metadata as Record<string, unknown>) || {})
+    const metadata = {
+      ...existingMetadata,
+      is_trial: duration === 1,
+      max_consultations: {
+        doctor: docCalls,
+        dietitian: dietCalls,
+        fitness_coach: fitCalls,
+      },
+      total_consultations: totalCalls,
+    }
+
     const planPayload = {
       tenant_id: '8liv',
       name: String(name).trim(),
@@ -92,6 +112,7 @@ export async function POST(request: Request) {
       display_order: parseInt(displayOrder) || 0,
       valid_from: validFrom || null,
       valid_until: validUntil || null,
+      metadata,
       updated_at: now,
       updated_by: adminUser.id,
     }
@@ -143,6 +164,8 @@ export async function POST(request: Request) {
       })
     }
 
+    invalidateTreatmentPlansCache()
+
     return NextResponse.json({ success: true, plan: savedPlan })
   } catch (err: any) {
     console.error('API Error in /api/admin/plans:', err)
@@ -184,6 +207,8 @@ export async function PATCH(request: Request) {
       old_values: existing,
       new_values: updated,
     })
+
+    invalidateTreatmentPlansCache()
 
     return NextResponse.json({ success: true, plan: updated })
   } catch (err: any) {

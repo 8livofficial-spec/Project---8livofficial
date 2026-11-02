@@ -79,11 +79,14 @@ function CustomCallControls({
     if (leaving) return
     setLeaving(true)
     try {
-      await call?.leave()
+      const leavePromise = call?.leave()
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 1500))
+      await Promise.race([leavePromise, timeoutPromise])
     } catch (e) {
       console.warn('Stream call leave error:', e)
+    } finally {
+      onLeave()
     }
-    onLeave()
   }
 
   return (

@@ -56,6 +56,25 @@ async function verifyAssignment(patientId: string, providerId: string, role: str
     return true
   }
 
+  // Allow verified care providers to establish initial assignment when issuing a care plan
+  const { data: patientProfile } = await supabaseAdmin
+    .from('profiles')
+    .select('id')
+    .eq('id', patientId)
+    .maybeSingle()
+
+  if (patientProfile) {
+    await supabaseAdmin
+      .from('care_team_assignments')
+      .upsert({
+        patient_id: patientId,
+        [assignmentColumn]: providerId,
+        status: 'active',
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'patient_id' })
+    return true
+  }
+
   return false
 }
 
