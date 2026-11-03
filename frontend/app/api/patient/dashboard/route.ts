@@ -5,6 +5,7 @@ import { ensureMembershipExpiryNotification, getMembershipValidity } from '@/lib
 import { assertPatientOrAssignedProvider } from '@/lib/apiSecurity'
 import { getPatientJourneyTarget } from '@/lib/patientJourney'
 import { logJourneyDebug } from '@/lib/logger'
+import { getPatientConsultationSummary } from '@/lib/subscriptionService'
 
 function isDoctorFollowUpType(value?: string | null) {
   return ['DOCTOR_FOLLOW_UP', 'FOLLOW_UP_CONSULTATION'].includes(String(value || '').toUpperCase())
@@ -83,7 +84,9 @@ export async function GET(request: Request) {
       unreadNotifsRes,
       dietPlanRes,
       fitnessPlanRes,
-      activePrescriptionRes
+      activePrescriptionRes,
+      quotaSummaryRes,
+      patientUploadsRes
     ] = await Promise.all([
       supabaseAdmin
         .from('profiles')
@@ -177,7 +180,17 @@ export async function GET(request: Request) {
         .not('status', 'in', '("DRAFT","REVOKED","CANCELLED","REPLACED")')
         .order('created_at', { ascending: false })
         .limit(1)
-        .maybeSingle()
+        .maybeSingle(),
+      getPatientConsultationSummary(patientId).catch((e) => {
+        console.warn('Quota summary notice:', e)
+        return null
+      }),
+      supabaseAdmin
+        .from('patient_lab_reports')
+        .select('*')
+        .eq('patient_id', patientId)
+        .order('created_at', { ascending: false })
+        .limit(6)
     ])
 
     if (profileRes.error) throw profileRes.error
@@ -205,8 +218,66 @@ export async function GET(request: Request) {
     let notifications = Array.from(notifMap.values())
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 15)
-    const dietPlan = dietPlanRes.data || null
+
+    let dietPlan = dietPlanRes.data || null
+    if (dietPlan?.attachment_url) {
+      try {
+        const rawPath = String(dietPlan.attachment_url).replace(/^diet-plans\//, '')
+        const { data: signed } = await supabaseAdmin.storage
+          .from('diet-plans')
+          .createSignedUrl(rawPath, 3600 * 24)
+        if (signed?.signedUrl) {
+          dietPlan = { ...dietPlan, attachment_signed_url: signed.signedUrl }
+        }
+      } catch (eDiet) {
+        console.warn('Diet plan signed URL notice:', eDiet)
+      }
+    }
+
     const fitnessPlan = fitnessPlanRes.data || null
+    let activePrescription: any = activePrescriptionRes?.data || null
+    if (activePrescription?.signed_pdf_path) {
+      try {
+        const { data: signedRx } = await supabaseAdmin.storage
+          .from('prescription-documents')
+          .createSignedUrl(activePrescription.signed_pdf_path, 3600 * 24)
+        if (signedRx?.signedUrl) {
+          activePrescription = { ...activePrescription, pdf_url: signedRx.signedUrl }
+        }
+      } catch (eRx) {
+        console.warn('Prescription signed URL notice:', eRx)
+      }
+    }
+
+    const rawUploads = patientUploadsRes?.data || []
+    const patientUploads = await Promise.all(
+      rawUploads.map(async (u: any) => {
+        let viewUrl = u.file_url
+        if (u.file_path) {
+          try {
+            const { data: signedDoc } = await supabaseAdmin.storage
+              .from('patient-documents')
+              .createSignedUrl(u.file_path, 3600 * 24)
+            if (signedDoc?.signedUrl) viewUrl = signedDoc.signedUrl
+          } catch (eDoc) {
+            console.warn('Doc signed URL notice:', eDoc)
+          }
+        }
+        return {
+          id: u.id,
+          report_category: u.report_category || 'blood_test',
+          test_date: u.test_date,
+          file_name: u.file_name,
+          file_url: viewUrl,
+          file_path: u.file_path,
+          mime_type: u.mime_type,
+          file_size_bytes: u.file_size_bytes,
+          created_at: u.created_at
+        }
+      })
+    )
+
+    const consultationQuota = quotaSummaryRes || null
 
     // Care Team formatting
     const careTeam: CareTeamStatus = {
@@ -394,7 +465,9 @@ export async function GET(request: Request) {
       notifications,
       dietPlan,
       fitnessPlan,
-      activePrescription: activePrescriptionRes?.data || null
+      activePrescription,
+      consultationQuota,
+      patientUploads
     }
 
     setCachedPatientDashboard(patientId, responseData, 10 * 1000)

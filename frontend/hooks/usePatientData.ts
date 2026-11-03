@@ -200,6 +200,7 @@ export interface DietPlan {
   description?: string
   attachment_url?: string
   attachment_type?: string
+  attachment_signed_url?: string | null
   created_at?: string
   updated_at?: string
 }
@@ -219,6 +220,7 @@ export interface FitnessPlan {
   description?: string
   attachment_url?: string
   attachment_type?: string
+  attachment_signed_url?: string | null
   created_at?: string
   updated_at?: string
 }
@@ -251,6 +253,27 @@ export interface PatientOnboardingState {
  */
 export type FlowStep = 'loading' | 'needs_assessment' | 'not_eligible' | 'needs_consultation' | 'appointment_scheduled' | 'needs_plan' | 'needs_payment' | 'ready'
 
+export interface ConsultationQuotaSummary {
+  doctor: { allowed: boolean; usedCount: number; maxAllowed: number; remaining: number; planName: string; role: string }
+  dietitian: { allowed: boolean; usedCount: number; maxAllowed: number; remaining: number; planName: string; role: string }
+  fitness_coach: { allowed: boolean; usedCount: number; maxAllowed: number; remaining: number; planName: string; role: string }
+  totalAllowed: number
+  totalUsed: number
+  planName: string
+}
+
+export interface PatientUploadRecord {
+  id: string
+  report_category?: string
+  test_date?: string | null
+  file_name: string
+  file_url: string
+  file_path?: string | null
+  mime_type?: string
+  file_size_bytes?: number | null
+  created_at: string
+}
+
 export interface PatientDataContextValue {
   user: any
   profile: PatientProfile | null
@@ -271,6 +294,8 @@ export interface PatientDataContextValue {
   dietPlan: DietPlan | null
   fitnessPlan: FitnessPlan | null
   activePrescription: any | null
+  consultationQuota: ConsultationQuotaSummary | null
+  patientUploads: PatientUploadRecord[]
 }
 
 const PatientDataContext = createContext<PatientDataContextValue | null>(null)
@@ -320,6 +345,8 @@ function usePatientDataInternal() {
   const [dietPlan, setDietPlan] = useState<DietPlan | null>(null)
   const [fitnessPlan, setFitnessPlan] = useState<FitnessPlan | null>(null)
   const [activePrescription, setActivePrescription] = useState<any | null>(null)
+  const [consultationQuota, setConsultationQuota] = useState<ConsultationQuotaSummary | null>(null)
+  const [patientUploads, setPatientUploads] = useState<PatientUploadRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [flowStep, setFlowStep] = useState<FlowStep>('loading')
@@ -397,6 +424,8 @@ function usePatientDataInternal() {
         if (dashboardData.activePrescription) {
           setActivePrescription(dashboardData.activePrescription)
         }
+        setConsultationQuota(dashboardData.consultationQuota || null)
+        setPatientUploads(dashboardData.patientUploads || [])
 
         // Set Flow Step
         const assessRow = dashboardData.assessment
@@ -616,6 +645,8 @@ function usePatientDataInternal() {
     reloadData,
     dietPlan,
     fitnessPlan,
-    activePrescription
+    activePrescription,
+    consultationQuota,
+    patientUploads
   }
 }
