@@ -1,7 +1,6 @@
 'use client'
 
 import React, { useState } from 'react'
-import Link from 'next/link'
 import { ChevronDown } from 'lucide-react'
 import { motion, AnimatePresence } from 'motion/react'
 import AnimatedList from '@/components/ui/AnimatedList'
@@ -140,21 +139,10 @@ export default function FAQ() {
                             transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
                             className="overflow-hidden lg:hidden"
                           >
-                            <div className="mt-3.5 pt-3.5 border-t border-slate-150 flex flex-col gap-3">
+                            <div className="mt-3.5 pt-3.5 border-t border-slate-150">
                               <p className="text-sm sm:text-base text-slate-700 font-normal leading-relaxed">
                                 {faqs[index].answer}
                               </p>
-                              <div className="pt-2 flex flex-col gap-2">
-                                <Link
-                                  href="/assessment"
-                                  className="inline-flex items-center justify-center px-5 py-2.5 rounded-full bg-[#00A884] hover:bg-[#008f70] text-white font-sans font-bold text-sm shadow-sm transition-all"
-                                >
-                                  Book a doctor consultation
-                                </Link>
-                                <span className="text-xs text-slate-500 italic">
-                                  Your doctor decides whether treatment is right for you.
-                                </span>
-                              </div>
                             </div>
                           </motion.div>
                         )}
@@ -167,7 +155,7 @@ export default function FAQ() {
 
             {/* Dedicated Answer Showcase Card (Desktop) */}
             <div className="hidden lg:block lg:col-span-6 sticky top-24">
-              <div className="bg-[#F3F8F5] rounded-3xl p-8 sm:p-9 border border-[#DCE8E1] shadow-xs relative overflow-hidden flex flex-col justify-between min-h-[380px]">
+              <div className="bg-[#F3F8F5] rounded-3xl p-8 sm:p-9 border border-[#DCE8E1] shadow-xs relative overflow-hidden min-h-[300px]">
                 {/* Ultra smooth cross-fade when question changes */}
                 <AnimatePresence mode="wait">
                   <motion.div
@@ -176,14 +164,9 @@ export default function FAQ() {
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -6 }}
                     transition={{ duration: 0.18, ease: 'easeOut' }}
-                    className="flex flex-col justify-between h-full"
+                    className="flex flex-col h-full"
                   >
                     <div>
-                      {/* Step index badge: QUESTION 0X OF 08 */}
-                      <span className="inline-block text-[#00A884] font-bold text-xs tracking-wider uppercase mb-3">
-                        QUESTION {String(selectedIndex + 1).padStart(2, '0')} OF {String(faqs.length).padStart(2, '0')}
-                      </span>
-
                       <h3 className="font-sans text-2xl sm:text-3xl font-extrabold text-[#11241A] mb-5 leading-tight tracking-tight">
                         {activeFaq.question}
                       </h3>
@@ -191,19 +174,6 @@ export default function FAQ() {
                       <p className="text-base sm:text-[17px] text-slate-700 font-normal leading-relaxed">
                         {activeFaq.answer}
                       </p>
-                    </div>
-
-                    {/* Book a doctor consultation button + disclaimer */}
-                    <div className="pt-8 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
-                      <Link
-                        href="/assessment"
-                        className="inline-flex items-center justify-center px-7 py-3.5 rounded-full bg-[#00A884] hover:bg-[#008f70] text-white font-sans font-bold text-sm sm:text-base shadow-sm hover:shadow-md transition-all active:scale-[0.98]"
-                      >
-                        Book a doctor consultation
-                      </Link>
-                      <span className="text-xs sm:text-sm text-slate-500 italic">
-                        Your doctor decides whether treatment is right for you.
-                      </span>
                     </div>
                   </motion.div>
                 </AnimatePresence>
