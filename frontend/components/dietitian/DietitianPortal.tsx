@@ -43,6 +43,10 @@ import {
   CalendarDays,
   Trash2,
   Upload,
+  MoreVertical,
+  Check,
+  Layers,
+  ExternalLink,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import ProviderProfileEditor from '@/components/provider/ProviderProfileEditor'
@@ -279,6 +283,16 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
   const [uploadPlanNotes, setUploadPlanNotes] = useState('')
   const [uploadPlanFile, setUploadPlanFile] = useState<File | null>(null)
   const [uploadingPlan, setUploadingPlan] = useState(false)
+  const [planAssignMode, setPlanAssignMode] = useState<'upload' | 'template'>('upload')
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
+
+  // Consultation Row Action State
+  const [actionMenuOpenSessionId, setActionMenuOpenSessionId] = useState<string | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{
+    type: 'missed' | 'cancel'
+    sessionId: string
+    patientName: string
+  } | null>(null)
 
   const allPatientOptions = useMemo(() => {
     const map = new Map<string, { id: string; name: string }>()
@@ -355,7 +369,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
       }
 
       // Plans & Templates
-      if (activeSection === 'plans') {
+      if (activeSection === 'plans' || activeSection === 'consultations') {
         const [plansRes, tmplRes] = await Promise.all([
           fetch('/api/dietitian/plans', { headers }),
           fetch('/api/dietitian/templates', { headers }),
@@ -559,10 +573,17 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
       setError('Please select a patient.')
       return
     }
-    if (!uploadPlanFile) {
+
+    if (planAssignMode === 'upload' && !uploadPlanFile) {
       setError('Please select a nutrition plan file (PDF, image, or spreadsheet).')
       return
     }
+
+    if (planAssignMode === 'template' && !selectedTemplateId) {
+      setError('Please choose a template from your diet library.')
+      return
+    }
+
     setUploadingPlan(true)
     setError('')
     setSuccess('')
@@ -570,18 +591,33 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
       const { data: { session } } = await supabase.auth.getSession()
       const token = session?.access_token || ''
 
-      const formData = new FormData()
-      formData.append('file', uploadPlanFile)
-      formData.append('patientId', uploadPlanPatientId)
-      formData.append('planType', 'diet')
+      let attachmentUrl = ''
+      let attachmentType = ''
+      let finalMealSchedule = 'Follow personalized schedule in attached document'
 
-      const uploadRes = await fetch('/api/provider/plans/upload', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: formData,
-      })
-      const uploadData = await uploadRes.json()
-      if (!uploadRes.ok) throw new Error(uploadData.error || 'Failed to upload plan file.')
+      if (planAssignMode === 'upload') {
+        const formData = new FormData()
+        formData.append('file', uploadPlanFile!)
+        formData.append('patientId', uploadPlanPatientId)
+        formData.append('planType', 'diet')
+
+        const uploadRes = await fetch('/api/provider/plans/upload', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: formData,
+        })
+        const uploadData = await uploadRes.json()
+        if (!uploadRes.ok) throw new Error(uploadData.error || 'Failed to upload plan file.')
+        attachmentUrl = uploadData.attachmentUrl
+        attachmentType = uploadData.attachmentType
+      } else {
+        const tmpl = templates.find((t) => t.id === selectedTemplateId)
+        if (tmpl?.meals?.length) {
+          finalMealSchedule = JSON.stringify(tmpl.meals)
+        } else {
+          finalMealSchedule = tmpl?.instructions || 'Standard balanced metabolic meal routine'
+        }
+      }
 
       const planRes = await fetch('/api/provider/plans', {
         method: 'POST',
@@ -590,13 +626,13 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
           patientId: uploadPlanPatientId,
           appointmentId: uploadPlanAppointmentId || undefined,
           title: uploadPlanTitle,
-          description: uploadPlanNotes || 'Dietitian uploaded nutrition protocol',
-          attachmentUrl: uploadData.attachmentUrl,
-          attachmentType: uploadData.attachmentType,
+          description: uploadPlanNotes || 'Dietitian assigned clinical nutrition protocol',
+          attachmentUrl: attachmentUrl || undefined,
+          attachmentType: attachmentType || undefined,
           notes: uploadPlanNotes,
           caloriesPerDay: Number(uploadPlanCalories) || 1600,
           hydrationGoal: `${uploadPlanWater} L`,
-          mealSchedule: 'Follow personalized schedule in attached document',
+          mealSchedule: finalMealSchedule,
         }),
       })
       const planResult = await planRes.json()
@@ -604,16 +640,17 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
 
       setSuccess(
         planResult.consultationCompleted
-          ? 'Nutrition plan successfully uploaded! Consultation completed and wallet earnings credited.'
-          : 'Nutrition plan successfully uploaded and assigned to patient!'
+          ? 'Nutrition plan successfully assigned! Consultation completed and wallet earnings credited.'
+          : 'Nutrition plan successfully assigned to patient!'
       )
       setUploadPlanAppointmentId('')
       setShowUploadPlanModal(false)
       setUploadPlanFile(null)
       setUploadPlanNotes('')
+      setSelectedTemplateId('')
       await loadData()
     } catch (err: any) {
-      setError(err.message || 'Unable to upload nutrition plan.')
+      setError(err.message || 'Unable to assign nutrition plan.')
     } finally {
       setUploadingPlan(false)
     }
@@ -2155,90 +2192,242 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
 
               {dietitianConsultations.length > 0 ? (
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left min-w-[700px]">
+                  <table className="w-full text-left min-w-[760px]">
                     <thead>
                       <tr className="border-b border-[#E8DED4] text-[11px] font-black uppercase tracking-wider text-slate-400">
-                        <th className="py-3 px-2">Patient</th>
-                        <th className="py-3 px-2">Date</th>
-                        <th className="py-3 px-2">Time</th>
-                        <th className="py-3 px-2">Type</th>
-                        <th className="py-3 px-2">Status</th>
-                        <th className="py-3 px-2 text-right">Actions</th>
+                        <th className="py-3.5 px-3">Patient</th>
+                        <th className="py-3.5 px-3">Date &amp; Time</th>
+                        <th className="py-3.5 px-3">Consultation Type</th>
+                        <th className="py-3.5 px-3">Status</th>
+                        <th className="py-3.5 px-3 text-right">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#E8DED4]">
                       {dietitianConsultations.map((session) => {
                         const status = String(session.status || '').toLowerCase()
                         const terminal = ['completed', 'cancelled', 'cancelled_by_doctor', 'cancelled_by_patient', 'missed', 'missed_by_patient'].includes(status)
+                        const isMenuOpen = actionMenuOpenSessionId === session.id
+                        const initials = (session.patientName || 'Patient')
+                          .trim()
+                          .split(' ')
+                          .filter(Boolean)
+                          .map((n) => n[0])
+                          .slice(0, 2)
+                          .join('')
+                          .toUpperCase() || 'PT'
+
                         return (
-                          <tr key={session.id} className="text-xs">
-                            <td className="py-3.5 px-2 font-bold text-[#1A1F36]">{session.patientName}</td>
-                            <td className="py-3.5 px-2 text-slate-600">{formatDate(session.booking_date || null)}</td>
-                            <td className="py-3.5 px-2 text-slate-600">{formatTime(session.booking_time)}</td>
-                            <td className="py-3.5 px-2 font-semibold text-slate-700">{session.appointmentType || session.roleLabel || 'Nutrition Consult'}</td>
-                            <td className="py-3.5 px-2">
-                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
-                                status === 'completed' ? 'bg-[#DCFCE7] text-[#166534] border border-emerald-200' :
-                                status === 'attended' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
-                                status === 'scheduled' ? 'bg-[#E0F2FE] text-[#0369A1] border border-sky-200' :
-                                'bg-slate-100 text-slate-600'
-                              }`}>
-                                {status === 'attended' ? 'Attended – Pending Diet Plan' : (session.status || 'scheduled')}
+                          <tr key={session.id} className="text-xs hover:bg-[#FAF8F5]/60 transition-colors">
+                            {/* Patient Info with Avatar */}
+                            <td className="py-4 px-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-9 h-9 rounded-2xl bg-[#E6F4F1] text-[#0D9488] font-black text-xs flex items-center justify-center shrink-0 border border-teal-200/60 shadow-xs">
+                                  {initials}
+                                </div>
+                                <div>
+                                  <p className="font-bold text-[#1A1F36] text-sm leading-tight">{session.patientName}</p>
+                                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                                    ID: {session.patient_id ? `${session.patient_id.substring(0, 8)}...` : 'Patient'}
+                                  </p>
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Date & Time */}
+                            <td className="py-4 px-3">
+                              <p className="font-bold text-[#1A1F36] text-xs">{formatDate(session.booking_date || null)}</p>
+                              <p className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 mt-0.5">
+                                <Clock className="w-3 h-3 text-slate-400" />
+                                <span>{formatTime(session.booking_time)}</span>
+                              </p>
+                            </td>
+
+                            {/* Type */}
+                            <td className="py-4 px-3">
+                              <span className="inline-block px-2.5 py-1 rounded-lg bg-slate-100/80 text-slate-700 font-bold text-[11px]">
+                                {session.appointmentType || session.roleLabel || 'Nutrition Consult'}
                               </span>
                             </td>
-                            <td className="py-3.5 px-2 text-right">
-                              <div className="flex items-center justify-end gap-2">
+
+                            {/* Status */}
+                            <td className="py-4 px-3">
+                              {status === 'completed' ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#DCFCE7] text-[#166534] border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3 text-[#166534]" />
+                                  <span>Completed</span>
+                                </span>
+                              ) : status === 'attended' ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-900 border border-amber-300">
+                                  <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                  <span>Attended · Plan Pending</span>
+                                </span>
+                              ) : status === 'scheduled' ? (
+                                session.canJoin ? (
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-300 shadow-xs">
+                                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                                    <span>Live Now</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-[#E0F2FE] text-[#0369A1] border border-sky-200">
+                                    <Clock className="w-3 h-3 text-sky-600" />
+                                    <span>Scheduled</span>
+                                  </span>
+                                )
+                              ) : ['missed', 'missed_by_patient'].includes(status) ? (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-orange-50 text-orange-800 border border-orange-200">
+                                  <span>Missed by Patient</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
+                                  <span>{session.status || 'Cancelled'}</span>
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Actions Column */}
+                            <td className="py-4 px-3 text-right">
+                              <div className="flex items-center justify-end gap-2 relative">
+                                {/* State-Aware Primary CTA */}
                                 {session.canJoin && session.meetingUrl ? (
                                   <a
                                     href={session.meetingUrl}
                                     target="_blank"
                                     rel="opener"
-                                    className="px-3.5 py-1.5 rounded-lg bg-[#0D9488] text-white text-xs font-bold hover:bg-[#0F766E] shadow-sm"
+                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
                                   >
-                                    Join Call
+                                    <Video className="w-3.5 h-3.5" />
+                                    <span>Join Call</span>
                                   </a>
+                                ) : status === 'attended' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setUploadPlanPatientId(session.patient_id || '')
+                                      setUploadPlanAppointmentId(session.id || '')
+                                      setPlanAssignMode('upload')
+                                      setShowUploadPlanModal(true)
+                                    }}
+                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
+                                    title="Upload or assign nutrition plan to complete consultation and release wallet earnings"
+                                  >
+                                    <Upload className="w-3.5 h-3.5" />
+                                    <span>Upload Plan &amp; Complete</span>
+                                  </button>
+                                ) : status === 'completed' ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => setActiveSection('plans')}
+                                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-emerald-200 bg-emerald-50/60 text-[#166534] hover:bg-emerald-100 text-xs font-bold transition cursor-pointer"
+                                  >
+                                    <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
+                                    <span>View Plan</span>
+                                  </button>
+                                ) : terminal ? (
+                                  <span className="px-2.5 py-1.5 text-[11px] text-slate-400 font-semibold italic">
+                                    Ended
+                                  </span>
                                 ) : (
-                                  <span className="px-3 py-1.5 text-[11px] text-slate-400 font-semibold">
-                                    {terminal ? 'Ended' : 'Opens 15m prior'}
+                                  <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-500 text-[11px] font-semibold">
+                                    <Clock className="w-3 h-3 text-slate-400" />
+                                    <span>Opens 15m prior</span>
                                   </span>
                                 )}
+
+                                {/* More Options (••• Dropdown Menu) */}
                                 {!terminal && (
-                                  <>
-                                    {status === 'attended' ? (
-                                      <button
-                                        onClick={() => {
-                                          setUploadPlanPatientId(session.patient_id || '')
-                                          setUploadPlanAppointmentId(session.id || '')
-                                          setShowUploadPlanModal(true)
-                                        }}
-                                        className="px-3 py-1.5 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-bold shadow-xs flex items-center gap-1.5 cursor-pointer"
-                                        title="Upload patient's nutrition plan to complete consultation and release wallet earnings"
-                                      >
-                                        <Upload className="w-3.5 h-3.5" />
-                                        <span>Upload Plan &amp; Complete</span>
-                                      </button>
-                                    ) : (
-                                      <button
-                                        onClick={() => handleUpdateConsultation(session.id, 'complete')}
-                                        className="px-2.5 py-1.5 rounded-lg border border-[#E8DED4] text-slate-700 hover:bg-slate-50 text-[11px] font-bold"
-                                        title="Requires uploaded nutrition plan before completing"
-                                      >
-                                        Complete
-                                      </button>
+                                  <div className="relative">
+                                    <button
+                                      type="button"
+                                      onClick={() => setActionMenuOpenSessionId(isMenuOpen ? null : session.id)}
+                                      className="p-2 rounded-xl border border-slate-200 hover:border-slate-300 text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition cursor-pointer"
+                                      title="More session options"
+                                    >
+                                      <MoreVertical className="w-4 h-4" />
+                                    </button>
+
+                                    {isMenuOpen && (
+                                      <>
+                                        <div
+                                          className="fixed inset-0 z-20"
+                                          onClick={() => setActionMenuOpenSessionId(null)}
+                                        />
+                                        <div className="absolute right-0 top-full mt-1.5 w-52 rounded-2xl bg-white shadow-xl border border-slate-200/90 py-1.5 z-30 animate-in fade-in zoom-in-95 text-left divide-y divide-slate-100">
+                                          <div className="py-1">
+                                            {session.patient_id && (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setActionMenuOpenSessionId(null)
+                                                  const pat = patients.find((p) => p.id === session.patient_id)
+                                                  if (pat) {
+                                                    openPatientWorkspace(pat)
+                                                  } else if (session.patient_id) {
+                                                    setSelectedPatient({
+                                                      id: session.patient_id,
+                                                      patient_name: session.patientName,
+                                                    })
+                                                  }
+                                                  setActiveSection('patients')
+                                                }}
+                                                className="w-full text-left px-3.5 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-2 cursor-pointer"
+                                              >
+                                                <UserCheck className="w-4 h-4 text-slate-400" />
+                                                <span>View Patient Chart</span>
+                                              </button>
+                                            )}
+                                            {status === 'attended' && (
+                                              <button
+                                                type="button"
+                                                onClick={() => {
+                                                  setActionMenuOpenSessionId(null)
+                                                  setUploadPlanPatientId(session.patient_id || '')
+                                                  setUploadPlanAppointmentId(session.id || '')
+                                                  setPlanAssignMode('template')
+                                                  setShowUploadPlanModal(true)
+                                                }}
+                                                className="w-full text-left px-3.5 py-2 text-xs font-semibold text-[#0D9488] hover:bg-teal-50 flex items-center gap-2 cursor-pointer"
+                                              >
+                                                <Layers className="w-4 h-4 text-[#0D9488]" />
+                                                <span>Assign from Templates</span>
+                                              </button>
+                                            )}
+                                          </div>
+                                          <div className="py-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setActionMenuOpenSessionId(null)
+                                                setConfirmModal({
+                                                  type: 'missed',
+                                                  sessionId: session.id,
+                                                  patientName: session.patientName,
+                                                })
+                                              }}
+                                              className="w-full text-left px-3.5 py-2 text-xs font-semibold text-amber-700 hover:bg-amber-50 flex items-center gap-2 cursor-pointer"
+                                            >
+                                              <AlertTriangle className="w-4 h-4 text-amber-500" />
+                                              <span>Mark Missed by Patient</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setActionMenuOpenSessionId(null)
+                                                setConfirmModal({
+                                                  type: 'cancel',
+                                                  sessionId: session.id,
+                                                  patientName: session.patientName,
+                                                })
+                                              }}
+                                              className="w-full text-left px-3.5 py-2 text-xs font-semibold text-rose-700 hover:bg-rose-50 flex items-center gap-2 cursor-pointer"
+                                            >
+                                              <XCircle className="w-4 h-4 text-rose-500" />
+                                              <span>Cancel Consultation</span>
+                                            </button>
+                                          </div>
+                                        </div>
+                                      </>
                                     )}
-                                    <button
-                                      onClick={() => handleUpdateConsultation(session.id, 'missed')}
-                                      className="px-2.5 py-1.5 rounded-lg border border-[#FED7AA] bg-[#FFF7ED] text-[#C4622D] hover:bg-[#FFEDD5] text-[11px] font-bold"
-                                    >
-                                      Missed
-                                    </button>
-                                    <button
-                                      onClick={() => handleUpdateConsultation(session.id, 'cancel')}
-                                      className="px-2.5 py-1.5 rounded-lg border border-[#FCA5A5] bg-[#FEF2F2] text-[#B94D4D] hover:bg-[#FEE2E2] text-[11px] font-bold"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </>
+                                  </div>
                                 )}
                               </div>
                             </td>
@@ -2634,14 +2823,79 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
           </div>
         )}
 
-        {/* Upload Nutrition Plan Modal */}
+        {/* Confirm Destructive Consultation Action Modal (Missed / Cancel) */}
+        {confirmModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
+            <div className="w-full max-w-md bg-white rounded-3xl p-6 shadow-2xl border border-slate-100 space-y-4 animate-in fade-in zoom-in-95">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                    confirmModal.type === 'missed' ? 'bg-amber-100 text-amber-700' : 'bg-rose-100 text-rose-700'
+                  }`}
+                >
+                  {confirmModal.type === 'missed' ? (
+                    <AlertTriangle className="w-6 h-6" />
+                  ) : (
+                    <XCircle className="w-6 h-6" />
+                  )}
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-[#1A1F36]">
+                    {confirmModal.type === 'missed' ? 'Mark Consultation as Missed?' : 'Cancel Consultation?'}
+                  </h3>
+                  <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                    Patient: <span className="text-slate-900 font-bold">{confirmModal.patientName}</span>
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-xs text-slate-600 leading-relaxed">
+                {confirmModal.type === 'missed'
+                  ? 'Are you sure the patient did not attend this scheduled session? This consultation will be closed and recorded as missed by patient.'
+                  : 'Are you sure you want to cancel this scheduled consultation? The patient appointment status will be updated to cancelled.'}
+              </p>
+
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmModal(null)}
+                  className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Keep Session
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const { sessionId, type } = confirmModal
+                    setConfirmModal(null)
+                    await handleUpdateConsultation(sessionId, type)
+                  }}
+                  className={`flex-1 py-2.5 px-4 rounded-xl text-white text-xs font-bold shadow-md transition cursor-pointer ${
+                    confirmModal.type === 'missed'
+                      ? 'bg-[#C4622D] hover:bg-[#A34E20]'
+                      : 'bg-rose-600 hover:bg-rose-700'
+                  }`}
+                >
+                  {confirmModal.type === 'missed' ? 'Confirm Missed' : 'Confirm Cancel'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Upload or Assign Nutrition Plan Modal */}
         {showUploadPlanModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
             <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between pb-3 border-b border-slate-100">
                 <div className="flex items-center gap-2">
-                  <Upload className="w-5 h-5 text-[#0D9488]" />
-                  <h3 className="text-lg font-black text-[#1A1F36]">Upload Patient Nutrition Plan</h3>
+                  <div className="w-9 h-9 rounded-xl bg-teal-50 text-[#0D9488] flex items-center justify-center">
+                    <Upload className="w-5 h-5 text-[#0D9488]" />
+                  </div>
+                  <div>
+                    <h3 className="text-base font-black text-[#1A1F36]">Assign Patient Nutrition Plan</h3>
+                    <p className="text-[11px] text-slate-500 font-medium">Finalizes consultation &amp; releases consultation payout</p>
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -2649,6 +2903,34 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                   className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
                 >
                   <XCircle className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Mode Switcher Tabs */}
+              <div className="flex p-1 bg-slate-100 rounded-2xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => setPlanAssignMode('upload')}
+                  className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    planAssignMode === 'upload'
+                      ? 'bg-white text-[#0D9488] shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Upload File (PDF/Image)</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPlanAssignMode('template')}
+                  className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                    planAssignMode === 'template'
+                      ? 'bg-white text-[#0D9488] shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Layers className="w-3.5 h-3.5" />
+                  <span>From Saved Templates</span>
                 </button>
               </div>
 
@@ -2667,6 +2949,41 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                     ))}
                   </select>
                 </div>
+
+                {planAssignMode === 'template' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Select Nutrition Template *</label>
+                    <select
+                      value={selectedTemplateId}
+                      onChange={(e) => {
+                        const tmplId = e.target.value
+                        setSelectedTemplateId(tmplId)
+                        const tmpl = templates.find((t) => t.id === tmplId)
+                        if (tmpl) {
+                          setUploadPlanTitle(tmpl.name)
+                          if (tmpl.target_calories) setUploadPlanCalories(String(tmpl.target_calories))
+                          if (tmpl.water_target_liters) setUploadPlanWater(String(tmpl.water_target_liters))
+                          if (tmpl.description || tmpl.instructions) {
+                            setUploadPlanNotes(tmpl.description || tmpl.instructions || '')
+                          }
+                        }
+                      }}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                    >
+                      <option value="">-- Choose from your template library ({templates.length} available) --</option>
+                      {templates.map((tmpl) => (
+                        <option key={tmpl.id} value={tmpl.id}>
+                          {tmpl.name} ({tmpl.category} · {tmpl.target_calories || 1600} kcal)
+                        </option>
+                      ))}
+                    </select>
+                    {templates.length === 0 && (
+                      <p className="text-[11px] text-amber-600 mt-1 font-medium">
+                        No saved templates found. You can switch to "Upload File" or create templates in the Plans tab.
+                      </p>
+                    )}
+                  </div>
+                )}
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">Plan Title *</label>
@@ -2715,37 +3032,39 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                   />
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Plan Document / Chart (PDF, Image, Excel) *</label>
-                  <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 hover:bg-slate-50 transition">
-                    <div className="space-y-2 text-center">
-                      <Upload className="mx-auto h-8 w-8 text-slate-400" />
-                      <div className="flex text-xs text-slate-600 justify-center">
-                        <label
-                          htmlFor="plan-upload-input"
-                          className="relative cursor-pointer rounded-md font-bold text-[#0D9488] hover:text-[#0F766E] focus-within:outline-none"
-                        >
-                          <span>Choose file</span>
-                          <input
-                            id="plan-upload-input"
-                            type="file"
-                            required
-                            accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls"
-                            onChange={(e) => setUploadPlanFile(e.target.files?.[0] || null)}
-                            className="sr-only"
-                          />
-                        </label>
-                        <p className="pl-1 font-medium">or drag and drop</p>
+                {planAssignMode === 'upload' && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">Plan Document / Chart (PDF, Image, Excel) *</label>
+                    <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 hover:bg-slate-50 transition">
+                      <div className="space-y-2 text-center">
+                        <Upload className="mx-auto h-8 w-8 text-slate-400" />
+                        <div className="flex text-xs text-slate-600 justify-center">
+                          <label
+                            htmlFor="plan-upload-input"
+                            className="relative cursor-pointer rounded-md font-bold text-[#0D9488] hover:text-[#0F766E] focus-within:outline-none"
+                          >
+                            <span>Choose file</span>
+                            <input
+                              id="plan-upload-input"
+                              type="file"
+                              required={planAssignMode === 'upload'}
+                              accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls"
+                              onChange={(e) => setUploadPlanFile(e.target.files?.[0] || null)}
+                              className="sr-only"
+                            />
+                          </label>
+                          <p className="pl-1 font-medium">or drag and drop</p>
+                        </div>
+                        <p className="text-[11px] text-slate-400">PDF, JPG, PNG, WEBP, XLSX up to 10MB</p>
+                        {uploadPlanFile && (
+                          <p className="text-xs font-bold text-[#0D9488] mt-2 bg-emerald-50 py-1 px-2.5 rounded-lg inline-block">
+                            ✓ {uploadPlanFile.name} ({(uploadPlanFile.size / (1024 * 1024)).toFixed(2)} MB)
+                          </p>
+                        )}
                       </div>
-                      <p className="text-[11px] text-slate-400">PDF, JPG, PNG, WEBP, XLSX up to 10MB</p>
-                      {uploadPlanFile && (
-                        <p className="text-xs font-bold text-[#0D9488] mt-2 bg-emerald-50 py-1 px-2.5 rounded-lg inline-block">
-                          ✓ {uploadPlanFile.name} ({(uploadPlanFile.size / (1024 * 1024)).toFixed(2)} MB)
-                        </p>
-                      )}
                     </div>
                   </div>
-                </div>
+                )}
 
                 <div className="flex gap-2.5 pt-2">
                   <button
@@ -2760,7 +3079,11 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                     disabled={uploadingPlan}
                     className="flex-1 py-2.5 px-4 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-md shadow-emerald-900/20 transition disabled:opacity-50 cursor-pointer"
                   >
-                    {uploadingPlan ? 'Uploading & Assigning...' : 'Upload & Assign Plan'}
+                    {uploadingPlan
+                      ? 'Assigning Plan...'
+                      : planAssignMode === 'upload'
+                      ? 'Upload & Complete Session'
+                      : 'Assign Template & Complete'}
                   </button>
                 </div>
               </form>
