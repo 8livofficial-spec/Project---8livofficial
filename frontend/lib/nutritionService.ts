@@ -624,12 +624,12 @@ export async function getDietitianDashboardData(dietitianId: string, tenantId: s
   try {
     const { data: wAccount } = await supabaseAdmin
       .from('wallet_accounts')
-      .select('balance, available_balance')
+      .select('current_balance')
       .eq('provider_id', dietitianId)
       .maybeSingle()
 
     if (wAccount) {
-      walletBalance = Number(wAccount.available_balance ?? wAccount.balance ?? 0)
+      walletBalance = Number(wAccount.current_balance ?? 0)
     } else {
       const { data: pWallet } = await supabaseAdmin
         .from('provider_wallets')

@@ -307,6 +307,18 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
     return Array.from(map.values())
   }, [patients, dietitianConsultations])
 
+  // Computed Today & Agenda for Clean Clinical Dashboard
+  const todayDateStr = useMemo(() => new Date().toISOString().split('T')[0], [])
+  const todayConsultations = useMemo(() => {
+    return dietitianConsultations.filter((c) => c.booking_date === todayDateStr)
+  }, [dietitianConsultations, todayDateStr])
+
+  const pendingPlanConsultations = useMemo(() => {
+    return dietitianConsultations.filter(
+      (c) => String(c.status || '').toLowerCase() === 'attended'
+    )
+  }, [dietitianConsultations])
+
   // 1. Initial Authentication & User Verification
   useEffect(() => {
     async function checkAuth() {
@@ -942,177 +954,392 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
           </div>
         )}
 
-        {/* SECTION 1: DASHBOARD */}
+        {/* SECTION 1: DASHBOARD (Clean & Neat Clinical Cockpit) */}
         {activeSection === 'dashboard' && (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            {/* Header Greeting & Action Bar */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs">
               <div>
-                <p className="text-xs font-black uppercase tracking-wider text-[#0D9488]">Clinical Care Center</p>
-                <h1 className="text-2xl md:text-3xl font-black text-[#1A1F36]">Dietitian Care Dashboard</h1>
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                  <p className="text-[11px] font-black uppercase tracking-wider text-[#0D9488]">Clinical Nutrition Center</p>
+                </div>
+                <h1 className="text-2xl md:text-3xl font-black text-[#1A1F36] mt-1">
+                  Welcome, {providerUser?.name || 'Doctor / Dietitian'}
+                </h1>
+                <p className="text-xs text-slate-500 font-semibold mt-1">
+                  {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })} · Daily Clinical Workspace
+                </p>
               </div>
-              <div className="flex items-center gap-3">
+
+              <div className="flex items-center gap-2.5 flex-wrap">
                 <button
-                  onClick={() => { setActiveSection('plans'); setEditingPlan({ plan_name: 'Custom Clinical Nutrition Plan', meals: [] }) }}
-                  className="rounded-full bg-[#0D9488] hover:bg-[#0F766E] text-white px-5 py-2.5 text-xs font-bold transition-all flex items-center gap-2 shadow-sm"
+                  onClick={() => {
+                    setUploadPlanPatientId('')
+                    setUploadPlanAppointmentId('')
+                    setPlanAssignMode('upload')
+                    setShowUploadPlanModal(true)
+                  }}
+                  className="rounded-2xl bg-[#0D9488] hover:bg-[#0F766E] text-white px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer"
                 >
-                  <FilePlus className="w-4 h-4" />
-                  <span>Create Nutrition Plan</span>
+                  <Plus className="w-4 h-4" />
+                  <span>Assign Nutrition Plan</span>
+                </button>
+                <button
+                  onClick={() => setActiveSection('schedule')}
+                  className="rounded-2xl border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
+                >
+                  <CalendarDays className="w-4 h-4 text-slate-400" />
+                  <span>Manage Slots</span>
                 </button>
               </div>
             </div>
 
-            {/* 8 Real Dashboard Metrics Cards */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="rounded-2xl border border-[#E8DED4] bg-white p-4 shadow-sm">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">My Patients</p>
-                <p className="mt-2 text-2xl md:text-3xl font-black text-[#1A1F36]">{dashboardMetrics?.myPatients ?? patients.length}</p>
-                <p className="text-[10px] font-semibold text-slate-400 mt-1">Assigned care program</p>
-              </div>
-
-              <div className="rounded-2xl border border-[#E8DED4] bg-white p-4 shadow-sm">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Today's Sessions</p>
-                <p className="mt-2 text-2xl md:text-3xl font-black text-[#0D9488]">{dashboardMetrics?.todaySessions ?? 0}</p>
-                <p className="text-[10px] font-semibold text-slate-400 mt-1">Scheduled video calls</p>
-              </div>
-
-              <div className="rounded-2xl border border-[#E8DED4] bg-white p-4 shadow-sm">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Upcoming Sessions</p>
-                <p className="mt-2 text-2xl md:text-3xl font-black text-[#1A1F36]">{dashboardMetrics?.upcomingSessions ?? 0}</p>
-                <p className="text-[10px] font-semibold text-slate-400 mt-1">Next 7 calendar days</p>
-              </div>
-
-              <div className="rounded-2xl border border-[#E8DED4] bg-white p-4 shadow-sm">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Active Plans</p>
-                <p className="mt-2 text-2xl md:text-3xl font-black text-[#0D9488]">{dashboardMetrics?.activePlans ?? 0}</p>
-                <p className="text-[10px] font-semibold text-slate-400 mt-1">Published & acknowledged</p>
-              </div>
-
-              <div className="rounded-2xl border border-[#E8DED4] bg-white p-4 shadow-sm">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Available Slots</p>
-                <p className="mt-2 text-2xl md:text-3xl font-black text-[#0D9488]">
-                  {availability.filter(s => s.status === 'AVAILABLE' && s.is_available).length}
+            {/* 4 Focused Clinical Vitals */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Card 1: Today's Appointments */}
+              <div
+                onClick={() => setActiveSection('consultations')}
+                className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xs hover:border-[#0D9488]/50 hover:shadow-md transition-all cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Today's Sessions</span>
+                  <div className="w-8 h-8 rounded-xl bg-teal-50 text-[#0D9488] flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Video className="w-4 h-4" />
+                  </div>
+                </div>
+                <p className="mt-3 text-3xl font-black text-[#1A1F36]">{todayConsultations.length}</p>
+                <p className="text-[11px] font-semibold text-slate-500 mt-1">
+                  {todayConsultations.length === 1 ? '1 video call scheduled today' : `${todayConsultations.length} video calls scheduled today`}
                 </p>
-                <p className="text-[10px] font-semibold text-slate-400 mt-1">Open for patient booking</p>
               </div>
 
-              <div className="rounded-2xl border border-[#E8DED4] bg-white p-4 shadow-sm">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Plans Due Review</p>
-                <p className="mt-2 text-2xl md:text-3xl font-black text-[#B94D4D]">{dashboardMetrics?.plansRequiringReview ?? 0}</p>
-                <p className="text-[10px] font-semibold text-slate-400 mt-1">Review date within 7d</p>
+              {/* Card 2: Pending Diet Plans (Alert) */}
+              <div
+                onClick={() => {
+                  if (pendingPlanConsultations.length > 0) {
+                    const first = pendingPlanConsultations[0]
+                    setUploadPlanPatientId(first.patient_id || '')
+                    setUploadPlanAppointmentId(first.id || '')
+                    setPlanAssignMode('upload')
+                    setShowUploadPlanModal(true)
+                  } else {
+                    setActiveSection('consultations')
+                  }
+                }}
+                className={`rounded-3xl border p-5 shadow-xs transition-all cursor-pointer group ${
+                  pendingPlanConsultations.length > 0
+                    ? 'border-amber-300 bg-amber-50/40 hover:bg-amber-50/70 hover:shadow-md'
+                    : 'border-slate-200/80 bg-white hover:border-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className={`text-[11px] font-black uppercase tracking-wider ${pendingPlanConsultations.length > 0 ? 'text-amber-700' : 'text-slate-400'}`}>
+                    Plans to Deliver
+                  </span>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center group-hover:scale-110 transition-transform ${
+                    pendingPlanConsultations.length > 0 ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-400'
+                  }`}>
+                    <AlertTriangle className="w-4 h-4" />
+                  </div>
+                </div>
+                <div className="flex items-baseline gap-2 mt-3">
+                  <p className={`text-3xl font-black ${pendingPlanConsultations.length > 0 ? 'text-amber-800' : 'text-slate-800'}`}>
+                    {pendingPlanConsultations.length}
+                  </p>
+                  {pendingPlanConsultations.length > 0 && (
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-200/60 text-amber-900">
+                      Action Needed
+                    </span>
+                  )}
+                </div>
+                <p className={`text-[11px] font-semibold mt-1 ${pendingPlanConsultations.length > 0 ? 'text-amber-700' : 'text-slate-500'}`}>
+                  {pendingPlanConsultations.length > 0 ? 'Upload to release wallet credit' : 'All consultation plans delivered'}
+                </p>
               </div>
 
-              <div className="rounded-2xl border border-[#E8DED4] bg-white p-4 shadow-sm">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Unreviewed Logs</p>
-                <p className="mt-2 text-2xl md:text-3xl font-black text-[#1A1F36]">{dashboardMetrics?.unreviewedFoodLogs ?? 0}</p>
-                <p className="text-[10px] font-semibold text-slate-400 mt-1">Pending clinical feedback</p>
+              {/* Card 3: Active Patients */}
+              <div
+                onClick={() => setActiveSection('patients')}
+                className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xs hover:border-[#0D9488]/50 hover:shadow-md transition-all cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Active Patients</span>
+                  <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Users className="w-4 h-4" />
+                  </div>
+                </div>
+                <p className="mt-3 text-3xl font-black text-[#1A1F36]">{patients.length}</p>
+                <p className="text-[11px] font-semibold text-slate-500 mt-1">Enrolled under your clinical care</p>
               </div>
 
-              <div className="rounded-2xl border border-[#E8DED4] bg-white p-4 shadow-sm">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Wallet Balance</p>
-                <p className="mt-2 text-2xl md:text-3xl font-black text-[#0D9488]">{formatInr(dashboardMetrics?.walletBalance ?? walletState.balance ?? 0)}</p>
-                <p className="text-[10px] font-semibold text-slate-400 mt-1">Available for withdrawal</p>
+              {/* Card 4: Wallet Balance */}
+              <div
+                onClick={() => setActiveSection('wallet')}
+                className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-xs hover:border-[#0D9488]/50 hover:shadow-md transition-all cursor-pointer group"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Available Wallet</span>
+                  <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center group-hover:scale-110 transition-transform">
+                    <Wallet className="w-4 h-4" />
+                  </div>
+                </div>
+                <p className="mt-3 text-3xl font-black text-[#0D9488]">
+                  {formatInr(walletState.balance || 0)}
+                </p>
+                <p className="text-[11px] font-semibold text-slate-500 mt-1 flex items-center gap-1">
+                  <span>Available for payout</span>
+                  <span className="text-[#0D9488] font-bold group-hover:underline">· Withdraw ↗</span>
+                </p>
               </div>
             </div>
 
-            {/* Today's Actions & Attention */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Today's Actions */}
-              <div className="rounded-2xl border border-[#E8DED4] bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-black text-[#1A1F36] flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-[#0D9488]" />
-                    Today's Priority Actions
-                  </h3>
-                  <span className="text-xs font-bold text-slate-400">{todaysActions.length} Actions</span>
-                </div>
-
-                {todaysActions.length > 0 ? (
-                  <div className="space-y-3">
-                    {todaysActions.map((action) => (
-                      <div key={action.id} className="p-3.5 rounded-xl bg-[#FAF8F5] border border-[#E8DED4] flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-bold text-[#1A1F36]">{action.title}</p>
-                          <p className="text-[10px] text-slate-400 mt-0.5">{new Date(action.timestamp).toLocaleDateString()}</p>
-                        </div>
-                        <button
-                          onClick={() => {
-                            if (action.type === 'PLAN_REVIEW') setActiveSection('plans')
-                            else router.push(action.actionUrl)
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-[#0D9488] text-white text-[11px] font-bold hover:bg-[#0F766E] transition-colors whitespace-nowrap"
-                        >
-                          {action.actionLabel}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-8 text-center bg-[#FAF8F5] rounded-xl text-slate-400 text-xs font-bold">
-                    No pending clinical actions scheduled for today.
-                  </div>
-                )}
-              </div>
-
-              {/* Patients Needing Attention */}
-              <div className="rounded-2xl border border-[#E8DED4] bg-white p-5 shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-base font-black text-[#1A1F36] flex items-center gap-2">
-                    <AlertTriangle className="w-4 h-4 text-[#C4622D]" />
-                    Patients Needing Attention
-                  </h3>
-                  <span className="text-xs font-bold text-slate-400">{patientsNeedingAttention.length} Alerts</span>
-                </div>
-
-                {patientsNeedingAttention.length > 0 ? (
-                  <div className="space-y-3">
-                    {patientsNeedingAttention.map((attn) => (
-                      <div key={attn.id} className="p-3.5 rounded-xl bg-[#FFF7ED] border border-[#FED7AA] flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-xs font-bold text-[#9A3412]">{attn.title}</p>
-                          <span className="inline-block mt-1 px-2 py-0.5 text-[9px] font-black uppercase rounded bg-[#EA580C]/20 text-[#9A3412]">
-                            Action Required
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => {
-                            if (attn.type === 'FOOD_LOGS') setActiveSection('food-logs')
-                            else setActiveSection('plans')
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-[#C4622D] text-white text-[11px] font-bold hover:bg-[#B25524] transition-colors whitespace-nowrap"
-                        >
-                          {attn.actionLabel}
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="p-8 text-center bg-[#FAF8F5] rounded-xl text-slate-400 text-xs font-bold">
-                    All patient food logs and reviews are up to date!
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Recent Audit Activity Feed */}
-            <div className="rounded-2xl border border-[#E8DED4] bg-white p-5 shadow-sm">
-              <h3 className="text-base font-black text-[#1A1F36] mb-4 flex items-center gap-2">
-                <Activity className="w-4 h-4 text-[#0D9488]" />
-                Recent Clinical Activity
-              </h3>
-              {recentActivity.length > 0 ? (
-                <div className="divide-y divide-slate-100">
-                  {recentActivity.map((act) => (
-                    <div key={act.id} className="py-2.5 flex items-center justify-between text-xs">
-                      <div>
-                        <span className="font-bold text-[#1A1F36] capitalize">{act.action?.replace(/_/g, ' ').toLowerCase()}</span>
-                        <span className="text-slate-400 ml-2">({act.resourceType})</span>
-                      </div>
-                      <span className="text-slate-400 text-[10px]">{new Date(act.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+            {/* Main Clinical Columns */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+              {/* Left Column (7 cols): Today's Schedule & Telehealth */}
+              <div className="lg:col-span-7 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-teal-50 text-[#0D9488] flex items-center justify-center">
+                      <Clock className="w-4 h-4" />
                     </div>
-                  ))}
+                    <div>
+                      <h2 className="text-base font-black text-[#1A1F36]">Today's Video Consultations</h2>
+                      <p className="text-[11px] text-slate-400 font-medium">Your scheduled telehealth appointments for today</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setActiveSection('consultations')}
+                    className="text-xs font-bold text-[#0D9488] hover:underline cursor-pointer"
+                  >
+                    View All Calls →
+                  </button>
+                </div>
+
+                {todayConsultations.length > 0 ? (
+                  <div className="space-y-3">
+                    {todayConsultations.map((sess) => {
+                      const sessStatus = String(sess.status || '').toLowerCase()
+                      const sessInitials = (sess.patientName || 'Patient')
+                        .trim()
+                        .split(' ')
+                        .filter(Boolean)
+                        .map((n) => n[0])
+                        .slice(0, 2)
+                        .join('')
+                        .toUpperCase() || 'PT'
+
+                      return (
+                        <div
+                          key={sess.id}
+                          className="p-4 rounded-2xl bg-[#FAF8F5]/80 border border-slate-200/70 hover:border-slate-300 hover:bg-[#FAF8F5] transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-2xl bg-teal-50 text-[#0D9488] font-black text-xs flex items-center justify-center shrink-0 border border-teal-200/50">
+                              {sessInitials}
+                            </div>
+                            <div>
+                              <p className="font-bold text-sm text-[#1A1F36]">{sess.patientName}</p>
+                              <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium mt-0.5">
+                                <span className="flex items-center gap-1 font-semibold text-slate-700">
+                                  <Clock className="w-3 h-3 text-slate-400" />
+                                  {formatTime(sess.booking_time)}
+                                </span>
+                                <span>·</span>
+                                <span>{sess.appointmentType || 'Nutrition Care'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-2 self-end sm:self-auto">
+                            {sessStatus === 'attended' ? (
+                              <button
+                                onClick={() => {
+                                  setUploadPlanPatientId(sess.patient_id || '')
+                                  setUploadPlanAppointmentId(sess.id || '')
+                                  setPlanAssignMode('upload')
+                                  setShowUploadPlanModal(true)
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
+                              >
+                                <Upload className="w-3.5 h-3.5" />
+                                <span>Upload Plan</span>
+                              </button>
+                            ) : sessStatus === 'completed' ? (
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                <span>Completed</span>
+                              </span>
+                            ) : sess.canJoin && sess.meetingUrl ? (
+                              <a
+                                href={sess.meetingUrl}
+                                target="_blank"
+                                rel="opener"
+                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
+                              >
+                                <Video className="w-3.5 h-3.5" />
+                                <span>Join Call</span>
+                              </a>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-500 text-[11px] font-semibold">
+                                <Clock className="w-3 h-3 text-slate-400" />
+                                <span>Opens 15m prior</span>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center bg-[#FAF8F5] rounded-2xl border border-dashed border-slate-200 space-y-2">
+                    <CalendarDays className="w-8 h-8 text-slate-300 mx-auto" />
+                    <p className="text-sm font-bold text-[#1A1F36]">No consultations scheduled for today</p>
+                    <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                      Patients book sessions based on your availability slots. You can add or adjust your hours anytime.
+                    </p>
+                    <button
+                      onClick={() => setActiveSection('schedule')}
+                      className="mt-2 inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-slate-200 hover:bg-white text-xs font-bold text-slate-700 transition cursor-pointer"
+                    >
+                      <span>Manage Available Slots</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column (5 cols): Action Required (Pending Plans) */}
+              <div className="lg:col-span-5 bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-700 flex items-center justify-center">
+                      <AlertTriangle className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h2 className="text-base font-black text-[#1A1F36]">Pending Plan Deliveries</h2>
+                      <p className="text-[11px] text-slate-400 font-medium">Attended calls needing diet plans to release payout</p>
+                    </div>
+                  </div>
+                </div>
+
+                {pendingPlanConsultations.length > 0 ? (
+                  <div className="space-y-3">
+                    {pendingPlanConsultations.slice(0, 4).map((pConsult) => (
+                      <div
+                        key={pConsult.id}
+                        className="p-3.5 rounded-2xl bg-amber-50/50 border border-amber-200/80 flex items-center justify-between gap-3"
+                      >
+                        <div>
+                          <p className="font-bold text-xs text-[#1A1F36]">{pConsult.patientName}</p>
+                          <p className="text-[10px] text-amber-800 font-medium mt-0.5">
+                            Attended on {formatDate(pConsult.booking_date || null)} · Claim ₹250
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setUploadPlanPatientId(pConsult.patient_id || '')
+                            setUploadPlanAppointmentId(pConsult.id || '')
+                            setPlanAssignMode('upload')
+                            setShowUploadPlanModal(true)
+                          }}
+                          className="px-3 py-1.5 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-bold shadow-xs whitespace-nowrap cursor-pointer"
+                        >
+                          Assign Plan
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-8 text-center bg-[#FAF8F5] rounded-2xl border border-dashed border-slate-200 space-y-2">
+                    <CheckCircle2 className="w-8 h-8 text-emerald-500 mx-auto" />
+                    <p className="text-sm font-bold text-[#1A1F36]">All consultation plans delivered!</p>
+                    <p className="text-xs text-slate-400">
+                      No patients are currently waiting for a nutrition plan. All completed consultations have been credited to your wallet.
+                    </p>
+                  </div>
+                )}
+
+                {/* Quick Shortcuts Box */}
+                <div className="pt-2">
+                  <div className="p-4 rounded-2xl bg-[#FAF8F5] border border-slate-200/70 space-y-2">
+                    <p className="text-xs font-bold text-slate-700">Quick Clinical Shortcuts</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setActiveSection('patients')}
+                        className="p-2.5 rounded-xl bg-white border border-slate-200 text-left hover:border-slate-300 transition cursor-pointer"
+                      >
+                        <p className="text-xs font-bold text-[#1A1F36]">Search Patients</p>
+                        <p className="text-[10px] text-slate-400">View intake &amp; history</p>
+                      </button>
+                      <button
+                        onClick={() => setActiveSection('plans')}
+                        className="p-2.5 rounded-xl bg-white border border-slate-200 text-left hover:border-slate-300 transition cursor-pointer"
+                      >
+                        <p className="text-xs font-bold text-[#1A1F36]">Plan Templates</p>
+                        <p className="text-[10px] text-slate-400">Pre-built diet charts</p>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Bottom Row: Active Patient Roster Preview */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200/80 shadow-xs space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-base font-black text-[#1A1F36]">Your Active Patients</h2>
+                    <p className="text-[11px] text-slate-400 font-medium">Quick access to medical intake and dietary tracking</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setActiveSection('patients')}
+                  className="text-xs font-bold text-[#0D9488] hover:underline cursor-pointer"
+                >
+                  View All ({patients.length}) →
+                </button>
+              </div>
+
+              {patients.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                  {patients.slice(0, 4).map((pat) => {
+                    const initials = (pat.patient_name || 'Patient')
+                      .trim()
+                      .split(' ')
+                      .filter(Boolean)
+                      .map((n) => n[0])
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase() || 'PT'
+
+                    return (
+                      <div
+                        key={pat.id}
+                        onClick={() => openPatientWorkspace(pat)}
+                        className="p-4 rounded-2xl bg-[#FAF8F5]/80 border border-slate-200/70 hover:border-[#0D9488]/60 hover:bg-white hover:shadow-xs transition-all cursor-pointer flex items-center justify-between group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-2xl bg-teal-50 text-[#0D9488] font-bold text-xs flex items-center justify-center shrink-0 border border-teal-200/40">
+                            {initials}
+                          </div>
+                          <div>
+                            <p className="font-bold text-xs text-[#1A1F36] group-hover:text-[#0D9488] transition-colors">{pat.patient_name}</p>
+                            <p className="text-[10px] text-slate-400 mt-0.5">{pat.phone || pat.email || 'Active Patient'}</p>
+                          </div>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-[#0D9488] group-hover:translate-x-0.5 transition-all" />
+                      </div>
+                    )
+                  })}
                 </div>
               ) : (
-                <p className="text-xs text-slate-400 py-4 text-center">No recorded activity yet.</p>
+                <div className="p-6 text-center bg-[#FAF8F5] rounded-2xl border border-dashed border-slate-200 text-xs text-slate-400 font-medium">
+                  No assigned patients yet. When patients subscribe to clinical nutrition, they will appear here.
+                </div>
               )}
             </div>
           </div>
