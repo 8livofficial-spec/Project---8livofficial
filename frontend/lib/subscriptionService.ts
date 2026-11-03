@@ -350,6 +350,8 @@ export async function checkPatientConsultationQuota(
   allowed: boolean
   maxAllowed: number
   usedCount: number
+  remaining: number
+  durationMonths: number
   isTrial: boolean
   planName: string
   reason?: string
@@ -379,7 +381,7 @@ export async function checkPatientConsultationQuota(
         .maybeSingle(),
       supabaseAdmin
         .from('payment_transactions')
-        .select('metadata, plan_name_snapshot, created_at')
+        .select('metadata, plan_name_snapshot, created_at, membership_tier')
         .eq('patient_id', patientId)
         .in('payment_type', ['membership', 'combined'])
         .in('status', ['success', 'paid'])
@@ -389,12 +391,12 @@ export async function checkPatientConsultationQuota(
       isDoctor
         ? supabaseAdmin
             .from('doctor_consultations')
-            .select('id', { count: 'exact', head: true })
+            .select('id, appointment_type, created_at')
             .eq('patient_id', patientId)
             .in('status', ['scheduled', 'calling', 'attended', 'approved', 'completed'])
         : supabaseAdmin
             .from('staff_consultations')
-            .select('id', { count: 'exact', head: true })
+            .select('id, staff_role, created_at')
             .eq('patient_id', patientId)
             .in('staff_role', staffRoles)
             .in('status', ['scheduled', 'calling', 'attended', 'completed'])
@@ -402,11 +404,34 @@ export async function checkPatientConsultationQuota(
 
     const sub = subRes.data
     const txn = txnRes.data
-    const usedCount = consultCountRes.count || 0
+    const membershipStartDate = sub?.start_date || txn?.created_at
+    const membershipStartMs = membershipStartDate ? new Date(membershipStartDate).getTime() : 0
+
+    let usedCount = 0
+    if (isDoctor) {
+      const docList = (consultCountRes.data as Array<{ id: string; appointment_type?: string | null; created_at: string }>) || []
+      const followUpConsults = docList.filter(c => {
+        const type = String(c.appointment_type || '').toUpperCase()
+        // The initial consultation was paid separately and must never be counted against membership follow-up quotas
+        if (type.includes('INITIAL')) return false
+        if (type.includes('FOLLOW_UP') || type.includes('CARE_PLAN')) return true
+        if (membershipStartMs > 0 && new Date(c.created_at).getTime() < (membershipStartMs - 60_000)) {
+          return false
+        }
+        return true
+      })
+      usedCount = followUpConsults.length
+    } else {
+      const staffList = (consultCountRes.data as Array<{ id: string; created_at: string }>) || []
+      const validStaffConsults = membershipStartMs > 0
+        ? staffList.filter(c => new Date(c.created_at).getTime() >= (membershipStartMs - 60_000))
+        : staffList
+      usedCount = validStaffConsults.length
+    }
 
     const planMetadata = (sub?.treatment_plans?.metadata || txn?.metadata || {}) as Record<string, any>
-    const planName = sub?.treatment_plans?.name || txn?.plan_name_snapshot || '1-Month Kickstart Trial'
-    const durationMonths = Number(sub?.treatment_plans?.duration_months || txn?.metadata?.duration_months || 1)
+    const planName = sub?.treatment_plans?.name || txn?.membership_tier || txn?.plan_name_snapshot || '1 Month'
+    const durationMonths = Number(sub?.treatment_plans?.duration_months || txn?.metadata?.durationMonths || txn?.metadata?.duration_months || 1)
 
     const isTrial = Boolean(planMetadata?.is_trial || durationMonths === 1 || /trial/i.test(planName))
 
@@ -423,11 +448,15 @@ export async function checkPatientConsultationQuota(
 
     const roleDisplay = isDoctor ? 'Doctor' : (normalizedRole === 'dietitian' ? 'Clinical Dietitian' : 'Fitness Coach')
 
+    const remaining = Math.max(0, maxConsultationsForRole - usedCount)
+
     if (usedCount >= maxConsultationsForRole) {
       const result = {
         allowed: false,
         maxAllowed: maxConsultationsForRole,
         usedCount,
+        remaining: 0,
+        durationMonths,
         isTrial,
         planName,
         reason: `Your ${planName} includes ${maxConsultationsForRole} ${roleDisplay} Consultation(s), which have already been scheduled or completed. Please upgrade or renew your treatment plan to schedule additional sessions.`,
@@ -440,6 +469,8 @@ export async function checkPatientConsultationQuota(
       allowed: true,
       maxAllowed: maxConsultationsForRole,
       usedCount,
+      remaining,
+      durationMonths,
       isTrial,
       planName,
     }
@@ -451,6 +482,8 @@ export async function checkPatientConsultationQuota(
       allowed: true,
       maxAllowed: 1,
       usedCount: 0,
+      remaining: 1,
+      durationMonths: 1,
       isTrial: false,
       planName: 'Care Plan',
     }
@@ -467,12 +500,16 @@ export async function getPatientConsultationSummary(patientId: string) {
     checkPatientConsultationQuota(patientId, 'fitness_coach'),
   ])
 
+  const durationMonths = doctorQuota.durationMonths || 1
+
   return {
     doctor: doctorQuota,
     dietitian: dietitianQuota,
     fitness_coach: fitnessQuota,
+    durationMonths,
     totalAllowed: doctorQuota.maxAllowed + dietitianQuota.maxAllowed + fitnessQuota.maxAllowed,
     totalUsed: doctorQuota.usedCount + dietitianQuota.usedCount + fitnessQuota.usedCount,
+    totalRemaining: doctorQuota.remaining + dietitianQuota.remaining + fitnessQuota.remaining,
     planName: doctorQuota.planName,
   }
 }

@@ -123,10 +123,26 @@ export default function PatientDashboardHome() {
 
   // Membership & Plan Duration Calculations
   const durationMonths = useMemo(() => {
+    // 1. Authoritative duration from active subscription / quota summary
+    if (typeof (consultationQuota as any)?.durationMonths === 'number' && (consultationQuota as any).durationMonths > 0) {
+      return (consultationQuota as any).durationMonths
+    }
+    if (consultationQuota?.doctor?.planName) {
+      const match = String(consultationQuota.doctor.planName).match(/(\d+)/)
+      if (match) return parseInt(match[1], 10)
+    }
+    // 2. Parse from assessment?.membership_tier (e.g. "1 Month Treatment Program" -> 1)
     const raw = assessment?.membership_tier
-    const n = Number(raw)
-    return !isNaN(n) && n > 0 ? n : 3
-  }, [assessment?.membership_tier])
+    if (raw) {
+      const match = String(raw).match(/(\d+)/)
+      if (match) {
+        const n = parseInt(match[1], 10)
+        if (n > 0) return n
+      }
+    }
+    // 3. Fallback to 1 (starter duration)
+    return 1
+  }, [assessment?.membership_tier, consultationQuota])
 
   const membershipLabel = `${durationMonths} Month Treatment Program`
 
@@ -167,22 +183,33 @@ export default function PatientDashboardHome() {
 
   // Consultation Quotas
   const quotas = useMemo(() => {
-    const defaultPerRole = durationMonths === 1 ? 1 : durationMonths === 5 ? 5 : 3
+    const docMax = consultationQuota?.doctor?.maxAllowed ?? durationMonths
+    const docUsed = consultationQuota?.doctor?.usedCount ?? 0
+    const docRemaining = consultationQuota?.doctor?.remaining ?? Math.max(0, docMax - docUsed)
+
+    const dietMax = consultationQuota?.dietitian?.maxAllowed ?? durationMonths
+    const dietUsed = consultationQuota?.dietitian?.usedCount ?? 0
+    const dietRemaining = consultationQuota?.dietitian?.remaining ?? Math.max(0, dietMax - dietUsed)
+
+    const fitMax = consultationQuota?.fitness_coach?.maxAllowed ?? durationMonths
+    const fitUsed = consultationQuota?.fitness_coach?.usedCount ?? 0
+    const fitRemaining = consultationQuota?.fitness_coach?.remaining ?? Math.max(0, fitMax - fitUsed)
+
     return {
       doctor: {
-        used: consultationQuota?.doctor?.usedCount ?? 0,
-        max: consultationQuota?.doctor?.maxAllowed ?? defaultPerRole,
-        remaining: consultationQuota?.doctor?.remaining ?? Math.max(0, defaultPerRole - (consultationQuota?.doctor?.usedCount ?? 0)),
+        used: docUsed,
+        max: docMax,
+        remaining: docRemaining,
       },
       dietitian: {
-        used: consultationQuota?.dietitian?.usedCount ?? 0,
-        max: consultationQuota?.dietitian?.maxAllowed ?? defaultPerRole,
-        remaining: consultationQuota?.dietitian?.remaining ?? Math.max(0, defaultPerRole - (consultationQuota?.dietitian?.usedCount ?? 0)),
+        used: dietUsed,
+        max: dietMax,
+        remaining: dietRemaining,
       },
       fitness_coach: {
-        used: consultationQuota?.fitness_coach?.usedCount ?? 0,
-        max: consultationQuota?.fitness_coach?.maxAllowed ?? defaultPerRole,
-        remaining: consultationQuota?.fitness_coach?.remaining ?? Math.max(0, defaultPerRole - (consultationQuota?.fitness_coach?.usedCount ?? 0)),
+        used: fitUsed,
+        max: fitMax,
+        remaining: fitRemaining,
       },
     }
   }, [consultationQuota, durationMonths])
