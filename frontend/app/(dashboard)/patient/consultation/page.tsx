@@ -219,13 +219,20 @@ export default function ConsultationSchedulingPage() {
   const appointmentType = isActiveMemberFollowUp ? DOCTOR_FOLLOW_UP : INITIAL_DOCTOR_CONSULTATION
 
   const requestedRole = searchParams.get('role') || searchParams.get('tab')
-  const initialTab: ProviderRoleTab = (requestedRole === 'dietitian' || requestedRole === 'nutritionist')
+  const initialTab: ProviderRoleTab = (isActiveMemberFollowUp && (requestedRole === 'dietitian' || requestedRole === 'nutritionist'))
     ? 'dietitian'
-    : (requestedRole === 'fitness_coach' || requestedRole === 'trainer')
+    : (isActiveMemberFollowUp && (requestedRole === 'fitness_coach' || requestedRole === 'trainer'))
       ? 'trainer'
       : 'doctor'
 
   const [activeProviderTab, setActiveProviderTab] = useState<ProviderRoleTab>(initialTab)
+
+  // Strict clinical rule: First consultation must always and exclusively be with a Doctor
+  useEffect(() => {
+    if (isPatientDataReady && !isActiveMemberFollowUp && activeProviderTab !== 'doctor') {
+      setActiveProviderTab('doctor')
+    }
+  }, [isPatientDataReady, isActiveMemberFollowUp, activeProviderTab])
   const [quotas, setQuotas] = useState<{
     doctor?: { allowed: boolean; maxAllowed: number; usedCount: number; reason?: string };
     dietitian?: { allowed: boolean; maxAllowed: number; usedCount: number; reason?: string };
@@ -1076,7 +1083,7 @@ export default function ConsultationSchedulingPage() {
       )}
 
       {/* Main Content */}
-      {(isActiveMemberFollowUp || activeProviderTab !== 'doctor') ? (
+      {isActiveMemberFollowUp ? (
         /* ═════════════════════════════════════════════════════════════════════
            IN-APP CONSULTATION UI (Active Members / Follow-Up Care)
            ═════════════════════════════════════════════════════════════════════ */
@@ -1532,57 +1539,9 @@ export default function ConsultationSchedulingPage() {
                 <p className="text-base mt-2" style={{ color: designTokens.colors.textSecondary }}>
                   {reusePaymentFromBookingId
                     ? 'Choose a new consultation slot. Your eligible consultation payment will be reused.'
-                    : `Select a consultation time that fits your schedule. We will reserve your chosen time with an eligible ${currentTabMeta.label.toLowerCase()}.`}
+                    : 'Select a consultation time that fits your schedule. We will reserve your chosen time with an eligible doctor.'}
                 </p>
               </div>
-            </div>
-          </div>
-
-          {/* Care Team Specialist Selector */}
-          <div className="mb-8">
-            <div className="mb-3">
-              <h2 className="text-sm font-bold text-slate-800 font-sora uppercase tracking-wider">
-                Select Care Specialist
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Book a 1:1 dedicated session with any member of your clinical team
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {PROVIDER_TABS.map((tab) => {
-                const Icon = tab.icon
-                const isActive = activeProviderTab === tab.id
-                return (
-                  <button
-                    key={tab.id}
-                    type="button"
-                    onClick={() => handleTabSwitch(tab.id)}
-                    className={`p-4 rounded-2xl border text-left transition-all cursor-pointer relative flex items-center gap-3.5 ${
-                      isActive
-                        ? 'bg-white border-[#00A884] ring-2 ring-[#00A884]/20 shadow-sm'
-                        : 'bg-white hover:bg-slate-50/80 border-slate-200/80 shadow-xs hover:border-slate-300'
-                    }`}
-                  >
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                      isActive ? 'bg-[#00A884] text-white shadow-xs' : 'bg-slate-100 text-slate-600'
-                    }`}>
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-1">
-                        <p className="text-sm font-bold text-slate-900 font-sora truncate">{tab.label}</p>
-                        {isActive && (
-                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-2 py-0.5 rounded-full">
-                            Selected
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-500 truncate mt-0.5">{tab.sublabel}</p>
-                    </div>
-                  </button>
-                )
-              })}
             </div>
           </div>
 
