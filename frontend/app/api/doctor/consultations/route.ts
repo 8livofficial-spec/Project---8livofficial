@@ -12,6 +12,7 @@ import { invalidateDoctorAvailabilityCache } from '@/lib/patientAppointmentBooki
 import { invalidateSlotsCache } from '@/lib/appointmentAvailability';
 import { invalidatePatientApiDashboardCache } from '@/lib/patientDashboardCache';
 import { createStreamMeeting } from '@/services/video/meeting.service';
+import { serverCache } from '@/lib/serverCache';
 
 type ConsultationRow = {
   id: string;
@@ -770,11 +771,12 @@ export async function PATCH(req: Request) {
         return NextResponse.json({ error: 'Completion decision must be approved or rejected.' }, { status: 400 });
       }
 
-      if (consultation.is_completed && ['approved', 'rejected'].includes(currentStatus)) {
+      if (consultation.is_completed && ['approved', 'rejected', 'completed'].includes(currentStatus)) {
         let retryPayout = { credited: false, reason: isAdminAction ? 'admin_action' : 'pending_review' };
-        if (!isAdminAction) {
+        if (!isAdminAction && consultation.doctor_id) {
           try {
             retryPayout = await creditDoctorWalletOnce(consultation.doctor_id, consultation.patient_id, consultation.id, appointmentType);
+            serverCache.invalidate(`wallet:${consultation.doctor_id}`);
           } catch (payoutError) {
             console.error('Completed consultation payout retry requires review:', payoutError);
           }
@@ -936,9 +938,10 @@ export async function PATCH(req: Request) {
       }
 
       let payout = { credited: false, reason: isAdminAction ? 'admin_action' : 'pending_review', amount: 0 };
-      if (!isAdminAction) {
+      if (!isAdminAction && consultation.doctor_id) {
         try {
           payout = await creditDoctorWalletOnce(consultation.doctor_id, consultation.patient_id, consultation.id, appointmentType);
+          serverCache.invalidate(`wallet:${consultation.doctor_id}`);
         } catch (payoutError) {
           // Clinical completion is already durable at this point. A wallet schema
           // or payout failure must be reconciled separately, not reported as a

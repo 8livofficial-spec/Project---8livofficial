@@ -4107,7 +4107,10 @@ export default function DoctorDashboard() {
             }}
             onSuccess={(newRx, signed) => {
               loadDoctorPrescriptions();
-              if (doctor) loadConsultations(doctor.id);
+              if (doctor) {
+                loadConsultations(doctor.id);
+                loadWallet(doctor.id);
+              }
               if (signed) {
                 setOfficialRxView(newRx);
               }

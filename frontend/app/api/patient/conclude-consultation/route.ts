@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabaseServer';
 import { getAuthenticatedUser } from '@/lib/apiSecurity';
 import { updatePatientJourneyState } from '@/lib/patientJourneyServer';
 import { invalidatePatientApiDashboardCache } from '@/lib/patientDashboardCache';
+import { creditCompletedConsultation } from '@/lib/walletLedger';
+import { serverCache } from '@/lib/serverCache';
 
 function sanitizeMatchTarget(target: string): string {
   if (target.startsWith('https://')) {
@@ -76,6 +78,17 @@ export async function POST(req: Request) {
             updated_at: now
           })
           .eq('id', docConsult.id);
+
+        if (docConsult.doctor_id && ['attended', 'completed'].includes(nextStatus)) {
+          await creditCompletedConsultation({
+            providerId: docConsult.doctor_id,
+            patientId: docConsult.patient_id,
+            appointmentId: docConsult.id,
+            appointmentType: docConsult.appointment_type || 'INITIAL_CONSULTATION',
+            createdBy: docConsult.doctor_id,
+          }).catch((e) => console.warn('[conclude-consultation] creditCompletedConsultation notice:', e));
+          serverCache.invalidate(`wallet:${docConsult.doctor_id}`);
+        }
 
         // Check if patient already has an active membership
         const { data: existingMembership } = await supabaseAdmin

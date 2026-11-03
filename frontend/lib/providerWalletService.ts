@@ -1,4 +1,5 @@
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { creditCompletedConsultation } from '@/lib/walletLedger'
 
 export interface UnifiedWalletData {
   provider_id: string
@@ -49,6 +50,41 @@ export async function getUnifiedProviderWallet(
 
   const v2Id = v2Profile?.id || null
 
+  // 1.5. Self-Healing Auto-Reconciliation of Completed/Attended Consultations
+  try {
+    const { data: eligibleConsults } = await supabaseAdmin
+      .from('doctor_consultations')
+      .select('id, patient_id, doctor_id, status, is_completed, appointment_type, created_at')
+      .or(`doctor_id.eq.${userId},doctor_id.eq.${pId}`)
+      .in('status', ['approved', 'completed', 'attended']);
+
+    if (eligibleConsults && eligibleConsults.length > 0) {
+      const { data: existingCredits } = await supabaseAdmin
+        .from('wallet_ledger_transactions')
+        .select('appointment_id')
+        .or(`provider_id.eq.${userId},provider_id.eq.${pId}`)
+        .eq('transaction_type', 'CONSULTATION_CREDIT')
+        .eq('status', 'SUCCESS');
+
+      const creditedIds = new Set((existingCredits || []).map((c: any) => c.appointment_id));
+      const uncredited = eligibleConsults.filter((c: any) => !creditedIds.has(c.id));
+
+      if (uncredited.length > 0) {
+        for (const item of uncredited) {
+          await creditCompletedConsultation({
+            providerId: item.doctor_id || userId,
+            patientId: item.patient_id,
+            appointmentId: item.id,
+            appointmentType: item.appointment_type || 'INITIAL_CONSULTATION',
+            createdBy: item.doctor_id || userId,
+          }).catch((err) => console.warn(`[getUnifiedProviderWallet] auto-credit notice for ${item.id}:`, err));
+        }
+      }
+    }
+  } catch (reconcileErr) {
+    console.warn('[getUnifiedProviderWallet] auto-reconciliation warning:', reconcileErr);
+  }
+
   // 2. Query all ledgers and payouts in parallel
   const [
     { data: v3Wallet },
@@ -92,10 +128,32 @@ export async function getUnifiedProviderWallet(
   const v3Pending = Number(v3Wallet?.pending_balance || 0)
   const v3OnHold = Number(v3Wallet?.on_hold_balance || 0)
 
-  const legCurrent = Number(legWallet?.current_balance || 0)
+  const successCreditsSum = (legTxns || [])
+    .filter((t: any) => t.status === 'SUCCESS' && (t.transaction_type === 'CONSULTATION_CREDIT' || t.transaction_type === 'ADJUSTMENT'))
+    .reduce((s: number, t: any) => s + Number(t.amount || 0), 0)
+
+  let legCurrent = Number(legWallet?.current_balance || 0)
+  if (successCreditsSum > legCurrent) {
+    legCurrent = successCreditsSum
+    if (legWallet?.id) {
+      try {
+        await supabaseAdmin
+          .from('wallet_accounts')
+          .update({
+            current_balance: legCurrent,
+            total_earned: Math.max(Number(legWallet?.total_earned || 0), successCreditsSum),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', legWallet.id)
+      } catch (e: any) {
+        console.warn('Failed to sync wallet_accounts current_balance:', e)
+      }
+    }
+  }
+
   const legPending = Number(legWallet?.pending_balance || 0)
   const legPaid = Number(legWallet?.total_paid || 0)
-  const legEarned = Number(legWallet?.total_earned || 0)
+  const legEarned = Math.max(Number(legWallet?.total_earned || 0), successCreditsSum)
 
   const docBalance = Number(docW?.balance || 0)
   const docWithdrawn = Number(docW?.total_withdrawn || 0)

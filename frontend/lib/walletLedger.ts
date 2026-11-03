@@ -1,4 +1,6 @@
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import { serverCache } from '@/lib/serverCache'
+import { getCommercialRules } from '@/lib/commercialRulesServer'
 
 export type WalletCreditResult = {
   credited: boolean
@@ -103,11 +105,12 @@ export async function creditCompletedConsultation(input: {
         supabaseAdmin.from('doctor_profiles').select('payout_amount').eq('id', input.providerId).maybeSingle(),
       ])
 
+      const commercialRules = await getCommercialRules().catch(() => null)
       const configuredRate = Number(profile?.payout_amount ?? provV2?.payout_amount ?? docProfile?.payout_amount ?? 0)
       if (configuredRate > 0) {
         payoutAmount = configuredRate
       } else {
-        const providerRole = profile?.role || provV2?.role || 'dietitian'
+        const providerRole = profile?.role || provV2?.role || (docProfile ? 'doctor' : 'doctor')
         const { data: settings } = await supabaseAdmin
           .from('provider_compensation_settings')
           .select('fixed_amount')
@@ -116,6 +119,12 @@ export async function creditCompletedConsultation(input: {
           .maybeSingle()
         if (settings?.fixed_amount && Number(settings.fixed_amount) > 0) {
           payoutAmount = Number(settings.fixed_amount)
+        } else if (providerRole === 'doctor' && commercialRules?.doctorPayout) {
+          payoutAmount = commercialRules.doctorPayout
+        } else if (providerRole === 'dietitian' && commercialRules?.dietitianPayout) {
+          payoutAmount = commercialRules.dietitianPayout
+        } else if (providerRole === 'fitness_coach' && commercialRules?.fitnessCoachPayout) {
+          payoutAmount = commercialRules.fitnessCoachPayout
         } else {
           payoutAmount = providerRole === 'doctor' ? 300.00 : 250.00
         }
@@ -179,6 +188,11 @@ export async function creditCompletedConsultation(input: {
       })
       .eq('appointment_id', input.appointmentId)
       .eq('status', 'FAILED')
+
+    serverCache.invalidate(`wallet:${input.providerId}`)
+    if (wallet.provider_id && wallet.provider_id !== input.providerId) {
+      serverCache.invalidate(`wallet:${wallet.provider_id}`)
+    }
 
     return {
       credited: true,

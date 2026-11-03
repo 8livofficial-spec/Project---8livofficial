@@ -1,6 +1,8 @@
 import { supabaseAdmin } from './supabaseServer'
 import { assertConsultationDoctorOwnership } from './fulfilmentAuth'
 import { canonicalPrescriptionData, generatePrescriptionPdf, sha256, storePrescriptionPdf } from './prescriptionPdfService'
+import { creditCompletedConsultation } from './walletLedger'
+import { serverCache } from './serverCache'
 
 export type PrescriptionItemInput = {
   medicine_name: string
@@ -403,6 +405,19 @@ export async function signPrescription(
           updated_at: nowIso,
         })
         .eq('id', prescription.consultation_id)
+
+      // Automatically credit doctor wallet for completed consultation and invalidate wallet cache
+      await creditCompletedConsultation({
+        providerId: doctorId,
+        patientId: prescription.patient_id,
+        appointmentId: prescription.consultation_id,
+        appointmentType: 'INITIAL_CONSULTATION',
+        createdBy: doctorId,
+      }).catch((creditErr) => {
+        console.warn('[prescriptionService] Could not credit doctor wallet:', creditErr)
+      })
+
+      serverCache.invalidate(`wallet:${doctorId}`)
     } catch (cErr) {
       console.warn('[prescriptionService] Could not update consultation record:', cErr)
     }
