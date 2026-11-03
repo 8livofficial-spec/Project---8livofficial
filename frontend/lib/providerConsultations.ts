@@ -57,14 +57,17 @@ export function labelForRole(role: string) {
 export function canJoinConsultation(bookingDate?: string | null, bookingTime?: string | null, status?: string | null) {
   const normalized = String(status || '').toLowerCase()
   const terminal = ['completed', 'cancelled', 'cancelled_by_doctor', 'cancelled_by_patient', 'missed', 'missed_by_patient', 'attended'].includes(normalized)
-  if (terminal || !bookingDate || !bookingTime) return false
+  if (terminal) return false
+
+  if (normalized === 'calling' || normalized === 'in_progress') return true
+  if (!bookingDate || !bookingTime) return false
 
   const normalizedTime = String(bookingTime || '').slice(0, 5)
   const istTimestamp = new Date(`${bookingDate}T${normalizedTime}:00+05:30`).getTime()
   const start = Number.isFinite(istTimestamp) ? istTimestamp : new Date(`${bookingDate} ${bookingTime}`).getTime()
   if (Number.isNaN(start)) return false
   const now = Date.now()
-  return now >= start - 15 * 60 * 1000
+  return now >= start - 15 * 60 * 1000 && now <= start + 120 * 60 * 1000
 }
 
 export async function getAssignedProviderForRole(patientId: string, role: string) {

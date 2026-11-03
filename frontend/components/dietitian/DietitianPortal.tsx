@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
@@ -48,6 +48,10 @@ import {
   Layers,
   ExternalLink,
   BookOpen,
+  Volume2,
+  VolumeX,
+  BellRing,
+  PhoneCall,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import ProviderProfileEditor from '@/components/provider/ProviderProfileEditor'
@@ -336,6 +340,114 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
       (c) => String(c.status || '').toLowerCase() === 'attended'
     )
   }, [dietitianConsultations])
+
+  // Telehealth Audio Chime Generator
+  const playTelehealthChime = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioCtx) return
+      const ctx = new AudioCtx()
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {})
+      const now = ctx.currentTime
+
+      const osc1 = ctx.createOscillator()
+      const osc2 = ctx.createOscillator()
+      const gain = ctx.createGain()
+
+      osc1.type = 'sine'
+      osc1.frequency.setValueAtTime(523.25, now)
+      osc1.frequency.setValueAtTime(783.99, now + 0.18)
+
+      osc2.type = 'triangle'
+      osc2.frequency.setValueAtTime(523.25, now)
+      osc2.frequency.setValueAtTime(783.99, now + 0.18)
+
+      gain.gain.setValueAtTime(0.001, now)
+      gain.gain.linearRampToValueAtTime(0.2, now + 0.04)
+      gain.gain.setValueAtTime(0.2, now + 0.16)
+      gain.gain.linearRampToValueAtTime(0.25, now + 0.22)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.75)
+
+      osc1.connect(gain)
+      osc2.connect(gain)
+      gain.connect(ctx.destination)
+
+      osc1.start(now)
+      osc2.start(now)
+      osc1.stop(now + 0.75)
+      osc2.stop(now + 0.75)
+    } catch (err) {
+      console.debug('Telehealth chime notice:', err)
+    }
+  }, [])
+
+  // Robust session joinability evaluator
+  const isSessionJoinable = useCallback((sess: any): boolean => {
+    if (!sess) return false
+    const status = String(sess.status || '').toLowerCase()
+    if (['completed', 'cancelled', 'cancelled_by_doctor', 'cancelled_by_patient', 'missed', 'missed_by_patient', 'attended'].includes(status)) {
+      return false
+    }
+    if (status === 'calling' || status === 'in_progress') return true
+    if (sess.canJoin) return true
+
+    if (sess.booking_date) {
+      if (sess.booking_date === todayDateStr) {
+        if (!sess.booking_time) return true
+        try {
+          const timeStr = String(sess.booking_time).slice(0, 5)
+          const istStart = new Date(`${sess.booking_date}T${timeStr}:00+05:30`).getTime()
+          const start = Number.isFinite(istStart) ? istStart : new Date(`${sess.booking_date} ${sess.booking_time}`).getTime()
+          if (Number.isFinite(start)) {
+            const now = Date.now()
+            return now >= start - 20 * 60 * 1000 && now <= start + 150 * 60 * 1000
+          }
+        } catch {
+          return true
+        }
+        return true
+      }
+    }
+    return false
+  }, [todayDateStr])
+
+  const liveConsultation = useMemo(() => {
+    const calling = dietitianConsultations.find((c) => String(c.status || '').toLowerCase() === 'calling')
+    if (calling) return calling
+    const joinable = dietitianConsultations.find((c) => isSessionJoinable(c))
+    if (joinable) return joinable
+    return null
+  }, [dietitianConsultations, isSessionJoinable])
+
+  const [chimeMuted, setChimeMuted] = useState(false)
+  const lastChimeSessionIdRef = useRef<string | null>(null)
+
+  // Audio & tab title notification for live calls
+  useEffect(() => {
+    if (!liveConsultation) {
+      document.title = '8LIV Health · Provider Portal'
+      return
+    }
+
+    const patientName = liveConsultation.patientName || 'Patient'
+    document.title = `(1) 🔴 LIVE CALL: ${patientName} | 8Liv Health`
+
+    if (!chimeMuted && lastChimeSessionIdRef.current !== liveConsultation.id) {
+      lastChimeSessionIdRef.current = liveConsultation.id
+      playTelehealthChime()
+    }
+
+    const interval = setInterval(() => {
+      document.title = document.title.includes('LIVE CALL')
+        ? `📹 CLICK TO JOIN - ${patientName}`
+        : `(1) 🔴 LIVE CALL: ${patientName} | 8Liv Health`
+    }, 1500)
+
+    return () => {
+      clearInterval(interval)
+      document.title = '8LIV Health · Provider Portal'
+    }
+  }, [liveConsultation, chimeMuted, playTelehealthChime])
 
   // 1. Initial Authentication & User Verification
   useEffect(() => {
@@ -972,6 +1084,61 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
           </div>
         )}
 
+        {/* UNMISSABLE GLOBAL LIVE CONSULTATION BANNER */}
+        {liveConsultation && (
+          <div className="rounded-3xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 text-white p-5 sm:p-6 shadow-xl shadow-emerald-950/20 border-2 border-emerald-300 flex flex-col md:flex-row items-center justify-between gap-5 animate-in slide-in-from-top-4 duration-300">
+            <div className="flex items-center gap-4">
+              <div className="relative shrink-0">
+                <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md text-white flex items-center justify-center border border-white/30 shadow-inner">
+                  <Video className="w-7 h-7 text-white animate-pulse" />
+                </div>
+                <span className="absolute -top-1.5 -right-1.5 flex h-4 w-4">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-90" />
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-amber-300 border-2 border-emerald-700" />
+                </span>
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/25 text-white backdrop-blur-sm border border-white/30 flex items-center gap-1.5 shadow-2xs">
+                    <span className="w-2 h-2 rounded-full bg-amber-300 animate-ping" />
+                    LIVE VIDEO CONSULTATION READY
+                  </span>
+                  <span className="text-xs font-bold text-emerald-100 flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    <span>{formatTime(liveConsultation.booking_time)} · Telehealth Call</span>
+                  </span>
+                </div>
+                <h3 className="text-xl sm:text-2xl font-black text-white mt-1 leading-tight tracking-tight">
+                  {liveConsultation.patientName} is waiting for consultation
+                </h3>
+                <p className="text-xs text-emerald-100 font-medium mt-0.5">
+                  Secure encrypted video room is active. Click below to enter the live session immediately.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
+              <button
+                type="button"
+                onClick={() => setChimeMuted(!chimeMuted)}
+                className="p-3.5 rounded-2xl bg-white/15 hover:bg-white/25 text-white border border-white/20 transition-all cursor-pointer"
+                title={chimeMuted ? 'Unmute call alerts' : 'Mute call alerts'}
+              >
+                {chimeMuted ? <VolumeX className="w-5 h-5 text-emerald-200" /> : <Volume2 className="w-5 h-5 text-white" />}
+              </button>
+              <a
+                href={liveConsultation.meetingUrl || `/video/room?id=${liveConsultation.id}`}
+                target="_blank"
+                rel="opener"
+                className="flex-1 md:flex-initial inline-flex items-center justify-center gap-2.5 px-8 py-4 rounded-2xl bg-white text-emerald-950 hover:bg-emerald-50 text-sm font-black shadow-xl shadow-black/20 hover:scale-105 active:scale-95 transition-all cursor-pointer group"
+              >
+                <Video className="w-5 h-5 text-emerald-700 group-hover:scale-110 transition-transform" />
+                <span>JOIN VIDEO ROOM NOW</span>
+              </a>
+            </div>
+          </div>
+        )}
+
         {/* SECTION 1: DASHBOARD (Clean & Neat Clinical Cockpit) */}
         {activeSection === 'dashboard' && (
           <div className="space-y-6">
@@ -1197,15 +1364,15 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                                 <span>Completed</span>
                               </span>
-                            ) : sess.canJoin && sess.meetingUrl ? (
+                            ) : isSessionJoinable(sess) ? (
                               <a
-                                href={sess.meetingUrl}
+                                href={sess.meetingUrl || `/video/room?id=${sess.id}`}
                                 target="_blank"
                                 rel="opener"
-                                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
+                                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black shadow-md shadow-emerald-700/25 hover:scale-105 active:scale-95 transition-all cursor-pointer animate-pulse"
                               >
-                                <Video className="w-3.5 h-3.5" />
-                                <span>Join Call</span>
+                                <Video className="w-4 h-4 text-white animate-pulse" />
+                                <span>JOIN VIDEO CALL NOW</span>
                               </a>
                             ) : (
                               <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-500 text-[11px] font-semibold">
@@ -2802,15 +2969,15 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                                     <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
                                     <span>View Plan</span>
                                   </button>
-                                ) : session.canJoin && session.meetingUrl && !terminal ? (
+                                ) : isSessionJoinable(session) && !terminal ? (
                                   <a
-                                    href={session.meetingUrl}
+                                    href={session.meetingUrl || `/video/room?id=${session.id}`}
                                     target="_blank"
                                     rel="opener"
-                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black shadow-md shadow-emerald-700/25 hover:scale-105 active:scale-95 transition-all cursor-pointer animate-pulse"
                                   >
-                                    <Video className="w-3.5 h-3.5" />
-                                    <span>Join Call</span>
+                                    <Video className="w-3.5 h-3.5 text-white animate-pulse" />
+                                    <span>JOIN VIDEO CALL</span>
                                   </a>
                                 ) : terminal ? (
                                   <span className="px-2.5 py-1.5 text-[11px] text-slate-400 font-semibold italic">
@@ -3059,31 +3226,103 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                 {(() => {
                   const booked = dietitianConsultations.filter(c => ['scheduled', 'calling', 'attended'].includes(String(c.status || '').toLowerCase()))
                   return booked.length > 0 ? (
-                    <div className="space-y-2.5 max-h-[500px] overflow-y-auto pr-1">
-                      {booked.map((item) => (
-                        <div key={item.id} className="p-3.5 rounded-xl bg-[#FAF8F5] border border-[#E8DED4] flex items-center justify-between">
-                          <div>
-                            <p className="font-bold text-xs text-[#1A1F36]">{item.patientName}</p>
-                            <p className="text-[11px] font-semibold text-slate-500 mt-0.5">
-                              {formatDate(item.booking_date || null)} at {formatTime(item.booking_time)}
-                            </p>
+                    <div className="space-y-3 max-h-[500px] overflow-y-auto pr-1">
+                      {booked.map((item) => {
+                        const canJoinNow = isSessionJoinable(item)
+                        const meetingLink = item.meetingUrl || `/video/room?id=${item.id}`
+                        const patientInitials = (item.patientName || 'Patient')
+                          .trim()
+                          .split(' ')
+                          .filter(Boolean)
+                          .map((n: string) => n[0])
+                          .slice(0, 2)
+                          .join('')
+                          .toUpperCase() || 'PT'
+                        const isAttended = String(item.status || '').toLowerCase() === 'attended'
+
+                        return (
+                          <div
+                            key={item.id}
+                            className={`p-4 sm:p-5 rounded-2xl border transition-all ${
+                              canJoinNow
+                                ? 'bg-gradient-to-r from-emerald-50 via-teal-50/80 to-emerald-50 border-2 border-emerald-500 shadow-md ring-2 ring-emerald-500/20'
+                                : isAttended
+                                ? 'bg-amber-50/60 border-amber-200'
+                                : 'bg-[#FAF8F5] border-[#E8DED4]'
+                            } flex flex-col sm:flex-row sm:items-center justify-between gap-4`}
+                          >
+                            <div className="flex items-center gap-3.5">
+                              <div className="relative shrink-0">
+                                <div className={`w-12 h-12 rounded-2xl font-black text-sm flex items-center justify-center shadow-xs ${
+                                  canJoinNow ? 'bg-emerald-600 text-white' : 'bg-teal-50 text-[#0D9488] border border-teal-200/50'
+                                }`}>
+                                  {patientInitials}
+                                </div>
+                                {canJoinNow && (
+                                  <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5">
+                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                                    <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-emerald-500 border-2 border-white" />
+                                  </span>
+                                )}
+                              </div>
+                              <div>
+                                {canJoinNow ? (
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-200 text-emerald-950 border border-emerald-300 animate-pulse flex items-center gap-1">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 animate-ping" />
+                                      Live Now · Ready to Join
+                                    </span>
+                                    <span className="text-[11px] font-bold text-emerald-700">Patient in Room</span>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-1.5 mb-0.5">
+                                    <span className="text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded bg-slate-100 text-slate-600">
+                                      {item.status || 'Scheduled'}
+                                    </span>
+                                  </div>
+                                )}
+                                <p className="font-black text-base text-[#1A1F36]">{item.patientName}</p>
+                                <p className="text-xs font-semibold text-slate-600 mt-0.5 flex items-center gap-1.5">
+                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>{formatDate(item.booking_date || null)} at {formatTime(item.booking_time)}</span>
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 self-end sm:self-auto shrink-0 w-full sm:w-auto">
+                              {canJoinNow ? (
+                                <a
+                                  href={meetingLink}
+                                  target="_blank"
+                                  rel="opener"
+                                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-700 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-black shadow-lg shadow-emerald-700/30 transition-all hover:scale-105 active:scale-95 cursor-pointer uppercase tracking-wider animate-bounce"
+                                >
+                                  <Video className="w-4 h-4 text-white" />
+                                  <span>JOIN VIDEO CALL NOW</span>
+                                </a>
+                              ) : isAttended ? (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setProtocolBuilderPatient({ id: item.patient_id || '', name: item.patientName || 'Patient' })
+                                    setProtocolBuilderConsultation(item)
+                                    setShowProtocolBuilder(true)
+                                  }}
+                                  className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-xs cursor-pointer"
+                                >
+                                  <Sparkles className="w-3.5 h-3.5 text-emerald-200" />
+                                  <span>Deliver Plan</span>
+                                </button>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-sky-50 text-sky-800 border border-sky-200 text-xs font-bold">
+                                  <Clock className="w-3.5 h-3.5 text-sky-600" />
+                                  <span>Opens 15m prior</span>
+                                </span>
+                              )}
+                            </div>
                           </div>
-                          {item.canJoin && item.meetingUrl ? (
-                            <a
-                              href={item.meetingUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="px-3 py-1.5 rounded-lg bg-[#0D9488] text-white text-[11px] font-bold hover:bg-[#0F766E]"
-                            >
-                              Join
-                            </a>
-                          ) : (
-                            <span className="text-[10px] font-bold px-2 py-1 rounded bg-[#E0F2FE] text-[#0369A1] uppercase">
-                              {item.status || 'Scheduled'}
-                            </span>
-                          )}
-                        </div>
-                      ))}
+                        )
+                      })}
                     </div>
                   ) : (
                     <div className="p-8 text-center bg-[#FAF8F5] rounded-xl text-slate-400 text-xs font-bold">

@@ -4,6 +4,7 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 import { serverCache, jsonWithETag } from '@/lib/serverCache'
 import { invalidateDoctorAvailabilityCache } from '@/lib/patientAppointmentBooking'
 import { invalidateSlotsCache } from '@/lib/appointmentAvailability'
+import { canJoinConsultation } from '@/lib/providerConsultations'
 
 const activeStatuses = ['AVAILABLE', 'BOOKED']
 type Source = 'MANUAL' | 'GENERATED'
@@ -106,10 +107,13 @@ export async function GET(request: Request) {
 
             consultations = consultData.map((consultation: any) => {
               const profile = profilesById.get(String(consultation.patient_id || ''))
+              const meetingUrl = consultation.meeting_url || consultation.room_url || `/video/room?id=${consultation.id}`
+              const canJoin = canJoinConsultation(consultation.booking_date, consultation.booking_time, consultation.status)
               return {
                 ...consultation,
                 patientName: `${profile?.first_name || ''} ${profile?.last_name || ''}`.trim() || profile?.email || 'Patient',
-                meetingUrl: consultation.meeting_url
+                meetingUrl,
+                canJoin,
               }
             })
           }

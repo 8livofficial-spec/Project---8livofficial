@@ -1,9 +1,9 @@
 'use client'
 
-import React, { useCallback, useEffect, useMemo, useState, createContext, useContext } from 'react'
+import React, { useCallback, useEffect, useMemo, useState, createContext, useContext, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Activity, Apple, CalendarDays, Dumbbell, FileText, LayoutDashboard, LogOut, MessageCircle, Search, Settings, Users, Video, Wallet, Sparkles, Eye } from 'lucide-react'
+import { Activity, Apple, CalendarDays, Dumbbell, FileText, LayoutDashboard, LogOut, MessageCircle, Search, Settings, Users, Video, Wallet, Sparkles, Eye, Volume2, VolumeX, BellRing, Clock } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
 import ProviderAvailabilityScheduler, { AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler'
@@ -344,6 +344,118 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
     setSearch(val)
     setPatientsPage(1)
   }
+
+  // Telehealth Audio Chime Generator
+  const playTelehealthChime = useCallback(() => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      if (!AudioCtx) return
+      const ctx = new AudioCtx()
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {})
+      const now = ctx.currentTime
+
+      const osc1 = ctx.createOscillator()
+      const osc2 = ctx.createOscillator()
+      const gain = ctx.createGain()
+
+      osc1.type = 'sine'
+      osc1.frequency.setValueAtTime(523.25, now)
+      osc1.frequency.setValueAtTime(783.99, now + 0.18)
+
+      osc2.type = 'triangle'
+      osc2.frequency.setValueAtTime(523.25, now)
+      osc2.frequency.setValueAtTime(783.99, now + 0.18)
+
+      gain.gain.setValueAtTime(0.001, now)
+      gain.gain.linearRampToValueAtTime(0.2, now + 0.04)
+      gain.gain.setValueAtTime(0.2, now + 0.16)
+      gain.gain.linearRampToValueAtTime(0.25, now + 0.22)
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.75)
+
+      osc1.connect(gain)
+      osc2.connect(gain)
+      gain.connect(ctx.destination)
+
+      osc1.start(now)
+      osc2.start(now)
+      osc1.stop(now + 0.75)
+      osc2.stop(now + 0.75)
+    } catch (err) {
+      console.debug('Telehealth chime notice:', err)
+    }
+  }, [])
+
+  const todayDateStr = useMemo(() => {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(new Date())
+  }, [])
+
+  // Robust session joinability evaluator
+  const isSessionJoinable = useCallback((sess: any): boolean => {
+    if (!sess) return false
+    const status = String(sess.status || '').toLowerCase()
+    if (['completed', 'cancelled', 'cancelled_by_doctor', 'cancelled_by_patient', 'missed', 'missed_by_patient', 'attended'].includes(status)) {
+      return false
+    }
+    if (status === 'calling' || status === 'in_progress') return true
+    if (sess.canJoin) return true
+
+    if (sess.booking_date) {
+      if (sess.booking_date === todayDateStr) {
+        if (!sess.booking_time) return true
+        try {
+          const timeStr = String(sess.booking_time).slice(0, 5)
+          const istStart = new Date(`${sess.booking_date}T${timeStr}:00+05:30`).getTime()
+          const start = Number.isFinite(istStart) ? istStart : new Date(`${sess.booking_date} ${sess.booking_time}`).getTime()
+          if (Number.isFinite(start)) {
+            const now = Date.now()
+            return now >= start - 20 * 60 * 1000 && now <= start + 150 * 60 * 1000
+          }
+        } catch {
+          return true
+        }
+        return true
+      }
+    }
+    return false
+  }, [todayDateStr])
+
+  const liveConsultation = useMemo(() => {
+    const calling = consultations.find((c) => String(c.status || '').toLowerCase() === 'calling')
+    if (calling) return calling
+    const joinable = consultations.find((c) => isSessionJoinable(c))
+    if (joinable) return joinable
+    return null
+  }, [consultations, isSessionJoinable])
+
+  const [chimeMuted, setChimeMuted] = useState(false)
+  const lastChimeSessionIdRef = useRef<string | null>(null)
+
+  // Audio & tab title notification for live calls
+  useEffect(() => {
+    if (!liveConsultation) {
+      document.title = '8LIV Health · Provider Portal'
+      return
+    }
+
+    const patientName = liveConsultation.patientName || 'Patient'
+    document.title = `(1) 🔴 LIVE CALL: ${patientName} | 8Liv Health`
+
+    if (!chimeMuted && lastChimeSessionIdRef.current !== liveConsultation.id) {
+      lastChimeSessionIdRef.current = liveConsultation.id
+      playTelehealthChime()
+    }
+
+    const interval = setInterval(() => {
+      document.title = document.title.includes('LIVE CALL')
+        ? `📹 CLICK TO JOIN - ${patientName}`
+        : `(1) 🔴 LIVE CALL: ${patientName} | 8Liv Health`
+    }, 1500)
+
+    return () => {
+      clearInterval(interval)
+      document.title = '8LIV Health · Provider Portal'
+    }
+  }, [liveConsultation, chimeMuted, playTelehealthChime])
 
   const copy = useMemo(() => roleCopy(provider?.role || 'dietitian'), [provider?.role])
   const RoleIcon = copy.icon
@@ -761,6 +873,56 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
           </header>
 
           <div className="mx-auto max-w-7xl px-5 py-6 md:px-8">
+            {liveConsultation && (
+              <div className="mb-6 rounded-3xl bg-linear-to-r from-emerald-600 via-teal-600 to-emerald-700 p-5 sm:p-6 text-white shadow-xl shadow-emerald-900/15 border border-emerald-400/30 animate-pulse">
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-4">
+                    <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/30 text-white shadow-inner">
+                      <Video className="w-7 h-7 animate-bounce" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-white/25 text-white backdrop-blur-sm border border-white/30 flex items-center gap-1.5 shadow-2xs">
+                          <span className="w-2 h-2 rounded-full bg-amber-300 animate-ping" />
+                          LIVE VIDEO CONSULTATION READY
+                        </span>
+                        <span className="text-xs font-bold text-emerald-100 flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>{formatTime(liveConsultation.booking_time)} · Telehealth Call</span>
+                        </span>
+                      </div>
+                      <h3 className="text-xl sm:text-2xl font-black text-white mt-1 leading-tight tracking-tight">
+                        {liveConsultation.patientName} is waiting for consultation
+                      </h3>
+                      <p className="text-xs text-emerald-100 font-medium mt-0.5">
+                        Secure encrypted video room is active. Click below to enter the live session immediately.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 w-full md:w-auto shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setChimeMuted(!chimeMuted)}
+                      className="p-3.5 rounded-2xl bg-white/15 hover:bg-white/25 text-white border border-white/20 transition-all cursor-pointer"
+                      title={chimeMuted ? 'Unmute call alerts' : 'Mute call alerts'}
+                    >
+                      {chimeMuted ? <VolumeX className="w-5 h-5 text-emerald-200" /> : <Volume2 className="w-5 h-5 text-white" />}
+                    </button>
+                    <a
+                      href={liveConsultation.meetingUrl || `/video/room?id=${encodeURIComponent(liveConsultation.id)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="w-full md:w-auto text-center px-7 py-3.5 rounded-2xl bg-white text-emerald-900 hover:bg-emerald-50 text-sm font-black tracking-wide shadow-lg shadow-black/10 transition-all transform active:scale-95 flex items-center justify-center gap-2.5 cursor-pointer"
+                    >
+                      <Video className="w-4 h-4 text-emerald-700" />
+                      <span>JOIN VIDEO ROOM NOW</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {error && <div className="mb-5 rounded-2xl border border-[#F2C8BE] bg-[#FFF4EC] p-4 text-sm font-bold text-[#A84A33]">{error}</div>}
             {success && <div className="mb-5 rounded-2xl border border-[#BFE4CA] bg-[#EEF7F1] p-4 text-sm font-bold text-[#3F6B50]">{success}</div>}
             {sectionLoading && (
@@ -772,7 +934,18 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
               </div>
             )}
 
-            {section === 'dashboard' && !sectionLoading && <Dashboard summary={summary} patients={patients} consultations={consultations} stats={consultationStats} wallet={walletState} copy={copy} onComplete={(id) => updateConsultation(id, 'complete')} />}
+            {section === 'dashboard' && !sectionLoading && (
+              <Dashboard
+                summary={summary}
+                patients={patients}
+                consultations={consultations}
+                stats={consultationStats}
+                wallet={walletState}
+                copy={copy}
+                onComplete={(id) => updateConsultation(id, 'complete')}
+                isSessionJoinable={isSessionJoinable}
+              />
+            )}
             {section === 'patients' && !sectionLoading && (
               <Patients
                 patients={patients}
@@ -784,7 +957,17 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
                 copy={copy}
               />
             )}
-            {section === 'schedule' && !sectionLoading && <Schedule availability={availability} consultations={consultations} providerLabel={copy.label} saving={saving} onGenerate={generateAvailability} onDelete={deleteAvailability} />}
+            {section === 'schedule' && !sectionLoading && (
+              <Schedule
+                availability={availability}
+                consultations={consultations}
+                providerLabel={copy.label}
+                saving={saving}
+                onGenerate={generateAvailability}
+                onDelete={deleteAvailability}
+                isSessionJoinable={isSessionJoinable}
+              />
+            )}
             {section === 'consultations' && !sectionLoading && (
               <Consultations
                 consultations={consultations}
@@ -798,6 +981,7 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
                 totalPages={consultationsTotalPages}
                 setPage={setConsultationsPage}
                 onOpenProtocolBuilder={handleOpenProtocolBuilder}
+                isSessionJoinable={isSessionJoinable}
               />
             )}
             {section === 'plans' && !sectionLoading && (
@@ -875,7 +1059,7 @@ function sectionLabel(section: string) {
   return 'Provider Profile'
 }
 
-function Dashboard({ summary, patients, consultations, stats, wallet, copy, onComplete }: {
+function Dashboard({ summary, patients, consultations, stats, wallet, copy, onComplete, isSessionJoinable }: {
   summary: Summary
   patients: Patient[]
   consultations: ProviderConsultation[]
@@ -883,6 +1067,7 @@ function Dashboard({ summary, patients, consultations, stats, wallet, copy, onCo
   wallet: WalletState
   copy: any
   onComplete: (consultationId: string) => void
+  isSessionJoinable: (sess: any) => boolean
 }) {
   const cards = [
     { label: 'Assigned Patients', value: summary.assignedPatients, sub: 'Active care members' },
@@ -942,25 +1127,53 @@ function Dashboard({ summary, patients, consultations, stats, wallet, copy, onCo
           <div className="mt-5 grid gap-3">
             {consultations.slice(0, 6).map((session) => {
               const terminal = ['completed', 'cancelled', 'cancelled_by_doctor', 'cancelled_by_patient', 'missed', 'missed_by_patient'].includes(String(session.status || '').toLowerCase())
+              const joinable = isSessionJoinable(session)
+              const meetingLink = session.meetingUrl || `/video/room?id=${encodeURIComponent(session.id)}`
               return (
-                <div key={session.id} className="rounded-2xl bg-[#F9F6F0] p-4">
+                <div
+                  key={session.id}
+                  className={classNames(
+                    'rounded-2xl p-4 transition-all border',
+                    joinable
+                      ? 'bg-linear-to-r from-emerald-50 to-teal-50/40 border-emerald-300 shadow-md shadow-emerald-500/10'
+                      : 'bg-[#F9F6F0] border-transparent'
+                  )}
+                >
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <p className="font-black">{session.patientName}</p>
-                      <p className="text-sm font-semibold text-[#6B7A90]">{session.roleLabel} | {session.booking_date || '-'} at {session.booking_time || '-'}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <Link
-                        href={session.canJoin ? `/video/room?id=${encodeURIComponent(session.id)}` : '#'}
-                        className={classNames(
-                          'rounded-full px-4 py-2 text-xs font-black',
-                          session.canJoin ? 'bg-[#1A1F36] text-white' : 'pointer-events-none bg-[#E8DED4] text-[#6B7A90]'
+                      <div className="flex items-center gap-2">
+                        <p className="font-black text-slate-900">{session.patientName}</p>
+                        {joinable && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white animate-pulse">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                            LIVE ROOM READY
+                          </span>
                         )}
-                      >
-                        {terminal ? 'Join Disabled' : session.canJoin ? 'Join Stream' : 'Opens 15 min before'}
-                      </Link>
+                      </div>
+                      <p className="text-sm font-semibold text-[#6B7A90] mt-0.5">{session.roleLabel} | {session.booking_date || '-'} at {session.booking_time ? formatTime(session.booking_time) : '-'}</p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {joinable && !terminal ? (
+                        <a
+                          href={meetingLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-600/30 transition-all active:scale-95 animate-pulse"
+                        >
+                          <Video className="w-3.5 h-3.5" />
+                          <span>JOIN VIDEO CALL NOW</span>
+                        </a>
+                      ) : (
+                        <span className={classNames(
+                          'inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-bold',
+                          terminal ? 'bg-slate-100 text-slate-400' : 'bg-amber-50 text-amber-700 border border-amber-200'
+                        )}>
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>{terminal ? 'Completed' : 'Opens 20m before time'}</span>
+                        </span>
+                      )}
                       {!terminal && (
-                        <button onClick={() => onComplete(session.id)} className="rounded-full border border-[#1A1F36]/15 bg-white px-4 py-2 text-xs font-black text-[#1A1F36]">
+                        <button onClick={() => onComplete(session.id)} className="rounded-full border border-[#1A1F36]/15 bg-white px-4 py-2 text-xs font-black text-[#1A1F36] hover:bg-slate-50 cursor-pointer">
                           Complete
                         </button>
                       )}
@@ -976,20 +1189,25 @@ function Dashboard({ summary, patients, consultations, stats, wallet, copy, onCo
   )
 }
 
-function Schedule({ availability, consultations, providerLabel, saving, onGenerate, onDelete }: {
+function Schedule({ availability, consultations, providerLabel, saving, onGenerate, onDelete, isSessionJoinable }: {
   availability: AvailabilitySlot[]
   consultations: ProviderConsultation[]
   providerLabel: string
   saving: boolean
   onGenerate: (submission: AvailabilitySubmission) => Promise<void>
   onDelete: (slotId: string) => void
+  isSessionJoinable: (sess: any) => boolean
 }) {
   const now = Date.now()
   const futureSlots = availability.filter((slot) => new Date(`${slot.available_date}T${slot.start_time}`).getTime() > now)
   const bookedKeys = new Set(
     consultations
-      .filter((consultation) => ['scheduled', 'calling', 'attended'].includes(String(consultation.status || '').toLowerCase()))
+      .filter((consultation) => ['scheduled', 'calling', 'attended', 'confirmed', 'in_progress'].includes(String(consultation.status || '').toLowerCase()))
       .map((consultation) => `${consultation.booking_date}-${formatTimeKey(consultation.booking_time)}`)
+  )
+
+  const bookedSessions = consultations.filter((item) =>
+    ['scheduled', 'calling', 'attended', 'confirmed', 'in_progress'].includes(String(item.status || '').toLowerCase())
   )
 
   return (
@@ -997,23 +1215,78 @@ function Schedule({ availability, consultations, providerLabel, saving, onGenera
       <ProviderAvailabilityScheduler providerLabel={providerLabel.toLowerCase()} onGenerate={onGenerate} isSaving={saving} />
       <div className="grid gap-6 xl:grid-cols-2">
         <SlotList
-          title="Available Slots"
+          title="Upcoming Available Slots"
           slots={futureSlots.filter((slot) => !bookedKeys.has(`${slot.available_date}-${formatTimeKey(slot.start_time)}`))}
-          empty="No future availability slots."
+          empty="No upcoming availability slots. Use the scheduler above to generate slots."
           onDelete={onDelete}
         />
         <div className="rounded-[28px] border border-[#E8DED4] bg-white p-6 shadow-sm">
-          <h3 className="text-xl font-black">Booked Slots</h3>
-          {consultations.filter((item) => ['scheduled', 'calling', 'attended'].includes(String(item.status || '').toLowerCase())).length ? (
+          <div className="flex items-center justify-between">
+            <h3 className="text-xl font-black">Booked Patient Sessions</h3>
+            <span className="text-xs font-bold text-[#6B7A90]">
+              {bookedSessions.length} Booked
+            </span>
+          </div>
+          {bookedSessions.length ? (
             <div className="mt-5 space-y-3">
-              {consultations
-                .filter((item) => ['scheduled', 'calling', 'attended'].includes(String(item.status || '').toLowerCase()))
-                .map((item) => (
-                  <div key={item.id} className="rounded-2xl bg-[#F9F6F0] p-4">
-                    <p className="font-black">{item.patientName}</p>
-                    <p className="mt-1 text-sm font-semibold text-[#6B7A90]">{item.booking_date || '-'} at {formatTime(item.booking_time)}</p>
+              {bookedSessions.map((item) => {
+                const joinable = isSessionJoinable(item)
+                const terminal = ['completed', 'cancelled', 'cancelled_by_doctor', 'cancelled_by_patient', 'missed', 'missed_by_patient'].includes(String(item.status || '').toLowerCase())
+                const meetingLink = item.meetingUrl || `/video/room?id=${encodeURIComponent(item.id)}`
+                return (
+                  <div
+                    key={item.id}
+                    className={classNames(
+                      'rounded-2xl p-5 border transition-all flex flex-col md:flex-row md:items-center justify-between gap-4',
+                      joinable
+                        ? 'bg-linear-to-r from-emerald-50/90 to-teal-50/50 border-emerald-300 shadow-md shadow-emerald-500/10'
+                        : 'bg-[#F9F6F0] border-transparent'
+                    )}
+                  >
+                    <div className="flex items-center gap-3.5">
+                      <div className={classNames(
+                        'w-12 h-12 rounded-2xl flex items-center justify-center font-black text-base shrink-0 shadow-xs',
+                        joinable ? 'bg-emerald-600 text-white' : 'bg-[#1A1F36]/10 text-[#1A1F36]'
+                      )}>
+                        {(item.patientName || 'P').charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-black text-slate-900 text-base">{item.patientName}</p>
+                          {joinable && (
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-600 text-white animate-pulse">
+                              <span className="w-1.5 h-1.5 rounded-full bg-white" />
+                              LIVE ROOM READY
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs font-semibold text-[#6B7A90] mt-0.5">
+                          {formatDate(item.booking_date || null)} at {formatTime(item.booking_time)}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      {joinable && !terminal ? (
+                        <a
+                          href={meetingLink}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black uppercase tracking-wider shadow-md shadow-emerald-600/30 transition-all active:scale-95 animate-pulse cursor-pointer"
+                        >
+                          <Video className="w-4 h-4" />
+                          <span>JOIN VIDEO CALL NOW</span>
+                        </a>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>Opens 20 min before time</span>
+                        </span>
+                      )}
+                    </div>
                   </div>
-                ))}
+                )
+              })}
             </div>
           ) : <p className="mt-5 rounded-2xl bg-[#F9F6F0] p-5 text-sm font-semibold text-[#6B7A90]">Booked slots will appear here.</p>}
         </div>
@@ -1055,6 +1328,7 @@ function Consultations({
   totalPages,
   setPage,
   onOpenProtocolBuilder,
+  isSessionJoinable,
 }: {
   consultations: ProviderConsultation[]
   stats: any
@@ -1067,6 +1341,7 @@ function Consultations({
   totalPages: number
   setPage: React.Dispatch<React.SetStateAction<number>>
   onOpenProtocolBuilder?: (consultation: ProviderConsultation) => void
+  isSessionJoinable: (sess: any) => boolean
 }) {
   const statCards = [
     { label: 'Today', value: stats.today || 0 },
@@ -1139,8 +1414,22 @@ function Consultations({
                       <td className="py-4 text-sm font-bold">{session.appointmentType || session.roleLabel}</td>
                       <td className="py-4"><span className="rounded-full bg-[#F9F6F0] px-3 py-1 text-xs font-black uppercase">{session.status || 'scheduled'}</span></td>
                       <td className="py-4">
-                        <div className="flex flex-wrap gap-2">
-                          <a href={session.canJoin && session.meetingUrl ? session.meetingUrl : undefined} target="_blank" className={classNames('rounded-full px-3 py-2 text-xs font-black', session.canJoin && session.meetingUrl ? 'bg-[#1A1F36] text-white' : 'pointer-events-none bg-[#E8DED4] text-[#6B7A90]')}>Join</a>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {isSessionJoinable(session) && !terminal ? (
+                            <a
+                              href={session.meetingUrl || `/video/room?id=${encodeURIComponent(session.id)}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-black shadow-md shadow-emerald-600/30 transition-all active:scale-95 animate-pulse cursor-pointer"
+                            >
+                              <Video className="w-3.5 h-3.5" />
+                              <span>JOIN CALL</span>
+                            </a>
+                          ) : (
+                            <span className="rounded-xl px-3 py-1.5 text-xs font-semibold bg-[#E8DED4] text-[#6B7A90]">
+                              {terminal ? 'Completed' : 'Opens 20m before'}
+                            </span>
+                          )}
                           {!terminal && onOpenProtocolBuilder && (
                             <button
                               type="button"

@@ -320,7 +320,7 @@ export async function GET(request: Request) {
             patientName,
             roleLabel: formatRoleLabel(role),
             canJoin: canJoinSession(consultation.booking_date, consultation.booking_time, consultation.status),
-            meetingUrl: consultation.meeting_url,
+            meetingUrl: consultation.meeting_url || consultation.room_url || `/video/room?id=${consultation.id}`,
           }
         })
 
