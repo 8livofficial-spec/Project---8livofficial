@@ -50,15 +50,37 @@ export async function getUnifiedProviderWallet(
 
   const v2Id = v2Profile?.id || null
 
-  // 1.5. Self-Healing Auto-Reconciliation of Completed/Attended Consultations
+  // 1.5. Self-Healing Auto-Reconciliation of Completed/Attended Consultations (All Provider Roles)
   try {
-    const { data: eligibleConsults } = await supabaseAdmin
-      .from('doctor_consultations')
-      .select('id, patient_id, doctor_id, status, is_completed, appointment_type, created_at')
-      .or(`doctor_id.eq.${userId},doctor_id.eq.${pId}`)
-      .in('status', ['approved', 'completed', 'attended']);
+    const [{ data: eligibleDocConsults }, { data: eligibleStaffConsults }] = await Promise.all([
+      supabaseAdmin
+        .from('doctor_consultations')
+        .select('id, patient_id, doctor_id, status, is_completed, appointment_type, created_at')
+        .or(`doctor_id.eq.${userId},doctor_id.eq.${pId}`)
+        .in('status', ['approved', 'completed', 'attended']),
+      supabaseAdmin
+        .from('staff_consultations')
+        .select('id, patient_id, staff_id, staff_role, status, is_completed, call_type, created_at')
+        .or(`staff_id.eq.${userId},staff_id.eq.${pId}`)
+        .in('status', ['approved', 'completed', 'attended']),
+    ]);
 
-    if (eligibleConsults && eligibleConsults.length > 0) {
+    const eligibleConsults = [
+      ...(eligibleDocConsults || []).map((c: any) => ({
+        id: c.id,
+        patientId: c.patient_id,
+        providerId: c.doctor_id || userId,
+        appointmentType: c.appointment_type || 'DOCTOR_CONSULTATION',
+      })),
+      ...(eligibleStaffConsults || []).map((c: any) => ({
+        id: c.id,
+        patientId: c.patient_id,
+        providerId: c.staff_id || userId,
+        appointmentType: c.call_type || (c.staff_role === 'dietitian' ? 'DIETITIAN_CONSULTATION' : 'STAFF_CONSULTATION'),
+      })),
+    ];
+
+    if (eligibleConsults.length > 0) {
       const { data: existingCredits } = await supabaseAdmin
         .from('wallet_ledger_transactions')
         .select('appointment_id')
@@ -72,11 +94,11 @@ export async function getUnifiedProviderWallet(
       if (uncredited.length > 0) {
         for (const item of uncredited) {
           await creditCompletedConsultation({
-            providerId: item.doctor_id || userId,
-            patientId: item.patient_id,
+            providerId: item.providerId,
+            patientId: item.patientId,
             appointmentId: item.id,
-            appointmentType: item.appointment_type || 'INITIAL_CONSULTATION',
-            createdBy: item.doctor_id || userId,
+            appointmentType: item.appointmentType,
+            createdBy: item.providerId,
           }).catch((err) => console.warn(`[getUnifiedProviderWallet] auto-credit notice for ${item.id}:`, err));
         }
       }

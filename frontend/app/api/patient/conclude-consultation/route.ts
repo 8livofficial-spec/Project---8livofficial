@@ -157,6 +157,17 @@ export async function POST(req: Request) {
           })
           .eq('id', staffConsult.id);
 
+        if (staffConsult.staff_id && ['attended', 'completed'].includes(nextStatus)) {
+          await creditCompletedConsultation({
+            providerId: staffConsult.staff_id,
+            patientId: staffConsult.patient_id,
+            appointmentId: staffConsult.id,
+            appointmentType: staffConsult.call_type || (isDietitian ? 'DIETITIAN_CONSULTATION' : 'FITNESS_COACH_CONSULTATION'),
+            createdBy: staffConsult.staff_id,
+          }).catch((e) => console.warn('[conclude-consultation] staff creditCompletedConsultation notice:', e));
+          serverCache.invalidate(`wallet:${staffConsult.staff_id}`);
+        }
+
         invalidatePatientApiDashboardCache(patientId);
 
         return NextResponse.json({

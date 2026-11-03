@@ -98,6 +98,7 @@ export async function creditCompletedConsultation(input: {
 
     // Determine payout amount (provider profile -> compensation settings -> role default)
     let payoutAmount = 250.00
+    let providerRole = 'doctor'
     try {
       const [{ data: profile }, { data: provV2 }, { data: docProfile }] = await Promise.all([
         supabaseAdmin.from('provider_profiles').select('payout_amount, role').eq('provider_id', input.providerId).maybeSingle(),
@@ -105,12 +106,12 @@ export async function creditCompletedConsultation(input: {
         supabaseAdmin.from('doctor_profiles').select('payout_amount').eq('id', input.providerId).maybeSingle(),
       ])
 
+      providerRole = profile?.role || provV2?.role || (docProfile ? 'doctor' : 'doctor')
       const commercialRules = await getCommercialRules().catch(() => null)
       const configuredRate = Number(profile?.payout_amount ?? provV2?.payout_amount ?? docProfile?.payout_amount ?? 0)
       if (configuredRate > 0) {
         payoutAmount = configuredRate
       } else {
-        const providerRole = profile?.role || provV2?.role || (docProfile ? 'doctor' : 'doctor')
         const { data: settings } = await supabaseAdmin
           .from('provider_compensation_settings')
           .select('fixed_amount')
@@ -163,7 +164,7 @@ export async function creditCompletedConsultation(input: {
         reference_id: `consultation:${input.appointmentId}`,
         description: 'Consultation credit',
         metadata: {
-          providerRole: 'doctor',
+          providerRole,
           appointmentType: input.appointmentType || 'INITIAL_CONSULTATION',
           creditedVia: 'direct_ledger_fallback',
           rpcError: errMsg,
