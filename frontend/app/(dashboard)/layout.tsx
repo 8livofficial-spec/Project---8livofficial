@@ -481,10 +481,6 @@ function DashboardLayoutContent({
                 </div>
               </div>
             </div>
-          ) : (loading) ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-[#F8FAF7]/60 backdrop-blur-sm z-10">
-              <div className="w-10 h-10 border-4 border-[#00A884] border-t-transparent rounded-full animate-spin" />
-            </div>
           ) : (
             children
           )}

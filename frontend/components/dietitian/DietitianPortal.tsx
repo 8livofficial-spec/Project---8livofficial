@@ -47,6 +47,7 @@ import {
   Check,
   Layers,
   ExternalLink,
+  BookOpen,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 import ProviderProfileEditor from '@/components/provider/ProviderProfileEditor'
@@ -129,23 +130,32 @@ type PlanRecord = {
   id: string
   plan_name: string
   version: number
-  status: 'DRAFT' | 'PUBLISHED' | 'ACKNOWLEDGED' | 'ARCHIVED'
+  status: 'DRAFT' | 'PUBLISHED' | 'ACKNOWLEDGED' | 'ARCHIVED' | 'ACTIVE' | string
   patient_id: string
   dietitian_id: string
-  start_date: string
+  start_date?: string
   review_date?: string | null
   daily_calorie_target?: number | null
   water_target_liters: number
-  meals: Meal[]
+  meals?: Meal[]
   nutrition_goals?: string | null
   general_instructions?: string | null
   pdf_url?: string | null
   pdf_hash?: string | null
+  attachment_url?: string | null
+  attachment_type?: string | null
+  attachment_signed_url?: string | null
+  description?: string | null
+  meal_schedule?: string | null
+  food_restrictions?: string | null
+  hydration_goal?: string | null
+  notes?: string | null
   created_at: string
   updated_at: string
   profiles?: {
     full_name?: string
     email?: string
+    phone?: string
   }
 }
 
@@ -381,7 +391,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
       }
 
       // Plans & Templates
-      if (activeSection === 'plans' || activeSection === 'consultations') {
+      if (activeSection === 'plans' || activeSection === 'consultations' || activeSection === 'dashboard') {
         const [plansRes, tmplRes] = await Promise.all([
           fetch('/api/dietitian/plans', { headers }),
           fetch('/api/dietitian/templates', { headers }),
@@ -1373,62 +1383,170 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                       <table className="w-full text-left text-xs">
                         <thead className="bg-[#FAF8F5] border-b border-[#E8DED4] text-slate-500 font-bold uppercase text-[10px]">
                           <tr>
-                            <th className="p-4">Patient Name</th>
-                            <th className="p-4">Current Weight / BMI</th>
-                            <th className="p-4">Active Plan</th>
-                            <th className="p-4">Review Due</th>
-                            <th className="p-4 text-right">Action</th>
+                            <th className="py-3.5 px-4">Patient</th>
+                            <th className="py-3.5 px-4">Current Weight & BMI</th>
+                            <th className="py-3.5 px-4">Active Nutrition Plan</th>
+                            <th className="py-3.5 px-4">Contact</th>
+                            <th className="py-3.5 px-4 text-right">Clinical Actions</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                          {patients.map((p) => (
-                            <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
-                              <td className="p-4">
-                                <p className="font-bold text-[#1A1F36]">{p.patient_name}</p>
-                                <p className="text-[10px] text-slate-400">{p.age ? `${p.age} yrs` : ''} {p.gender ? `• ${p.gender}` : ''}</p>
-                              </td>
-                              <td className="p-4">
-                                <span className="font-bold">{p.current_weight ? `${p.current_weight} kg` : 'Not recorded'}</span>
-                                {p.bmi && <span className="text-slate-400 ml-1.5">(BMI {p.bmi})</span>}
-                              </td>
-                              <td className="p-4">
-                                {p.active_plan_name ? (
-                                  <div>
-                                    <span className="font-bold text-[#0D9488]">{p.active_plan_name}</span>
-                                    <span className="text-[10px] text-slate-400 ml-1">v{p.active_plan_version}</span>
+                          {patients.map((p) => {
+                            const initials = (p.patient_name || 'Patient')
+                              .trim()
+                              .split(' ')
+                              .filter(Boolean)
+                              .map((n) => n[0])
+                              .slice(0, 2)
+                              .join('')
+                              .toUpperCase() || 'PT'
+
+                            const bmiVal = p.bmi ? Number(p.bmi) : null
+                            const bmiCategory = !bmiVal
+                              ? null
+                              : bmiVal < 18.5
+                              ? 'Underweight'
+                              : bmiVal < 25
+                              ? 'Healthy'
+                              : bmiVal < 30
+                              ? 'Overweight'
+                              : 'Obese'
+
+                            return (
+                              <tr key={p.id} className="hover:bg-slate-50/80 transition-colors">
+                                {/* Patient Info */}
+                                <td className="py-3.5 px-4">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-9 h-9 rounded-2xl bg-[#E6F4F1] text-[#0D9488] font-black text-xs flex items-center justify-center shrink-0 border border-teal-200/60 shadow-xs">
+                                      {initials}
+                                    </div>
+                                    <div>
+                                      <p className="font-bold text-[#1A1F36] text-sm leading-tight">{p.patient_name}</p>
+                                      <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                                        ID: {p.id.substring(0, 8)}...
+                                      </p>
+                                    </div>
                                   </div>
-                                ) : (
-                                  <span className="text-slate-400 italic">No active plan</span>
-                                )}
-                              </td>
-                              <td className="p-4">
-                                {p.review_date ? (
-                                  <span className="font-semibold text-slate-600">{new Date(p.review_date).toLocaleDateString()}</span>
-                                ) : (
-                                  <span className="text-slate-400">-</span>
-                                )}
-                              </td>
-                              <td className="p-4 text-right">
-                                <button
-                                  onClick={() => openPatientWorkspace(p)}
-                                  className="px-3.5 py-1.5 rounded-lg bg-[#1A1F36] text-white text-[11px] font-bold hover:bg-[#2C344E] transition-colors"
-                                >
-                                  Open Workspace
-                                </button>
-                              </td>
-                            </tr>
-                          ))}
+                                </td>
+
+                                {/* Weight & BMI */}
+                                <td className="py-3.5 px-4">
+                                  {p.current_weight ? (
+                                    <div>
+                                      <div className="flex items-baseline gap-1.5 font-bold text-slate-800 text-xs">
+                                        <span>{p.current_weight} kg</span>
+                                        {bmiVal && <span className="text-slate-400 font-medium text-[11px]">(BMI {bmiVal})</span>}
+                                      </div>
+                                      {bmiCategory && (
+                                        <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-md mt-1 ${
+                                          bmiCategory === 'Healthy'
+                                            ? 'bg-emerald-50 text-emerald-700'
+                                            : bmiCategory === 'Overweight'
+                                            ? 'bg-amber-50 text-amber-800'
+                                            : 'bg-rose-50 text-rose-700'
+                                        }`}>
+                                          {bmiCategory}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-slate-400 italic text-xs">Assessment pending</span>
+                                  )}
+                                </td>
+
+                                {/* Active Plan */}
+                                <td className="py-3.5 px-4">
+                                  {p.active_plan_name ? (
+                                    <div className="space-y-1">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                          <span>Active</span>
+                                        </span>
+                                        <span className="font-bold text-slate-800 text-xs">{p.active_plan_name}</span>
+                                      </div>
+                                      {p.review_date && (
+                                        <p className="text-[10px] text-slate-400">
+                                          Review: {new Date(p.review_date).toLocaleDateString()}
+                                        </p>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                                      <AlertTriangle className="w-3 h-3 text-amber-600" />
+                                      <span>Plan Pending</span>
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Contact info */}
+                                <td className="py-3.5 px-4">
+                                  <p className="text-xs font-semibold text-slate-700">{p.phone || p.email || '--'}</p>
+                                  {p.phone && p.email && (
+                                    <p className="text-[11px] text-slate-400 truncate max-w-[160px]">{p.email}</p>
+                                  )}
+                                </td>
+
+                                {/* Actions */}
+                                <td className="py-3.5 px-4 text-right">
+                                  <div className="flex items-center justify-end gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setUploadPlanPatientId(p.id)
+                                        setShowUploadPlanModal(true)
+                                      }}
+                                      className="px-3 py-1.5 rounded-xl border border-teal-200 bg-teal-50/70 text-[#0D9488] hover:bg-teal-100 text-xs font-bold transition cursor-pointer"
+                                    >
+                                      Assign Plan
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => openPatientWorkspace(p)}
+                                      className="px-3.5 py-1.5 rounded-xl bg-[#1A1F36] text-white text-xs font-bold hover:bg-[#2C344E] transition cursor-pointer shadow-xs"
+                                    >
+                                      Workspace ↗
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>
                   </div>
                 ) : (
-                  <div className="rounded-2xl border border-dashed border-[#E8DED4] p-12 text-center bg-white">
-                    <Users className="w-10 h-10 text-slate-300 mx-auto mb-3" />
-                    <h3 className="text-sm font-bold text-[#1A1F36]">No patients assigned yet</h3>
-                    <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                      Assigned patients from care programs and direct consultation bookings will appear here.
-                    </p>
+                  <div className="rounded-2xl border border-dashed border-[#E8DED4] p-12 text-center bg-white space-y-3">
+                    <div className="w-12 h-12 rounded-2xl bg-slate-50 text-slate-400 flex items-center justify-center mx-auto">
+                      <Users className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-[#1A1F36]">No patients found</h3>
+                      <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                        {patientSearch
+                          ? `No patients match "${patientSearch}". Try searching by another term.`
+                          : 'Patients with booked consultations or assigned nutrition programs will automatically appear in this roster.'}
+                      </p>
+                    </div>
+                    {patientSearch ? (
+                      <button
+                        type="button"
+                        onClick={() => setPatientSearch('')}
+                        className="text-xs font-bold text-[#0D9488] hover:underline"
+                      >
+                        Clear search
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setActiveSection('consultations')}
+                        className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0D9488] text-white text-xs font-bold shadow-xs hover:bg-[#0F766E] transition cursor-pointer"
+                      >
+                        <Calendar className="w-3.5 h-3.5" />
+                        <span>View Consultations</span>
+                      </button>
+                    )}
                   </div>
                 )}
               </>
@@ -2192,40 +2310,140 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                 </div>
 
                 {planSubTab === 'active' && (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {plans.map((p) => (
-                      <div key={p.id} className="p-5 rounded-2xl border border-[#E8DED4] bg-white shadow-sm space-y-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-bold text-base text-[#1A1F36]">{p.plan_name}</p>
-                            <p className="text-xs text-slate-400">{p.profiles?.full_name || 'Patient'} • v{p.version}</p>
+                  plans.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {plans.map((p) => {
+                        const patName = p.profiles?.full_name || 'Assigned Patient'
+                        const patInitials = patName
+                          .trim()
+                          .split(' ')
+                          .filter(Boolean)
+                          .map((n) => n[0])
+                          .slice(0, 2)
+                          .join('')
+                          .toUpperCase() || 'PT'
+
+                        const fileUrl = p.attachment_signed_url || p.pdf_url || null
+                        const hasAttachment = Boolean(p.attachment_url || p.attachment_signed_url)
+
+                        return (
+                          <div key={p.id} className="p-5 rounded-2xl border border-[#E8DED4] bg-white shadow-xs hover:shadow-md transition-all space-y-4">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-2xl bg-[#E6F4F1] text-[#0D9488] font-black text-xs flex items-center justify-center shrink-0 border border-teal-200/60 shadow-xs">
+                                  {patInitials}
+                                </div>
+                                <div>
+                                  <h3 className="font-bold text-sm text-[#1A1F36] leading-tight">{p.plan_name}</h3>
+                                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                                    Patient: <span className="font-bold text-slate-700">{patName}</span> • v{p.version || 1}
+                                  </p>
+                                </div>
+                              </div>
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider shrink-0 ${
+                                p.status === 'PUBLISHED' || p.status === 'ACTIVE'
+                                  ? 'bg-[#DCFCE7] text-[#166534] border border-emerald-200'
+                                  : 'bg-[#FEF3C7] text-[#92400E] border border-amber-200'
+                              }`}>
+                                {p.status}
+                              </span>
+                            </div>
+
+                            {/* Targets & Specs */}
+                            <div className="flex flex-wrap items-center gap-2 text-xs">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-teal-50 text-[#0D9488] font-bold border border-teal-100">
+                                <span>🔥</span>
+                                <span>{p.daily_calorie_target || 1600} kcal/day</span>
+                              </span>
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800 font-bold border border-sky-100">
+                                <span>💧</span>
+                                <span>{p.water_target_liters || 2.5} L water</span>
+                              </span>
+                              {p.meals && p.meals.length > 0 && (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-slate-50 text-slate-700 font-semibold border border-slate-200">
+                                  <span>🍽️</span>
+                                  <span>{p.meals.length} meals</span>
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Attached Clinical Document (if uploaded) */}
+                            {hasAttachment && (
+                              <div className="p-3 rounded-xl bg-[#FAF8F5] border border-[#E8DED4]/80 flex items-center justify-between gap-3 text-xs">
+                                <div className="flex items-center gap-2 truncate">
+                                  <FileText className="w-4 h-4 text-[#0D9488] shrink-0" />
+                                  <div className="truncate">
+                                    <p className="font-bold text-[#1A1F36] truncate">
+                                      {p.attachment_type?.includes('pdf')
+                                        ? 'Dietary Protocol PDF'
+                                        : 'Dietary Protocol Attachment'}
+                                    </p>
+                                    <p className="text-[10px] text-slate-400">Verified Clinical Document</p>
+                                  </div>
+                                </div>
+                                {fileUrl && (
+                                  <a
+                                    href={fileUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="shrink-0 inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-white border border-[#E8DED4] hover:border-[#0D9488] text-xs font-bold text-[#0D9488] transition shadow-xs"
+                                  >
+                                    <ExternalLink className="w-3.5 h-3.5" />
+                                    <span>View File</span>
+                                  </a>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Card Footer */}
+                            <div className="pt-3 flex items-center justify-between border-t border-slate-100 text-xs">
+                              <span className="text-[11px] text-slate-400 font-medium">
+                                Created {p.created_at ? new Date(p.created_at).toLocaleDateString() : 'Recently'}
+                              </span>
+                              {p.status === 'PUBLISHED' && (
+                                <a
+                                  href={`/api/dietitian/plans/${p.id}/pdf`}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs font-bold text-[#0D9488] hover:underline flex items-center gap-1"
+                                >
+                                  <Download className="w-3.5 h-3.5" />
+                                  <span>Download PDF</span>
+                                </a>
+                              )}
+                            </div>
                           </div>
-                          <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase ${
-                            p.status === 'PUBLISHED' ? 'bg-[#DCFCE7] text-[#166534]' : 'bg-[#FEF3C7] text-[#92400E]'
-                          }`}>
-                            {p.status}
-                          </span>
-                        </div>
-                        <div className="text-xs text-slate-600">
-                          {p.meals?.length || 0} scheduled meals • {p.daily_calorie_target || 1600} kcal/day
-                        </div>
-                        <div className="pt-2 flex items-center justify-between border-t border-slate-100">
-                          <span className="text-[10px] text-slate-400">Review: {p.review_date || 'In 14 days'}</span>
-                          {p.status === 'PUBLISHED' && (
-                            <a
-                              href={`/api/dietitian/plans/${p.id}/pdf`}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-xs font-bold text-[#0D9488] hover:underline flex items-center gap-1"
-                            >
-                              <Download className="w-3.5 h-3.5" />
-                              <span>PDF</span>
-                            </a>
-                          )}
-                        </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-[#E8DED4] p-12 text-center bg-white space-y-3">
+                      <div className="w-12 h-12 rounded-2xl bg-teal-50 text-[#0D9488] flex items-center justify-center mx-auto">
+                        <BookOpen className="w-6 h-6" />
                       </div>
-                    ))}
-                  </div>
+                      <div>
+                        <h3 className="text-sm font-bold text-[#1A1F36]">No active nutrition plans yet</h3>
+                        <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                          Upload a nutrition protocol document or build a customized meal plan for your assigned patients.
+                        </p>
+                      </div>
+                      <div className="flex items-center justify-center gap-3 pt-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (allPatientOptions.length > 0 && !uploadPlanPatientId) {
+                              setUploadPlanPatientId(allPatientOptions[0].id)
+                            }
+                            setShowUploadPlanModal(true)
+                          }}
+                          className="px-4 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5"
+                        >
+                          <Upload className="w-3.5 h-3.5" />
+                          <span>Upload Plan Document</span>
+                        </button>
+                      </div>
+                    </div>
+                  )
                 )}
 
                 {planSubTab === 'templates' && (

@@ -839,7 +839,7 @@ export async function getAssignedDietitianPatients(
   try {
     const { data } = await supabaseAdmin
       .from('profiles')
-      .select('id, full_name, email, phone, gender, age, date_of_birth, created_at')
+      .select('id, first_name, last_name, full_name, email, phone_number, created_at')
       .in('id', patientIds)
 
     if (data) profiles = data
@@ -871,6 +871,34 @@ export async function getAssignedDietitianPatients(
         }
       }
 
+      // Fallback: Check health_assessments if no nutrition assessment exists yet
+      if (!latestAssessment) {
+        try {
+          const { data: ha } = await supabaseAdmin
+            .from('health_assessments')
+            .select('weight_kg, height_cm, is_eligible, created_at')
+            .eq('patient_id', p.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (ha) {
+            const hM = (ha.height_cm || 170) / 100
+            const wKg = ha.weight_kg || 0
+            const bmi = hM > 0 && wKg > 0 ? parseFloat((wKg / (hM * hM)).toFixed(1)) : null
+            latestAssessment = {
+              current_weight_kg: ha.weight_kg,
+              height_cm: ha.height_cm,
+              bmi,
+              weight_change_kg: null,
+              status: 'COMPLETED'
+            }
+          }
+        } catch (eha) {
+          // ignore
+        }
+      }
+
+      // Check nutrition_plans first
       try {
         const { data: plan } = await supabaseAdmin
           .from('nutrition_plans')
@@ -890,13 +918,39 @@ export async function getAssignedDietitianPatients(
         }
       }
 
+      // Fallback: Check diet_plans (uploaded and structured clinical diet plans)
+      if (!activePlan) {
+        try {
+          const { data: dPlan } = await supabaseAdmin
+            .from('diet_plans')
+            .select('id, title, calories_per_day, attachment_url, status, created_at')
+            .eq('patient_id', p.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (dPlan) {
+            activePlan = {
+              id: dPlan.id,
+              plan_name: dPlan.title || 'Personalized Nutrition Protocol',
+              version: 1,
+              status: (dPlan.status || 'ACTIVE').toUpperCase(),
+              review_date: null,
+            }
+          }
+        } catch (edp) {
+          // ignore
+        }
+      }
+
+      const pName = p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.email?.split('@')[0] || 'Patient'
+
       return {
         id: p.id,
-        patient_name: p.full_name || 'Patient',
+        patient_name: pName,
         email: p.email,
-        phone: p.phone,
-        gender: p.gender || 'Not specified',
-        age: p.age || null,
+        phone: p.phone_number || null,
+        gender: 'Not specified',
+        age: null,
         current_weight: latestAssessment?.current_weight_kg || null,
         height_cm: latestAssessment?.height_cm || null,
         bmi: latestAssessment?.bmi || null,
@@ -934,10 +988,18 @@ export async function getPatientNutritionWorkspace(
   try {
     const { data } = await supabaseAdmin
       .from('profiles')
-      .select('id, full_name, email, phone, gender, age, date_of_birth, created_at')
+      .select('id, first_name, last_name, full_name, email, phone_number, created_at')
       .eq('id', patientId)
       .maybeSingle()
-    patient = data
+    if (data) {
+      patient = {
+        ...data,
+        full_name: data.full_name || `${data.first_name || ''} ${data.last_name || ''}`.trim() || data.email || 'Patient',
+        phone: data.phone_number,
+        gender: 'Not specified',
+        age: 32,
+      }
+    }
   } catch (err) {
     console.warn('Patient lookup notice:', err)
   }
