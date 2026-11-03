@@ -441,26 +441,24 @@ function usePatientDataInternal() {
         const isUserEligible = eligibilityStatus === 'ELIGIBLE' || eligibilityStatus === 'REVIEW_REQUIRED' || Boolean(assessRow?.is_eligible)
         const isUserNotEligible = eligibilityStatus === 'NOT_ELIGIBLE' || (assessRow && assessRow.is_eligible === false && !isUserEligible)
 
-        const journeyFlowStep: FlowStep = dashboardAccess
-          || (membershipStatus === 'ACTIVE' && firstConsultationCompleted)
-          || Boolean(assessRow?.onboarding_completed)
-          || Boolean(assessRow?.booking_date)
-          || (dashboardData.staffConsultations && dashboardData.staffConsultations.length > 0)
-          || (dashboardData.consultations && dashboardData.consultations.length > 0)
-          ? 'ready'
-          : assessmentStatus !== 'COMPLETED'
-            ? 'needs_assessment'
-            : isUserNotEligible
-              ? 'not_eligible'
-              : !isUserEligible
-              ? 'needs_assessment'
-              : consultationPaymentStatus === 'PAID' && appointmentStatus === 'SCHEDULED' && consultationStatus !== 'COMPLETED'
-                ? 'appointment_scheduled'
-                : consultationStatus === 'COMPLETED' && membershipStatus === 'NOT_SELECTED'
-                  ? 'needs_plan'
-                  : consultationStatus === 'COMPLETED' && membershipStatus === 'SELECTED'
-                    ? 'needs_payment'
-                    : 'needs_consultation'
+        const isEligible = isUserEligible && !isUserNotEligible
+        let journeyFlowStep: FlowStep = 'needs_consultation'
+
+        if (!isEligible) {
+          journeyFlowStep = isUserNotEligible ? 'not_eligible' : 'needs_assessment'
+        } else if (assessmentStatus !== 'COMPLETED') {
+          journeyFlowStep = 'needs_assessment'
+        } else if (membershipStatus === 'ACTIVE' || (dashboardAccess && membershipStatus !== 'NOT_SELECTED' && membershipStatus !== 'SELECTED')) {
+          journeyFlowStep = 'ready'
+        } else if (consultationPaymentStatus !== 'PAID') {
+          journeyFlowStep = 'needs_consultation'
+        } else if (appointmentStatus === 'SCHEDULED' && consultationStatus !== 'COMPLETED') {
+          journeyFlowStep = 'appointment_scheduled'
+        } else if (consultationStatus === 'COMPLETED' || firstConsultationCompleted) {
+          journeyFlowStep = membershipStatus === 'SELECTED' ? 'needs_payment' : 'needs_plan'
+        } else {
+          journeyFlowStep = 'needs_consultation'
+        }
 
         setFlowStep(journeyFlowStep)
       } else {
@@ -520,25 +518,24 @@ function usePatientDataInternal() {
         const isUserEligible = eligibilityStatus === 'ELIGIBLE' || eligibilityStatus === 'REVIEW_REQUIRED' || Boolean(assessRow?.is_eligible)
         const isUserNotEligible = eligibilityStatus === 'NOT_ELIGIBLE' || (assessRow && assessRow.is_eligible === false && !isUserEligible)
 
-        const journeyFlowStep: FlowStep = dashboardAccess
-          || (membershipStatus === 'ACTIVE' && firstConsultationCompleted)
-          || Boolean(assessRow?.onboarding_completed)
-          || Boolean(assessRow?.booking_date)
-          || (statusData.staffConsultations && statusData.staffConsultations.length > 0)
-          ? 'ready'
-          : assessmentStatus !== 'COMPLETED'
-            ? 'needs_assessment'
-            : isUserNotEligible
-              ? 'not_eligible'
-              : !isUserEligible
-              ? 'needs_assessment'
-              : consultationPaymentStatus === 'PAID' && appointmentStatus === 'SCHEDULED' && consultationStatus !== 'COMPLETED'
-                ? 'appointment_scheduled'
-                : consultationStatus === 'COMPLETED' && membershipStatus === 'NOT_SELECTED'
-                  ? 'needs_plan'
-                  : consultationStatus === 'COMPLETED' && membershipStatus === 'SELECTED'
-                    ? 'needs_payment'
-                    : 'needs_consultation'
+        const isEligible = isUserEligible && !isUserNotEligible
+        let journeyFlowStep: FlowStep = 'needs_consultation'
+
+        if (!isEligible) {
+          journeyFlowStep = isUserNotEligible ? 'not_eligible' : 'needs_assessment'
+        } else if (assessmentStatus !== 'COMPLETED') {
+          journeyFlowStep = 'needs_assessment'
+        } else if (membershipStatus === 'ACTIVE' || (dashboardAccess && membershipStatus !== 'NOT_SELECTED' && membershipStatus !== 'SELECTED')) {
+          journeyFlowStep = 'ready'
+        } else if (consultationPaymentStatus !== 'PAID') {
+          journeyFlowStep = 'needs_consultation'
+        } else if (appointmentStatus === 'SCHEDULED' && consultationStatus !== 'COMPLETED') {
+          journeyFlowStep = 'appointment_scheduled'
+        } else if (consultationStatus === 'COMPLETED' || firstConsultationCompleted) {
+          journeyFlowStep = membershipStatus === 'SELECTED' ? 'needs_payment' : 'needs_plan'
+        } else {
+          journeyFlowStep = 'needs_consultation'
+        }
 
         setFlowStep(journeyFlowStep)
 

@@ -126,43 +126,30 @@ function DashboardLayoutContent({
     if (loading) return
 
     let targetPath: string | null = null
-    const isStandardDashboardPage = pathname === '/patient' || 
-      pathname.startsWith('/patient/support') || 
-      pathname.startsWith('/patient/profile') || 
-      pathname.startsWith('/patient/settings') || 
-      pathname.startsWith('/patient/appointments') || 
-      pathname.startsWith('/patient/consultation') || 
-      pathname.startsWith('/patient/billing') || 
-      pathname.startsWith('/patient/prescriptions') || 
-      pathname.startsWith('/patient/progress')
 
-    if (isStandardDashboardPage) {
-      if (flowStep === 'needs_assessment') {
-        targetPath = '/assessment'
+    if (flowStep === 'needs_assessment') {
+      targetPath = '/assessment'
+    } else if (flowStep === 'not_eligible') {
+      targetPath = consultationPaymentStatus === 'PAID' ? '/appointments/select-slot' : '/consultation-payment'
+    } else if (flowStep === 'needs_consultation') {
+      if (!isConsultationBookingPage && !isAppointmentDetailsPage && !isConsultationRoomPage) {
+        targetPath = consultationPaymentStatus === 'PAID' ? '/patient/consultation' : '/consultation-payment'
       }
-    } else {
-      if (flowStep === 'needs_assessment') {
-        targetPath = '/assessment'
-      } else if (flowStep === 'not_eligible') {
-        targetPath = consultationPaymentStatus === 'PAID' ? '/appointments/select-slot' : '/consultation-payment'
-      } else if (dashboardAccess && pathname.startsWith('/patient/onboarding')) {
-        targetPath = '/patient'
-      } else if (flowStep === 'appointment_scheduled') {
-        const canAccessRescheduleBooking = isConsultationBookingPage && ['MISSED_BY_PATIENT', 'CANCELLED_BY_DOCTOR', 'CANCELLED_BY_PATIENT'].includes(appointmentStatus)
-        if (!isAppointmentDetailsPage && !isConsultationRoomPage && !isConsultationConsentPage && !canAccessRescheduleBooking) {
-          targetPath = bookingId ? `/patient/appointments/${bookingId}` : '/patient/appointments'
-        }
-      } else if (flowStep === 'needs_consultation') {
-        if (!isConsultationBookingPage && !isAppointmentDetailsPage) {
-          targetPath = consultationPaymentStatus === 'PAID' ? '/appointments/select-slot' : '/consultation-payment'
-        }
-      } else if (flowStep === 'needs_plan') {
-        // Never redirect away from the consultation room -- the patient just ended
-        // their call and is mid-navigation. The room page navigates itself away.
-        if (!isOnboardingPlanPage && !isConsultationRoomPage) targetPath = '/patient/onboarding/plan'
-      } else if (flowStep === 'needs_payment') {
-        if (!isOnboardingPaymentPage && !isConsultationRoomPage) targetPath = '/membership-payment'
+    } else if (flowStep === 'appointment_scheduled') {
+      const canAccessRescheduleBooking = isConsultationBookingPage && ['MISSED_BY_PATIENT', 'CANCELLED_BY_DOCTOR', 'CANCELLED_BY_PATIENT'].includes(appointmentStatus)
+      if (!isAppointmentDetailsPage && !isConsultationRoomPage && !isConsultationConsentPage && !canAccessRescheduleBooking) {
+        targetPath = bookingId ? `/patient/appointments/${bookingId}` : '/patient/appointments'
       }
+    } else if (flowStep === 'needs_plan') {
+      if (!isOnboardingPlanPage && !isConsultationRoomPage) {
+        targetPath = '/patient/onboarding/plan'
+      }
+    } else if (flowStep === 'needs_payment') {
+      if (!isOnboardingPaymentPage && !isConsultationRoomPage) {
+        targetPath = '/patient/onboarding/payment'
+      }
+    } else if (dashboardAccess && pathname.startsWith('/patient/onboarding')) {
+      targetPath = '/patient'
     }
 
     if (targetPath && pathname !== targetPath) {

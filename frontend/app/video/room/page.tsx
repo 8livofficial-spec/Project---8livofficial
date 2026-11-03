@@ -35,7 +35,7 @@ function VideoRoomContent() {
       setCurrentProviderRole(meta.providerRole)
     }
     if (meta.participantRole === 'patient') {
-      setReturnPath('/patient/appointments')
+      setReturnPath('/patient/onboarding/plan')
       setSessionTitle('Consultation')
     } else if (meta.providerRole === 'dietitian') {
       setReturnPath('/dietitian/consultations')
@@ -67,7 +67,7 @@ function VideoRoomContent() {
       const action = isDietitian ? 'attend' : 'complete'
       const patientForceStatus = isDietitian ? 'attended' : 'completed'
 
-      await Promise.allSettled([
+      const results = await Promise.allSettled([
         fetch('/api/provider/consultations', {
           method: 'PATCH',
           headers,
@@ -82,6 +82,18 @@ function VideoRoomContent() {
         }),
       ])
       clearTimeout(timeoutId)
+
+      const concludeResult = results[1]
+      if (concludeResult.status === 'fulfilled' && concludeResult.value.ok) {
+        try {
+          const data = await concludeResult.value.json()
+          if (data?.nextUrl) {
+            setReturnPath(data.nextUrl)
+          }
+        } catch {
+          // ignore
+        }
+      }
     } catch (err) {
       console.error('Error concluding consultation:', err)
     } finally {

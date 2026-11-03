@@ -182,38 +182,29 @@ function ConsultationRoomContent() {
   }
 
   const leaveCall = async () => {
-    // Immediately show post-summary UI — do NOT stay on the room page after patient ends
-    setPhase('post-summary');
-
-    // Navigate away from /patient/consultation/room to a stable route BEFORE
-    // reloadData() fires. This prevents the layout onboarding gate from
-    // redirecting the patient back into the pre-check device page when flowStep
-    // transitions to needs_plan / needs_payment after the session concludes.
-    if (appointmentId) {
-      router.replace(`/patient/appointments/${encodeURIComponent(appointmentId)}`);
-    } else {
-      router.replace('/patient');
-    }
-
-    // Fire-and-forget: mark consultation as concluded on the backend.
-    // We deliberately do NOT await reloadData() here — the navigation above
-    // already moves the patient away so the layout gate no longer interferes.
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const patientId = session?.user?.id || assessment?.patient_id;
       if (patientId) {
-        await fetch('/api/patient/conclude-consultation', {
+        const res = await fetch('/api/patient/conclude-consultation', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
           },
-          body: JSON.stringify({ patientId, appointmentId })
+          body: JSON.stringify({ patientId, appointmentId, forceStatus: 'completed' })
         });
+        if (res.ok) {
+          const data = await res.json();
+          const nextUrl = data?.nextUrl || '/patient/onboarding/plan';
+          router.replace(nextUrl);
+          return;
+        }
       }
     } catch (err) {
       console.error("Failed to conclude consultation:", err);
     }
+    router.replace('/patient/onboarding/plan');
   };
 
   if (loading) {

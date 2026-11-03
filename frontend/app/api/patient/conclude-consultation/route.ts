@@ -77,17 +77,42 @@ export async function POST(req: Request) {
           })
           .eq('id', docConsult.id);
 
-        // Advance patient journey state so the patient is not trapped in 'appointment_scheduled'
-        await updatePatientJourneyState(patientId, {
+        // Check if patient already has an active membership
+        const { data: existingMembership } = await supabaseAdmin
+          .from('memberships')
+          .select('id, status')
+          .eq('patient_id', patientId)
+          .eq('status', 'active')
+          .maybeSingle();
+
+        const isInitialConsultation = !existingMembership;
+
+        // Advance patient journey state
+        await updatePatientJourneyState(patientId, isInitialConsultation ? {
+          appointmentStatus: 'COMPLETED',
+          consultationStatus: 'COMPLETED',
+          membershipStatus: 'NOT_SELECTED',
+          dashboardAccess: false,
+          firstConsultationCompleted: true,
+          bookingId: docConsult.id,
+          currentJourneyStep: 'PLAN_SELECTION',
+          lastCompletedStep: 'INITIAL_CONSULTATION',
+        } : {
           appointmentStatus: 'COMPLETED',
           consultationStatus: 'COMPLETED',
           firstConsultationCompleted: true,
           bookingId: docConsult.id,
-          currentJourneyStep: 'MEMBERSHIP_SELECTION',
-          lastCompletedStep: 'INITIAL_CONSULTATION',
+          currentJourneyStep: 'DASHBOARD',
+          lastCompletedStep: 'FOLLOW_UP_CONSULTATION',
         }).catch((e) => console.warn('[conclude-consultation] updatePatientJourneyState notice:', e));
 
         invalidatePatientApiDashboardCache(patientId);
+
+        return NextResponse.json({
+          success: true,
+          isInitialConsultation,
+          nextUrl: isInitialConsultation ? '/patient/onboarding/plan' : '/patient'
+        });
       }
 
       // 2. Search in staff_consultations
@@ -120,10 +145,16 @@ export async function POST(req: Request) {
           .eq('id', staffConsult.id);
 
         invalidatePatientApiDashboardCache(patientId);
+
+        return NextResponse.json({
+          success: true,
+          isInitialConsultation: false,
+          nextUrl: '/patient'
+        });
       }
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, nextUrl: '/patient/onboarding/plan' });
   } catch (err: unknown) {
     console.error('Error in POST /api/patient/conclude-consultation:', err);
     const message = err instanceof Error ? err.message : 'Internal Server Error';

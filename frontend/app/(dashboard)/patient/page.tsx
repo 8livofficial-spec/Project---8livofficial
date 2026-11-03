@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { 
   Scale, Calendar, Video, ArrowRight,
   Pill, MessageSquare, ChevronRight, BarChart3, Plus, X,
@@ -29,10 +30,22 @@ export default function PatientDashboardHome() {
     consultationQuota,
     patientUploads: initialUploads = [],
     onboardingState,
+    flowStep,
     loading,
     error,
     reloadData,
   } = usePatientData()
+
+  const router = useRouter()
+
+  useEffect(() => {
+    if (loading) return
+    if (flowStep === 'needs_plan' || (onboardingState.membershipStatus === 'NOT_SELECTED' && !onboardingState.dashboardAccess)) {
+      router.replace('/patient/onboarding/plan')
+    } else if (flowStep === 'needs_payment' || onboardingState.membershipStatus === 'SELECTED') {
+      router.replace('/patient/onboarding/payment')
+    }
+  }, [loading, flowStep, onboardingState, router])
 
   // Weight Modals
   const [showWeightModal, setShowWeightModal] = useState(false)

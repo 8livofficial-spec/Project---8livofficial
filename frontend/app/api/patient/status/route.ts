@@ -286,11 +286,11 @@ export async function GET(request: Request) {
           ? 'SELECTED'
           : 'NOT_SELECTED'
     const effectiveDashboardAccess = Boolean(
-      (membershipActive && firstConsultationCompleted) ||
-      persistedJourney?.dashboard_access ||
-      onboardingCompleted ||
-      has_attended_doctor_session ||
-      staffConsults.length > 0
+      membershipActive && (
+        firstConsultationCompleted ||
+        persistedJourney?.dashboard_access ||
+        onboardingCompleted
+      )
     )
     const currentJourneyStep = getCurrentJourneyStep({
       assessmentStatus,
