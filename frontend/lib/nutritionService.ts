@@ -2,6 +2,7 @@ import { supabaseAdmin } from './supabaseServer'
 import { writeProviderAudit } from './providerPlatform/audit'
 import { emitNotificationEvent } from './notificationDispatcher'
 import { generateNutritionPlanPdf } from './nutritionPlanPdfService'
+import { completeDietitianConsultationWithWalletCredit } from './dietitianConsultationCompletion'
 
 // ==========================================
 // 1. DATA TYPES & SCHEMAS
@@ -1560,7 +1561,17 @@ export async function publishNutritionPlan(
     },
   })
 
-  // 6. Notify Patient (Graceful failure does not rollback clinical state)
+  // 6. Complete any pending/attended consultation for this patient & credit wallet
+  try {
+    await completeDietitianConsultationWithWalletCredit({
+      patientId: plan.patient_id,
+      dietitianId,
+    })
+  } catch (completeErr) {
+    console.warn('Consultation completion on plan publish notice:', completeErr)
+  }
+
+  // 7. Notify Patient (Graceful failure does not rollback clinical state)
   if (patientEmail) {
     try {
       await emitNotificationEvent({

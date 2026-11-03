@@ -28,8 +28,12 @@ function VideoRoomContent() {
   const [countdown, setCountdown] = useState(3)
   const [returnPath, setReturnPath] = useState('/dietitian/consultations')
   const [sessionTitle, setSessionTitle] = useState('Clinical Consultation')
+  const [currentProviderRole, setCurrentProviderRole] = useState<string>('')
 
   const handleSessionReady = useCallback((meta: { providerRole?: string; participantRole?: string }) => {
+    if (meta.providerRole) {
+      setCurrentProviderRole(meta.providerRole)
+    }
     if (meta.participantRole === 'patient') {
       setReturnPath('/patient/appointments')
       setSessionTitle('Consultation')
@@ -59,17 +63,21 @@ function VideoRoomContent() {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 2500)
 
+      const isDietitian = currentProviderRole === 'dietitian' || returnPath.includes('dietitian')
+      const action = isDietitian ? 'attend' : 'complete'
+      const patientForceStatus = isDietitian ? 'attended' : 'completed'
+
       await Promise.allSettled([
         fetch('/api/provider/consultations', {
           method: 'PATCH',
           headers,
-          body: JSON.stringify({ consultationId: appointmentId, action: 'complete' }),
+          body: JSON.stringify({ consultationId: appointmentId, action }),
           signal: controller.signal,
         }),
         fetch('/api/patient/conclude-consultation', {
           method: 'POST',
           headers,
-          body: JSON.stringify({ appointmentId, forceStatus: 'completed' }),
+          body: JSON.stringify({ appointmentId, forceStatus: patientForceStatus }),
           signal: controller.signal,
         }),
       ])
@@ -89,7 +97,7 @@ function VideoRoomContent() {
         console.warn('Window close blocked:', e)
       }
     }
-  }, [appointmentId, concluding])
+  }, [appointmentId, concluding, currentProviderRole, returnPath])
 
   useEffect(() => {
     if (!hasEnded) return

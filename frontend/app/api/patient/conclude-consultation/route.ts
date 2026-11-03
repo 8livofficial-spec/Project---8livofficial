@@ -106,13 +106,15 @@ export async function POST(req: Request) {
       const { data: staffConsult } = await staffQuery.maybeSingle();
 
       if (staffConsult) {
-        // For staff consultations (dietitian/trainer): set status to 'completed'
-        const nextStatus = forceStatus || 'completed';
+        // For dietitian consultations: call ending transitions to 'attended' until the nutrition plan is uploaded
+        const isDietitian = staffConsult.staff_role === 'dietitian';
+        const nextStatus = forceStatus || (isDietitian ? 'attended' : 'completed');
         await supabaseAdmin
           .from('staff_consultations')
           .update({
             status: nextStatus,
-            meeting_status: 'COMPLETED',
+            is_completed: nextStatus === 'completed',
+            meeting_status: 'ENDED',
             call_ended_at: new Date().toISOString()
           })
           .eq('id', staffConsult.id);

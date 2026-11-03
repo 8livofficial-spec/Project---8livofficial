@@ -146,18 +146,48 @@ export async function PATCH(request: Request) {
   }
 
   const { consultationId, action, notes } = await request.json()
-  if (!consultationId || !['complete', 'missed', 'cancel'].includes(action)) {
+  if (!consultationId || !['complete', 'attend', 'missed', 'cancel'].includes(action)) {
     return NextResponse.json({ error: 'consultationId and a valid action are required.' }, { status: 400 })
   }
 
   const statusByAction: Record<string, string> = {
     complete: 'completed',
+    attend: 'attended',
     missed: 'missed_by_patient',
     cancel: 'cancelled_by_doctor',
   }
   const nextStatus = statusByAction[action]
   const now = new Date().toISOString()
   const isComplete = action === 'complete'
+  const isAttend = action === 'attend'
+
+  // Pre-check for dietitian consultation completion: Dietitian MUST have uploaded a plan to complete
+  if (isComplete) {
+    const { data: existingStaff } = await supabaseAdmin
+      .from('staff_consultations')
+      .select('id, staff_role, staff_id, patient_id')
+      .eq('id', consultationId)
+      .maybeSingle()
+
+    if (existingStaff && (existingStaff.staff_role === 'dietitian' || provider.role === 'dietitian')) {
+      const { data: dietPlan } = await supabaseAdmin
+        .from('diet_plans')
+        .select('id')
+        .eq('patient_id', existingStaff.patient_id)
+        .eq('dietitian_id', provider.user.id)
+        .limit(1)
+        .maybeSingle()
+
+      if (!dietPlan) {
+        return NextResponse.json({
+          error: "Cannot complete consultation. Please upload or publish the patient's personalized nutrition plan first.",
+          requiresDietPlan: true,
+          patientId: existingStaff.patient_id,
+          consultationId,
+        }, { status: 400 })
+      }
+    }
+  }
 
   let staffQuery = supabaseAdmin
     .from('staff_consultations')
@@ -165,8 +195,8 @@ export async function PATCH(request: Request) {
       status: nextStatus,
       is_completed: isComplete,
       completed_at: isComplete ? now : null,
-      call_ended_at: isComplete ? now : null,
-      meeting_status: isComplete ? 'ENDED' : 'CANCELLED',
+      call_ended_at: isComplete || isAttend ? now : null,
+      meeting_status: isComplete || isAttend ? 'ENDED' : 'CANCELLED',
       consultation_notes: notes || null,
     })
     .eq('id', consultationId)
@@ -187,9 +217,9 @@ export async function PATCH(request: Request) {
     let docQuery = supabaseAdmin
       .from('doctor_consultations')
       .update({
-        status: isComplete ? 'attended' : nextStatus,
-        meeting_status: isComplete ? 'COMPLETED' : 'CANCELLED',
-        call_ended_at: isComplete ? now : null,
+        status: isComplete || isAttend ? 'attended' : nextStatus,
+        meeting_status: isComplete || isAttend ? 'COMPLETED' : 'CANCELLED',
+        call_ended_at: isComplete || isAttend ? now : null,
         updated_at: now,
       })
       .eq('id', consultationId)

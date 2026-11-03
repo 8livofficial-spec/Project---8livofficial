@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { assignmentColumnForRole, getAuthenticatedProvider, trainerFallbackColumnForRole } from '@/lib/providerServer'
 import { loadAssignedProviderPatients } from '@/lib/providerAssignedPatients'
+import { completeDietitianConsultationWithWalletCredit } from '@/lib/dietitianConsultationCompletion'
 
 function requiredString(value: unknown, label: string) {
   const text = String(value || '').trim()
@@ -189,7 +190,17 @@ export async function POST(request: Request) {
       .update({ dietitian_notes: body.notes || mealScheduleVal, updated_at: new Date().toISOString() })
       .eq('patient_id', patientId)
 
-    return NextResponse.json({ plan: data })
+    const completionResult = await completeDietitianConsultationWithWalletCredit({
+      patientId,
+      dietitianId: provider.user.id,
+      appointmentId: body.appointmentId || null,
+    })
+
+    return NextResponse.json({
+      plan: data,
+      consultationCompleted: completionResult.completed,
+      walletCredited: Boolean(completionResult.walletResult?.credited),
+    })
   }
 
   if (provider.role === 'nutritionist') {
@@ -218,7 +229,17 @@ export async function POST(request: Request) {
       .update({ nutritionist_notes: body.notes || guidanceFocus.value, updated_at: new Date().toISOString() })
       .eq('patient_id', patientId)
 
-    return NextResponse.json({ plan: data })
+    const completionResult = await completeDietitianConsultationWithWalletCredit({
+      patientId,
+      dietitianId: provider.user.id,
+      appointmentId: body.appointmentId || null,
+    })
+
+    return NextResponse.json({
+      plan: data,
+      consultationCompleted: completionResult.completed,
+      walletCredited: Boolean(completionResult.walletResult?.credited),
+    })
   }
 
   // Fitness coach role

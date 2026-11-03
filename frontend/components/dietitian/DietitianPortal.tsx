@@ -272,6 +272,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
   // Upload Nutrition Plan State
   const [showUploadPlanModal, setShowUploadPlanModal] = useState(false)
   const [uploadPlanPatientId, setUploadPlanPatientId] = useState('')
+  const [uploadPlanAppointmentId, setUploadPlanAppointmentId] = useState('')
   const [uploadPlanTitle, setUploadPlanTitle] = useState('Personalized Clinical Nutrition Plan')
   const [uploadPlanCalories, setUploadPlanCalories] = useState('1600')
   const [uploadPlanWater, setUploadPlanWater] = useState('2.5')
@@ -587,6 +588,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({
           patientId: uploadPlanPatientId,
+          appointmentId: uploadPlanAppointmentId || undefined,
           title: uploadPlanTitle,
           description: uploadPlanNotes || 'Dietitian uploaded nutrition protocol',
           attachmentUrl: uploadData.attachmentUrl,
@@ -600,7 +602,12 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
       const planResult = await planRes.json()
       if (!planRes.ok) throw new Error(planResult.error || 'Failed to assign nutrition plan to patient.')
 
-      setSuccess('Nutrition plan successfully uploaded and assigned to patient!')
+      setSuccess(
+        planResult.consultationCompleted
+          ? 'Nutrition plan successfully uploaded! Consultation completed and wallet earnings credited.'
+          : 'Nutrition plan successfully uploaded and assigned to patient!'
+      )
+      setUploadPlanAppointmentId('')
       setShowUploadPlanModal(false)
       setUploadPlanFile(null)
       setUploadPlanNotes('')
@@ -624,7 +631,14 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
         body: JSON.stringify({ consultationId, action }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Unable to update consultation.')
+      if (!res.ok) {
+        if (data.requiresDietPlan && data.patientId) {
+          setUploadPlanPatientId(data.patientId)
+          setUploadPlanAppointmentId(consultationId)
+          setShowUploadPlanModal(true)
+        }
+        throw new Error(data.error || 'Unable to update consultation.')
+      }
       setSuccess(action === 'complete' ? 'Session marked completed.' : action === 'missed' ? 'Session marked missed.' : 'Session cancelled.')
       await loadData()
     } catch (err: any) {
@@ -2163,12 +2177,13 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                             <td className="py-3.5 px-2 text-slate-600">{formatTime(session.booking_time)}</td>
                             <td className="py-3.5 px-2 font-semibold text-slate-700">{session.appointmentType || session.roleLabel || 'Nutrition Consult'}</td>
                             <td className="py-3.5 px-2">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-black uppercase ${
-                                status === 'completed' ? 'bg-[#DCFCE7] text-[#166534]' :
-                                status === 'scheduled' ? 'bg-[#E0F2FE] text-[#0369A1]' :
+                              <span className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                                status === 'completed' ? 'bg-[#DCFCE7] text-[#166534] border border-emerald-200' :
+                                status === 'attended' ? 'bg-amber-50 text-amber-800 border border-amber-200' :
+                                status === 'scheduled' ? 'bg-[#E0F2FE] text-[#0369A1] border border-sky-200' :
                                 'bg-slate-100 text-slate-600'
                               }`}>
-                                {session.status || 'scheduled'}
+                                {status === 'attended' ? 'Attended – Pending Diet Plan' : (session.status || 'scheduled')}
                               </span>
                             </td>
                             <td className="py-3.5 px-2 text-right">
@@ -2189,12 +2204,28 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                                 )}
                                 {!terminal && (
                                   <>
-                                    <button
-                                      onClick={() => handleUpdateConsultation(session.id, 'complete')}
-                                      className="px-2.5 py-1.5 rounded-lg border border-[#E8DED4] text-slate-700 hover:bg-slate-50 text-[11px] font-bold"
-                                    >
-                                      Complete
-                                    </button>
+                                    {status === 'attended' ? (
+                                      <button
+                                        onClick={() => {
+                                          setUploadPlanPatientId(session.patient_id || '')
+                                          setUploadPlanAppointmentId(session.id || '')
+                                          setShowUploadPlanModal(true)
+                                        }}
+                                        className="px-3 py-1.5 rounded-lg bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-bold shadow-xs flex items-center gap-1.5 cursor-pointer"
+                                        title="Upload patient's nutrition plan to complete consultation and release wallet earnings"
+                                      >
+                                        <Upload className="w-3.5 h-3.5" />
+                                        <span>Upload Plan &amp; Complete</span>
+                                      </button>
+                                    ) : (
+                                      <button
+                                        onClick={() => handleUpdateConsultation(session.id, 'complete')}
+                                        className="px-2.5 py-1.5 rounded-lg border border-[#E8DED4] text-slate-700 hover:bg-slate-50 text-[11px] font-bold"
+                                        title="Requires uploaded nutrition plan before completing"
+                                      >
+                                        Complete
+                                      </button>
+                                    )}
                                     <button
                                       onClick={() => handleUpdateConsultation(session.id, 'missed')}
                                       className="px-2.5 py-1.5 rounded-lg border border-[#FED7AA] bg-[#FFF7ED] text-[#C4622D] hover:bg-[#FFEDD5] text-[11px] font-bold"

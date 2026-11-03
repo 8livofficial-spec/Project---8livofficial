@@ -94,19 +94,20 @@ export async function creditCompletedConsultation(input: {
       throw new Error(`Wallet account could not be found or created for provider ${input.providerId}`)
     }
 
-    // Determine payout amount (provider profile -> compensation settings -> 300 default)
-    let payoutAmount = 300.00
+    // Determine payout amount (provider profile -> compensation settings -> role default)
+    let payoutAmount = 250.00
     try {
-      const { data: profile } = await supabaseAdmin
-        .from('provider_profiles')
-        .select('payout_amount, role')
-        .eq('provider_id', input.providerId)
-        .maybeSingle()
+      const [{ data: profile }, { data: provV2 }, { data: docProfile }] = await Promise.all([
+        supabaseAdmin.from('provider_profiles').select('payout_amount, role').eq('provider_id', input.providerId).maybeSingle(),
+        supabaseAdmin.from('provider_profiles_v2').select('payout_amount, role').eq('user_id', input.providerId).maybeSingle(),
+        supabaseAdmin.from('doctor_profiles').select('payout_amount').eq('id', input.providerId).maybeSingle(),
+      ])
 
-      if (profile?.payout_amount && Number(profile.payout_amount) > 0) {
-        payoutAmount = Number(profile.payout_amount)
+      const configuredRate = Number(profile?.payout_amount ?? provV2?.payout_amount ?? docProfile?.payout_amount ?? 0)
+      if (configuredRate > 0) {
+        payoutAmount = configuredRate
       } else {
-        const providerRole = profile?.role || 'doctor'
+        const providerRole = profile?.role || provV2?.role || 'dietitian'
         const { data: settings } = await supabaseAdmin
           .from('provider_compensation_settings')
           .select('fixed_amount')
@@ -115,10 +116,12 @@ export async function creditCompletedConsultation(input: {
           .maybeSingle()
         if (settings?.fixed_amount && Number(settings.fixed_amount) > 0) {
           payoutAmount = Number(settings.fixed_amount)
+        } else {
+          payoutAmount = providerRole === 'doctor' ? 300.00 : 250.00
         }
       }
     } catch {
-      payoutAmount = 300.00
+      payoutAmount = 250.00
     }
 
     const oldBalance = Number(wallet.current_balance || 0)
