@@ -295,7 +295,21 @@ export default function ConsultationSchedulingPage() {
   }, [availableDates])
 
   const groupedSlots = useMemo(() => {
-    const sorted = [...selectedDateSlots].sort((a, b) => {
+    // Deduplicate slots by time_slot so patients see each unique time once per date
+    const uniqueMap = new Map<string, AvailableDoctorSlot>()
+    for (const slot of selectedDateSlots) {
+      if (!slot?.time_slot) continue
+      if (!uniqueMap.has(slot.time_slot)) {
+        uniqueMap.set(slot.time_slot, slot)
+      } else {
+        const existing = uniqueMap.get(slot.time_slot)!
+        if (!existing.slotId && slot.slotId) {
+          uniqueMap.set(slot.time_slot, slot)
+        }
+      }
+    }
+
+    const sorted = Array.from(uniqueMap.values()).sort((a, b) => {
       const aTime = new Date(`${a.available_date} ${a.time_slot}`).getTime()
       const bTime = new Date(`${b.available_date} ${b.time_slot}`).getTime()
       return aTime - bTime
@@ -1291,11 +1305,11 @@ export default function ConsultationSchedulingPage() {
                                     </span>
                                   </div>
                                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
-                                    {slots.map((slot) => {
+                                    {slots.map((slot, idx) => {
                                       const isSelected = selectedSlot?.available_date === slot.available_date && selectedSlot?.time_slot === slot.time_slot
                                       return (
                                         <button
-                                          key={`${slot.available_date}-${slot.time_slot}`}
+                                          key={`${slot.slotId || slot.providerId || 'slot'}-${slot.available_date}-${slot.time_slot}-${idx}`}
                                           type="button"
                                           onClick={() => setSelectedSlot(slot)}
                                           className={`py-3 px-3.5 rounded-xl border text-center font-sora text-xs font-bold transition-all cursor-pointer ${
@@ -1777,11 +1791,11 @@ export default function ConsultationSchedulingPage() {
                                 </p>
                               </div>
                               <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-3">
-                                {slots.map((slot) => {
+                                {slots.map((slot, idx) => {
                                   const selected = selectedSlot?.available_date === slot.available_date && selectedSlot?.time_slot === slot.time_slot
                                   return (
                                     <button
-                                      key={`${slot.available_date}-${slot.time_slot}`}
+                                      key={`${slot.slotId || slot.providerId || 'slot'}-${slot.available_date}-${slot.time_slot}-${idx}`}
                                       type="button"
                                       onClick={() => setSelectedSlot(slot)}
                                       className={`rounded-2xl border-2 px-4 py-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md cursor-pointer ${

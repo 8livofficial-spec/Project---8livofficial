@@ -218,7 +218,7 @@ export default function ProviderAvailabilityScheduler({ providerLabel = 'provide
       <div className="mt-6 rounded-2xl border border-[#E8DED4] bg-[#F9F6F0] p-4">
         <div className="flex items-center justify-between"><h4 className="font-black text-[#1A1F36]">Slot Preview</h4><span className="text-xs font-black text-[#6B7A90]">{preview.length} SLOT{preview.length === 1 ? '' : 'S'}</span></div>
         {preview.length ? <div className="mt-3 grid max-h-64 gap-2 overflow-y-auto sm:grid-cols-2 xl:grid-cols-3">
-          {preview.map((slot, index) => <div key={`${slot.available_date}-${slot.time_slot}`} className="flex items-center justify-between rounded-xl bg-white p-3">
+          {preview.map((slot, index) => <div key={`${slot.available_date}-${slot.time_slot}-${index}`} className="flex items-center justify-between rounded-xl bg-white p-3">
             <div><p className="text-sm font-black text-[#1A1F36]">{new Date(`${slot.available_date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short' })}</p><p className="text-xs font-bold text-[#6B7A90]">{formatTime(slot.time_slot)} - {formatTime(slot.end_time)} | {slot.source} | AVAILABLE</p></div>
             {mode === 'MANUAL' && <button type="button" onClick={() => setManualSlots(current => current.filter((_, itemIndex) => itemIndex !== index))} title="Remove slot" className="p-2 text-rose-600"><Trash2 className="h-4 w-4" /></button>}
           </div>)}
