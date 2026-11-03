@@ -97,6 +97,12 @@ export default function OfficialProtocolModal({
         {/* Top Control Bar (Screen only, hidden in print) */}
         <div className="print:hidden sticky top-0 z-20 flex items-center justify-between border-b border-[#1A1F36]/10 bg-white px-6 py-4 sm:px-8">
           <div className="flex items-center gap-3">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand-logo-official.png"
+              alt="8Liv Official Logo"
+              className="h-7 sm:h-8 w-auto object-contain hidden sm:block mr-1"
+            />
             <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${isFitness ? 'bg-amber-500/10 text-amber-600' : 'bg-[#0D9488]/10 text-[#0D9488]'}`}>
               {isFitness ? <Dumbbell className="h-5 w-5" /> : <Apple className="h-5 w-5" />}
             </div>
@@ -168,3 +174,4 @@ export default function OfficialProtocolModal({
     </div>
   )
 }
+

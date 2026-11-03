@@ -153,12 +153,15 @@ export default function CareProtocolOfficialSheet({
       {/* ── 1. HEADER (BRAND LOGO & SPECIALIST CREDENTIALS) ── */}
       <div className="pb-4">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          {/* Left: 8Liv Health Brand Logo & Credentials */}
-          <div className="flex items-start gap-3">
-            {/* Black Circle with White 8L Logo */}
-            <div className="w-12 h-12 rounded-full bg-black text-white flex items-center justify-center font-black text-xl tracking-tighter shrink-0 mt-0.5 shadow-sm">
-              8L
-            </div>
+          {/* Left: 8Liv Health Official Brand Logo & Credentials */}
+          <div className="flex items-start gap-3.5">
+            {/* Official 8Liv Brand Logo */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand-logo-official.png"
+              alt="8Liv Health Official Logo"
+              className="h-10 sm:h-12 w-auto object-contain block shrink-0 mt-0.5 drop-shadow-2xs"
+            />
             <div>
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-black leading-tight uppercase">
                 8LIV HEALTH NETWORK
@@ -403,3 +406,4 @@ export default function CareProtocolOfficialSheet({
     </div>
   )
 }
+

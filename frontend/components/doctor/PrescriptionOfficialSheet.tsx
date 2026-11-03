@@ -113,11 +113,14 @@ export default function PrescriptionOfficialSheet({
       <div className="pb-4">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
           {/* Left: Organization Branding */}
-          <div className="flex items-start gap-3">
-            {/* Black Circle with White 8L */}
-            <div className="w-11 h-11 rounded-full bg-black text-white flex items-center justify-center font-black text-lg tracking-tighter shrink-0 mt-0.5">
-              8L
-            </div>
+          <div className="flex items-start gap-3.5">
+            {/* Authentic Official 8Liv Logo */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand-logo-official.png"
+              alt="8Liv Health Official Logo"
+              className="h-10 sm:h-12 w-auto object-contain block shrink-0 mt-0.5 drop-shadow-2xs"
+            />
             <div>
               <h1 className="text-xl sm:text-2xl font-black tracking-tight text-black leading-tight uppercase">
                 8LIV HEALTH NETWORK

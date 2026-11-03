@@ -489,8 +489,14 @@ export default function ProviderProtocolBuilderModal({
         {/* ── TOP NAV BAR ── */}
         <div className="flex items-center justify-between border-b border-slate-200 bg-white px-6 py-3.5 shrink-0">
           <div className="flex items-center gap-3">
-            <div className={`w-10 h-10 rounded-2xl flex items-center justify-center font-bold ${isFitnessRole ? 'bg-amber-100 text-amber-700' : 'bg-[#0D9488]/10 text-[#0D9488]'}`}>
-              {isFitnessRole ? <Dumbbell className="w-5 h-5" /> : <Apple className="w-5 h-5" />}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/brand-logo-official.png"
+              alt="8Liv Official Logo"
+              className="h-7 sm:h-8 w-auto object-contain hidden sm:block mr-1"
+            />
+            <div className={`w-9 h-9 rounded-2xl flex items-center justify-center font-bold ${isFitnessRole ? 'bg-amber-100 text-amber-700' : 'bg-[#0D9488]/10 text-[#0D9488]'}`}>
+              {isFitnessRole ? <Dumbbell className="w-4 h-4" /> : <Apple className="w-4 h-4" />}
             </div>
             <div>
               <div className="flex items-center gap-2">
@@ -874,3 +880,4 @@ export default function ProviderProtocolBuilderModal({
     </div>
   )
 }
+
