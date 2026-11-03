@@ -182,10 +182,16 @@ export default function ScienceResults() {
     <section
       id="results-and-science"
       aria-label="Clinical Body Mass Index Assessment"
-      className="py-20 sm:py-24 lg:py-28 bg-[#FAFBF9] border-b border-slate-200/80 scroll-mt-20"
+      className="py-20 sm:py-24 lg:py-28 bg-gradient-to-b from-[#F5F8F6] via-[#FAFBF9] to-[#F2F7F4] border-b border-slate-200/80 scroll-mt-20 relative overflow-hidden"
     >
+      {/* Dynamic Background Ambient Light Spheres for Authentic Glassmorphism Refraction */}
+      <div className="absolute top-10 left-1/4 -translate-x-1/2 w-[550px] h-[550px] bg-emerald-400/15 rounded-full blur-[130px] pointer-events-none" />
+      <div className="absolute bottom-10 right-10 w-[600px] h-[600px] bg-teal-400/15 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute top-1/2 right-1/3 w-[450px] h-[450px] bg-emerald-300/10 rounded-full blur-[120px] pointer-events-none" />
+      <div className="absolute -bottom-20 left-10 w-[400px] h-[400px] bg-cyan-400/10 rounded-full blur-[110px] pointer-events-none" />
+
       <div id="bmi-assessment" className="scroll-mt-20" />
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-12 sm:mb-16">
@@ -206,24 +212,26 @@ export default function ScienceResults() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-stretch">
           
           {/* ========================================================= */}
-          {/* LEFT COLUMN: INTERACTIVE BIOMETRIC INPUTS                 */}
+          {/* LEFT COLUMN: INTERACTIVE BIOMETRIC INPUTS (GLASSMORPHIC)  */}
           {/* ========================================================= */}
-          <div className="lg:col-span-7 bg-white rounded-[2rem] border border-slate-200/80 shadow-xs p-6 sm:p-8 flex flex-col justify-between">
-            <div>
+          <div className="lg:col-span-7 bg-white/75 backdrop-blur-2xl rounded-[2.5rem] border border-white/80 shadow-[0_20px_50px_rgba(0,0,0,0.06),0_1px_3px_rgba(0,0,0,0.02),inset_0_1px_1px_rgba(255,255,255,0.95)] p-6 sm:p-8 flex flex-col justify-between relative overflow-hidden">
+            {/* Subtle card interior ambient glow */}
+            <div className="absolute top-0 right-0 w-80 h-80 bg-gradient-to-bl from-emerald-100/30 to-transparent pointer-events-none rounded-tr-[2.5rem]" />
+            <div className="relative z-10">
               {/* Unit Switcher & Demographics Header */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-5 border-b border-slate-100 mb-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pb-5 border-b border-slate-200/50 mb-5">
                 <div>
-                  <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
                     Measurement System
                   </span>
-                  <div className="inline-flex w-full p-1 bg-slate-100 rounded-xl">
+                  <div className="inline-flex w-full p-1 bg-slate-200/50 backdrop-blur-md rounded-2xl border border-white/70 shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)]">
                     <button
                       type="button"
                       onClick={() => handleUnitSwitch('metric')}
-                      className={`flex-1 py-1.5 px-2 text-xs sm:text-sm font-semibold rounded-lg text-center transition-all ${
+                      className={`flex-1 py-1.5 px-2 text-xs sm:text-sm font-semibold rounded-xl text-center transition-all ${
                         unit === 'metric'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                          ? 'bg-white text-slate-900 shadow-[0_4px_14px_rgba(0,0,0,0.08)] border border-white/90'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
                       }`}
                     >
                       Metric (cm, kg)
@@ -231,10 +239,10 @@ export default function ScienceResults() {
                     <button
                       type="button"
                       onClick={() => handleUnitSwitch('imperial')}
-                      className={`flex-1 py-1.5 px-2 text-xs sm:text-sm font-semibold rounded-lg text-center transition-all ${
+                      className={`flex-1 py-1.5 px-2 text-xs sm:text-sm font-semibold rounded-xl text-center transition-all ${
                         unit === 'imperial'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                          ? 'bg-white text-slate-900 shadow-[0_4px_14px_rgba(0,0,0,0.08)] border border-white/90'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
                       }`}
                     >
                       Imperial (ft/in, lbs)
@@ -244,17 +252,17 @@ export default function ScienceResults() {
 
                 {/* Biological Sex Toggle */}
                 <div>
-                  <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  <span className="block text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">
                     Biological Sex
                   </span>
-                  <div className="inline-flex w-full p-1 bg-slate-100 rounded-xl">
+                  <div className="inline-flex w-full p-1 bg-slate-200/50 backdrop-blur-md rounded-2xl border border-white/70 shadow-[inset_0_1px_3px_rgba(0,0,0,0.06)]">
                     <button
                       type="button"
                       onClick={() => setSex('female')}
-                      className={`flex-1 py-1.5 px-2 text-xs sm:text-sm font-semibold rounded-lg text-center transition-all ${
+                      className={`flex-1 py-1.5 px-2 text-xs sm:text-sm font-semibold rounded-xl text-center transition-all ${
                         sex === 'female'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                          ? 'bg-white text-slate-900 shadow-[0_4px_14px_rgba(0,0,0,0.08)] border border-white/90'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
                       }`}
                     >
                       Female
@@ -262,10 +270,10 @@ export default function ScienceResults() {
                     <button
                       type="button"
                       onClick={() => setSex('male')}
-                      className={`flex-1 py-1.5 px-2 text-xs sm:text-sm font-semibold rounded-lg text-center transition-all ${
+                      className={`flex-1 py-1.5 px-2 text-xs sm:text-sm font-semibold rounded-xl text-center transition-all ${
                         sex === 'male'
-                          ? 'bg-white text-slate-900 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                          ? 'bg-white text-slate-900 shadow-[0_4px_14px_rgba(0,0,0,0.08)] border border-white/90'
+                          : 'text-slate-600 hover:text-slate-900 hover:bg-white/40'
                       }`}
                     >
                       Male
@@ -285,10 +293,10 @@ export default function ScienceResults() {
                       key={range}
                       type="button"
                       onClick={() => setAgeGroup(range)}
-                      className={`py-2 px-2 text-xs sm:text-sm font-medium rounded-xl border text-center transition-all ${
+                      className={`py-2 px-2 text-xs sm:text-sm font-semibold rounded-xl border text-center transition-all ${
                         ageGroup === range
-                          ? 'bg-[#163824] text-white border-[#163824] shadow-xs'
-                          : 'bg-white text-slate-600 border-slate-200 hover:border-slate-300'
+                          ? 'bg-gradient-to-r from-[#00A884] to-[#0A8F70] text-white border-emerald-500 shadow-[0_6px_16px_rgba(0,168,132,0.3),inset_0_1px_1px_rgba(255,255,255,0.35)]'
+                          : 'bg-white/60 hover:bg-white/90 backdrop-blur-md text-slate-700 border-white/80 shadow-xs'
                       }`}
                     >
                       {range}
@@ -313,7 +321,7 @@ export default function ScienceResults() {
                           max={220}
                           value={heightCm}
                           onChange={(e) => setHeightCm(Math.max(100, Math.min(230, Number(e.target.value) || 0)))}
-                          className="w-20 px-2.5 py-1 text-right text-base font-extrabold text-slate-900 border border-slate-200 rounded-lg focus:outline-none focus:border-[#00A884]"
+                          className="w-20 px-2.5 py-1.5 text-right text-base font-extrabold text-slate-900 bg-white/80 backdrop-blur-md border border-white/90 rounded-xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] focus:outline-none focus:ring-2 focus:ring-[#00A884]/40 focus:border-[#00A884]"
                         />
                         <span className="text-xs font-semibold text-slate-500">cm</span>
                       </div>
@@ -325,7 +333,7 @@ export default function ScienceResults() {
                       step={1}
                       value={heightCm}
                       onChange={(e) => setHeightCm(Number(e.target.value))}
-                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#00A884]"
+                      className="w-full h-2.5 bg-slate-200/80 rounded-lg appearance-none cursor-pointer accent-[#00A884] shadow-inner"
                     />
                     <div className="flex justify-between text-[11px] text-slate-500 mt-1.5 font-medium">
                       <span>120 cm (3&apos;11&quot;)</span>
@@ -337,7 +345,7 @@ export default function ScienceResults() {
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-bold text-slate-800">Height</span>
-                      <span className="text-base font-extrabold text-slate-900">
+                      <span className="text-base font-extrabold text-slate-900 bg-white/80 backdrop-blur-md border border-white/90 px-3 py-1 rounded-xl shadow-xs">
                         {heightFt}&apos; {heightIn}&quot;
                       </span>
                     </div>
@@ -353,7 +361,7 @@ export default function ScienceResults() {
                           step={1}
                           value={heightFt}
                           onChange={(e) => setHeightFt(Number(e.target.value))}
-                          className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#00A884]"
+                          className="w-full h-2.5 bg-slate-200/80 rounded-lg appearance-none cursor-pointer accent-[#00A884] shadow-inner"
                         />
                       </div>
                       <div>
@@ -367,7 +375,7 @@ export default function ScienceResults() {
                           step={1}
                           value={heightIn}
                           onChange={(e) => setHeightIn(Number(e.target.value))}
-                          className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#00A884]"
+                          className="w-full h-2.5 bg-slate-200/80 rounded-lg appearance-none cursor-pointer accent-[#00A884] shadow-inner"
                         />
                       </div>
                     </div>
@@ -391,7 +399,7 @@ export default function ScienceResults() {
                           max={200}
                           value={weightKg}
                           onChange={(e) => setWeightKg(Math.max(30, Math.min(250, Number(e.target.value) || 0)))}
-                          className="w-20 px-2.5 py-1 text-right text-base font-extrabold text-slate-900 border border-slate-200 rounded-lg focus:outline-none focus:border-[#00A884]"
+                          className="w-20 px-2.5 py-1.5 text-right text-base font-extrabold text-slate-900 bg-white/80 backdrop-blur-md border border-white/90 rounded-xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] focus:outline-none focus:ring-2 focus:ring-[#00A884]/40 focus:border-[#00A884]"
                         />
                         <span className="text-xs font-semibold text-slate-500">kg</span>
                       </div>
@@ -403,7 +411,7 @@ export default function ScienceResults() {
                       step={0.5}
                       value={weightKg}
                       onChange={(e) => setWeightKg(Number(e.target.value))}
-                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#00A884]"
+                      className="w-full h-2.5 bg-slate-200/80 rounded-lg appearance-none cursor-pointer accent-[#00A884] shadow-inner"
                     />
                     <div className="flex justify-between text-[11px] text-slate-500 mt-1.5 font-medium">
                       <span>35 kg (77 lbs)</span>
@@ -425,7 +433,7 @@ export default function ScienceResults() {
                           max={450}
                           value={weightLbs}
                           onChange={(e) => setWeightLbs(Math.max(60, Math.min(500, Number(e.target.value) || 0)))}
-                          className="w-24 px-2.5 py-1 text-right text-base font-extrabold text-slate-900 border border-slate-200 rounded-lg focus:outline-none focus:border-[#00A884]"
+                          className="w-24 px-2.5 py-1.5 text-right text-base font-extrabold text-slate-900 bg-white/80 backdrop-blur-md border border-white/90 rounded-xl shadow-[inset_0_1px_2px_rgba(0,0,0,0.04)] focus:outline-none focus:ring-2 focus:ring-[#00A884]/40 focus:border-[#00A884]"
                         />
                         <span className="text-xs font-semibold text-slate-500">lbs</span>
                       </div>
@@ -437,7 +445,7 @@ export default function ScienceResults() {
                       step={1}
                       value={weightLbs}
                       onChange={(e) => setWeightLbs(Number(e.target.value))}
-                      className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#00A884]"
+                      className="w-full h-2.5 bg-slate-200/80 rounded-lg appearance-none cursor-pointer accent-[#00A884] shadow-inner"
                     />
                     <div className="flex justify-between text-[11px] text-slate-500 mt-1.5 font-medium">
                       <span>77 lbs (35 kg)</span>
@@ -452,8 +460,9 @@ export default function ScienceResults() {
               {/* MOBILE LIVE RESULT HUD (Visible strictly on mobile screens) */}
               {/* Gives instant, zero-scroll visual feedback as sliders move! */}
               {/* ========================================================= */}
-              <div className="lg:hidden mt-6 p-4 sm:p-5 rounded-2xl bg-[#163824] text-white shadow-lg border border-emerald-900/40">
-                <div className="flex items-center justify-between gap-3 mb-3">
+              <div className="lg:hidden mt-6 p-5 rounded-2xl bg-gradient-to-br from-[#0e3b26]/92 via-[#0a2c1d]/90 to-[#061e13]/94 backdrop-blur-2xl text-white shadow-[0_15px_35px_rgba(5,23,13,0.35),inset_0_1px_1px_rgba(255,255,255,0.2)] border border-emerald-400/25 relative overflow-hidden">
+                <div className="absolute top-0 right-0 w-48 h-48 bg-emerald-400/20 rounded-full blur-2xl pointer-events-none" />
+                <div className="flex items-center justify-between gap-3 mb-3 relative z-10">
                   <div>
                     <span className="text-[11px] font-mono tracking-wider uppercase text-emerald-400 font-bold block">
                       Live BMI Result
@@ -468,7 +477,7 @@ export default function ScienceResults() {
 
                   <div className="text-right">
                     <span
-                      className="inline-block px-2.5 py-1 rounded-full text-xs font-bold"
+                      className="inline-block px-2.5 py-1 rounded-full text-xs font-bold shadow-xs backdrop-blur-md"
                       style={{ backgroundColor: `${category.color}25`, color: category.color === '#00A884' ? '#34D399' : category.color }}
                     >
                       {category.label}
@@ -484,8 +493,8 @@ export default function ScienceResults() {
                 </div>
 
                 {/* Mini Spectrum Needle Bar for instant tactile feedback on mobile */}
-                <div className="mb-4">
-                  <div className="relative w-full h-2 rounded-full overflow-hidden flex bg-white/10 p-0.5">
+                <div className="mb-4 relative z-10">
+                  <div className="relative w-full h-2 rounded-full overflow-hidden flex bg-white/10 backdrop-blur-sm border border-white/15 p-0.5">
                     <div className="h-full bg-blue-400 rounded-l-full" style={{ width: '17.5%' }} />
                     <div className="h-full bg-[#00A884]" style={{ width: '22%' }} />
                     <div className="h-full bg-amber-400" style={{ width: '22.5%' }} />
@@ -502,13 +511,13 @@ export default function ScienceResults() {
                 </div>
 
                 {/* Mobile Recommendation Narrative & Full-Width Primary CTA */}
-                <div className="pt-2">
+                <div className="pt-2 relative z-10">
                   <p className="text-xs text-slate-200 leading-relaxed mb-4 font-normal">
                     {category.recommendation}
                   </p>
                   <Link
                     href={`/assessment?height=${activeMetrics.heightCm}&weight=${activeMetrics.weightKg}&bmi=${bmi}`}
-                    className="w-full py-3.5 px-5 rounded-full bg-[#00A884] hover:bg-[#009272] text-white text-sm font-bold flex items-center justify-center gap-2 shadow-md transition-all text-center"
+                    className="w-full py-3.5 px-5 rounded-full bg-gradient-to-r from-[#00A884] via-[#059669] to-[#0D9488] hover:from-[#009272] hover:to-[#087F63] text-white text-sm font-bold flex items-center justify-center gap-2 shadow-[0_8px_20px_rgba(0,168,132,0.4),inset_0_1px_1px_rgba(255,255,255,0.35)] border border-emerald-300/30 transition-all text-center"
                   >
                     <span>Check My Doctor Eligibility</span>
                     <ArrowRight className="w-4 h-4" />
@@ -518,7 +527,7 @@ export default function ScienceResults() {
             </div>
 
             {/* Indian Consensus Guideline Note */}
-            <div className="pt-6 border-t border-slate-100 flex items-start gap-2.5 text-xs text-slate-600 leading-relaxed">
+            <div className="mt-6 p-4 rounded-2xl bg-white/50 backdrop-blur-md border border-white/70 shadow-xs flex items-start gap-2.5 text-xs text-slate-600 leading-relaxed relative z-10">
               <Info className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               <span>
                 <strong>Indian Consensus Calibration:</strong> In accordance with ICMR & WHO South Asian guidelines, the overweight threshold begins at <strong>23.0 kg/m²</strong> (compared to 25.0 kg/m² in Western guidelines) due to higher cardiovascular and visceral fat risks in Indian phenotypes.
@@ -528,21 +537,32 @@ export default function ScienceResults() {
 
           {/* ========================================================= */}
           {/* RIGHT COLUMN: CLINICAL RESULTS & METABOLIC TELEMETRY      */}
+          {/* Frosted Emerald Dark Glassmorphism                        */}
           {/* Strictly visible on desktop (lg:flex) - hidden on mobile! */}
           {/* ========================================================= */}
           <div
             id="clinical-results-panel"
-            className="hidden lg:flex lg:col-span-5 bg-[#163824] rounded-[2rem] text-white p-6 sm:p-8 flex-col justify-between shadow-xl relative overflow-hidden"
+            className="hidden lg:flex lg:col-span-5 bg-gradient-to-br from-[#0e3b26]/90 via-[#0a2c1d]/90 to-[#061e13]/92 backdrop-blur-2xl rounded-[2.5rem] text-white p-7 sm:p-9 flex-col justify-between shadow-[0_25px_60px_-15px_rgba(5,20,11,0.5),inset_0_1px_1px_rgba(255,255,255,0.25)] border border-emerald-400/25 relative overflow-hidden"
           >
-            <div>
+            {/* Top specular highlight rim */}
+            <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/40 to-transparent pointer-events-none" />
+            {/* Ambient luminous orb top-right */}
+            <div className="absolute -top-24 -right-24 w-80 h-80 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none" />
+            {/* Ambient teal glow bottom-left */}
+            <div className="absolute -bottom-20 -left-20 w-72 h-72 bg-teal-500/15 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="relative z-10">
               {/* Card Header */}
-              <div className="pb-4 border-b border-white/10 mb-6">
-                <h3 className="font-sans text-xl font-bold text-white">Your Metabolic Index</h3>
+              <div className="pb-4 border-b border-white/10 mb-6 flex items-center justify-between">
+                <h3 className="font-sans text-xl font-bold text-white tracking-tight">Your Metabolic Index</h3>
+                <span className="text-[10px] uppercase font-mono tracking-widest text-emerald-400/90 font-bold bg-white/5 border border-white/10 px-2.5 py-1 rounded-full">
+                  Clinical HUD
+                </span>
               </div>
 
               {/* Large Score Display */}
               <div className="flex items-baseline gap-3 mb-6">
-                <span className="font-sans text-5xl sm:text-6xl font-extrabold text-white tracking-tight tabular-nums">
+                <span className="font-sans text-5xl sm:text-6xl font-extrabold text-white tracking-tight tabular-nums drop-shadow-[0_4px_12px_rgba(0,0,0,0.3)]">
                   {bmi.toFixed(1)}
                 </span>
                 <div className="flex flex-col">
@@ -562,16 +582,16 @@ export default function ScienceResults() {
                   <span>Obese</span>
                 </div>
 
-                {/* Bar with 4 zones */}
-                <div className="relative w-full h-3 rounded-full overflow-hidden flex bg-white/10 p-0.5">
+                {/* Glassy capsule container for the spectrum */}
+                <div className="relative w-full h-3.5 rounded-full overflow-hidden flex bg-white/10 backdrop-blur-md border border-white/15 p-0.5 shadow-[inset_0_1px_3px_rgba(0,0,0,0.25)]">
                   {/* Zone 1: Underweight (<18.5) -> ~17.5% */}
-                  <div className="h-full bg-blue-400 rounded-l-full" style={{ width: '17.5%' }} title="Underweight (<18.5)" />
+                  <div className="h-full bg-blue-400 rounded-l-full shadow-xs" style={{ width: '17.5%' }} title="Underweight (<18.5)" />
                   {/* Zone 2: Normal (18.5 - 22.9) -> ~22% */}
-                  <div className="h-full bg-[#00A884]" style={{ width: '22%' }} title="Healthy (18.5 - 22.9)" />
+                  <div className="h-full bg-[#00A884] shadow-xs" style={{ width: '22%' }} title="Healthy (18.5 - 22.9)" />
                   {/* Zone 3: Overweight (23.0 - 27.4) -> ~22.5% */}
-                  <div className="h-full bg-amber-400" style={{ width: '22.5%' }} title="Overweight (23.0 - 27.4)" />
+                  <div className="h-full bg-amber-400 shadow-xs" style={{ width: '22.5%' }} title="Overweight (23.0 - 27.4)" />
                   {/* Zone 4: Obese (>=27.5) -> ~38% */}
-                  <div className="h-full bg-rose-500 rounded-r-full" style={{ width: '38%' }} title="Obese (>=27.5)" />
+                  <div className="h-full bg-rose-500 rounded-r-full shadow-xs" style={{ width: '38%' }} title="Obese (>=27.5)" />
                 </div>
 
                 {/* Needle Indicator */}
@@ -581,15 +601,15 @@ export default function ScienceResults() {
                     style={{ left: `${Math.max(4, Math.min(96, needlePercent))}%` }}
                   >
                     <div className="w-0 h-0 border-l-[5px] border-l-transparent border-r-[5px] border-r-transparent border-b-[6px] border-b-white" />
-                    <span className="text-[10px] font-mono font-bold text-white bg-black/60 px-1 rounded mt-0.5">
+                    <span className="text-[10px] font-mono font-bold text-white bg-black/60 backdrop-blur-sm border border-white/20 px-1.5 py-0.5 rounded shadow-sm mt-0.5">
                       {bmi.toFixed(1)}
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Telemetry Breakdown Details */}
-              <div className="space-y-3 bg-white/5 rounded-2xl p-4 border border-white/10 mb-6">
+              {/* Telemetry Breakdown Details (Glassy Sub-card) */}
+              <div className="space-y-3 bg-white/10 backdrop-blur-xl rounded-2xl p-4 sm:p-5 border border-white/15 shadow-[0_8px_24px_rgba(0,0,0,0.15),inset_0_1px_0_rgba(255,255,255,0.15)] mb-6">
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-slate-300">Healthy Weight Range (for your height):</span>
                   <span className="font-bold text-white tabular-nums">
@@ -598,21 +618,21 @@ export default function ScienceResults() {
                 </div>
 
                 {healthyWeightRange.differenceKg > 0 ? (
-                  <div className="flex items-center justify-between text-xs pt-2 border-t border-white/10">
+                  <div className="flex items-center justify-between text-xs pt-2.5 border-t border-white/10">
                     <span className="text-slate-300">Weight to Optimal Threshold:</span>
                     <span className="font-bold text-amber-300 tabular-nums">
                       +{healthyWeightRange.differenceKg} {unit === 'metric' ? 'kg' : 'lbs'}
                     </span>
                   </div>
                 ) : healthyWeightRange.differenceKg < 0 ? (
-                  <div className="flex items-center justify-between text-xs pt-2 border-t border-white/10">
+                  <div className="flex items-center justify-between text-xs pt-2.5 border-t border-white/10">
                     <span className="text-slate-300">Weight Difference:</span>
                     <span className="font-bold text-blue-300 tabular-nums">
                       {healthyWeightRange.differenceKg} {unit === 'metric' ? 'kg' : 'lbs'}
                     </span>
                   </div>
                 ) : (
-                  <div className="flex items-center justify-between text-xs pt-2 border-t border-white/10">
+                  <div className="flex items-center justify-between text-xs pt-2.5 border-t border-white/10">
                     <span className="text-slate-300">Target Alignment:</span>
                     <span className="font-bold text-emerald-400">Within Optimal Zone</span>
                   </div>
@@ -625,11 +645,11 @@ export default function ScienceResults() {
               </p>
             </div>
 
-            {/* Direct High-Conversion Clinical CTA */}
-            <div>
+            {/* Direct High-Conversion Clinical CTA with Glass Specular Effect */}
+            <div className="relative z-10">
               <Link
                 href={`/assessment?height=${activeMetrics.heightCm}&weight=${activeMetrics.weightKg}&bmi=${bmi}`}
-                className="w-full py-4 px-6 rounded-full bg-[#00A884] hover:bg-[#009272] text-white font-sans font-bold text-sm sm:text-base flex items-center justify-center gap-2 shadow-lg transition-all hover:scale-[1.01] active:scale-[0.99]"
+                className="w-full py-4 px-6 rounded-full bg-gradient-to-r from-[#00A884] via-[#059669] to-[#0D9488] hover:from-[#009272] hover:to-[#087F63] text-white font-sans font-bold text-sm sm:text-base flex items-center justify-center gap-2 shadow-[0_12px_32px_rgba(0,168,132,0.45),inset_0_1px_1px_rgba(255,255,255,0.4)] border border-emerald-300/30 backdrop-blur-sm transition-all hover:scale-[1.01] active:scale-[0.99]"
               >
                 <span>Check My Doctor Eligibility</span>
                 <ArrowRight className="w-4 h-4" />
