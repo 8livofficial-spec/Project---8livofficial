@@ -56,7 +56,7 @@ export function labelForRole(role: string) {
 
 export function canJoinConsultation(bookingDate?: string | null, bookingTime?: string | null, status?: string | null) {
   const normalized = String(status || '').toLowerCase()
-  const terminal = ['completed', 'cancelled', 'cancelled_by_doctor', 'cancelled_by_patient', 'missed', 'missed_by_patient'].includes(normalized)
+  const terminal = ['completed', 'cancelled', 'cancelled_by_doctor', 'cancelled_by_patient', 'missed', 'missed_by_patient', 'attended'].includes(normalized)
   if (terminal || !bookingDate || !bookingTime) return false
 
   const normalizedTime = String(bookingTime || '').slice(0, 5)

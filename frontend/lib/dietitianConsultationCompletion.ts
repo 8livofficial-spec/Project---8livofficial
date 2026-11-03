@@ -43,10 +43,9 @@ export async function completeDietitianConsultationWithWalletCredit(input: {
     .update({
       status: 'completed',
       is_completed: true,
-      completed_at: now,
+      completed_at: consult.completed_at || now,
       call_ended_at: consult.call_ended_at || now,
       meeting_status: 'ENDED',
-      updated_at: now,
     })
     .eq('id', consult.id)
     .select()

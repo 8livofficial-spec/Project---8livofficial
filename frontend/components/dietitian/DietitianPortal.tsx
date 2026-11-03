@@ -2288,17 +2288,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                             <td className="py-4 px-3 text-right">
                               <div className="flex items-center justify-end gap-2 relative">
                                 {/* State-Aware Primary CTA */}
-                                {session.canJoin && session.meetingUrl ? (
-                                  <a
-                                    href={session.meetingUrl}
-                                    target="_blank"
-                                    rel="opener"
-                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
-                                  >
-                                    <Video className="w-3.5 h-3.5" />
-                                    <span>Join Call</span>
-                                  </a>
-                                ) : status === 'attended' ? (
+                                {status === 'attended' ? (
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -2322,6 +2312,16 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                                     <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
                                     <span>View Plan</span>
                                   </button>
+                                ) : session.canJoin && session.meetingUrl && !terminal ? (
+                                  <a
+                                    href={session.meetingUrl}
+                                    target="_blank"
+                                    rel="opener"
+                                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
+                                  >
+                                    <Video className="w-3.5 h-3.5" />
+                                    <span>Join Call</span>
+                                  </a>
                                 ) : terminal ? (
                                   <span className="px-2.5 py-1.5 text-[11px] text-slate-400 font-semibold italic">
                                     Ended
