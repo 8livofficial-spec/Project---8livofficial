@@ -13,6 +13,7 @@ import {
   AlertCircle,
 } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
+import OfficialProtocolModal from '@/components/protocol/OfficialProtocolModal'
 
 export default function PatientNutritionWidget() {
   const [activePlan, setActivePlan] = useState<any>(null)
@@ -29,6 +30,7 @@ export default function PatientNutritionWidget() {
   const [notes, setNotes] = useState('')
   const [submittingLog, setSubmittingLog] = useState(false)
   const [statusMessage, setStatusMessage] = useState('')
+  const [viewingLetterhead, setViewingLetterhead] = useState(false)
 
   const loadPatientNutrition = useCallback(async () => {
     try {
@@ -144,15 +146,25 @@ export default function PatientNutritionWidget() {
                 Version {activePlan.version} • Start Date: {activePlan.start_date} • Review Date: {activePlan.review_date || 'In 14 Days'}
               </p>
             </div>
-            <a
-              href={`/api/dietitian/plans/${activePlan.id}/pdf`}
-              target="_blank"
-              rel="noreferrer"
-              className="px-4 py-2 rounded-full border border-[#E8DED4] hover:bg-slate-50 text-xs font-bold text-[#1A1F36] flex items-center gap-2 self-start"
-            >
-              <Download className="w-4 h-4 text-[#0D9488]" />
-              <span>View Nutrition Plan PDF</span>
-            </a>
+            <div className="flex items-center gap-2 self-start flex-wrap">
+              <button
+                type="button"
+                onClick={() => setViewingLetterhead(true)}
+                className="px-4 py-2 rounded-full bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold flex items-center gap-2 shadow-xs cursor-pointer"
+              >
+                <FileText className="w-4 h-4 text-emerald-200" />
+                <span>Official Letterhead</span>
+              </button>
+              <a
+                href={`/api/dietitian/plans/${activePlan.id}/pdf`}
+                target="_blank"
+                rel="noreferrer"
+                className="px-4 py-2 rounded-full border border-[#E8DED4] hover:bg-slate-50 text-xs font-bold text-[#1A1F36] flex items-center gap-2"
+              >
+                <Download className="w-4 h-4 text-[#0D9488]" />
+                <span>Download PDF</span>
+              </a>
+            </div>
           </div>
 
           {/* Acknowledgement Block */}
@@ -336,6 +348,14 @@ export default function PatientNutritionWidget() {
           </div>
         </div>
       )}
+
+      {/* Official Letterhead Modal */}
+      <OfficialProtocolModal
+        isOpen={viewingLetterhead}
+        onClose={() => setViewingLetterhead(false)}
+        protocol={activePlan}
+        role="dietitian"
+      />
     </div>
   )
 }

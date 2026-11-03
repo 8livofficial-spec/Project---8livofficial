@@ -3,12 +3,14 @@
 import React, { useCallback, useEffect, useMemo, useState, createContext, useContext } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Activity, Apple, CalendarDays, Dumbbell, FileText, LayoutDashboard, LogOut, MessageCircle, Search, Settings, Users, Video, Wallet } from 'lucide-react'
+import { Activity, Apple, CalendarDays, Dumbbell, FileText, LayoutDashboard, LogOut, MessageCircle, Search, Settings, Users, Video, Wallet, Sparkles, Eye } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
 import ProviderAvailabilityScheduler, { AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler'
 import ProviderProfileEditor from './ProviderProfileEditor'
 import DietitianPortal from '@/components/dietitian/DietitianPortal'
+import ProviderProtocolBuilderModal from '@/components/protocol/ProviderProtocolBuilderModal'
+import OfficialProtocolModal from '@/components/protocol/OfficialProtocolModal'
 import { authedFetch } from '@/lib/apiClient'
 
 
@@ -121,6 +123,7 @@ type Summary = {
 type Plan = Record<string, any>
 type ProviderConsultation = {
   id: string
+  patient_id?: string
   patientName: string
   staff_role: string
   roleLabel: string
@@ -323,6 +326,12 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState('')
 
+  // Official Protocol Builder & Viewer State
+  const [showProtocolBuilder, setShowProtocolBuilder] = useState(false)
+  const [protocolBuilderPatient, setProtocolBuilderPatient] = useState<{ id: string; name?: string } | null>(null)
+  const [protocolBuilderConsultation, setProtocolBuilderConsultation] = useState<any>(null)
+  const [viewingOfficialProtocol, setViewingOfficialProtocol] = useState<any>(null)
+
   // Pagination & Search States for Patients and Consultations
   const [patientsPage, setPatientsPage] = useState(1)
   const [patientsTotalPages, setPatientsTotalPages] = useState(1)
@@ -520,6 +529,36 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update consultation.')
     }
+  }
+
+  const handleOpenProtocolBuilder = (patientIdOrSession?: string | ProviderConsultation) => {
+    if (patientIdOrSession && typeof patientIdOrSession === 'object') {
+      const session = patientIdOrSession as ProviderConsultation
+      setProtocolBuilderConsultation(session)
+      setProtocolBuilderPatient({ id: session.patient_id || '', name: session.patientName })
+    } else if (typeof patientIdOrSession === 'string' && patientIdOrSession) {
+      const pat = patients.find((p) => p.id === patientIdOrSession)
+      setProtocolBuilderPatient(pat ? { id: pat.id, name: pat.name } : { id: patientIdOrSession })
+      setProtocolBuilderConsultation(null)
+    } else {
+      setProtocolBuilderPatient(null)
+      setProtocolBuilderConsultation(null)
+    }
+    setShowProtocolBuilder(true)
+  }
+
+  const handleViewProtocol = (plan: any) => {
+    const patient = patients.find((p) => p.id === plan.patient_id)
+    setViewingOfficialProtocol({
+      ...plan,
+      title: plan.title || `${plan.workout_type || 'Care'} Protocol`,
+      patient_name: patient?.name || 'Assigned Patient',
+      coach_name: provider?.name || 'Certified Fitness Coach',
+      workout_type: plan.workout_type,
+      weekly_frequency: plan.weekly_frequency,
+      daily_step_goal: plan.daily_step_goal,
+      notes: plan.notes,
+    })
   }
 
   const generateAvailability = async (submission: AvailabilitySubmission) => {
@@ -758,6 +797,7 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
                 page={consultationsPage}
                 totalPages={consultationsTotalPages}
                 setPage={setConsultationsPage}
+                onOpenProtocolBuilder={handleOpenProtocolBuilder}
               />
             )}
             {section === 'plans' && !sectionLoading && (
@@ -770,6 +810,8 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
                 submitPlan={submitPlan}
                 saving={saving}
                 copy={copy}
+                onOpenProtocolBuilder={handleOpenProtocolBuilder}
+                onViewProtocol={handleViewProtocol}
               />
             )}
 
@@ -786,6 +828,38 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
           </div>
         </section>
       </div>
+
+      {/* Official Protocol Builder Modal for Fitness Coaches */}
+      <ProviderProtocolBuilderModal
+        isOpen={showProtocolBuilder}
+        onClose={() => {
+          setShowProtocolBuilder(false)
+          setProtocolBuilderPatient(null)
+          setProtocolBuilderConsultation(null)
+        }}
+        onSuccess={() => {
+          setShowProtocolBuilder(false)
+          setProtocolBuilderPatient(null)
+          setProtocolBuilderConsultation(null)
+          loadSectionData('plans', true)
+          loadSectionData('consultations', true)
+          loadSectionData('wallet', true)
+        }}
+        providerRole={(provider?.role as any) || 'fitness_coach'}
+        patient={protocolBuilderPatient}
+        consultation={protocolBuilderConsultation}
+        patientsList={patients}
+        providerProfile={provider}
+      />
+
+      {/* Official Letterhead Viewer Modal */}
+      <OfficialProtocolModal
+        isOpen={Boolean(viewingOfficialProtocol)}
+        onClose={() => setViewingOfficialProtocol(null)}
+        protocol={viewingOfficialProtocol}
+        role={(provider?.role as any) || 'fitness_coach'}
+        specialistProfile={provider}
+      />
     </main>
   )
 }
@@ -979,7 +1053,8 @@ function Consultations({
   setStatus,
   page,
   totalPages,
-  setPage
+  setPage,
+  onOpenProtocolBuilder,
 }: {
   consultations: ProviderConsultation[]
   stats: any
@@ -991,6 +1066,7 @@ function Consultations({
   page: number
   totalPages: number
   setPage: React.Dispatch<React.SetStateAction<number>>
+  onOpenProtocolBuilder?: (consultation: ProviderConsultation) => void
 }) {
   const statCards = [
     { label: 'Today', value: stats.today || 0 },
@@ -1065,6 +1141,16 @@ function Consultations({
                       <td className="py-4">
                         <div className="flex flex-wrap gap-2">
                           <a href={session.canJoin && session.meetingUrl ? session.meetingUrl : undefined} target="_blank" className={classNames('rounded-full px-3 py-2 text-xs font-black', session.canJoin && session.meetingUrl ? 'bg-[#1A1F36] text-white' : 'pointer-events-none bg-[#E8DED4] text-[#6B7A90]')}>Join</a>
+                          {!terminal && onOpenProtocolBuilder && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenProtocolBuilder(session)}
+                              className="rounded-full bg-[#1A1F36] text-white px-3 py-2 text-xs font-black hover:bg-slate-800 flex items-center gap-1 cursor-pointer"
+                            >
+                              <Sparkles className="w-3 h-3 text-amber-300" />
+                              <span>Deliver Protocol</span>
+                            </button>
+                          )}
                           {!terminal && <button onClick={() => onAction(session.id, 'complete')} className="rounded-full border border-[#1A1F36]/15 bg-white px-3 py-2 text-xs font-black">Complete</button>}
                           {!terminal && <button onClick={() => onAction(session.id, 'missed')} className="rounded-full border border-[#D89A3D]/25 bg-[#FFF8EC] px-3 py-2 text-xs font-black text-[#A86812]">Missed</button>}
                           {!terminal && <button onClick={() => onAction(session.id, 'cancel')} className="rounded-full border border-[#F2C8BE] bg-[#FFF4EC] px-3 py-2 text-xs font-black text-[#A84A33]">Cancel</button>}
@@ -1452,6 +1538,8 @@ function Plans(props: {
   submitPlan: (event: React.FormEvent<HTMLFormElement>) => void
   saving: boolean
   copy: any
+  onOpenProtocolBuilder?: (patientId?: string, consultation?: any) => void
+  onViewProtocol?: (plan: any) => void
 }) {
   const selectedPatient = props.patients.find((patient) => patient.id === props.selectedPatientId)
   const isDietitian = props.provider?.role === 'dietitian'
@@ -1480,8 +1568,22 @@ function Plans(props: {
   return (
     <div className="grid gap-6 xl:grid-cols-[1fr_420px]">
       <div className="rounded-[28px] border border-[#E8DED4] bg-white p-6 shadow-sm">
-        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#C4622D]">{props.copy.planTitle}</p>
-        <h3 className="mt-1 text-2xl font-black">Assigned care plan</h3>
+        <div className="flex items-center justify-between gap-4 flex-wrap pb-4 border-b border-[#E8DED4]">
+          <div>
+            <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#C4622D]">{props.copy.planTitle}</p>
+            <h3 className="mt-1 text-2xl font-black">Assigned care plan</h3>
+          </div>
+          {props.onOpenProtocolBuilder && (
+            <button
+              type="button"
+              onClick={() => props.onOpenProtocolBuilder?.(props.selectedPatientId)}
+              className="rounded-full bg-gradient-to-r from-[#1A1F36] to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white px-5 py-2.5 text-xs font-bold flex items-center gap-2 shadow-sm cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>Author Official Protocol Sheet</span>
+            </button>
+          )}
+        </div>
         {!props.patients.length ? (
           <EmptyState />
         ) : (
@@ -1601,6 +1703,16 @@ function Plans(props: {
                           <FileText className="w-3.5 h-3.5" />
                           <span className="truncate max-w-[200px]">{plan.title || 'Attached Document'}</span>
                         </div>
+                      )}
+                      {props.onViewProtocol && (
+                        <button
+                          type="button"
+                          onClick={() => props.onViewProtocol?.(plan)}
+                          className="mt-2 text-xs font-bold text-[#C4622D] hover:underline flex items-center gap-1 cursor-pointer"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>View Official Letterhead</span>
+                        </button>
                       )}
                     </div>
                     <span className="rounded-full px-3 py-1 text-xs font-black" style={{ background: props.copy.soft, color: props.copy.accent }}>{plan.status}</span>

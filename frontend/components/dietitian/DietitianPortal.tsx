@@ -52,6 +52,8 @@ import {
 import { supabase } from '@/lib/supabaseClient'
 import ProviderProfileEditor from '@/components/provider/ProviderProfileEditor'
 import ProviderAvailabilityScheduler, { AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler'
+import ProviderProtocolBuilderModal from '@/components/protocol/ProviderProtocolBuilderModal'
+import OfficialProtocolModal from '@/components/protocol/OfficialProtocolModal'
 
 // ==========================================
 // TYPES & SCHEMAS
@@ -295,6 +297,12 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
   const [uploadingPlan, setUploadingPlan] = useState(false)
   const [planAssignMode, setPlanAssignMode] = useState<'upload' | 'template'>('upload')
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('')
+
+  // Official Letterhead Protocol Builder & Viewer State
+  const [showProtocolBuilder, setShowProtocolBuilder] = useState(false)
+  const [protocolBuilderPatient, setProtocolBuilderPatient] = useState<{ id: string; name?: string } | null>(null)
+  const [protocolBuilderConsultation, setProtocolBuilderConsultation] = useState<any>(null)
+  const [viewingOfficialProtocol, setViewingOfficialProtocol] = useState<any>(null)
 
   // Consultation Row Action State
   const [actionMenuOpenSessionId, setActionMenuOpenSessionId] = useState<string | null>(null)
@@ -985,15 +993,26 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
               <div className="flex items-center gap-2.5 flex-wrap">
                 <button
                   onClick={() => {
+                    setProtocolBuilderPatient(null)
+                    setProtocolBuilderConsultation(null)
+                    setShowProtocolBuilder(true)
+                  }}
+                  className="rounded-2xl bg-gradient-to-r from-[#0D9488] to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-2 shadow-sm cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-emerald-200" />
+                  <span>Author Official Protocol</span>
+                </button>
+                <button
+                  onClick={() => {
                     setUploadPlanPatientId('')
                     setUploadPlanAppointmentId('')
                     setPlanAssignMode('upload')
                     setShowUploadPlanModal(true)
                   }}
-                  className="rounded-2xl bg-[#0D9488] hover:bg-[#0F766E] text-white px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-2 shadow-xs cursor-pointer"
+                  className="rounded-2xl border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2.5 text-xs font-bold transition-all flex items-center gap-2 cursor-pointer"
                 >
-                  <Plus className="w-4 h-4" />
-                  <span>Assign Nutrition Plan</span>
+                  <Upload className="w-4 h-4 text-slate-500" />
+                  <span>Upload File Plan</span>
                 </button>
                 <button
                   onClick={() => setActiveSection('schedule')}
@@ -1029,10 +1048,9 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                 onClick={() => {
                   if (pendingPlanConsultations.length > 0) {
                     const first = pendingPlanConsultations[0]
-                    setUploadPlanPatientId(first.patient_id || '')
-                    setUploadPlanAppointmentId(first.id || '')
-                    setPlanAssignMode('upload')
-                    setShowUploadPlanModal(true)
+                    setProtocolBuilderPatient({ id: first.patient_id || '', name: first.patientName || 'Patient' })
+                    setProtocolBuilderConsultation(first)
+                    setShowProtocolBuilder(true)
                   } else {
                     setActiveSection('consultations')
                   }
@@ -1165,15 +1183,14 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                             {sessStatus === 'attended' ? (
                               <button
                                 onClick={() => {
-                                  setUploadPlanPatientId(sess.patient_id || '')
-                                  setUploadPlanAppointmentId(sess.id || '')
-                                  setPlanAssignMode('upload')
-                                  setShowUploadPlanModal(true)
+                                  setProtocolBuilderPatient({ id: sess.patient_id || '', name: sess.patientName || 'Patient' })
+                                  setProtocolBuilderConsultation(sess)
+                                  setShowProtocolBuilder(true)
                                 }}
                                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
                               >
-                                <Upload className="w-3.5 h-3.5" />
-                                <span>Upload Plan</span>
+                                <Sparkles className="w-3.5 h-3.5 text-emerald-200" />
+                                <span>Deliver Official Plan</span>
                               </button>
                             ) : sessStatus === 'completed' ? (
                               <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-bold">
@@ -1247,14 +1264,14 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                         </div>
                         <button
                           onClick={() => {
-                            setUploadPlanPatientId(pConsult.patient_id || '')
-                            setUploadPlanAppointmentId(pConsult.id || '')
-                            setPlanAssignMode('upload')
-                            setShowUploadPlanModal(true)
+                            setProtocolBuilderPatient({ id: pConsult.patient_id || '', name: pConsult.patientName || 'Patient' })
+                            setProtocolBuilderConsultation(pConsult)
+                            setShowProtocolBuilder(true)
                           }}
-                          className="px-3 py-1.5 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-bold shadow-xs whitespace-nowrap cursor-pointer"
+                          className="px-3 py-1.5 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-[11px] font-bold shadow-xs whitespace-nowrap cursor-pointer flex items-center gap-1"
                         >
-                          Assign Plan
+                          <Sparkles className="w-3 h-3 text-emerald-200" />
+                          <span>Deliver Plan</span>
                         </button>
                       </div>
                     ))}
@@ -2045,12 +2062,23 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
               <div className="flex items-center gap-3">
                 <button
                   onClick={() => {
+                    setProtocolBuilderPatient(null)
+                    setProtocolBuilderConsultation(null)
+                    setShowProtocolBuilder(true)
+                  }}
+                  className="rounded-full bg-gradient-to-r from-[#0D9488] to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white px-5 py-2.5 text-xs font-bold flex items-center gap-2 shadow-sm cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4 text-emerald-200" />
+                  <span>Author Official Protocol</span>
+                </button>
+                <button
+                  onClick={() => {
                     if (allPatientOptions.length > 0 && !uploadPlanPatientId) {
                       setUploadPlanPatientId(allPatientOptions[0].id)
                     }
                     setShowUploadPlanModal(true)
                   }}
-                  className="rounded-full bg-[#1A1F36] hover:bg-slate-800 text-white px-5 py-2.5 text-xs font-bold flex items-center gap-2 shadow-sm"
+                  className="rounded-full bg-[#1A1F36] hover:bg-slate-800 text-white px-5 py-2.5 text-xs font-bold flex items-center gap-2 shadow-sm cursor-pointer"
                 >
                   <Upload className="w-4 h-4 text-emerald-400" />
                   <span>Upload Nutrition Plan</span>
@@ -2400,17 +2428,35 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                               <span className="text-[11px] text-slate-400 font-medium">
                                 Created {p.created_at ? new Date(p.created_at).toLocaleDateString() : 'Recently'}
                               </span>
-                              {p.status === 'PUBLISHED' && (
-                                <a
-                                  href={`/api/dietitian/plans/${p.id}/pdf`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-xs font-bold text-[#0D9488] hover:underline flex items-center gap-1"
+                              <div className="flex items-center gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setViewingOfficialProtocol({
+                                    ...p,
+                                    title: p.plan_name,
+                                    patient_name: patName,
+                                    calories_per_day: p.daily_calorie_target,
+                                    hydration_goal: `${p.water_target_liters || 2.5} L`,
+                                    dietitian_name: providerUser?.name || 'Assigned Dietitian',
+                                    notes: p.notes || (p.meals && p.meals.length > 0 ? JSON.stringify(p.meals, null, 2) : ''),
+                                  })}
+                                  className="text-xs font-bold text-[#0D9488] hover:underline flex items-center gap-1 cursor-pointer"
                                 >
-                                  <Download className="w-3.5 h-3.5" />
-                                  <span>Download PDF</span>
-                                </a>
-                              )}
+                                  <FileText className="w-3.5 h-3.5" />
+                                  <span>Official Letterhead</span>
+                                </button>
+                                {p.status === 'PUBLISHED' && (
+                                  <a
+                                    href={`/api/dietitian/plans/${p.id}/pdf`}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-xs font-bold text-slate-600 hover:text-slate-900 hover:underline flex items-center gap-1"
+                                  >
+                                    <Download className="w-3.5 h-3.5" />
+                                    <span>PDF</span>
+                                  </a>
+                                )}
+                              </div>
                             </div>
                           </div>
                         )
@@ -2737,16 +2783,15 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                                   <button
                                     type="button"
                                     onClick={() => {
-                                      setUploadPlanPatientId(session.patient_id || '')
-                                      setUploadPlanAppointmentId(session.id || '')
-                                      setPlanAssignMode('upload')
-                                      setShowUploadPlanModal(true)
+                                      setProtocolBuilderPatient({ id: session.patient_id || '', name: session.patientName || 'Patient' })
+                                      setProtocolBuilderConsultation(session)
+                                      setShowProtocolBuilder(true)
                                     }}
-                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
-                                    title="Upload or assign nutrition plan to complete consultation and release wallet earnings"
+                                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#0D9488] to-teal-700 hover:from-teal-700 hover:to-teal-800 text-white text-xs font-bold shadow-xs hover:shadow transition-all cursor-pointer"
+                                    title="Deliver official letterhead nutrition plan to complete consultation and release wallet earnings"
                                   >
-                                    <Upload className="w-3.5 h-3.5" />
-                                    <span>Upload Plan &amp; Complete</span>
+                                    <Sparkles className="w-3.5 h-3.5 text-emerald-200" />
+                                    <span>Deliver Protocol &amp; Complete</span>
                                   </button>
                                 ) : status === 'completed' ? (
                                   <button
@@ -3351,6 +3396,33 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                 </button>
               </div>
 
+              {/* Preferred Option: Official 8Liv Letterhead Studio */}
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 flex items-center justify-between gap-3 shadow-xs">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-[#0D9488] text-white flex items-center justify-center shrink-0">
+                    <Sparkles className="w-4 h-4 text-emerald-200" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-black text-[#1A1F36]">Author Official 8Liv Letterhead</p>
+                    <p className="text-[11px] text-slate-500 font-medium">Type or copy-paste clinical diet with 8Liv header, logo &amp; signature.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowUploadPlanModal(false)
+                    const pat = allPatientOptions.find((p) => p.id === uploadPlanPatientId)
+                    setProtocolBuilderPatient(pat || null)
+                    setProtocolBuilderConsultation(uploadPlanAppointmentId ? { id: uploadPlanAppointmentId } : null)
+                    setShowProtocolBuilder(true)
+                  }}
+                  className="shrink-0 px-3 py-1.5 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1"
+                >
+                  <span>Open Letterhead</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
               {/* Mode Switcher Tabs */}
               <div className="flex p-1 bg-slate-100 rounded-2xl gap-1">
                 <button
@@ -3535,6 +3607,35 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
             </div>
           </div>
         )}
+        {/* Official Protocol Builder Studio Modal */}
+        <ProviderProtocolBuilderModal
+          isOpen={showProtocolBuilder}
+          onClose={() => {
+            setShowProtocolBuilder(false)
+            setProtocolBuilderPatient(null)
+            setProtocolBuilderConsultation(null)
+          }}
+          onSuccess={() => {
+            setShowProtocolBuilder(false)
+            setProtocolBuilderPatient(null)
+            setProtocolBuilderConsultation(null)
+            loadData()
+          }}
+          providerRole="dietitian"
+          patient={protocolBuilderPatient}
+          consultation={protocolBuilderConsultation}
+          patientsList={allPatientOptions}
+          providerProfile={providerUser}
+        />
+
+        {/* Official Protocol Letterhead Viewer Modal */}
+        <OfficialProtocolModal
+          isOpen={Boolean(viewingOfficialProtocol)}
+          onClose={() => setViewingOfficialProtocol(null)}
+          protocol={viewingOfficialProtocol}
+          role="dietitian"
+          specialistProfile={providerUser}
+        />
       </main>
     </div>
   )

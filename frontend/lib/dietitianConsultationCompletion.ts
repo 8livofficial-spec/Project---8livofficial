@@ -5,8 +5,9 @@ export async function completeDietitianConsultationWithWalletCredit(input: {
   patientId: string
   dietitianId: string
   appointmentId?: string | null
+  providerRole?: string
 }) {
-  const { patientId, dietitianId, appointmentId } = input
+  const { patientId, dietitianId, appointmentId, providerRole = 'dietitian' } = input
   const now = new Date().toISOString()
 
   let query = supabaseAdmin
@@ -56,14 +57,18 @@ export async function completeDietitianConsultationWithWalletCredit(input: {
     return { completed: false, error: updateErr.message }
   }
 
-  // 2. Credit the dietitian's wallet account using their configured payout_amount
+  // 2. Credit the provider's wallet account using their configured payout_amount
+  const defaultApptType = providerRole === 'fitness_coach' || providerRole === 'trainer'
+    ? 'FITNESS_COACH_CONSULTATION'
+    : 'DIETITIAN_CONSULTATION'
+
   let walletResult = null
   try {
     walletResult = await creditCompletedConsultation({
       providerId: dietitianId,
       patientId,
       appointmentId: consult.id,
-      appointmentType: consult.appointment_type || 'DIETITIAN_CONSULTATION',
+      appointmentType: (consult as any).appointment_type || defaultApptType,
       createdBy: dietitianId,
     })
   } catch (walletErr) {
@@ -71,14 +76,21 @@ export async function completeDietitianConsultationWithWalletCredit(input: {
   }
 
   // 3. Notify patient
+  const notifTitle = providerRole === 'fitness_coach' || providerRole === 'trainer'
+    ? 'Fitness consultation completed'
+    : 'Dietitian consultation completed'
+  const notifMsg = providerRole === 'fitness_coach' || providerRole === 'trainer'
+    ? 'Your personalized movement and strength protocol has been delivered and your consultation is concluded.'
+    : 'Your personalized clinical nutrition plan has been delivered and your consultation is concluded.'
+
   try {
     await supabaseAdmin
       .from('patient_notifications')
       .insert({
         patient_id: patientId,
         type: 'appointment',
-        title: 'Dietitian consultation completed',
-        message: 'Your personalized clinical nutrition plan has been delivered and your consultation is concluded.',
+        title: notifTitle,
+        message: notifMsg,
         is_read: false,
       })
   } catch (notifErr) {
@@ -91,4 +103,7 @@ export async function completeDietitianConsultationWithWalletCredit(input: {
     walletResult,
   }
 }
+
+export const completeStaffConsultationWithWalletCredit = completeDietitianConsultationWithWalletCredit
+
 

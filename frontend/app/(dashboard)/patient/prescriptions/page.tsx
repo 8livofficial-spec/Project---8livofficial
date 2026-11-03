@@ -21,6 +21,7 @@ import {
   Sparkles,
 } from 'lucide-react'
 import { authedFetch } from '@/lib/apiClient'
+import OfficialProtocolModal from '@/components/protocol/OfficialProtocolModal'
 
 type SpecialistFilter = 'all' | 'doctor' | 'dietitian' | 'trainer'
 
@@ -28,6 +29,8 @@ export default function PatientPrescriptionsPage() {
   const [filter, setFilter] = useState<SpecialistFilter>('all')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const [viewingOfficialProtocol, setViewingOfficialProtocol] = useState<any>(null)
+  const [viewingOfficialRole, setViewingOfficialRole] = useState<'dietitian' | 'fitness_coach'>('dietitian')
   const [data, setData] = useState<{
     prescriptions: any[]
     activePrescription: any | null
@@ -337,10 +340,21 @@ export default function PatientPrescriptionsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewingOfficialRole('dietitian')
+                      setViewingOfficialProtocol(data.activeNutritionPlan)
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-[#0D9488] hover:bg-[#0B7A6F] text-white px-4 py-2.5 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-200" />
+                    <span>Official Letterhead</span>
+                  </button>
                   <Link
                     href="/patient/care-plan"
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#0D9488] hover:bg-[#0B7A6F] text-white px-5 py-2.5 text-xs font-black uppercase tracking-wider transition-all shadow-md"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-4 py-2.5 text-xs font-bold transition-all shadow-xs"
                   >
                     View Meal Guide <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
@@ -436,10 +450,21 @@ export default function PatientPrescriptionsPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewingOfficialRole('fitness_coach')
+                      setViewingOfficialProtocol(data.activeFitnessPlan)
+                    }}
+                    className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white px-4 py-2.5 text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-amber-200" />
+                    <span>Official Letterhead</span>
+                  </button>
                   <Link
                     href="/patient/care-plan"
-                    className="inline-flex items-center gap-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 text-xs font-black uppercase tracking-wider transition-all shadow-md"
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 px-4 py-2.5 text-xs font-bold transition-all shadow-xs"
                   >
                     View Workout Details <ArrowRight className="w-3.5 h-3.5" />
                   </Link>
@@ -578,6 +603,14 @@ export default function PatientPrescriptionsPage() {
           </div>
         </div>
       )}
+
+      {/* Official Protocol Letterhead Modal */}
+      <OfficialProtocolModal
+        isOpen={Boolean(viewingOfficialProtocol)}
+        onClose={() => setViewingOfficialProtocol(null)}
+        protocol={viewingOfficialProtocol}
+        role={viewingOfficialRole}
+      />
     </div>
   )
 }

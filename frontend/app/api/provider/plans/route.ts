@@ -291,7 +291,18 @@ export async function POST(request: Request) {
     .update({ trainer_notes: body.notes || workoutTypeVal, updated_at: new Date().toISOString() })
     .eq('patient_id', patientId)
 
-  return NextResponse.json({ plan: data })
+  const completionResult = await completeDietitianConsultationWithWalletCredit({
+    patientId,
+    dietitianId: provider.user.id,
+    appointmentId: body.appointmentId || null,
+    providerRole: provider.role,
+  })
+
+  return NextResponse.json({
+    plan: data,
+    consultationCompleted: completionResult.completed,
+    walletCredited: Boolean(completionResult.walletResult?.credited),
+  })
 }
 
 export async function PATCH(request: Request) {
