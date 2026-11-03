@@ -8,7 +8,7 @@ import { usePatientData } from '@/hooks/usePatientData'
 import { supabase, syncSupabaseAuthCookie } from '@/lib/supabaseClient'
 import ConsultationSkeleton from '@/components/patient/ConsultationSkeleton'
 
-const CONSULTATION_FEE = 350
+const DEFAULT_CONSULTATION_FEE = 350
 const SESSION_EXPIRED = 'SESSION_EXPIRED'
 const INITIAL_DOCTOR_CONSULTATION = 'INITIAL_DOCTOR_CONSULTATION'
 const DOCTOR_FOLLOW_UP = 'DOCTOR_FOLLOW_UP'
@@ -233,6 +233,28 @@ export default function ConsultationSchedulingPage() {
       setActiveProviderTab('doctor')
     }
   }, [isPatientDataReady, isActiveMemberFollowUp, activeProviderTab])
+
+  const [consultationFee, setConsultationFee] = useState<number>(DEFAULT_CONSULTATION_FEE)
+
+  useEffect(() => {
+    let active = true
+    async function loadFee() {
+      try {
+        const res = await fetch('/api/patient/consultations/fee')
+        if (res.ok) {
+          const data = await res.json()
+          if (active && typeof data.consultationFee === 'number' && data.consultationFee > 0) {
+            setConsultationFee(data.consultationFee)
+          }
+        }
+      } catch (err) {
+        // Safe fallback to default
+      }
+    }
+    loadFee()
+    return () => { active = false }
+  }, [])
+
   const [quotas, setQuotas] = useState<{
     doctor?: { allowed: boolean; maxAllowed: number; usedCount: number; reason?: string };
     dietitian?: { allowed: boolean; maxAllowed: number; usedCount: number; reason?: string };
@@ -751,7 +773,7 @@ export default function ConsultationSchedulingPage() {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            amount: CONSULTATION_FEE,
+            amount: consultationFee,
             currency: 'INR',
             paymentType: 'consultation',
           }),
@@ -803,7 +825,7 @@ export default function ConsultationSchedulingPage() {
                   body: JSON.stringify({
                     patientId,
                     paymentType: 'consultation',
-                    amount: CONSULTATION_FEE,
+                    amount: consultationFee,
                     paymentMethod,
                     razorpay_order_id: response.razorpay_order_id,
                     razorpay_payment_id: response.razorpay_payment_id,
@@ -890,7 +912,7 @@ export default function ConsultationSchedulingPage() {
             appointmentType: data.appointmentType || 'INITIAL_CONSULTATION',
             consultationStatus: 'PENDING',
             membershipStatus: 'ACTIVE',
-            paymentAmount: data.assignment?.paymentAmount ?? CONSULTATION_FEE,
+            paymentAmount: data.assignment?.paymentAmount ?? consultationFee,
             paymentStatus: data.assignment?.paymentStatus || 'PAID',
             paymentId: data.paymentId || data.assignment?.paymentId,
             paymentMethod: paymentMethod,
@@ -957,7 +979,7 @@ export default function ConsultationSchedulingPage() {
                   </div>
                   <div className="text-right">
                     <p className="text-2xl font-bold" style={{ color: designTokens.colors.primary }}>
-                      INR {CONSULTATION_FEE}
+                      INR {consultationFee}
                     </p>
                     <p className="text-xs font-semibold text-[#5C7A6B]">
                       Official Razorpay Gateway
@@ -999,7 +1021,7 @@ export default function ConsultationSchedulingPage() {
                     style={{ backgroundColor: designTokens.colors.primary }}
                   >
                     <Lock className="w-4 h-4" />
-                    {loading ? 'Opening Razorpay...' : `Pay INR ${CONSULTATION_FEE}`}
+                    {loading ? 'Opening Razorpay...' : `Pay INR ${consultationFee}`}
                   </button>
                 </div>
               </>
@@ -1043,7 +1065,7 @@ export default function ConsultationSchedulingPage() {
                     { label: 'Booking ID', value: assignment.bookingId || assignment.consultationId },
                     { label: 'Meeting Type', value: assignment.meetingType },
                     { label: 'Status', value: assignment.appointmentStatus || 'SCHEDULED' },
-                    { label: 'Payment Amount', value: `INR ${Number(assignment.paymentAmount || CONSULTATION_FEE).toLocaleString('en-IN')}` },
+                    { label: 'Payment Amount', value: `INR ${Number(assignment.paymentAmount || consultationFee).toLocaleString('en-IN')}` },
                     { label: 'Payment Status', value: assignment.paymentStatus || 'PAID' },
                     { label: 'Payment ID', value: assignment.paymentId || 'Recorded' },
                   ].map((row) => (
@@ -1893,7 +1915,7 @@ export default function ConsultationSchedulingPage() {
                       <p className="font-bold" style={{ color: (activeProviderTab !== 'doctor' || isAlreadyPaid) ? '#0D9488' : designTokens.colors.textPrimary }}>
                         {activeProviderTab !== 'doctor'
                           ? '₹0 (Care Program Benefit)'
-                          : (isAlreadyPaid ? (isActiveMemberFollowUp ? '₹0 (Member Benefit)' : '₹0 (Paid ✓)') : `INR ${CONSULTATION_FEE}`)}
+                          : (isAlreadyPaid ? (isActiveMemberFollowUp ? '₹0 (Member Benefit)' : '₹0 (Paid ✓)') : `INR ${consultationFee}`)}
                       </p>
                     </div>
                   </div>

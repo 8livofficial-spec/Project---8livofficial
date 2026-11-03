@@ -6,6 +6,7 @@ import { getAuthoritativeSubscriptionPricing } from '@/lib/subscriptionService'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { getMembershipValidity } from '@/lib/membershipServer'
 import { buildRazorpayOrderMetadata, getRazorpayClient, getRazorpayKeyId } from '@/lib/payments/razorpayServer'
+import { getCommercialRules } from '@/lib/commercialRulesServer'
 
 export async function POST(request: Request) {
   try {
@@ -85,7 +86,10 @@ export async function POST(request: Request) {
     const lookupKey = planId || (rawDuration > 0 ? rawDuration : 1)
     const isStandardOrder = paymentType === 'standard'
 
-    let amount = isStandardOrder ? Number(body?.amount) / 100 : 350
+    const commercialRules = await getCommercialRules()
+    const dynamicConsultationFee = commercialRules.consultationFee || 350
+
+    let amount = isStandardOrder ? Number(body?.amount) / 100 : dynamicConsultationFee
     let selectedPricing: any = null
 
     if (isStandardOrder && !Number.isFinite(Number(body?.amount))) {

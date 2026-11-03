@@ -298,6 +298,25 @@ function AdminDashboardContent() {
   const [providerBeneficiaryName, setProviderBeneficiaryName] = useState('');
   const [providerUpi, setProviderUpi] = useState('');
 
+  // ── Commercial Rules state ──────────────────────────────────────────────
+  const [commercialRules, setCommercialRules] = useState({
+    consultationFee: 350,
+    doctorPayout: 300,
+    dietitianPayout: 250,
+    fitnessCoachPayout: 250,
+    platformCommission: 50,
+  });
+  const [commercialModalOpen, setCommercialModalOpen] = useState(false);
+  const [commercialLoading, setCommercialLoading] = useState(false);
+  const [commercialSubmitting, setCommercialSubmitting] = useState(false);
+  const [commercialEditForm, setCommercialEditForm] = useState({
+    consultationFee: '350',
+    doctorPayout: '300',
+    dietitianPayout: '250',
+    fitnessCoachPayout: '250',
+  });
+  const [commercialMsg, setCommercialMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   useEffect(() => {
     const tab = searchParams.get('tab') as AdminTab | null;
     const validTabs: AdminTab[] = [
@@ -807,6 +826,87 @@ function AdminDashboardContent() {
     if (!adminUser || (adminTab !== 'staff' && adminTab !== 'dietitians' && adminTab !== 'nutritionists')) return;
     fetchStaffProfiles();
   }, [adminTab, adminUser]);
+
+  useEffect(() => {
+    if (!adminUser || adminTab !== 'platform-settings') return;
+    fetchCommercialRules();
+  }, [adminTab, adminUser]);
+
+  // ── Commercial Rules Fetch & Save ──────────────────────────────────────
+  const fetchCommercialRules = async () => {
+    try {
+      setCommercialLoading(true);
+      const res = await adminFetch('/api/admin/commercial-rules');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.rules) {
+          setCommercialRules(data.rules);
+          setCommercialEditForm({
+            consultationFee: String(data.rules.consultationFee ?? 350),
+            doctorPayout: String(data.rules.doctorPayout ?? 300),
+            dietitianPayout: String(data.rules.dietitianPayout ?? 250),
+            fitnessCoachPayout: String(data.rules.fitnessCoachPayout ?? 250),
+          });
+        }
+      }
+    } catch (err) {
+      console.error('[Commercial Rules Fetch Error]', err);
+    } finally {
+      setCommercialLoading(false);
+    }
+  };
+
+  const handleSaveCommercialRules = async (e: FormEvent) => {
+    e.preventDefault();
+    setCommercialSubmitting(true);
+    setCommercialMsg(null);
+    try {
+      const consultFee = Number(commercialEditForm.consultationFee);
+      const docPayout = Number(commercialEditForm.doctorPayout);
+      const dietPayout = Number(commercialEditForm.dietitianPayout);
+      const fitPayout = Number(commercialEditForm.fitnessCoachPayout);
+
+      if (isNaN(consultFee) || consultFee <= 0) {
+        setCommercialMsg({ type: 'error', text: 'Consultation fee must be a positive number.' });
+        setCommercialSubmitting(false);
+        return;
+      }
+      if (isNaN(docPayout) || docPayout < 0) {
+        setCommercialMsg({ type: 'error', text: 'Doctor payout must be a non-negative number.' });
+        setCommercialSubmitting(false);
+        return;
+      }
+
+      const res = await adminFetch('/api/admin/commercial-rules', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          consultationFee: consultFee,
+          doctorPayout: docPayout,
+          dietitianPayout: isNaN(dietPayout) ? 250 : dietPayout,
+          fitnessCoachPayout: isNaN(fitPayout) ? 250 : fitPayout,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to update commercial rules');
+      }
+
+      if (data.rules) {
+        setCommercialRules(data.rules);
+      }
+      setCommercialMsg({ type: 'success', text: 'Commercial rules saved! Consultation fee is now Rs ' + consultFee + '.' });
+      setTimeout(() => {
+        setCommercialModalOpen(false);
+        setCommercialMsg(null);
+      }, 1500);
+    } catch (err: any) {
+      setCommercialMsg({ type: 'error', text: err?.message || 'Failed to update commercial rules.' });
+    } finally {
+      setCommercialSubmitting(false);
+    }
+  };
 
   // ── Fetch staff profiles ───────────────────────────────────────────────
   const fetchStaffProfiles = async () => {
@@ -1694,12 +1794,12 @@ function AdminDashboardContent() {
       title: 'Commercial Rules',
       description: 'Pricing, payouts, and margin controls for the first consultation and care team payouts.',
       items: [
-        { label: 'Consultation Fee', value: 'Rs 350', helper: 'Initial endocrinologist consultation charged to patients.' },
-        { label: 'Doctor Payout', value: 'Rs 300', helper: 'Credited only after completed attended consultation.' },
-        { label: 'Dietitian Payout', value: 'Configure', helper: 'Used for post-plan care team compensation.' },
-        { label: 'Nutritionist Payout', value: 'Configure', helper: 'Applied to nutrition support sessions.' },
-        { label: 'Fitness Coach Payout', value: 'Configure', helper: 'Applied to fitness coach sessions.' },
-        { label: 'Platform Commission', value: 'Rs 50', helper: 'Consultation fee minus doctor payout.' },
+        { label: 'Consultation Fee', value: `Rs ${commercialRules.consultationFee}`, helper: 'Initial endocrinologist consultation charged to patients.' },
+        { label: 'Doctor Payout', value: `Rs ${commercialRules.doctorPayout}`, helper: 'Credited only after completed attended consultation.' },
+        { label: 'Dietitian Payout', value: `Rs ${commercialRules.dietitianPayout}`, helper: 'Used for post-plan care team compensation.' },
+        { label: 'Nutritionist Payout', value: `Rs ${commercialRules.dietitianPayout}`, helper: 'Applied to nutrition support sessions.' },
+        { label: 'Fitness Coach Payout', value: `Rs ${commercialRules.fitnessCoachPayout}`, helper: 'Applied to fitness coach sessions.' },
+        { label: 'Platform Commission', value: `Rs ${commercialRules.platformCommission}`, helper: 'Consultation fee minus doctor payout.' },
       ],
     },
     {
@@ -4612,7 +4712,23 @@ function AdminDashboardContent() {
                         </div>
                       ))}
                     </div>
-                    <button onClick={() => alert(`${group.title} settings are managed from this card. Database-backed settings persistence is ready to connect to a settings table.`)} className="mt-5 w-full rounded-xl bg-[#1A1F36] px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition-all hover:-translate-y-0.5 hover:bg-[#11162A]">
+                    <button
+                      onClick={() => {
+                        if (group.title === 'Commercial Rules') {
+                          setCommercialEditForm({
+                            consultationFee: String(commercialRules.consultationFee),
+                            doctorPayout: String(commercialRules.doctorPayout),
+                            dietitianPayout: String(commercialRules.dietitianPayout),
+                            fitnessCoachPayout: String(commercialRules.fitnessCoachPayout),
+                          });
+                          setCommercialMsg(null);
+                          setCommercialModalOpen(true);
+                        } else {
+                          alert(`${group.title} settings are managed from this card. Database-backed settings persistence is ready to connect to a settings table.`);
+                        }
+                      }}
+                      className="mt-5 w-full rounded-xl bg-[#1A1F36] px-4 py-3 text-xs font-black uppercase tracking-wider text-white transition-all hover:-translate-y-0.5 hover:bg-[#11162A]"
+                    >
                       Manage {group.title}
                     </button>
                   </div>
@@ -5169,6 +5285,164 @@ function AdminDashboardContent() {
           </>
         )}
       </motion.div>
+
+      {/* ── COMMERCIAL RULES MODAL ── */}
+      {commercialModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="w-full max-w-lg bg-white rounded-3xl p-6 md:p-8 shadow-2xl border border-slate-100 space-y-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold">
+                  <Wallet className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-black text-slate-900 leading-tight">Manage Commercial Rules</h3>
+                  <p className="text-xs font-semibold text-slate-400">Consultation fee, doctor payout & commission</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setCommercialModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {commercialMsg && (
+              <div className={"p-4 rounded-2xl text-xs font-bold flex items-center gap-2.5 " + (commercialMsg.type === 'success' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200')}>
+                {commercialMsg.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+                <span>{commercialMsg.text}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveCommercialRules} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
+                    Consultation Fee (Rs)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+                    <input
+                      type="number"
+                      min="1"
+                      step="1"
+                      required
+                      value={commercialEditForm.consultationFee}
+                      onChange={(e) => setCommercialEditForm({ ...commercialEditForm, consultationFee: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-8 pr-4 py-2.5 text-sm font-bold text-slate-800 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-400">Amount charged to patient at booking</p>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-black uppercase tracking-wider text-slate-500 mb-1.5">
+                    Doctor Payout (Rs)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-sm">₹</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="1"
+                      required
+                      value={commercialEditForm.doctorPayout}
+                      onChange={(e) => setCommercialEditForm({ ...commercialEditForm, doctorPayout: e.target.value })}
+                      className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-8 pr-4 py-2.5 text-sm font-bold text-slate-800 focus:border-indigo-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                    />
+                  </div>
+                  <p className="mt-1 text-[11px] text-slate-400">Credited to doctor upon consultation</p>
+                </div>
+              </div>
+
+              {/* Live Margin Calculation Preview */}
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex items-center justify-between text-xs font-bold text-slate-600">
+                  <span>Platform Commission per Consultation:</span>
+                  <span className={"text-sm font-black " + (
+                    (Number(commercialEditForm.consultationFee) - Number(commercialEditForm.doctorPayout)) >= 0
+                      ? 'text-emerald-600'
+                      : 'text-rose-600'
+                  )}>
+                    ₹{Math.max(0, (Number(commercialEditForm.consultationFee) || 0) - (Number(commercialEditForm.doctorPayout) || 0))}
+                  </span>
+                </div>
+                <div className="mt-1 text-[11px] text-slate-400">
+                  Patient pays ₹{commercialEditForm.consultationFee || 0} → Doctor receives ₹{commercialEditForm.doctorPayout || 0} → Platform retains remaining balance.
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100">
+                <p className="text-[11px] font-black uppercase tracking-wider text-slate-400 mb-3">Care Team Session Payouts</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">
+                      Dietitian Session (Rs)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={commercialEditForm.dietitianPayout}
+                        onChange={(e) => setCommercialEditForm({ ...commercialEditForm, dietitianPayout: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-7 pr-3 py-2 text-xs font-bold text-slate-800 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 mb-1">
+                      Fitness Coach Session (Rs)
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">₹</span>
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        value={commercialEditForm.fitnessCoachPayout}
+                        onChange={(e) => setCommercialEditForm({ ...commercialEditForm, fitnessCoachPayout: e.target.value })}
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50/50 pl-7 pr-3 py-2 text-xs font-bold text-slate-800 focus:border-indigo-500 focus:bg-white focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setCommercialModalOpen(false)}
+                  className="flex-1 py-3 px-4 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 text-xs font-bold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={commercialSubmitting}
+                  className="flex-1 py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20 transition-all active:scale-95"
+                >
+                  {commercialSubmitting ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin text-white" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Check className="w-4 h-4" />
+                      Save & Apply
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* ── NEW PROVIDER / STAFF CREDENTIALS MODAL ── */}
       {createdCredentialsModal.isOpen && (

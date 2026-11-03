@@ -10,6 +10,7 @@ import { checkRateLimit, getClientIp, rateLimitResponse } from '@/lib/authSecuri
 import { activateSubscriptionForPatient, getAuthoritativeSubscriptionPricing } from '@/lib/subscriptionService'
 import { findRazorpayTransaction, verifyRazorpayPaymentSignature } from '@/lib/payments/razorpayServer'
 import { invalidatePatientApiDashboardCache } from '@/lib/patientDashboardCache'
+import { getCommercialRules } from '@/lib/commercialRulesServer'
 
 export async function POST(request: Request) {
   const ip = getClientIp(request)
@@ -110,7 +111,8 @@ export async function POST(request: Request) {
     // Security Binding 3: Verify paid amount matches authoritative pricing
     let expectedMinAmount = 0
     if (paymentType === 'consultation') {
-      expectedMinAmount = 350
+      const commercialRules = await getCommercialRules()
+      expectedMinAmount = commercialRules.consultationFee || 350
     } else if (paymentType === 'membership' || paymentType === 'combined') {
       expectedMinAmount = pricing.finalPrice
     }
