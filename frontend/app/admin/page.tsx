@@ -2358,7 +2358,6 @@ function AdminDashboardContent() {
                   <option value="nutritionist">Nutritionist</option>
                   <option value="fitness_coach">Fitness Coach</option>
                 </select>
-                <button onClick={resetProviderForm} className="rounded-xl bg-[#1A1F36] px-5 py-3 text-xs font-black uppercase tracking-wider text-white">Add Provider</button>
                 <a href="/admin/providers/new" className="rounded-xl bg-[#0D9488] px-4 py-3 text-xs font-black uppercase tracking-wider text-white inline-flex items-center gap-1.5 shadow-sm hover:bg-[#0b7a70] transition-colors">
                   <UserPlus className="h-4 w-4" /> Setup & Invite Provider
                 </a>
@@ -2389,7 +2388,7 @@ function AdminDashboardContent() {
               </div>
             )}
 
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_420px]">
+            <div className="w-full">
               <div className="overflow-hidden rounded-[20px] border border-[#1A1F36]/8 bg-white shadow-[0_12px_32px_rgba(26,31,54,0.07)]">
                 <div className="grid min-w-[1100px] grid-cols-[1.2fr_0.8fr_1fr_0.8fr_0.8fr_0.8fr_0.8fr_1.1fr] gap-4 bg-[#F5F0EB] px-5 py-3 text-[11px] font-black uppercase tracking-widest text-[#8896A4]">
                   <span>Provider</span><span>Role</span><span>Specialization</span><span>Experience</span><span>Payout</span><span>Status</span><span>Wallet</span><span>Actions</span>
@@ -2398,7 +2397,9 @@ function AdminDashboardContent() {
                   {providerRows.length === 0 ? (
                     <div className="p-10 text-center text-sm font-bold text-[#8896A4]">
                       <p>No providers found. Add the first provider to enable assignment and wallets.</p>
-                      <button onClick={resetProviderForm} className="mt-4 rounded-xl bg-[#1A1F36] px-5 py-3 text-xs font-black uppercase tracking-wider text-white">Add Provider</button>
+                      <a href="/admin/providers/new" className="mt-4 inline-flex items-center gap-1.5 rounded-xl bg-[#0D9488] px-5 py-3 text-xs font-black uppercase tracking-wider text-white hover:bg-[#0b7a70] transition-colors">
+                        <UserPlus className="h-4 w-4" /> Setup & Invite Provider
+                      </a>
                     </div>
                   ) : paginatedProviderRows.map(provider => (
                     <div key={provider.provider_id} className="grid min-w-[1100px] grid-cols-[1.2fr_0.8fr_1fr_0.8fr_0.8fr_0.8fr_0.8fr_1.1fr] gap-4 px-5 py-4 text-sm font-bold text-[#40516A]">
@@ -2413,9 +2414,9 @@ function AdminDashboardContent() {
                       <span className={`w-fit rounded-full px-3 py-1 text-xs font-black ${provider.status === 'inactive' ? 'bg-[#D96A6A]/12 text-[#B94D4D]' : 'bg-[#5C7A6B]/12 text-[#5C7A6B]'}`}>{provider.status || 'active'}</span>
                       <span>Included</span>
                       <span className="flex flex-wrap gap-2">
-                        <button onClick={() => editProvider(provider)} className="rounded-lg border border-[#1A1F36]/10 px-2 py-1 text-[10px] font-black">Edit</button>
-                        <button onClick={() => handleProviderStatus(provider, provider.status === 'inactive' ? 'active' : 'inactive')} className="rounded-lg bg-[#1A1F36] px-2 py-1 text-[10px] font-black text-white">{provider.status === 'inactive' ? 'Activate' : 'Deactivate'}</button>
-                        <button onClick={() => { setManagementSearch(provider.name || ''); openAdminTab('appointments'); }} className="rounded-lg border border-[#1A1F36]/10 px-2 py-1 text-[10px] font-black">Schedule</button>
+                        <button onClick={() => editProvider(provider)} className="rounded-lg border border-[#1A1F36]/10 px-2 py-1 text-[10px] font-black hover:bg-slate-100 transition-colors">Edit</button>
+                        <button onClick={() => handleProviderStatus(provider, provider.status === 'inactive' ? 'active' : 'inactive')} className="rounded-lg bg-[#1A1F36] px-2 py-1 text-[10px] font-black text-white hover:bg-slate-800 transition-colors">{provider.status === 'inactive' ? 'Activate' : 'Deactivate'}</button>
+                        <button onClick={() => { setManagementSearch(provider.name || ''); openAdminTab('appointments'); }} className="rounded-lg border border-[#1A1F36]/10 px-2 py-1 text-[10px] font-black hover:bg-slate-100 transition-colors">Schedule</button>
                       </span>
                     </div>
                   ))}
@@ -2444,23 +2445,45 @@ function AdminDashboardContent() {
                   </div>
                 </div>
               </div>
+            </div>
 
-              <form onSubmit={handleCreateProvider} className="rounded-[20px] border border-[#1A1F36]/8 bg-white p-6 shadow-[0_12px_32px_rgba(26,31,54,0.07)]">
-                <div className="mb-5">
-                  <p className="text-xs font-black uppercase tracking-[0.18em] text-[#C4622D]">{selectedProvider ? 'Edit Provider' : 'Add Provider'}</p>
-                  <h3 className="mt-1 text-2xl font-black text-[#1A1F36]">{selectedProvider ? 'Provider Profile' : 'Provider Login + Profile'}</h3>
-                  <p className="mt-2 text-sm font-semibold text-[#8896A4]">Creates login access, provider profile, wallet inclusion, and schedule eligibility.</p>
-                </div>
-                  <div className="space-y-4">
-                    <input value={providerFullName} onChange={e => setProviderFullName(e.target.value)} placeholder="Full Name *" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+            {/* Edit Provider Modal (Only displays when editing an existing provider) */}
+            {selectedProvider && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm overflow-y-auto animate-in fade-in duration-200">
+                <div className="relative w-full max-w-2xl bg-white rounded-3xl p-6 sm:p-8 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto my-8">
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.18em] text-[#C4622D]">Edit Provider</p>
+                      <h3 className="mt-1 text-2xl font-black text-[#1A1F36]">{selectedProvider.name || selectedProvider.full_name || 'Provider Profile'}</h3>
+                      <p className="text-xs font-semibold text-[#8896A4]">Update clinical profile, role, credentials, and payout settings.</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => resetProviderForm()}
+                      className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleCreateProvider} className="mt-6 space-y-4">
+                    <div>
+                      <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Full Name *</label>
+                      <input value={providerFullName} onChange={e => setProviderFullName(e.target.value)} placeholder="Full Name *" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#C4622D]/20" />
+                    </div>
+
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <input value={providerEmail} onChange={e => setProviderEmail(e.target.value)} placeholder="Email *" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
                       <div>
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Email *</label>
+                        <input value={providerEmail} onChange={e => setProviderEmail(e.target.value)} placeholder="Email *" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#C4622D]/20" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">New Password (optional)</label>
                         <div className="relative flex items-center">
                           <input
                             value={providerPassword}
                             onChange={e => setProviderPassword(e.target.value)}
-                            placeholder={selectedProvider ? 'Leave empty to keep current password' : 'Auto-generated Password *'}
+                            placeholder="Leave empty to keep current password"
                             type="text"
                             className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 pl-4 pr-10 py-3 text-sm font-bold outline-none font-mono text-indigo-700"
                           />
@@ -2473,51 +2496,92 @@ function AdminDashboardContent() {
                             <Sparkles className="w-4 h-4" />
                           </button>
                         </div>
-                        <p className="text-[10px] text-slate-400 font-semibold mt-1">Click sparkle icon to regenerate a secure password</p>
                       </div>
                     </div>
-                    <input value={providerPhone} onChange={e => setProviderPhone(e.target.value)} placeholder="Phone Number" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <select value={providerRole} onChange={e => { const role = e.target.value as typeof providerRole; setProviderRole(role); setProviderSpecialization(providerSpecializationOptions[role][0]); }} className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none">
-                        <option value="doctor">Doctor</option>
-                        <option value="dietitian">Dietitian</option>
-                        <option value="nutritionist">Nutritionist</option>
-                        <option value="fitness_coach">Fitness Coach</option>
-                      </select>
-                      <select value={providerSpecialization} onChange={e => setProviderSpecialization(e.target.value)} className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none">
-                        {providerSpecializationOptions[providerRole].map(option => <option key={option} value={option}>{option}</option>)}
-                      </select>
-                    </div>
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <input value={providerQualification} onChange={e => setProviderQualification(e.target.value)} placeholder="Qualification" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                      <input value={providerExperience} onChange={e => setProviderExperience(e.target.value)} placeholder="Years of Experience" type="number" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                    </div>
-                    <input value={providerLicense} onChange={e => setProviderLicense(e.target.value)} placeholder="Medical License / Registration Number" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                    <input value={providerPhoto} onChange={e => setProviderPhoto(e.target.value)} placeholder="Profile Photo URL" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <input value={providerConsultationType} onChange={e => setProviderConsultationType(e.target.value)} placeholder="Consultation Type" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                      <input value={providerPayoutAmount} onChange={e => setProviderPayoutAmount(e.target.value)} placeholder="Payout Amount" type="number" className="rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
-                    </div>
-                    <select value={providerStatus} onChange={e => setProviderStatus(e.target.value as 'active' | 'inactive')} className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none">
-                      <option value="active">Active</option>
-                      <option value="inactive">Inactive</option>
-                    </select>
 
-                    <div className="p-4 rounded-2xl bg-emerald-50/60 border border-emerald-100 space-y-1.5">
-                      <p className="text-xs font-black text-emerald-950 uppercase tracking-wider flex items-center gap-1.5">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Self-Service Financial Security
-                      </p>
-                      <p className="text-[11px] font-semibold text-emerald-800 leading-relaxed">
-                        Provider bank accounts, UPI IDs, and KYC credentials will be securely configured and verified directly by the provider during self-onboarding.
-                      </p>
+                    <div>
+                      <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Phone Number</label>
+                      <input value={providerPhone} onChange={e => setProviderPhone(e.target.value)} placeholder="Phone Number" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none focus:ring-2 focus:ring-[#C4622D]/20" />
                     </div>
 
-                    <button disabled={providerSubmitting} className="w-full rounded-xl bg-[#1A1F36] px-5 py-4 text-xs font-black uppercase tracking-wider text-white transition-all hover:bg-[#11162A] disabled:opacity-60">
-                      {providerSubmitting ? 'Saving Provider...' : selectedProvider ? 'Save Provider' : 'Create Provider'}
-                    </button>
-                  </div>
-              </form>
-            </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Role *</label>
+                        <select value={providerRole} onChange={e => { const role = e.target.value as typeof providerRole; setProviderRole(role); setProviderSpecialization(providerSpecializationOptions[role][0]); }} className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none">
+                          <option value="doctor">Doctor</option>
+                          <option value="dietitian">Dietitian</option>
+                          <option value="nutritionist">Nutritionist</option>
+                          <option value="fitness_coach">Fitness Coach</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Specialization</label>
+                        <select value={providerSpecialization} onChange={e => setProviderSpecialization(e.target.value)} className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none">
+                          {providerSpecializationOptions[providerRole]?.map(option => <option key={option} value={option}>{option}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Qualification</label>
+                        <input value={providerQualification} onChange={e => setProviderQualification(e.target.value)} placeholder="Qualification" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Years of Experience</label>
+                        <input value={providerExperience} onChange={e => setProviderExperience(e.target.value)} placeholder="Years of Experience" type="number" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Medical License / Registration Number</label>
+                      <input value={providerLicense} onChange={e => setProviderLicense(e.target.value)} placeholder="Medical License / Registration Number" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Profile Photo URL</label>
+                      <input value={providerPhoto} onChange={e => setProviderPhoto(e.target.value)} placeholder="Profile Photo URL" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Consultation Type</label>
+                        <input value={providerConsultationType} onChange={e => setProviderConsultationType(e.target.value)} placeholder="Consultation Type" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Payout Amount (₹)</label>
+                        <input value={providerPayoutAmount} onChange={e => setProviderPayoutAmount(e.target.value)} placeholder="Payout Amount" type="number" className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-black text-slate-500 uppercase tracking-wider block mb-1">Account Status</label>
+                      <select value={providerStatus} onChange={e => setProviderStatus(e.target.value as 'active' | 'inactive')} className="w-full rounded-xl border border-[#1A1F36]/10 bg-[#F5F0EB]/60 px-4 py-3 text-sm font-bold outline-none">
+                        <option value="active">Active</option>
+                        <option value="inactive">Inactive</option>
+                      </select>
+                    </div>
+
+                    <div className="flex gap-3 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => resetProviderForm()}
+                        className="flex-1 rounded-xl border border-slate-200 px-5 py-3.5 text-xs font-bold text-slate-600 hover:bg-slate-50 transition-colors"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        disabled={providerSubmitting}
+                        className="flex-1 rounded-xl bg-[#1A1F36] px-5 py-3.5 text-xs font-black uppercase tracking-wider text-white transition-all hover:bg-[#11162A] disabled:opacity-60"
+                      >
+                        {providerSubmitting ? 'Saving Changes...' : 'Save Changes'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            )}
           </motion.div>
         ) : activeView === 'doctors' ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-6 md:p-8 max-w-[1500px] mx-auto space-y-5">
