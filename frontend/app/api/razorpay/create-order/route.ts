@@ -95,7 +95,7 @@ export async function POST(request: Request) {
     if (isStandardOrder && !Number.isFinite(Number(body?.amount))) {
       return NextResponse.json({ error: 'Amount is required in paise.' }, { status: 400 })
     } else if (paymentType === 'membership' || paymentType === 'combined') {
-      selectedPricing = await getAuthoritativeSubscriptionPricing(lookupKey)
+      selectedPricing = await getAuthoritativeSubscriptionPricing(lookupKey, '8liv', isPatientAuth ? patient.user.id : undefined)
       // Statutory 18% GST added during payment for each membership plan
       amount = selectedPricing.totalWithGst || Math.round(selectedPricing.finalPrice * 1.18)
     }

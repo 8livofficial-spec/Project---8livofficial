@@ -114,7 +114,7 @@ export async function GET(request: Request) {
       getMembershipValidity(patientId),
       supabaseAdmin
         .from('prescriptions')
-        .select('id, prescription_number, status, diagnosis, valid_until, issued_at, created_at, signed_pdf_path, canonical_data, prescription_items(id, medicine_name, dosage, frequency, duration)')
+        .select('id, prescription_number, status, diagnosis, valid_until, issued_at, created_at, signed_pdf_path, canonical_data, prescription_items(id, medicine_name, generic_name, brand_name, strength, dosage_form, dose, route, frequency, duration_value, duration_unit, quantity, food_instruction, special_instruction)')
         .eq('patient_id', patientId)
         .not('status', 'in', '("DRAFT","REVOKED","CANCELLED","REPLACED")')
         .order('created_at', { ascending: false })

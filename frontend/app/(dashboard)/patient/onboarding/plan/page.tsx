@@ -46,6 +46,21 @@ const PLAN_ENRICHMENT: Record<number, {
       'Continuous habit tracking & milestone check-ins',
     ],
   },
+  5: {
+    tagline: '5 Months Complete Program',
+    badge: 'COMPLETE PROGRAM',
+    popular: false,
+    bestFor: 'Full 5-Month Physician-Supervised Protocol for significant weight reduction, clinical lab monitoring, and preventing rebound gain.',
+    features: [
+      'Full 5-Month Physician-Supervised Protocol',
+      'Bi-Weekly Biomarker & Clinical Review Cycles',
+      'Dynamic Macro & Indian Meal Progression Strategy',
+      'Guided Gym & Home Resistance Routines',
+      'Long-Term Weight Regain Defense Protocol',
+      'Priority Patient Support & Care Team Access',
+      'Prescriptions fulfilled at your preferred pharmacy',
+    ],
+  },
   6: {
     tagline: 'Deep Cellular Reversal & Fat Loss',
     badge: 'RECOMMENDED',
@@ -86,9 +101,15 @@ export default function PlanSelectionPage() {
   const [saving, setSaving] = useState(false)
 
   useEffect(() => {
-    fetch('/api/subscriptions/pricing')
-      .then(res => res.json())
-      .then(data => {
+    async function loadPricing() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const headers: Record<string, string> = {}
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`
+        }
+        const res = await fetch('/api/subscriptions/pricing', { headers })
+        const data = await res.json()
         const fetched = data.plans || data.tiers || []
         setPlans(fetched)
         if (fetched.length > 0) {
@@ -105,11 +126,12 @@ export default function PlanSelectionPage() {
           setSelectedPlanId(defaultPlan.id)
         }
         setLoading(false)
-      })
-      .catch(err => {
+      } catch (err) {
         console.warn('Error fetching plans:', err)
         setLoading(false)
-      })
+      }
+    }
+    loadPricing()
   }, [durationParam])
 
   const selectedPlan = plans.find(p => p.id === selectedPlanId) || plans[0]
@@ -206,7 +228,7 @@ export default function PlanSelectionPage() {
                 }`}
               >
                 {/* Discount pill at top if applicable */}
-                {discountPct > 0 && (
+                {prog.isFirstTimeOffer && discountPct > 0 && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-[#00A884] px-3 py-0.5 text-[10px] font-black uppercase tracking-wider text-white shadow-sm whitespace-nowrap">
                     {discountPct}% OFF (Save ₹{discountAmt.toLocaleString('en-IN')})
                   </div>
@@ -244,16 +266,16 @@ export default function PlanSelectionPage() {
                       <span className="text-xs font-semibold text-slate-500">/ month</span>
                     </div>
 
-                    <div className="flex items-center gap-2 mt-1">
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
                       <span className="text-xs font-bold text-slate-700">
                         ₹{Number(prog.finalPrice).toLocaleString('en-IN')} total
                       </span>
-                      {discountPct > 0 && (
+                      {prog.isFirstTimeOffer && (prog.originalPrice || prog.basePrice) > prog.finalPrice && (
                         <span className="text-[11px] font-semibold text-slate-400 line-through">
-                          ₹{Number(prog.basePrice).toLocaleString('en-IN')}
+                          ₹{Number(prog.originalPrice || prog.basePrice).toLocaleString('en-IN')}
                         </span>
                       )}
-                      {discountAmt > 0 && (
+                      {prog.isFirstTimeOffer && discountAmt > 0 && (
                         <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/70 px-1.5 py-0.2 rounded">
                           Save ₹{discountAmt.toLocaleString('en-IN')}
                         </span>

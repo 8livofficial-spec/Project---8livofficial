@@ -161,7 +161,7 @@ export async function PATCH(request: Request) {
   const isComplete = action === 'complete'
   const isAttend = action === 'attend'
 
-  // Pre-check for dietitian consultation completion: Dietitian MUST have uploaded a plan to complete
+  // Pre-check for consultation completion: Provider MUST have uploaded or authored a plan to complete
   if (isComplete) {
     const { data: existingStaff } = await supabaseAdmin
       .from('staff_consultations')
@@ -182,6 +182,25 @@ export async function PATCH(request: Request) {
         return NextResponse.json({
           error: "Cannot complete consultation. Please upload or publish the patient's personalized nutrition plan first.",
           requiresDietPlan: true,
+          patientId: existingStaff.patient_id,
+          consultationId,
+        }, { status: 400 })
+      }
+    }
+
+    if (existingStaff && (existingStaff.staff_role === 'fitness_coach' || provider.role === 'fitness_coach' || provider.role === 'trainer')) {
+      const { data: fitnessPlan } = await supabaseAdmin
+        .from('fitness_plans')
+        .select('id')
+        .eq('patient_id', existingStaff.patient_id)
+        .eq('fitness_coach_id', provider.user.id)
+        .limit(1)
+        .maybeSingle()
+
+      if (!fitnessPlan) {
+        return NextResponse.json({
+          error: "Cannot complete consultation. Please upload or publish the patient's personalized workout sheet first.",
+          requiresFitnessPlan: true,
           patientId: existingStaff.patient_id,
           consultationId,
         }, { status: 400 })

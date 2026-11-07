@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useState, createContext, useContext, useRef } from 'react'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Activity, Apple, CalendarDays, Dumbbell, FileText, LayoutDashboard, LogOut, MessageCircle, Search, Settings, Users, Video, Wallet, Sparkles, Eye, Volume2, VolumeX, BellRing, Clock } from 'lucide-react'
+import { Activity, Apple, CalendarDays, Dumbbell, FileText, LayoutDashboard, LogOut, MessageCircle, Search, Settings, Users, Video, Wallet, Sparkles, Eye, Volume2, VolumeX, BellRing, Clock, Upload, XCircle, ChevronRight, CheckCircle2, Layers } from 'lucide-react'
 import { supabase } from '@/lib/supabaseClient'
 
 import ProviderAvailabilityScheduler, { AvailabilitySubmission } from '@/components/scheduling/ProviderAvailabilityScheduler'
@@ -146,9 +146,13 @@ type AvailabilitySlot = {
 type WalletState = {
   provider_id?: string
   balance: number
+  available_balance?: number
+  gross_balance?: number
   pending_payout: number
   completed_payout: number
   lifetime_earnings: number
+  total_earned?: number
+  total_withdrawn?: number
 }
 type WalletTransaction = Record<string, any>
 
@@ -331,6 +335,19 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
   const [protocolBuilderPatient, setProtocolBuilderPatient] = useState<{ id: string; name?: string } | null>(null)
   const [protocolBuilderConsultation, setProtocolBuilderConsultation] = useState<any>(null)
   const [viewingOfficialProtocol, setViewingOfficialProtocol] = useState<any>(null)
+
+  // Upload Workout / Care Plan State (matching DietitianPortal uploader)
+  const [showUploadWorkoutModal, setShowUploadWorkoutModal] = useState(false)
+  const [uploadPlanPatientId, setUploadPlanPatientId] = useState('')
+  const [uploadPlanAppointmentId, setUploadPlanAppointmentId] = useState('')
+  const [uploadPlanTitle, setUploadPlanTitle] = useState('Personalized Workout & Conditioning Routine')
+  const [uploadWorkoutType, setUploadWorkoutType] = useState('Resistance & Low-Impact Cardio')
+  const [uploadWeeklyFreq, setUploadWeeklyFreq] = useState('3')
+  const [uploadStepGoal, setUploadStepGoal] = useState('8000')
+  const [uploadRestrictions, setUploadRestrictions] = useState('')
+  const [uploadPlanNotes, setUploadPlanNotes] = useState('')
+  const [uploadPlanFile, setUploadPlanFile] = useState<File | null>(null)
+  const [uploadingPlan, setUploadingPlan] = useState(false)
 
   // Pagination & Search States for Patients and Consultations
   const [patientsPage, setPatientsPage] = useState(1)
@@ -622,6 +639,83 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
     }
   }
 
+  const handleUploadWorkoutPlan = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!uploadPlanPatientId) {
+      setError('Please select a patient.')
+      return
+    }
+
+    if (!uploadPlanFile) {
+      setError('Please select a workout plan file (PDF, image, or spreadsheet).')
+      return
+    }
+
+    setUploadingPlan(true)
+    setError('')
+    setSuccess('')
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      const token = session?.access_token || ''
+
+      const formData = new FormData()
+      formData.append('file', uploadPlanFile)
+      formData.append('patientId', uploadPlanPatientId)
+      formData.append('planType', 'fitness')
+      if (uploadPlanAppointmentId) {
+        formData.append('appointmentId', uploadPlanAppointmentId)
+      }
+
+      const uploadRes = await fetch('/api/provider/plans/upload', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData,
+      })
+      const uploadData = await uploadRes.json()
+      if (!uploadRes.ok) throw new Error(uploadData.error || 'Failed to upload workout plan file.')
+
+      const planRes = await fetch('/api/provider/plans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          patientId: uploadPlanPatientId,
+          appointmentId: uploadPlanAppointmentId || undefined,
+          title: uploadPlanTitle,
+          workoutType: uploadWorkoutType,
+          weeklyFrequency: Number(uploadWeeklyFreq) || 3,
+          dailyStepGoal: uploadStepGoal ? Number(uploadStepGoal) : null,
+          exerciseRestrictions: uploadRestrictions || undefined,
+          notes: uploadPlanNotes || undefined,
+          description: uploadPlanNotes || 'Fitness coach assigned workout protocol',
+          attachmentUrl: uploadData.attachmentUrl,
+          attachmentType: uploadData.attachmentType,
+        }),
+      })
+      const planResult = await planRes.json()
+      if (!planRes.ok) throw new Error(planResult.error || 'Failed to assign workout plan to patient.')
+
+      setSuccess(
+        planResult.consultationCompleted
+          ? 'Workout plan successfully assigned! Consultation completed and wallet earnings credited.'
+          : 'Workout sheet successfully assigned to patient!'
+      )
+      setUploadPlanAppointmentId('')
+      setShowUploadWorkoutModal(false)
+      setUploadPlanFile(null)
+      setUploadPlanNotes('')
+      setUploadRestrictions('')
+      clearProviderCache('/api/provider/plans')
+      clearProviderCache('/api/provider/consultations')
+      clearProviderCache('/api/provider/wallet')
+      clearProviderCache('/api/provider/dashboard')
+      await loadSectionData(section, true)
+    } catch (err: any) {
+      setError(err.message || 'Unable to assign workout plan.')
+    } finally {
+      setUploadingPlan(false)
+    }
+  }
+
   const updateConsultation = async (consultationId: string, action: 'complete' | 'missed' | 'cancel') => {
     setError('')
     setSuccess('')
@@ -631,7 +725,14 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
         body: JSON.stringify({ consultationId, action }),
       })
       const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Unable to update consultation.')
+      if (!res.ok) {
+        if ((data.requiresDietPlan || data.requiresFitnessPlan) && data.patientId) {
+          setUploadPlanPatientId(data.patientId)
+          setUploadPlanAppointmentId(consultationId)
+          setShowUploadWorkoutModal(true)
+        }
+        throw new Error(data.error || 'Unable to update consultation.')
+      }
       setSuccess(action === 'complete' ? 'Session marked completed.' : action === 'missed' ? 'Session marked missed.' : 'Session cancelled.')
       clearProviderCache('/api/provider/consultations')
       clearProviderCache('/api/provider/wallet')
@@ -837,6 +938,20 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
                 <h2 className="mt-1 text-2xl font-black tracking-tight text-[#0F172A] font-sora md:text-3xl">{sectionLabel(section)}</h2>
               </div>
               <div className="hidden items-center gap-3 md:flex">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (patients.length > 0 && !uploadPlanPatientId) {
+                      setUploadPlanPatientId(patients[0].id)
+                    }
+                    setUploadPlanAppointmentId('')
+                    setShowUploadWorkoutModal(true)
+                  }}
+                  className="rounded-full bg-[#1A1F36] hover:bg-slate-800 text-white px-4 py-1.5 text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>Upload Workout Sheet</span>
+                </button>
                 <Link
                   href="/provider/profile"
                   className={`rounded-full border px-3.5 py-1.5 text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer ${
@@ -943,6 +1058,11 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
                 wallet={walletState}
                 copy={copy}
                 onComplete={(id) => updateConsultation(id, 'complete')}
+                onOpenUploadModal={(session) => {
+                  setUploadPlanPatientId(session.patient_id || '')
+                  setUploadPlanAppointmentId(session.id)
+                  setShowUploadWorkoutModal(true)
+                }}
                 isSessionJoinable={isSessionJoinable}
               />
             )}
@@ -981,6 +1101,11 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
                 totalPages={consultationsTotalPages}
                 setPage={setConsultationsPage}
                 onOpenProtocolBuilder={handleOpenProtocolBuilder}
+                onOpenUploadModal={(session) => {
+                  setUploadPlanPatientId(session.patient_id || '')
+                  setUploadPlanAppointmentId(session.id)
+                  setShowUploadWorkoutModal(true)
+                }}
                 isSessionJoinable={isSessionJoinable}
               />
             )}
@@ -995,6 +1120,11 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
                 saving={saving}
                 copy={copy}
                 onOpenProtocolBuilder={handleOpenProtocolBuilder}
+                onOpenUploadModal={(patientId) => {
+                  if (patientId) setUploadPlanPatientId(patientId)
+                  setUploadPlanAppointmentId('')
+                  setShowUploadWorkoutModal(true)
+                }}
                 onViewProtocol={handleViewProtocol}
               />
             )}
@@ -1044,6 +1174,202 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
         role={(provider?.role as any) || 'fitness_coach'}
         specialistProfile={provider}
       />
+
+      {/* Upload or Assign Workout Plan Modal for Fitness Coach (matching Dietitian uploader) */}
+      {showUploadWorkoutModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 pointer-events-auto">
+          <div className="w-full max-w-lg bg-white rounded-3xl p-6 shadow-2xl border border-slate-100 space-y-5 animate-in fade-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-xl bg-teal-50 text-[#0D9488] flex items-center justify-center">
+                  <Upload className="w-5 h-5 text-[#0D9488]" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-[#1A1F36]">Assign Patient Workout Plan / Sheet</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Delivers sheet to patient portal &amp; finalizes consultation</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowUploadWorkoutModal(false)}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 cursor-pointer"
+              >
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Preferred Option: Official 8Liv Letterhead Studio */}
+            <div className="p-3.5 rounded-2xl bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-200 flex items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#0D9488] text-white flex items-center justify-center shrink-0">
+                  <Sparkles className="w-4 h-4 text-emerald-200" />
+                </div>
+                <div>
+                  <p className="text-xs font-black text-[#1A1F36]">Author Official 8Liv Letterhead</p>
+                  <p className="text-[11px] text-slate-500 font-medium">Type or customize workout sheet with 8Liv header, logo &amp; signature.</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUploadWorkoutModal(false)
+                  const pat = patients.find((p) => p.id === uploadPlanPatientId)
+                  setProtocolBuilderPatient(pat ? { id: pat.id, name: pat.name } : null)
+                  setProtocolBuilderConsultation(uploadPlanAppointmentId ? { id: uploadPlanAppointmentId } : null)
+                  setShowProtocolBuilder(true)
+                }}
+                className="shrink-0 px-3 py-1.5 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1"
+              >
+                <span>Open Letterhead</span>
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUploadWorkoutPlan} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Select Patient *</label>
+                <select
+                  required
+                  value={uploadPlanPatientId}
+                  onChange={(e) => setUploadPlanPatientId(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                >
+                  <option value="">-- Choose patient --</option>
+                  {patients.map((pat) => (
+                    <option key={pat.id} value={pat.id}>{pat.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Workout Sheet Title *</label>
+                <input
+                  type="text"
+                  required
+                  value={uploadPlanTitle}
+                  onChange={(e) => setUploadPlanTitle(e.target.value)}
+                  placeholder="e.g. Personalized Strength & Low-Impact Cardio Routine"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Workout Focus / Type *</label>
+                <select
+                  value={uploadWorkoutType}
+                  onChange={(e) => setUploadWorkoutType(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                >
+                  <option value="Resistance & Low-Impact Cardio">Resistance & Low-Impact Cardio</option>
+                  <option value="Strength & Conditioning">Strength & Conditioning</option>
+                  <option value="Mobility & Core Stability">Mobility & Core Stability</option>
+                  <option value="Fat Loss & HIIT Routine">Fat Loss & HIIT Routine</option>
+                  <option value="Low-Impact Joint Rehabilitation">Low-Impact Joint Rehabilitation</option>
+                  <option value="Metabolic Conditioning Routine">Metabolic Conditioning Routine</option>
+                  <option value="Daily Home Calisthenics">Daily Home Calisthenics</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Weekly Frequency (days/wk)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="7"
+                    value={uploadWeeklyFreq}
+                    onChange={(e) => setUploadWeeklyFreq(e.target.value)}
+                    placeholder="3"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Daily Step Goal</label>
+                  <input
+                    type="number"
+                    step="500"
+                    value={uploadStepGoal}
+                    onChange={(e) => setUploadStepGoal(e.target.value)}
+                    placeholder="8000"
+                    className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Exercise Restrictions / Medical Notes</label>
+                <input
+                  type="text"
+                  value={uploadRestrictions}
+                  onChange={(e) => setUploadRestrictions(e.target.value)}
+                  placeholder="e.g. Avoid heavy squats due to knee pain; keep heart rate below 140 bpm"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Coach Notes / Workout Instructions</label>
+                <textarea
+                  rows={3}
+                  value={uploadPlanNotes}
+                  onChange={(e) => setUploadPlanNotes(e.target.value)}
+                  placeholder="Perform 3 sets of 12 reps for resistance movements, maintain 2 minutes rest between sets, stretch 10 mins post-workout..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-sm font-semibold focus:border-[#0D9488] outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Workout Sheet / Protocol File (PDF, Image, Excel) *</label>
+                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed border-slate-200 rounded-2xl bg-slate-50/50 hover:bg-slate-50 transition">
+                  <div className="space-y-2 text-center">
+                    <Upload className="mx-auto h-8 w-8 text-slate-400" />
+                    <div className="flex text-xs text-slate-600 justify-center">
+                      <label
+                        htmlFor="workout-sheet-upload-input"
+                        className="relative cursor-pointer rounded-md font-bold text-[#0D9488] hover:text-[#0F766E] focus-within:outline-none"
+                      >
+                        <span>Choose file</span>
+                        <input
+                          id="workout-sheet-upload-input"
+                          type="file"
+                          required
+                          accept=".pdf,.png,.jpg,.jpeg,.webp,.xlsx,.xls"
+                          onChange={(e) => setUploadPlanFile(e.target.files?.[0] || null)}
+                          className="sr-only"
+                        />
+                      </label>
+                      <p className="pl-1 font-medium">or drag and drop</p>
+                    </div>
+                    <p className="text-[11px] text-slate-400">PDF, JPG, PNG, WEBP, XLSX up to 10MB</p>
+                    {uploadPlanFile && (
+                      <p className="text-xs font-bold text-[#0D9488] mt-2 bg-emerald-50 py-1 px-2.5 rounded-lg inline-block">
+                        ✓ {uploadPlanFile.name} ({(uploadPlanFile.size / (1024 * 1024)).toFixed(2)} MB)
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowUploadWorkoutModal(false)}
+                  className="flex-1 py-2.5 px-4 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 transition cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={uploadingPlan}
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold shadow-md shadow-emerald-900/20 transition disabled:opacity-50 cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  {uploadingPlan ? 'Assigning Sheet...' : 'Upload & Deliver Sheet'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
@@ -1059,7 +1385,7 @@ function sectionLabel(section: string) {
   return 'Provider Profile'
 }
 
-function Dashboard({ summary, patients, consultations, stats, wallet, copy, onComplete, isSessionJoinable }: {
+function Dashboard({ summary, patients, consultations, stats, wallet, copy, onComplete, onOpenUploadModal, isSessionJoinable }: {
   summary: Summary
   patients: Patient[]
   consultations: ProviderConsultation[]
@@ -1067,15 +1393,20 @@ function Dashboard({ summary, patients, consultations, stats, wallet, copy, onCo
   wallet: WalletState
   copy: any
   onComplete: (consultationId: string) => void
+  onOpenUploadModal?: (session: ProviderConsultation) => void
   isSessionJoinable: (sess: any) => boolean
 }) {
+  const availableBalance = wallet.available_balance !== undefined
+    ? Number(wallet.available_balance)
+    : Math.max(0, Number(wallet.balance || 0) - Number(wallet.pending_payout || 0))
+
   const cards = [
     { label: 'Assigned Patients', value: summary.assignedPatients, sub: 'Active care members' },
     { label: "Today's Sessions", value: stats.today || 0, sub: 'Scheduled today' },
     { label: 'Upcoming Sessions', value: stats.upcoming || 0, sub: 'Ready to attend' },
     { label: 'Completed Sessions', value: stats.completed || 0, sub: 'Finished sessions' },
     { label: copy.pendingLabel, value: summary.pendingFollowUps, sub: 'Needs next action' },
-    { label: 'Wallet Balance', value: formatInr(wallet.balance), sub: 'Credited earnings' },
+    { label: 'Available Balance', value: formatInr(availableBalance), sub: 'Ready to withdraw' },
   ]
 
   return (
@@ -1173,9 +1504,21 @@ function Dashboard({ summary, patients, consultations, stats, wallet, copy, onCo
                         </span>
                       )}
                       {!terminal && (
-                        <button onClick={() => onComplete(session.id)} className="rounded-full border border-[#1A1F36]/15 bg-white px-4 py-2 text-xs font-black text-[#1A1F36] hover:bg-slate-50 cursor-pointer">
-                          Complete
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          {onOpenUploadModal && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenUploadModal(session)}
+                              className="rounded-full border border-teal-200 bg-teal-50/70 text-[#0D9488] hover:bg-teal-100 px-3 py-2 text-xs font-black flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                            >
+                              <Upload className="w-3 h-3 text-[#0D9488]" />
+                              <span>Upload Sheet</span>
+                            </button>
+                          )}
+                          <button onClick={() => onComplete(session.id)} className="rounded-full border border-[#1A1F36]/15 bg-white px-4 py-2 text-xs font-black text-[#1A1F36] hover:bg-slate-50 cursor-pointer">
+                            Complete
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -1328,6 +1671,7 @@ function Consultations({
   totalPages,
   setPage,
   onOpenProtocolBuilder,
+  onOpenUploadModal,
   isSessionJoinable,
 }: {
   consultations: ProviderConsultation[]
@@ -1341,6 +1685,7 @@ function Consultations({
   totalPages: number
   setPage: React.Dispatch<React.SetStateAction<number>>
   onOpenProtocolBuilder?: (consultation: ProviderConsultation) => void
+  onOpenUploadModal?: (consultation: ProviderConsultation) => void
   isSessionJoinable: (sess: any) => boolean
 }) {
   const statCards = [
@@ -1440,6 +1785,16 @@ function Consultations({
                               <span>Deliver Protocol</span>
                             </button>
                           )}
+                          {!terminal && onOpenUploadModal && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenUploadModal(session)}
+                              className="rounded-full border border-teal-200 bg-teal-50/70 text-[#0D9488] hover:bg-teal-100 px-3 py-2 text-xs font-black flex items-center gap-1 cursor-pointer transition shadow-2xs"
+                            >
+                              <Upload className="w-3 h-3 text-[#0D9488]" />
+                              <span>Upload Sheet</span>
+                            </button>
+                          )}
                           {!terminal && <button onClick={() => onAction(session.id, 'complete')} className="rounded-full border border-[#1A1F36]/15 bg-white px-3 py-2 text-xs font-black">Complete</button>}
                           {!terminal && <button onClick={() => onAction(session.id, 'missed')} className="rounded-full border border-[#D89A3D]/25 bg-[#FFF8EC] px-3 py-2 text-xs font-black text-[#A86812]">Missed</button>}
                           {!terminal && <button onClick={() => onAction(session.id, 'cancel')} className="rounded-full border border-[#F2C8BE] bg-[#FFF4EC] px-3 py-2 text-xs font-black text-[#A84A33]">Cancel</button>}
@@ -1497,7 +1852,9 @@ function WalletModule({
   const [requesting, setRequesting] = useState(false)
   const [modalError, setModalError] = useState('')
 
-  const availableBalance = wallet.balance - wallet.pending_payout
+  const availableBalance = wallet.available_balance !== undefined
+    ? Number(wallet.available_balance)
+    : Math.max(0, Number(wallet.balance || 0) - Number(wallet.pending_payout || 0))
 
   const handleRequestPayout = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -1537,10 +1894,10 @@ function WalletModule({
   }
 
   const cards = [
-    { label: 'Wallet Balance', value: formatInr(wallet.balance) },
-    { label: 'Pending Payout', value: formatInr(wallet.pending_payout) },
-    { label: 'Completed Payout', value: formatInr(wallet.completed_payout) },
-    { label: 'Lifetime Earnings', value: formatInr(wallet.lifetime_earnings) },
+    { label: 'Available Balance', value: formatInr(availableBalance), sub: 'Ready to withdraw' },
+    { label: 'Pending Payout', value: formatInr(wallet.pending_payout || 0), sub: 'Processing transfer' },
+    { label: 'Total Withdrawn', value: formatInr(wallet.completed_payout || wallet.total_withdrawn || 0), sub: 'To bank account' },
+    { label: 'Total Earned', value: formatInr(wallet.lifetime_earnings || wallet.total_earned || 0), sub: 'From completed consults' },
   ]
 
   return (
@@ -1575,6 +1932,7 @@ function WalletModule({
           <div key={card.label} className="rounded-[24px] border border-[#E8DED4] bg-white p-5 shadow-sm">
             <p className="text-xs font-black uppercase tracking-[0.18em] text-[#6B7A90]">{card.label}</p>
             <p className="mt-4 text-3xl font-black text-[#1A1F36]">{card.value}</p>
+            {card.sub && <p className="mt-1 text-xs font-semibold text-[#8896A4]">{card.sub}</p>}
           </div>
         ))}
       </div>
@@ -1687,7 +2045,8 @@ function WalletModule({
                   type="number"
                   value={payoutAmount}
                   onChange={(e) => setPayoutAmount(e.target.value)}
-                  placeholder="Enter amount to withdraw"
+                  placeholder={`Max ${formatInr(availableBalance)}`}
+                  max={availableBalance}
                   required
                   className="w-full rounded-xl border border-[#E8DED4] bg-[#F9F6F0] px-4 py-3 text-sm font-semibold outline-none focus:border-[#C4622D]"
                 />
@@ -1828,6 +2187,7 @@ function Plans(props: {
   saving: boolean
   copy: any
   onOpenProtocolBuilder?: (patientId?: string, consultation?: any) => void
+  onOpenUploadModal?: (patientId?: string) => void
   onViewProtocol?: (plan: any) => void
 }) {
   const selectedPatient = props.patients.find((patient) => patient.id === props.selectedPatientId)
@@ -1862,16 +2222,28 @@ function Plans(props: {
             <p className="text-[11px] font-black uppercase tracking-[0.22em] text-[#C4622D]">{props.copy.planTitle}</p>
             <h3 className="mt-1 text-2xl font-black">Assigned care plan</h3>
           </div>
-          {props.onOpenProtocolBuilder && (
-            <button
-              type="button"
-              onClick={() => props.onOpenProtocolBuilder?.(props.selectedPatientId)}
-              className="rounded-full bg-gradient-to-r from-[#1A1F36] to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white px-5 py-2.5 text-xs font-bold flex items-center gap-2 shadow-sm cursor-pointer"
-            >
-              <Sparkles className="w-4 h-4 text-amber-300" />
-              <span>Author Official Protocol Sheet</span>
-            </button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap">
+            {props.onOpenUploadModal && (
+              <button
+                type="button"
+                onClick={() => props.onOpenUploadModal?.(props.selectedPatientId)}
+                className="rounded-full bg-[#0D9488] hover:bg-[#0F766E] text-white px-4 py-2.5 text-xs font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
+              >
+                <Upload className="w-4 h-4 text-emerald-200" />
+                <span>Upload Workout Sheet</span>
+              </button>
+            )}
+            {props.onOpenProtocolBuilder && (
+              <button
+                type="button"
+                onClick={() => props.onOpenProtocolBuilder?.(props.selectedPatientId)}
+                className="rounded-full bg-gradient-to-r from-[#1A1F36] to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white px-5 py-2.5 text-xs font-bold flex items-center gap-2 shadow-sm cursor-pointer"
+              >
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>Author Official Protocol Sheet</span>
+              </button>
+            )}
+          </div>
         </div>
         {!props.patients.length ? (
           <EmptyState />

@@ -26,8 +26,8 @@ export default function BillingPage() {
   }
 
   useEffect(() => {
-    // 1. Load active commercial plans
-    fetch('/api/subscriptions/pricing')
+    // 1. Load active commercial plans with patient authentication context
+    authedFetch('/api/subscriptions/pricing')
       .then(r => r.json())
       .then(d => {
         if (d.plans && d.plans.length > 0) {
@@ -353,14 +353,21 @@ export default function BillingPage() {
                   <div className="absolute -top-2.5 left-4 rounded-full bg-[#0D9488] px-2.5 py-0.5 text-[10px] font-black text-white uppercase tracking-wider shadow-sm">
                     Current Active Program
                   </div>
-                ) : discountPct > 0 ? (
+                ) : prog.isFirstTimeOffer && discountPct > 0 ? (
                   <div className="absolute -top-2.5 right-4 rounded-full bg-[#C4622D] px-2.5 py-0.5 text-[10px] font-black text-white uppercase">
                     {discountPct}% OFF (Save ₹{discountAmt.toLocaleString('en-IN')})
                   </div>
                 ) : null}
                 <div>
                   <h4 className="font-bold font-sora text-[#1A1F36]">{prog.name}</h4>
-                  <p className="text-2xl font-black text-[#1A1F36] mt-2">₹{Number(prog.finalPrice).toLocaleString('en-IN')}</p>
+                  <div className="flex items-baseline gap-2 mt-2 flex-wrap">
+                    {prog.isFirstTimeOffer && (prog.originalPrice || prog.basePrice) > prog.finalPrice && (
+                      <span className="text-sm font-semibold text-slate-400 line-through">
+                        ₹{Number(prog.originalPrice || prog.basePrice).toLocaleString('en-IN')}
+                      </span>
+                    )}
+                    <p className="text-2xl font-black text-[#1A1F36]">₹{Number(prog.finalPrice).toLocaleString('en-IN')}</p>
+                  </div>
                   <p className="text-xs text-[#8896A4] font-semibold">₹{Number(prog.monthlyEquivalent).toLocaleString('en-IN')} / mo</p>
                   <p className="mt-3 text-xs text-[#40516A] leading-relaxed">{prog.description || `${prog.durationMonths} monthly treatment cycles provisioned.`}</p>
                 </div>

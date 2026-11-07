@@ -16,9 +16,9 @@ type UpiApp = { name: string; color: string; abbr: string }
 
 const UPI_APPS: UpiApp[] = [
   { name: 'Google Pay', color: '#4285F4', abbr: 'GPay' },
-  { name: 'PhonePe',   color: '#5F259F', abbr: 'PhPe' },
-  { name: 'Paytm',     color: '#00B9F1', abbr: 'Paytm' },
-  { name: 'BHIM',      color: '#0075C2', abbr: 'BHIM' },
+  { name: 'PhonePe', color: '#5F259F', abbr: 'PhPe' },
+  { name: 'Paytm', color: '#00B9F1', abbr: 'Paytm' },
+  { name: 'BHIM', color: '#0075C2', abbr: 'BHIM' },
 ]
 
 const BANKS = ['State Bank of India', 'HDFC Bank', 'ICICI Bank', 'Axis Bank', 'Kotak Mahindra Bank', 'Yes Bank']
@@ -101,9 +101,15 @@ export default function OnboardingPaymentPage() {
 
   useEffect(() => {
     if (!assessment?.membership_tier) return
-    fetch('/api/subscriptions/pricing')
-      .then(r => r.json())
-      .then(d => {
+    async function loadPricing() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const headers: Record<string, string> = {}
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`
+        }
+        const res = await fetch('/api/subscriptions/pricing', { headers })
+        const d = await res.json()
         if (d.plans && d.plans.length > 0) {
           const matched = d.plans.find((p: any) => p.name === assessment.membership_tier)
             || d.plans.find((p: any) => String(p.durationMonths) === String(parseInt(String(assessment.membership_tier))))
@@ -112,9 +118,13 @@ export default function OnboardingPaymentPage() {
           setSelectedPlan(matched)
           selectedPlanIdRef.current = matched?.id || ''
         }
-      })
-      .catch(e => console.warn('Failed to load plans:', e))
-      .finally(() => setLoading(false))
+      } catch (e) {
+        console.warn('Failed to load plans:', e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadPricing()
   }, [assessment?.membership_tier])
 
   // ── Authoritative Database-Driven Pricing ───────────────────────────────────
@@ -386,10 +396,23 @@ export default function OnboardingPaymentPage() {
                     <span className="text-[#475569]">Selected Program</span>
                     <span className="font-bold text-[#0F172A] font-sora">{durationMonths} Month Treatment Program</span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[#475569]">Program Fee</span>
-                    <span className="font-bold text-[#0F172A] font-sora">₹{planPrice.toLocaleString('en-IN')}</span>
-                  </div>
+                  {selectedPlan?.isFirstTimeOffer && discountAmount > 0 ? (
+                    <>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-[#475569]">Regular Price</span>
+                        <span className="font-semibold text-slate-400 line-through font-sora">₹{basePrice.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-emerald-600 font-medium">
+                        <span>First-Time Member Discount</span>
+                        <span className="font-bold font-sora">-₹{discountAmount.toLocaleString('en-IN')}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-[#475569]">Program Fee</span>
+                      <span className="font-bold text-[#0F172A] font-sora">₹{planPrice.toLocaleString('en-IN')}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between text-sm border-t border-slate-200 pt-3">
                     <span className="text-[#0F172A] font-bold font-sora">Total Payable</span>
                     <span className="font-extrabold text-xl text-[#00A884] font-sora">₹{total.toLocaleString('en-IN')}</span>
@@ -487,7 +510,7 @@ export default function OnboardingPaymentPage() {
                     { label: 'Transaction ID', value: txnId, mono: true },
                     { label: 'Amount Paid', value: `₹${total.toLocaleString('en-IN')}` },
                     { label: 'Plan Activated', value: assessment?.membership_tier },
-                    { label: 'Payment Method', value: method === 'upi' ? (upiSubMethod === 'qr' ? 'UPI (QR Code)' : selectedUpiApp || 'UPI') : method === 'card' ? `Card •••• ${cardNumber.replace(/\s/g,'').slice(-4)}` : selectedBank },
+                    { label: 'Payment Method', value: method === 'upi' ? (upiSubMethod === 'qr' ? 'UPI (QR Code)' : selectedUpiApp || 'UPI') : method === 'card' ? `Card •••• ${cardNumber.replace(/\s/g, '').slice(-4)}` : selectedBank },
                     { label: 'Date', value: new Date().toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' }) },
                   ].map(row => (
                     <div key={row.label} className="flex justify-between items-center text-xs">

@@ -175,7 +175,7 @@ export async function GET(request: Request) {
         .maybeSingle(),
       supabaseAdmin
         .from('prescriptions')
-        .select('id, prescription_number, status, diagnosis, valid_until, issued_at, created_at, signed_pdf_path, canonical_data, prescription_items(id, medicine_name, dosage, frequency, duration)')
+        .select('id, prescription_number, status, diagnosis, valid_until, issued_at, created_at, signed_pdf_path, canonical_data, prescription_items(id, medicine_name, generic_name, brand_name, strength, dosage_form, dose, route, frequency, duration_value, duration_unit, quantity, food_instruction, special_instruction)')
         .eq('patient_id', patientId)
         .not('status', 'in', '("DRAFT","REVOKED","CANCELLED","REPLACED")')
         .order('created_at', { ascending: false })
@@ -234,7 +234,21 @@ export async function GET(request: Request) {
       }
     }
 
-    const fitnessPlan = fitnessPlanRes.data || null
+    let fitnessPlan = fitnessPlanRes.data || null
+    if (fitnessPlan?.attachment_url) {
+      try {
+        const rawPath = String(fitnessPlan.attachment_url).replace(/^fitness-plans\//, '')
+        const { data: signed } = await supabaseAdmin.storage
+          .from('fitness-plans')
+          .createSignedUrl(rawPath, 3600 * 24)
+        if (signed?.signedUrl) {
+          fitnessPlan = { ...fitnessPlan, attachment_signed_url: signed.signedUrl }
+        }
+      } catch (eFit) {
+        console.warn('Fitness plan signed URL notice:', eFit)
+      }
+    }
+
     let activePrescription: any = activePrescriptionRes?.data || null
     if (activePrescription?.signed_pdf_path) {
       try {
@@ -246,6 +260,32 @@ export async function GET(request: Request) {
         }
       } catch (eRx) {
         console.warn('Prescription signed URL notice:', eRx)
+      }
+    }
+
+    // Fallback: If no formal e-prescription exists yet, check if doctor recorded prescription_text during consultation
+    if (!activePrescription && consultations.length > 0) {
+      const consultWithRx = consultations.find((c: any) => c.prescription_text && String(c.prescription_text).trim())
+      if (consultWithRx) {
+        activePrescription = {
+          id: consultWithRx.id,
+          prescription_number: `RX-CONSULT-${String(consultWithRx.id).slice(0, 8).toUpperCase()}`,
+          status: 'ISSUED',
+          diagnosis: 'Clinical Consultation Prescription',
+          prescription_items: [
+            {
+              id: consultWithRx.id,
+              medicine_name: consultWithRx.prescription_text,
+              dose: 'Follow physician instructions',
+              frequency: 'As directed',
+              strength: '',
+            }
+          ],
+          issued_at: consultWithRx.updated_at || consultWithRx.created_at,
+          created_at: consultWithRx.created_at,
+          doctor_consultation_id: consultWithRx.id,
+          is_consultation_note: true,
+        }
       }
     }
 

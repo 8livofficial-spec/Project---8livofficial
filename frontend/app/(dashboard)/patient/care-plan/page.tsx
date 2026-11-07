@@ -128,14 +128,27 @@ export default function CarePlanPage() {
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => setViewingOfficialFitnessModal(activeFitnessPlan)}
-                      className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-[#1A1F36] to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white text-xs font-bold flex items-center gap-2 shadow-sm self-start cursor-pointer transition-all hover:scale-[1.02]"
-                    >
-                      <Sparkles className="w-4 h-4 text-amber-300" />
-                      <span>View Official Letterhead</span>
-                    </button>
+                    <div className="flex items-center gap-2 self-start flex-wrap">
+                      {(activeFitnessPlan.attachment_signed_url || activeFitnessPlan.attachment_url) && (
+                        <a
+                          href={activeFitnessPlan.attachment_signed_url || activeFitnessPlan.attachment_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-4 py-2.5 rounded-2xl bg-[#00A884] hover:bg-[#009272] text-white text-xs font-bold flex items-center gap-2 shadow-sm transition-all hover:scale-[1.02]"
+                        >
+                          <FileText className="w-4 h-4 text-emerald-200" />
+                          <span>View Workout Sheet</span>
+                        </a>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setViewingOfficialFitnessModal(activeFitnessPlan)}
+                        className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-[#1A1F36] to-slate-800 hover:from-slate-800 hover:to-slate-900 text-white text-xs font-bold flex items-center gap-2 shadow-sm cursor-pointer transition-all hover:scale-[1.02]"
+                      >
+                        <Sparkles className="w-4 h-4 text-amber-300" />
+                        <span>View Official Letterhead</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Primary Targets Strip */}
@@ -161,6 +174,48 @@ export default function CarePlanPage() {
                       <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200 text-slate-800 text-sm whitespace-pre-wrap leading-relaxed font-mono">
                         {activeFitnessPlan.notes}
                       </div>
+                    </div>
+                  )}
+
+                  {/* Attached Workout Sheet / File */}
+                  {(activeFitnessPlan.attachment_signed_url || activeFitnessPlan.attachment_url) && (
+                    <div className="p-5 rounded-2xl bg-amber-50/60 border border-amber-200/80 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-700 flex items-center justify-center shrink-0">
+                            <FileText className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-black text-slate-900">
+                              {activeFitnessPlan.title || 'Official Workout Plan Sheet'}
+                            </h4>
+                            <p className="text-xs text-slate-500">
+                              Uploaded by coach • {activeFitnessPlan.attachment_type || 'PDF/Document'}
+                            </p>
+                          </div>
+                        </div>
+                        <a
+                          href={activeFitnessPlan.attachment_signed_url || activeFitnessPlan.attachment_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition"
+                        >
+                          <span>Open / Download File</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </a>
+                      </div>
+
+                      {/* Responsive Image Preview if attachment is an image */}
+                      {(activeFitnessPlan.attachment_type?.startsWith('image/') ||
+                        /\.(png|jpg|jpeg|webp)$/i.test(activeFitnessPlan.attachment_url || '')) && (
+                        <div className="mt-3 overflow-hidden rounded-xl border border-amber-200 bg-white p-2">
+                          <img
+                            src={activeFitnessPlan.attachment_signed_url || activeFitnessPlan.attachment_url}
+                            alt="Workout Plan Preview"
+                            className="max-h-96 w-full object-contain rounded-lg"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 

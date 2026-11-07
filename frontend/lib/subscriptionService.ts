@@ -8,6 +8,8 @@ export interface TreatmentPlanRecord {
   name: string
   duration_months: number
   base_price: number
+  renewal_price?: number
+  first_time_price?: number
   discount_percentage: number
   discount_amount: number
   final_price: number
@@ -49,21 +51,24 @@ export const SEED_PLANS: TreatmentPlanRecord[] = [
   {
     id: 'seed-plan-1m',
     tenant_id: '8liv',
-    name: '1-Month Kickstart Trial',
+    name: '1-Month Trial Plan',
     duration_months: 1,
     base_price: 1820.00,
+    renewal_price: 1820.00,
+    first_time_price: 1470.00,
     discount_percentage: 19.23,
     discount_amount: 350.00,
     final_price: 1470.00,
     currency: 'INR',
     description: '1-month trial plan for new users. Exactly 3 consultations included (1 with Doctor, 1 with Nutritionist, 1 with Fitness Coach).',
     features: [
-      '3 Consultations Total (1 Doctor, 1 Dietitian, 1 Fitness Coach)',
       '1 Doctor Video Telehealth Consultation',
-      '1 Clinical Dietitian Meal Calibration',
-      '1 Fitness Coach Movement Session',
-      'Official CDSCO Digital E-Prescription',
-      'Customized Indian Diet Plan & Daily Logs',
+      '1 Clinical Dietitian Indian Meal Calibration',
+      '1 Fitness Coach Movement Coaching Session',
+      'Official CDSCO Digital E-Prescription in Portal',
+      'Personalized Indian Diet Plan (Roti, Dal, Sabzi)',
+      'Daily In-App Food & Water Log Tracking',
+      'Prescriptions fulfilled at your preferred pharmacy',
     ],
     status: 'ACTIVE',
     display_order: 1,
@@ -86,17 +91,21 @@ export const SEED_PLANS: TreatmentPlanRecord[] = [
     name: '3-Month Metabolic Reset',
     duration_months: 3,
     base_price: 5460.00,
+    renewal_price: 5460.00,
+    first_time_price: 4900.00,
     discount_percentage: 10.26,
     discount_amount: 560.00,
     final_price: 4900.00,
     currency: 'INR',
     description: '3 months of structured clinical metabolic care with recurring doctor reviews and continuous dietitian support.',
     features: [
-      'Multi-Cycle Physician Follow-ups & Dosage Calibration',
-      'Dedicated Clinical Dietitian Support',
-      'Progressive Resistance & Muscle-Defense Routines',
+      'Multi-Cycle Doctor Follow-ups & Dosage Reviews',
+      'Dedicated Clinical Dietitian Support Throughout',
+      'Progressive Muscle-Defense Resistance Routines',
       'Continuous Metabolic Telemetry Monitoring',
-      'Care Team In-App Messaging Coordination',
+      'Direct In-App Care Team Messaging',
+      'Official Digital E-Prescription Renewals',
+      'Prescriptions fulfilled at your preferred pharmacy',
     ],
     status: 'ACTIVE',
     display_order: 2,
@@ -116,9 +125,11 @@ export const SEED_PLANS: TreatmentPlanRecord[] = [
   {
     id: 'seed-plan-5m',
     tenant_id: '8liv',
-    name: '5-Month Sustainable Transformation',
+    name: '5-Month Transformation',
     duration_months: 5,
     base_price: 9100.00,
+    renewal_price: 9100.00,
+    first_time_price: 8225.00,
     discount_percentage: 9.62,
     discount_amount: 875.00,
     final_price: 8225.00,
@@ -126,10 +137,12 @@ export const SEED_PLANS: TreatmentPlanRecord[] = [
     description: 'Complete 5-month sustained weight reduction program designed to lock in metabolic health and prevent weight regain.',
     features: [
       'Full 5-Month Physician-Supervised Protocol',
-      'Comprehensive Biomarker & Lab Review Cycles',
-      'Dynamic Indian Diet & Habit Lock-In Strategy',
+      'Bi-Weekly Biomarker & Clinical Review Cycles',
+      'Dynamic Macro & Indian Meal Progression Strategy',
       'Guided Gym & Home Resistance Routines',
       'Long-Term Weight Regain Defense Protocol',
+      'Priority Patient Support & Care Team Access',
+      'Prescriptions fulfilled at your preferred pharmacy',
     ],
     status: 'ACTIVE',
     display_order: 3,
@@ -148,18 +161,40 @@ export const SEED_PLANS: TreatmentPlanRecord[] = [
   },
 ]
 
-export function computePlanPricing(basePrice: number, discountPercentage: number, durationMonths: number) {
+export function computePlanPricing(
+  basePrice: number,
+  discountPercentage: number,
+  durationMonths: number,
+  isFirstTime = true,
+  explicitOfferPrice?: number
+) {
   const base = Math.max(0, Number(basePrice) || 0)
-  const discountPct = Math.min(100, Math.max(0, Number(discountPercentage) || 0))
   const duration = Math.max(1, Number(durationMonths) || 1)
-  const discountAmount = Math.round((base * discountPct) / 100)
-  const finalPrice = Math.max(0, base - discountAmount)
+
+  let discountPct = 0
+  let discountAmount = 0
+  let finalPrice = base
+
+  if (isFirstTime) {
+    if (explicitOfferPrice !== undefined && explicitOfferPrice > 0 && explicitOfferPrice <= base) {
+      finalPrice = explicitOfferPrice
+      discountAmount = Math.max(0, base - finalPrice)
+      discountPct = base > 0 ? Math.round((discountAmount / base) * 100) : 0
+    } else {
+      discountPct = Math.min(100, Math.max(0, Number(discountPercentage) || 0))
+      discountAmount = Math.round((base * discountPct) / 100)
+      finalPrice = Math.max(0, base - discountAmount)
+    }
+  }
+
   const gstAmount = Math.round(finalPrice * STATUTORY_GST_RATE)
   const totalWithGst = finalPrice + gstAmount
   const monthlyEquivalent = Math.round(finalPrice / duration)
 
   return {
     basePrice: base,
+    renewalPrice: base,
+    firstTimePrice: isFirstTime ? finalPrice : (explicitOfferPrice && explicitOfferPrice > 0 ? explicitOfferPrice : Math.max(0, base - Math.round((base * (Number(discountPercentage) || 0)) / 100))),
     discountPercentage: discountPct,
     discountAmount,
     finalPrice,
@@ -168,7 +203,47 @@ export function computePlanPricing(basePrice: number, discountPercentage: number
     totalWithGst,
     monthlyEquivalent,
     durationMonths: duration,
+    isFirstTimeOffer: isFirstTime && discountAmount > 0,
   }
+}
+
+/**
+ * Determine if a patient is eligible for the first-time introductory plan offer.
+ * Eligible (true): The patient has 0 prior successful membership/plan payments and no active/past subscription.
+ * Returning (false): The patient has previously purchased at least 1 membership/plan.
+ * Note: Initial ₹350 consultation fee does NOT disqualify the patient.
+ */
+export async function isFirstTimeSubscriber(patientId?: string | null): Promise<boolean> {
+  if (!patientId) return true
+
+  try {
+    // 1. Check successful payment transactions for membership or combined plan
+    const { count: txnCount, error: txnErr } = await supabaseAdmin
+      .from('payment_transactions')
+      .select('id', { count: 'exact', head: true })
+      .eq('patient_id', patientId)
+      .in('payment_type', ['membership', 'combined'])
+      .in('status', ['success', 'paid'])
+
+    if (!txnErr && typeof txnCount === 'number' && txnCount > 0) {
+      return false
+    }
+
+    // 2. Check if subscriptions table has any provisioned subscription
+    const { count: subCount, error: subErr } = await supabaseAdmin
+      .from('subscriptions')
+      .select('id', { count: 'exact', head: true })
+      .eq('patient_id', patientId)
+      .in('status', ['ACTIVE', 'EXPIRED', 'COMPLETED', 'CANCELLED'])
+
+    if (!subErr && typeof subCount === 'number' && subCount > 0) {
+      return false
+    }
+  } catch (err) {
+    console.warn('[isFirstTimeSubscriber] check error:', err)
+  }
+
+  return true
 }
 
 let activePlansCache: { data: TreatmentPlanRecord[]; expiresAt: number } | null = null
@@ -262,7 +337,11 @@ export async function getTreatmentPlanByDuration(durationMonths: number, tenantI
  * Authoritative Server-Side Pricing Lookup
  * Patient/frontend cannot tamper with amount; backend resolves active plan or duration from database.
  */
-export async function getAuthoritativeSubscriptionPricing(planIdOrDuration: string | number, tenantId = '8liv'): Promise<SubscriptionPricing> {
+export async function getAuthoritativeSubscriptionPricing(
+  planIdOrDuration: string | number,
+  tenantId = '8liv',
+  patientId?: string
+): Promise<SubscriptionPricing> {
   let plan: TreatmentPlanRecord | null = null
 
   if (typeof planIdOrDuration === 'string' && planIdOrDuration.length > 0) {
@@ -276,8 +355,16 @@ export async function getAuthoritativeSubscriptionPricing(planIdOrDuration: stri
     plan = await getTreatmentPlanByDuration(planIdOrDuration, tenantId)
   }
 
+  const isFirstTime = await isFirstTimeSubscriber(patientId)
+
   if (plan) {
-    const calc = computePlanPricing(plan.base_price, plan.discount_percentage, plan.duration_months)
+    const calc = computePlanPricing(
+      plan.base_price,
+      plan.discount_percentage,
+      plan.duration_months,
+      isFirstTime,
+      plan.final_price
+    )
     return {
       planId: plan.id,
       durationMonths: plan.duration_months,
@@ -293,14 +380,19 @@ export async function getAuthoritativeSubscriptionPricing(planIdOrDuration: stri
       currency: plan.currency || 'INR',
       description: plan.description,
       features: plan.features,
-      metadata: plan.metadata,
+      metadata: {
+        ...(plan.metadata || {}),
+        isFirstTimeOffer: calc.isFirstTimeOffer,
+        renewalPrice: calc.renewalPrice,
+        firstTimePrice: calc.firstTimePrice,
+      },
     }
   }
 
   // Generic dynamic calculation if custom duration passed without explicit plan
   const duration = typeof planIdOrDuration === 'number' ? planIdOrDuration : (Number(planIdOrDuration) || 1)
   const basePrice = duration * DEFAULT_BASE_MONTHLY_RATE
-  const calc = computePlanPricing(basePrice, 0, duration)
+  const calc = computePlanPricing(basePrice, 0, duration, isFirstTime)
 
   return {
     durationMonths: duration,
@@ -314,6 +406,11 @@ export async function getAuthoritativeSubscriptionPricing(planIdOrDuration: stri
     gstAmount: calc.gstAmount,
     totalWithGst: calc.totalWithGst,
     currency: 'INR',
+    metadata: {
+      isFirstTimeOffer: false,
+      renewalPrice: calc.basePrice,
+      firstTimePrice: calc.basePrice,
+    },
   }
 }
 

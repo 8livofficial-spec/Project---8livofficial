@@ -60,13 +60,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Base price must be a non-negative number.' }, { status: 400 })
     }
 
-    const rawDiscountPct = parseFloat(discountPercentage || 0)
-    if (isNaN(rawDiscountPct) || rawDiscountPct < 0 || rawDiscountPct > 100) {
-      return NextResponse.json({ error: 'Discount percentage must be between 0 and 100.' }, { status: 400 })
-    }
+    const rawFirstTimePrice = body?.firstTimePrice !== undefined && body?.firstTimePrice !== '' ? parseFloat(body.firstTimePrice) : undefined
+    let rawDiscountPct = parseFloat(discountPercentage || 0)
 
-    // Server-authoritative calculation: Never trust client-supplied discountAmount or finalPrice
-    const calc = computePlanPricing(rawBasePrice, rawDiscountPct, duration)
+    let calc: any
+    if (rawFirstTimePrice !== undefined && !isNaN(rawFirstTimePrice) && rawFirstTimePrice >= 0) {
+      const clampedOffer = Math.min(rawBasePrice, rawFirstTimePrice)
+      const diff = Math.max(0, rawBasePrice - clampedOffer)
+      rawDiscountPct = rawBasePrice > 0 ? Math.round((diff / rawBasePrice) * 100) : 0
+      calc = computePlanPricing(rawBasePrice, rawDiscountPct, duration, true, clampedOffer)
+    } else {
+      if (isNaN(rawDiscountPct) || rawDiscountPct < 0 || rawDiscountPct > 100) {
+        return NextResponse.json({ error: 'Discount percentage must be between 0 and 100.' }, { status: 400 })
+      }
+      calc = computePlanPricing(rawBasePrice, rawDiscountPct, duration, true)
+    }
     const now = new Date().toISOString()
 
     let oldValues: Record<string, unknown> | null = null
@@ -89,6 +97,8 @@ export async function POST(request: Request) {
     const metadata = {
       ...existingMetadata,
       is_trial: duration === 1,
+      renewal_price: calc.basePrice,
+      first_time_price: calc.finalPrice,
       max_consultations: {
         doctor: docCalls,
         dietitian: dietCalls,

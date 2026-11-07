@@ -155,17 +155,80 @@ export default function PatientNutritionWidget() {
                 <FileText className="w-4 h-4 text-emerald-200" />
                 <span>Official Letterhead</span>
               </button>
-              <a
-                href={`/api/dietitian/plans/${activePlan.id}/pdf`}
-                target="_blank"
-                rel="noreferrer"
-                className="px-4 py-2 rounded-full border border-[#E8DED4] hover:bg-slate-50 text-xs font-bold text-[#1A1F36] flex items-center gap-2"
-              >
-                <Download className="w-4 h-4 text-[#0D9488]" />
-                <span>Download PDF</span>
-              </a>
+              {activePlan.attachment_signed_url ? (
+                <a
+                  href={activePlan.attachment_signed_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 py-2 rounded-full bg-[#0D9488] hover:bg-[#0F766E] text-xs font-bold text-white flex items-center gap-2 shadow-xs"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>View Attached Chart</span>
+                </a>
+              ) : (
+                <a
+                  href={`/api/dietitian/plans/${activePlan.id}/pdf`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="px-4 py-2 rounded-full border border-[#E8DED4] hover:bg-slate-50 text-xs font-bold text-[#1A1F36] flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4 text-[#0D9488]" />
+                  <span>Download PDF</span>
+                </a>
+              )}
             </div>
           </div>
+
+          {/* Quick Metrics Strip */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-4">
+            <div className="p-3 rounded-2xl bg-[#FAF8F5] border border-[#E8DED4]">
+              <span className="text-[10px] font-bold uppercase text-slate-400 block">Daily Target</span>
+              <span className="text-base font-black text-[#1A1F36] block mt-0.5">
+                {activePlan.daily_calorie_target || activePlan.calories_per_day || 1600} kcal
+              </span>
+            </div>
+            <div className="p-3 rounded-2xl bg-[#FAF8F5] border border-[#E8DED4]">
+              <span className="text-[10px] font-bold uppercase text-slate-400 block">Hydration</span>
+              <span className="text-base font-black text-[#0D9488] block mt-0.5 flex items-center gap-1">
+                <Droplets className="w-4 h-4 text-teal-600" />
+                {activePlan.water_target_liters || activePlan.hydration_goal || '2.5 L'}
+              </span>
+            </div>
+            <div className="p-3 rounded-2xl bg-[#FAF8F5] border border-[#E8DED4] col-span-2 sm:col-span-1">
+              <span className="text-[10px] font-bold uppercase text-slate-400 block">Prescribed By</span>
+              <span className="text-sm font-bold text-slate-700 block mt-0.5 truncate">
+                {activePlan.dietitian?.full_name || 'Clinical Dietitian'}
+              </span>
+            </div>
+          </div>
+
+          {/* Plan Instructions / Attached Document Notice */}
+          {(activePlan.general_instructions || activePlan.notes || activePlan.attachment_signed_url) && (
+            <div className="mt-4 p-4 rounded-2xl bg-teal-50/50 border border-teal-100 text-xs space-y-2">
+              <span className="text-[10px] font-black uppercase tracking-wider text-[#0D9488] block">
+                Dietitian Guidelines & Routine
+              </span>
+              <p className="text-slate-700 leading-relaxed font-medium">
+                {activePlan.general_instructions || activePlan.notes || 'Follow your personalized nutrition plan as prescribed.'}
+              </p>
+              {activePlan.attachment_signed_url && (
+                <div className="pt-2 flex items-center justify-between border-t border-teal-100">
+                  <span className="text-[11px] text-teal-800 font-bold flex items-center gap-1.5">
+                    <FileCheck className="w-4 h-4 text-[#0D9488]" />
+                    Official Diet Chart / Schedule Document Attached
+                  </span>
+                  <a
+                    href={activePlan.attachment_signed_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs font-black text-[#0D9488] hover:underline flex items-center gap-1"
+                  >
+                    <span>Open Document →</span>
+                  </a>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Acknowledgement Block */}
           {activePlan.status === 'PUBLISHED' ? (

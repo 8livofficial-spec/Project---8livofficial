@@ -1139,9 +1139,9 @@ export default function DoctorDashboard() {
           balance,
           pending_payout: pendingPayout,
           completed_payout: completedPayout,
-          total_earned: totalEarned || (balance + completedPayout + pendingPayout),
+          total_earned: totalEarned || (balance + completedPayout),
           total_withdrawn: completedPayout,
-          lifetime_earnings: totalEarned || (balance + completedPayout + pendingPayout),
+          lifetime_earnings: totalEarned || (balance + completedPayout),
         });
 
         // Combine ledger transactions and payouts for unified history

@@ -260,7 +260,10 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
   const [sendingComm, setSendingComm] = useState(false)
 
   // Wallet State (Exact reuse)
-  const [walletState, setWalletState] = useState<any>({ balance: 0, pending_payout: 0, completed_payout: 0, lifetime_earnings: 0 })
+  const [walletState, setWalletState] = useState<any>({ balance: 0, available_balance: 0, gross_balance: 0, pending_payout: 0, completed_payout: 0, lifetime_earnings: 0 })
+  const availableBalance = walletState.available_balance !== undefined
+    ? Number(walletState.available_balance)
+    : Math.max(0, Number(walletState.balance || 0) - Number(walletState.pending_payout || 0))
   const [walletTransactions, setWalletTransactions] = useState<any[]>([])
   const [walletPayouts, setWalletPayouts] = useState<any[]>([])
   const [showPayoutModal, setShowPayoutModal] = useState(false)
@@ -884,7 +887,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
       setPayoutError('Enter a valid payout amount')
       return
     }
-    if (amountVal > Number(walletState.balance || 0)) {
+    if (amountVal > availableBalance) {
       setPayoutError('Requested amount exceeds available balance')
       return
     }
@@ -1032,7 +1035,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
               <span>Wallet & Payouts</span>
             </div>
             <span className="text-[11px] font-black text-[#2DD4BF]">
-              {formatInr(walletState.balance || 0)}
+              {formatInr(availableBalance)}
             </span>
           </button>
 
@@ -1280,7 +1283,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                   </div>
                 </div>
                 <p className="mt-3 text-3xl font-black text-[#0D9488]">
-                  {formatInr(walletState.balance || 0)}
+                  {formatInr(availableBalance)}
                 </p>
                 <p className="text-[11px] font-semibold text-slate-500 mt-1 flex items-center gap-1">
                   <span>Available for payout</span>
@@ -3367,20 +3370,24 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
             {/* Wallet Stat Cards */}
             <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
               <div className="rounded-2xl border border-[#E8DED4] bg-white p-5 shadow-sm">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Wallet Balance</p>
-                <p className="mt-2 text-2xl font-black text-[#1A1F36]">{formatInr(walletState.balance || 0)}</p>
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Available Balance</p>
+                <p className="mt-2 text-2xl font-black text-[#1A1F36]">{formatInr(availableBalance)}</p>
+                <p className="mt-1 text-[10px] font-semibold text-slate-400">Ready to withdraw</p>
               </div>
               <div className="rounded-2xl border border-[#E8DED4] bg-white p-5 shadow-sm">
                 <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Pending Payout</p>
                 <p className="mt-2 text-2xl font-black text-[#C4622D]">{formatInr(walletState.pending_payout || 0)}</p>
+                <p className="mt-1 text-[10px] font-semibold text-[#C4622D]/70">Processing transfer</p>
               </div>
               <div className="rounded-2xl border border-[#E8DED4] bg-white p-5 shadow-sm">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Completed Payout</p>
-                <p className="mt-2 text-2xl font-black text-[#0D9488]">{formatInr(walletState.completed_payout || 0)}</p>
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Total Withdrawn</p>
+                <p className="mt-2 text-2xl font-black text-[#0D9488]">{formatInr(walletState.completed_payout || walletState.total_withdrawn || 0)}</p>
+                <p className="mt-1 text-[10px] font-semibold text-slate-400">To bank account</p>
               </div>
               <div className="rounded-2xl border border-[#E8DED4] bg-white p-5 shadow-sm">
-                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Lifetime Earnings</p>
-                <p className="mt-2 text-2xl font-black text-[#1A1F36]">{formatInr(walletState.lifetime_earnings || 0)}</p>
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-500">Total Earned</p>
+                <p className="mt-2 text-2xl font-black text-[#1A1F36]">{formatInr(walletState.lifetime_earnings || walletState.total_earned || 0)}</p>
+                <p className="mt-1 text-[10px] font-semibold text-slate-400">From completed consults</p>
               </div>
             </div>
 
@@ -3419,7 +3426,7 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                   <form onSubmit={handleRequestPayout} className="space-y-4">
                     <div>
                       <label className="block text-[10px] font-black uppercase text-slate-400 mb-1">Available Balance</label>
-                      <p className="text-xl font-black text-[#1A1F36]">{formatInr(walletState.balance || 0)}</p>
+                      <p className="text-xl font-black text-[#1A1F36]">{formatInr(availableBalance)}</p>
                     </div>
 
                     <div>
@@ -3427,9 +3434,10 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
                       <input
                         type="number"
                         required
+                        max={availableBalance}
                         value={payoutAmount}
                         onChange={(e) => setPayoutAmount(e.target.value)}
-                        placeholder="Enter amount"
+                        placeholder={`Max ${formatInr(availableBalance)}`}
                         className="w-full px-3 py-2 border border-[#E8DED4] rounded-xl text-xs font-bold"
                       />
                     </div>

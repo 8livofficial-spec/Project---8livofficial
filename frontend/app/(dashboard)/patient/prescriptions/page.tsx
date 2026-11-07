@@ -90,7 +90,7 @@ export default function PatientPrescriptionsPage() {
     // Doctor Prescriptions
     if (filter === 'all' || filter === 'doctor') {
       for (const rx of data.prescriptions) {
-        const isActive = ['ISSUED', 'ACTIVE', 'SIGNED'].includes(rx.status)
+        const isActive = ['ISSUED', 'ACTIVE', 'SIGNED'].includes(String(rx.status || '').toUpperCase())
         list.push({
           id: rx.id,
           specialist: 'doctor',
@@ -99,14 +99,14 @@ export default function PatientPrescriptionsPage() {
           date: rx.issued_at || rx.created_at,
           status: isActive ? 'Active Clinical Rx' : rx.status,
           statusColor: isActive ? 'bg-emerald-50 text-emerald-700 border-emerald-200/60' : 'bg-slate-100 text-slate-700 border-slate-200',
-          link: `/patient/prescriptions/${rx.id}`,
-          itemsSummary: (rx.prescription_items || []).map((m: any) => `${m.medicine_name} (${m.strength})`).join(', ') || 'Prescription medications',
+          link: rx.is_consultation_note ? '/patient' : `/patient/prescriptions/${rx.id}`,
+          itemsSummary: (rx.prescription_items || []).map((m: any) => m.strength ? `${m.medicine_name} (${m.strength})` : m.medicine_name).join(', ') || 'Prescription medications',
           meta1Label: 'Issued Date',
-          meta1Value: rx.issued_at ? new Date(rx.issued_at).toLocaleDateString('en-IN') : '-',
+          meta1Value: rx.issued_at ? new Date(rx.issued_at).toLocaleDateString('en-IN') : (rx.created_at ? new Date(rx.created_at).toLocaleDateString('en-IN') : '-'),
           meta2Label: 'Valid Until',
-          meta2Value: rx.valid_until ? new Date(rx.valid_until).toLocaleDateString('en-IN') : '-',
-          meta3Label: 'Pharmacy',
-          meta3Value: 'Any licensed pharmacy',
+          meta2Value: rx.valid_until ? new Date(rx.valid_until).toLocaleDateString('en-IN') : 'Ongoing therapy',
+          meta3Label: 'Type',
+          meta3Value: rx.is_consultation_note ? 'Doctor Consultation Direct' : 'Official E-Prescription',
         })
       }
     }
@@ -114,7 +114,7 @@ export default function PatientPrescriptionsPage() {
     // Dietitian Nutrition Plans
     if (filter === 'all' || filter === 'dietitian') {
       for (const plan of data.nutritionPlans) {
-        const isCurrent = plan.status === 'PUBLISHED' || plan.status === 'ACKNOWLEDGED' || plan.status === 'ACTIVE'
+        const isCurrent = ['PUBLISHED', 'ACKNOWLEDGED', 'ACTIVE'].includes(String(plan.status || '').toUpperCase())
         list.push({
           id: plan.id,
           specialist: 'dietitian',
@@ -123,14 +123,14 @@ export default function PatientPrescriptionsPage() {
           date: plan.created_at,
           status: isCurrent ? `Active Blueprint v${plan.version || 1}` : plan.status,
           statusColor: isCurrent ? 'bg-teal-50 text-teal-700 border-teal-200/60' : 'bg-slate-100 text-slate-700 border-slate-200',
-          link: '/patient/care-plan',
+          link: plan.attachment_signed_url || '/patient/care-plan',
           itemsSummary: plan.description || 'Target macros and clinical nutritional therapy guidelines.',
           meta1Label: 'Target Calories',
           meta1Value: plan.target_calories ? `${plan.target_calories} kcal/day` : 'Calibrated plan',
           meta2Label: 'Protein & Hydration',
-          meta2Value: `${plan.target_protein_g || 90}g protein • ${plan.hydration_liters || 3}L water`,
-          meta3Label: 'Dietitian Review',
-          meta3Value: plan.dietitian_name || 'Verified Care Team',
+          meta2Value: `${plan.target_protein_g || 90}g protein • ${plan.hydration_liters || 2.5}L water`,
+          meta3Label: 'Document',
+          meta3Value: plan.attachment_signed_url ? 'Diet Chart Attached' : 'Interactive Guide',
         })
       }
     }
@@ -138,7 +138,7 @@ export default function PatientPrescriptionsPage() {
     // Fitness Coach Workout Plans
     if (filter === 'all' || filter === 'trainer') {
       for (const fp of data.fitnessPlans) {
-        const isCurrent = fp.status === 'ACTIVE'
+        const isCurrent = String(fp.status || '').toUpperCase() === 'ACTIVE'
         list.push({
           id: fp.id,
           specialist: 'trainer',
@@ -147,14 +147,14 @@ export default function PatientPrescriptionsPage() {
           date: fp.created_at,
           status: isCurrent ? 'Active Movement Plan' : fp.status,
           statusColor: isCurrent ? 'bg-amber-50 text-amber-700 border-amber-200/60' : 'bg-slate-100 text-slate-700 border-slate-200',
-          link: '/patient/care-plan',
+          link: fp.attachment_signed_url || '/patient/care-plan',
           itemsSummary: fp.notes || `Focus: ${fp.workout_type} (${fp.weekly_frequency} sessions/week)`,
           meta1Label: 'Split Frequency',
           meta1Value: `${fp.weekly_frequency} sessions/week`,
           meta2Label: 'Daily Steps',
           meta2Value: `${(fp.daily_step_goal || 8000).toLocaleString()} steps/day`,
-          meta3Label: 'Restrictions',
-          meta3Value: fp.exercise_restrictions || 'None reported',
+          meta3Label: 'Document',
+          meta3Value: fp.attachment_signed_url ? 'Workout Sheet Attached' : 'Standard Routine',
         })
       }
     }

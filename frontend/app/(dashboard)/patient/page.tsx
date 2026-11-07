@@ -766,13 +766,13 @@ export default function PatientDashboardHome() {
                   </div>
                 </div>
                 <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200">
-                  {activePrescription ? 'Active' : 'Prescribed'}
+                  {activePrescription || consultation?.prescription_text ? 'Active' : 'Pending'}
                 </span>
               </div>
 
               <div className="mt-3.5 space-y-2">
                 <p className="text-xs font-extrabold text-[#11241A]">
-                  {consultation?.prescription_text || activePrescription?.prescription_items?.[0]?.medicine_name || 'Metformin ER 500mg'}
+                  {consultation?.prescription_text || activePrescription?.prescription_items?.[0]?.medicine_name || (consultations?.[0]?.prescription_text) || 'Medical protocol will be issued by your doctor after consultation.'}
                 </p>
                 <p className="text-xs text-slate-500 leading-relaxed">
                   {activePrescription?.diagnosis ? `Diagnosis: ${activePrescription.diagnosis}` : 'Doctor-supervised metabolic titration therapy.'}
@@ -933,13 +933,25 @@ export default function PatientDashboardHome() {
                 <Eye size={13} />
                 <span>View</span>
               </Link>
+              {(fitnessPlan?.attachment_signed_url || fitnessPlan?.attachment_url) && (
+                <a
+                  href={fitnessPlan.attachment_signed_url || fitnessPlan.attachment_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded-xl border border-stone-200 hover:bg-slate-50 text-slate-700 font-bold transition"
+                >
+                  <Download size={13} />
+                  <span>File</span>
+                </a>
+              )}
               <button
                 type="button"
                 onClick={() => handleWhatsAppShare(
                   'Fitness & Movement Protocol',
-                  `Protocol: ${fitnessPlan?.title || 'Metabolic Conditioning'}\nFrequency: ${fitnessPlan?.weekly_frequency || 3}x/week\nSteps: ${fitnessPlan?.daily_step_goal || 8000} steps/day\nCoach: ${careTeam?.fitness_coach_name || 'Fitness Coach'}`
+                  `Protocol: ${fitnessPlan?.title || 'Metabolic Conditioning'}\nFrequency: ${fitnessPlan?.weekly_frequency || 3}x/week\nSteps: ${fitnessPlan?.daily_step_goal || 8000} steps/day\nCoach: ${careTeam?.fitness_coach_name || 'Fitness Coach'}`,
+                  fitnessPlan?.attachment_signed_url || fitnessPlan?.attachment_url || null
                 )}
-                className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold hover:bg-emerald-100 transition cursor-pointer ml-auto"
+                className="inline-flex items-center gap-1 px-3 py-2 rounded-xl bg-emerald-50 text-emerald-800 border border-emerald-200 font-bold hover:bg-emerald-100 transition cursor-pointer"
                 title="Share via WhatsApp"
               >
                 <Share2 size={13} />

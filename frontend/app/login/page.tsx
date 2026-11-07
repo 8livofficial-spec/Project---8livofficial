@@ -182,17 +182,28 @@ export default function UnifiedLogin() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
       })
-      const loginData = await loginResponse.json()
+
+      const contentType = loginResponse.headers.get('content-type') || ''
+      const isJson = contentType.includes('application/json')
+      const loginData = isJson ? await loginResponse.json() : null
+
       if (!loginResponse.ok) {
-        if (loginData.code === 'EMAIL_NOT_VERIFIED') {
+        if (loginData?.code === 'EMAIL_NOT_VERIFIED') {
           window.location.href = `/verification-pending?email=${encodeURIComponent(email)}`
           return
         }
-        if (loginData.code === 'RESET_PASSWORD_REQUIRED') {
+        if (loginData?.code === 'RESET_PASSWORD_REQUIRED') {
           setAuthError('Please set your password using the invitation link, or use Forgot password to create a new password.')
           return
         }
-        throw new Error(loginData.error || 'Authentication failed.')
+        if (loginResponse.status === 404) {
+          throw new Error('Authentication service route is initializing. Please try again.')
+        }
+        throw new Error(loginData?.error || 'Authentication failed. Please check your credentials.')
+      }
+
+      if (!loginData?.session?.access_token) {
+        throw new Error('Invalid login response from server.')
       }
 
       await supabase.auth.setSession({
@@ -230,9 +241,10 @@ export default function UnifiedLogin() {
         }),
       })
 
-      const data = await res.json()
+      const contentType = res.headers.get('content-type') || ''
+      const data = contentType.includes('application/json') ? await res.json() : null
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to dispatch WhatsApp OTP.')
+        throw new Error(data?.error || 'Failed to dispatch WhatsApp OTP. Please try again.')
       }
 
       setMaskedPhone(data.maskedPhone || phone)
@@ -269,9 +281,10 @@ export default function UnifiedLogin() {
         }),
       })
 
-      const data = await res.json()
+      const contentType = res.headers.get('content-type') || ''
+      const data = contentType.includes('application/json') ? await res.json() : null
       if (!res.ok) {
-        throw new Error(data.error || 'Invalid or expired verification code.')
+        throw new Error(data?.error || 'Invalid or expired verification code.')
       }
 
       if (data.session) {

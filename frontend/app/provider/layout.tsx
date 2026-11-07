@@ -3,6 +3,7 @@
 import React from 'react'
 import { usePathname } from 'next/navigation'
 import { ProviderDataProvider } from '@/components/provider/ProviderPortal'
+import ProviderActiveCallFloatingButton from '@/components/provider/ProviderActiveCallFloatingButton'
 
 export default function ProviderLayout({
   children
@@ -17,6 +18,7 @@ export default function ProviderLayout({
   return (
     <ProviderDataProvider>
       {children}
+      <ProviderActiveCallFloatingButton />
     </ProviderDataProvider>
   )
 }

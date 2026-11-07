@@ -675,6 +675,33 @@ export async function PATCH(req: Request) {
         .select('*')
         .single();
       if (startError) throw startError;
+
+      // Notify patient via email that doctor has started the call
+      try {
+        const [{ data: patientProfile }, { data: docProfile }] = await Promise.all([
+          supabaseAdmin.from('profiles').select('email, first_name, last_name, full_name').eq('id', consultation.patient_id).maybeSingle(),
+          supabaseAdmin.from('doctor_profiles').select('full_name, specialty').eq('id', targetDoctorId).maybeSingle()
+        ]);
+        if (patientProfile?.email) {
+          const origin = process.env.NEXT_PUBLIC_SITE_URL || 'https://8liv.in';
+          const callUrl = `${origin}/patient/consultation/room?id=${consultationId}`;
+          const patientName = patientProfile.full_name || `${patientProfile.first_name || ''} ${patientProfile.last_name || ''}`.trim() || 'Patient';
+          const doctorName = docProfile?.full_name ? (docProfile.full_name.startsWith('Dr.') ? docProfile.full_name : `Dr. ${docProfile.full_name}`) : 'Your Doctor';
+          await EmailService.sendVideoCallStartingToPatient({
+            email: patientProfile.email,
+            name: patientName,
+            patientId: consultation.patient_id,
+            providerName: doctorName,
+            providerRole: 'doctor',
+            callUrl,
+            bookingDate: consultation.booking_date,
+            bookingTime: consultation.booking_time,
+          }).catch((e) => console.warn('[doctor/consultations] Call starting email notice:', e));
+        }
+      } catch (errEmail) {
+        console.warn('[doctor/consultations] Could not send call starting email:', errEmail);
+      }
+
       return NextResponse.json({ consultation: started });
     }
 

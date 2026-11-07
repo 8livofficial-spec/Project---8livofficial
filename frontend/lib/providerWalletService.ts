@@ -6,6 +6,8 @@ export interface UnifiedWalletData {
   doctor_id: string
   provider_profile_id: string
   balance: number
+  available_balance: number
+  gross_balance: number
   current_balance: number
   pending_payout: number
   pending_balance: number
@@ -135,7 +137,7 @@ export async function getUnifiedProviderWallet(
 
     // Production Ledger Tables
     supabaseAdmin.from('wallet_accounts').select('*').or(`provider_id.eq.${userId},provider_id.eq.${pId}`).maybeSingle(),
-    supabaseAdmin.from('provider_payouts').select('*').or(`provider_id.eq.${userId},provider_id.eq.${pId}`).order('created_at', { ascending: false }).limit(50),
+    supabaseAdmin.from('provider_payouts').select('*').or(`provider_id.eq.${userId},provider_id.eq.${pId}`).order('initiated_at', { ascending: false }).limit(50),
     supabaseAdmin.from('wallet_ledger_transactions').select('*').or(`provider_id.eq.${userId},provider_id.eq.${pId}`).order('created_at', { ascending: false }).limit(50),
 
     // Legacy Doctor Tables
@@ -154,9 +156,13 @@ export async function getUnifiedProviderWallet(
     .filter((t: any) => t.status === 'SUCCESS' && (t.transaction_type === 'CONSULTATION_CREDIT' || t.transaction_type === 'ADJUSTMENT'))
     .reduce((s: number, t: any) => s + Number(t.amount || 0), 0)
 
+  const netLedgerTxns = (legTxns || [])
+    .filter((t: any) => t.status === 'SUCCESS')
+    .reduce((s: number, t: any) => s + Number(t.amount || 0), 0)
+
   let legCurrent = Number(legWallet?.current_balance || 0)
-  if (successCreditsSum > legCurrent) {
-    legCurrent = successCreditsSum
+  if (netLedgerTxns > legCurrent) {
+    legCurrent = netLedgerTxns
     if (legWallet?.id) {
       try {
         await supabaseAdmin
@@ -181,24 +187,37 @@ export async function getUnifiedProviderWallet(
   const docWithdrawn = Number(docW?.total_withdrawn || 0)
   const docEarned = Number(docW?.total_earned || 0)
 
-  let balance = Math.max(v3Eligible, legCurrent, docBalance)
   const pendingPayout = Math.max(
     v3Processing,
     legPending,
     (legPayouts || []).filter((p: any) => ['PENDING', 'PROCESSING'].includes(String(p.payout_status || '').toUpperCase())).reduce((s: number, p: any) => s + Number(p.payout_amount || 0), 0)
   )
   const completedPayout = Math.max(v3Paid, legPaid, docWithdrawn)
+
+  // Gross balance represents total credited funds before deducting any pending payouts
+  let grossBalance = Math.max(
+    v3Eligible + v3Processing,
+    legCurrent,
+    docBalance
+  )
+
+  // Available balance is the funds actually ready to be withdrawn right now
+  let availableBalance = Math.max(0, grossBalance - pendingPayout)
+
+  // Lifetime earnings is total cumulative earned: gross balance + completed payouts (or available + pending + completed)
+  // NEVER add pendingPayout to grossBalance, because grossBalance already includes pending payouts!
   let lifetimeEarnings = Math.max(
     v3Eligible + v3Processing + v3Paid + v3Pending + v3OnHold,
     legEarned,
     docEarned,
-    balance + completedPayout + pendingPayout
+    grossBalance + completedPayout
   )
 
   // Fallback ONLY when no ledger record or wallet balance exists anywhere
-  if (balance === 0 && completedPayout === 0 && pendingPayout === 0 && (completedConsultsFallbackCount || 0) > 0) {
+  if (grossBalance === 0 && completedPayout === 0 && pendingPayout === 0 && (completedConsultsFallbackCount || 0) > 0) {
     const dynamicEarned = (completedConsultsFallbackCount || 0) * 300
-    balance = dynamicEarned
+    grossBalance = dynamicEarned
+    availableBalance = dynamicEarned
     lifetimeEarnings = dynamicEarned
   }
 
@@ -253,7 +272,7 @@ export async function getUnifiedProviderWallet(
         status,
         failure_reason: p.failure_reason || null,
         initiated_at: p.initiated_at || p.created_at,
-        created_at: p.created_at,
+        created_at: p.initiated_at || p.created_at,
         source: 'provider_payout_records',
       }
     }),
@@ -270,7 +289,7 @@ export async function getUnifiedProviderWallet(
         status,
         failure_reason: p.failure_reason || null,
         initiated_at: p.initiated_at || p.created_at,
-        created_at: p.created_at,
+        created_at: p.initiated_at || p.created_at,
         source: 'provider_payouts',
       }
     }),
@@ -310,11 +329,13 @@ export async function getUnifiedProviderWallet(
       provider_id: userId,
       doctor_id: userId,
       provider_profile_id: v2Profile?.id || userId,
-      balance,
-      current_balance: balance,
+      balance: grossBalance,
+      gross_balance: grossBalance,
+      available_balance: availableBalance,
+      current_balance: grossBalance,
       pending_payout: pendingPayout,
       pending_balance: pendingPayout,
-      eligible_balance: balance,
+      eligible_balance: availableBalance,
       completed_payout: completedPayout,
       total_paid: completedPayout,
       total_withdrawn: completedPayout,

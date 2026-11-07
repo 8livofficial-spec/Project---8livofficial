@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server'
 import { APP_CONFIG } from '@/lib/appConfig'
+
+export const dynamic = 'force-dynamic'
 import {
   checkRateLimit,
   createSupabasePasswordClient,

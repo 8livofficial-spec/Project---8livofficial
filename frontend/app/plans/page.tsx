@@ -55,14 +55,16 @@ export const metadata: Metadata = {
 export default async function PlansPage() {
   const dbPlans = await getActiveTreatmentPlans()
   const durationPrograms = dbPlans.map((p) => {
-    const calc = computePlanPricing(p.base_price, p.discount_percentage, p.duration_months)
+    const calc = computePlanPricing(p.base_price, p.discount_percentage, p.duration_months, true, p.first_time_price)
     return {
       durationMonths: p.duration_months,
       name: p.name,
       price: `₹${calc.finalPrice.toLocaleString('en-IN')}`,
+      originalPrice: calc.basePrice > calc.finalPrice ? `₹${calc.basePrice.toLocaleString('en-IN')}` : null,
+      isFirstTimeOffer: calc.isFirstTimeOffer,
       monthlyEquivalent: `₹${calc.monthlyEquivalent.toLocaleString('en-IN')} / mo`,
-      discountLabel: calc.discountPercentage > 0 ? `${calc.discountPercentage}% OFF (Saves ₹${calc.discountAmount.toLocaleString('en-IN')})` : null,
-      label: calc.discountPercentage > 0 ? `${calc.discountPercentage}% OFF Bulk Protocol` : (p.duration_months === 1 ? 'Single Cycle Starter' : `${p.duration_months} Month Program`),
+      discountLabel: calc.isFirstTimeOffer && calc.discountPercentage > 0 ? `${calc.discountPercentage}% OFF (Saves ₹${calc.discountAmount.toLocaleString('en-IN')})` : null,
+      label: calc.isFirstTimeOffer && calc.discountPercentage > 0 ? `Special First-Time Offer` : (p.duration_months === 1 ? 'Single Cycle Starter' : `${p.duration_months} Month Program`),
       description: p.description || `${p.duration_months} monthly treatment cycles with comprehensive doctor review, personalized dietary protocol, and lifestyle onboarding.`,
       features: p.features && p.features.length > 0 ? p.features : [
         `${p.duration_months} Treatment ${p.duration_months === 1 ? 'Cycle' : 'Cycles'} provisioned`,
@@ -72,7 +74,7 @@ export default async function PlansPage() {
         'Doctor-issued signed e-prescriptions',
       ],
       href: `/assessment?duration=${p.duration_months}`,
-      featured: calc.discountPercentage > 0,
+      featured: calc.isFirstTimeOffer && calc.discountPercentage > 0,
     }
   })
   return (
@@ -160,7 +162,14 @@ export default async function PlansPage() {
                   <h3 className="mt-2 font-sora text-2xl font-bold text-[#0F172A]">{prog.name}</h3>
 
                   <div className="mt-4 border-b border-[#0F172A]/8 pb-4">
-                    <p className="font-sora text-3xl font-black text-[#0F172A]">{prog.price}</p>
+                    <div className="flex items-baseline gap-2.5 flex-wrap">
+                      {prog.originalPrice && prog.isFirstTimeOffer && (
+                        <span className="font-sora text-lg font-bold text-slate-400 line-through">
+                          {prog.originalPrice}
+                        </span>
+                      )}
+                      <p className="font-sora text-3xl font-black text-[#0F172A]">{prog.price}</p>
+                    </div>
                     <p className="text-xs font-bold text-[#64748B] mt-0.5">{prog.monthlyEquivalent}</p>
                   </div>
 

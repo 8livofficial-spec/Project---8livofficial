@@ -132,11 +132,17 @@ export async function GET(request: Request) {
         Number(w1?.total_withdrawn || 0)
       )
 
+      const gross_balance = Math.max(
+        Number(w3?.eligible_balance || 0) + Number(w3?.processing_balance || 0),
+        Number(w2?.current_balance || 0),
+        Number(w1?.balance || 0)
+      )
+
       const total_earned = Math.max(
         Number(w3?.lifetime_earnings || 0),
         Number(w2?.total_earned || 0),
         Number(w1?.total_earned || 0),
-        balance + total_paid + pending_balance
+        gross_balance + total_paid
       )
 
       return { balance, pending_balance, total_paid, total_earned }

@@ -381,6 +381,101 @@ export const EmailService = {
       `),
     })
   },
+
+  async sendVideoCallStartingToPatient(input: {
+    email: string
+    name?: string | null
+    patientId?: string | null
+    providerName: string
+    providerRole?: string | null
+    callUrl: string
+    bookingDate?: string | null
+    bookingTime?: string | null
+  }) {
+    const roleLabel = input.providerRole === 'dietitian' ? 'Clinical Dietitian' : input.providerRole === 'fitness_coach' ? 'Fitness Coach' : 'Attending Physician'
+    return sendEmail({
+      to: input.email,
+      patientId: input.patientId || null,
+      template: 'VIDEO_CALL_STARTING',
+      subject: `🔴 Live Call: Your 8LIV video consultation is starting now`,
+      html: baseTemplate('Video Consultation Starting', `
+        <p style="font-size: 16px; line-height: 1.6;">Hello ${escapeHtml(input.name || 'there')},</p>
+        <p style="font-size: 15px; line-height: 1.6; color: #1A1F36;">
+          Your healthcare provider, <strong>${escapeHtml(input.providerName)}</strong> (${escapeHtml(roleLabel)}), is ready for your scheduled consultation.
+        </p>
+        <div style="background: #FDF9F6; border: 1px solid #E8DED4; border-radius: 14px; padding: 18px; margin: 20px 0;">
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Specialist:</strong> ${escapeHtml(input.providerName)}</p>
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Role:</strong> ${escapeHtml(roleLabel)}</p>
+          ${input.bookingDate ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Scheduled:</strong> ${escapeHtml(input.bookingDate)} ${input.bookingTime ? `at ${escapeHtml(input.bookingTime)}` : ''}</p>` : ''}
+        </div>
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${escapeHtml(input.callUrl)}" style="background: #00A884; color: #ffffff; padding: 16px 32px; border-radius: 14px; text-decoration: none; font-weight: 800; font-size: 16px; display: inline-block; box-shadow: 0 4px 14px rgba(0, 168, 132, 0.35);">
+            🎥 JOIN VIDEO CALL NOW →
+          </a>
+        </div>
+        <p style="font-size: 13px; color: #6B7A90; text-align: center;">
+          Please ensure your camera and microphone are connected and enabled before entering.
+        </p>
+      `),
+    })
+  },
+
+  async sendPatientJoinedCallToProvider(input: {
+    email: string
+    name?: string | null
+    providerId?: string | null
+    patientName: string
+    callUrl: string
+    bookingDate?: string | null
+    bookingTime?: string | null
+    role?: string | null
+  }) {
+    return sendEmail({
+      to: input.email,
+      template: 'PATIENT_JOINED_CALL_ALERT',
+      subject: `🔴 Patient In Room: ${input.patientName} has joined the video consultation`,
+      html: baseTemplate('Patient Has Joined Call', `
+        <p style="font-size: 16px; line-height: 1.6;">Hello ${escapeHtml(input.name || 'Doctor')},</p>
+        <p style="font-size: 15px; line-height: 1.6; color: #1A1F36;">
+          Your patient, <strong style="color: #00A884; font-size: 17px;">${escapeHtml(input.patientName)}</strong>, has entered the encrypted video consultation room and is waiting for you.
+        </p>
+        <div style="background: #EEF7F1; border: 1px solid #A7F3D0; border-radius: 14px; padding: 18px; margin: 20px 0;">
+          <p style="margin: 4px 0; font-size: 14px;"><strong>Patient:</strong> ${escapeHtml(input.patientName)}</p>
+          ${input.bookingDate ? `<p style="margin: 4px 0; font-size: 14px;"><strong>Appointment:</strong> ${escapeHtml(input.bookingDate)} ${input.bookingTime ? `at ${escapeHtml(input.bookingTime)}` : ''}</p>` : ''}
+          <p style="margin: 4px 0; font-size: 14px; color: #065F46;"><strong>Status:</strong> Patient is actively waiting in the consultation room</p>
+        </div>
+        <div style="text-align: center; margin: 28px 0;">
+          <a href="${escapeHtml(input.callUrl)}" style="background: #1A1F36; color: #ffffff; padding: 16px 32px; border-radius: 14px; text-decoration: none; font-weight: 800; font-size: 16px; display: inline-block; box-shadow: 0 4px 14px rgba(26, 31, 54, 0.25);">
+            ENTER VIDEO ROOM NOW →
+          </a>
+        </div>
+      `),
+    })
+  },
+
+  async sendPatientJoinedConfirmationToPatient(input: {
+    email: string
+    name?: string | null
+    patientId?: string | null
+    providerName: string
+    callUrl: string
+  }) {
+    return sendEmail({
+      to: input.email,
+      patientId: input.patientId || null,
+      template: 'PATIENT_IN_ROOM_CONFIRMATION',
+      subject: `You have entered your 8LIV consultation room`,
+      html: baseTemplate('In Consultation Room', `
+        <p style="font-size: 16px; line-height: 1.6;">Hello ${escapeHtml(input.name || 'there')},</p>
+        <p style="font-size: 15px; line-height: 1.6;">
+          You are now in the consultation room. We have alerted <strong>${escapeHtml(input.providerName)}</strong> that you are waiting in the room.
+        </p>
+        <p style="font-size: 14px; color: #6B7A90;">
+          Please stay on the call screen. Your specialist will connect shortly.
+        </p>
+      `),
+    })
+  },
 }
 
 export const emailService = EmailService

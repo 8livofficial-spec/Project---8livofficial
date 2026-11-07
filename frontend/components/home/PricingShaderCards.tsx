@@ -20,6 +20,10 @@ interface TreatmentPlan {
   discountPercentage: number
   discountAmount: number
   finalPrice: number
+  originalPrice?: number
+  isFirstTimeOffer?: boolean
+  renewalPrice?: number
+  firstTimePrice?: number
   monthlyEquivalent: number
   currency: string
   description?: string
@@ -207,7 +211,12 @@ export default function PricingShaderCards() {
 
                   {/* Price Block */}
                   <div className="mb-6 pb-6 border-b border-slate-100">
-                    <div className="flex items-baseline gap-1">
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      {(plan.isFirstTimeOffer ?? true) && (plan.originalPrice || plan.basePrice) > plan.finalPrice && (
+                        <span className="font-sora text-lg font-bold text-slate-400 line-through tabular-nums">
+                          ₹{(plan.originalPrice || plan.basePrice).toLocaleString('en-IN')}
+                        </span>
+                      )}
                       <span className="font-sora text-3xl sm:text-4xl font-extrabold text-slate-900 tabular-nums">
                         ₹{plan.finalPrice.toLocaleString('en-IN')}
                       </span>
@@ -224,9 +233,9 @@ export default function PricingShaderCards() {
                       </p>
                     )}
 
-                    {plan.discountPercentage > 0 && (
+                    {(plan.isFirstTimeOffer ?? true) && plan.discountPercentage > 0 && (
                       <p className="text-xs text-amber-800 font-medium mt-0.5 tabular-nums">
-                        Includes {plan.discountPercentage}% savings (₹{plan.discountAmount.toLocaleString('en-IN')})
+                        First-time savings: {plan.discountPercentage}% OFF (₹{plan.discountAmount.toLocaleString('en-IN')})
                       </p>
                     )}
                   </div>

@@ -261,6 +261,7 @@ function AdminDashboardContent() {
   const [planDietitianConsultations, setPlanDietitianConsultations] = useState('1');
   const [planFitnessCoachConsultations, setPlanFitnessCoachConsultations] = useState('1');
   const [planPrice, setPlanPrice] = useState('');
+  const [planFirstTimePrice, setPlanFirstTimePrice] = useState('');
   const [planConsultFee, setPlanConsultFee] = useState('350');
   const [planFeatures, setPlanFeatures] = useState('');
   const [planDescription, setPlanDescription] = useState('');
@@ -625,6 +626,7 @@ function AdminDashboardContent() {
     setPlanDietitianConsultations('1');
     setPlanFitnessCoachConsultations('1');
     setPlanPrice('');
+    setPlanFirstTimePrice('');
     setPlanConsultFee('350');
     setPlanFeatures('');
     setPlanDescription('');
@@ -648,7 +650,10 @@ function AdminDashboardContent() {
     setPlanDoctorConsultations(String(maxC.doctor ?? (dur === 1 ? 1 : dur)));
     setPlanDietitianConsultations(String(maxC.dietitian ?? (dur === 1 ? 1 : dur)));
     setPlanFitnessCoachConsultations(String(maxC.fitness_coach ?? (dur === 1 ? 1 : dur)));
-    setPlanPrice(String(p.base_price ?? p.price_monthly ?? ''));
+    const baseP = p.base_price ?? p.price_monthly ?? '';
+    const firstP = p.final_price ?? meta.first_time_price ?? baseP;
+    setPlanPrice(String(baseP));
+    setPlanFirstTimePrice(String(firstP));
     setPlanConsultFee(String(p.consultation_fee ?? 350));
     setPlanFeatures(Array.isArray(p.features) ? p.features.join(', ') : (p.features || ''));
     setPlanDescription(p.description || '');
@@ -4146,30 +4151,39 @@ function AdminDashboardContent() {
               {/* Dynamic Live Calculation Preview Banner */}
               {(() => {
                 const parsedBase = parseFloat(planPrice) || 0;
-                const parsedPct = Math.min(100, Math.max(0, parseFloat(planDiscountPercent) || 0));
+                let parsedFinal = parseFloat(planFirstTimePrice) || 0;
+                let parsedPct = Math.min(100, Math.max(0, parseFloat(planDiscountPercent) || 0));
                 const parsedDur = Math.max(1, parseInt(planDurationMonths) || 1);
-                const calcDisc = Math.round((parsedBase * parsedPct) / 100);
-                const calcFinal = Math.max(0, parsedBase - calcDisc);
-                const calcMonthly = Math.round(calcFinal / parsedDur);
+                
+                if (planFirstTimePrice && !isNaN(parseFloat(planFirstTimePrice))) {
+                  parsedFinal = Math.min(parsedBase, Math.max(0, parseFloat(planFirstTimePrice)));
+                } else {
+                  parsedFinal = Math.max(0, parsedBase - Math.round((parsedBase * parsedPct) / 100));
+                }
+                const calcDisc = Math.max(0, parsedBase - parsedFinal);
+                if (parsedBase > 0 && planFirstTimePrice) {
+                  parsedPct = Math.round((calcDisc / parsedBase) * 100);
+                }
+                const calcMonthly = Math.round(parsedFinal / parsedDur);
 
                 return (
                   <div className="bg-gradient-to-r from-indigo-50/80 to-teal-50/80 border border-indigo-100 p-6 rounded-2xl mb-8">
-                    <p className="text-xs font-black text-indigo-900 uppercase tracking-widest mb-3">Live Server Calculation Preview</p>
+                    <p className="text-xs font-black text-indigo-900 uppercase tracking-widest mb-3">Live Server Calculation Preview (Dual-Tier Pricing)</p>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-left">
                       <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">Base Program Price</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Real / Renewal Price (Returning)</p>
                         <p className="text-lg font-black text-slate-800">₹{parsedBase.toLocaleString('en-IN')}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">Discount ({parsedPct}%)</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">First-Time Offer Price (New User)</p>
+                        <p className="text-xl font-black text-indigo-600">₹{parsedFinal.toLocaleString('en-IN')}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">First-Time Discount ({parsedPct}%)</p>
                         <p className="text-lg font-black text-emerald-600">-₹{calcDisc.toLocaleString('en-IN')}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">Final Payable Price</p>
-                        <p className="text-xl font-black text-indigo-600">₹{calcFinal.toLocaleString('en-IN')}</p>
-                      </div>
-                      <div>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase">Monthly Equivalent</p>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase">Monthly Equiv. (First Time)</p>
                         <p className="text-lg font-bold text-slate-700">₹{calcMonthly.toLocaleString('en-IN')}/mo</p>
                       </div>
                     </div>
@@ -4182,7 +4196,7 @@ function AdminDashboardContent() {
                   e.preventDefault();
                   if (!adminUser) return;
                   if (!planName || !planPrice || !planDurationMonths) {
-                    alert('Please fill in Plan Name, Duration (Months), and Base Price.');
+                    alert('Please fill in Plan Name, Duration (Months), and Real / Renewal Price.');
                     return;
                   }
                   setPlanSubmitting(true);
@@ -4198,6 +4212,7 @@ function AdminDashboardContent() {
                         dietitianConsultations: parseInt(planDietitianConsultations) || parseInt(planDurationMonths) || 1,
                         fitnessCoachConsultations: parseInt(planFitnessCoachConsultations) || parseInt(planDurationMonths) || 1,
                         basePrice: parseFloat(planPrice),
+                        firstTimePrice: planFirstTimePrice ? parseFloat(planFirstTimePrice) : undefined,
                         discountPercentage: parseFloat(planDiscountPercent || '0'),
                         description: planDescription,
                         displayOrder: parseInt(planDisplayOrder || '1'),
@@ -4225,7 +4240,7 @@ function AdminDashboardContent() {
                 }}
                 className="space-y-6"
               >
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
                   <div className="space-y-2">
                     <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Plan Name *</label>
                     <input
@@ -4248,19 +4263,49 @@ function AdminDashboardContent() {
                       placeholder="e.g. 1, 2, 3, 6, 10, 12"
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                     />
-                    <p className="text-[10px] text-slate-400 font-semibold">Provisions exactly this many monthly treatment cycles upon subscription.</p>
+                    <p className="text-[10px] text-slate-400 font-semibold">Provisions monthly treatment cycles upon subscription.</p>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Base Program Price (INR) *</label>
+                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Real / Renewal Price (INR) *</label>
                     <input
                       type="number"
                       required
                       min="0"
                       value={planPrice}
-                      onChange={(e) => setPlanPrice(e.target.value)}
-                      placeholder="e.g. 3998"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPlanPrice(val);
+                        const bp = parseFloat(val) || 0;
+                        const dp = parseFloat(planDiscountPercent) || 0;
+                        if (bp > 0 && dp > 0) {
+                          setPlanFirstTimePrice(String(Math.round(bp * (1 - dp / 100))));
+                        }
+                      }}
+                      placeholder="e.g. 1820"
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                     />
+                    <p className="text-[10px] text-slate-400 font-semibold">Standard price for returning subscriber renewals.</p>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs font-black text-indigo-600 uppercase tracking-widest">First-Time Offer Price (INR) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={planFirstTimePrice}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPlanFirstTimePrice(val);
+                        const fp = parseFloat(val) || 0;
+                        const bp = parseFloat(planPrice) || 0;
+                        if (bp > 0 && fp >= 0) {
+                          const disc = Math.max(0, bp - fp);
+                          setPlanDiscountPercent(String(Math.min(100, Math.round((disc / bp) * 100))));
+                        }
+                      }}
+                      placeholder="e.g. 1470"
+                      className="w-full bg-indigo-50/50 border border-indigo-200 rounded-2xl py-3 px-4 text-sm font-bold text-indigo-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                    <p className="text-[10px] text-indigo-500 font-semibold">One-time introductory price shown to first-time patients.</p>
                   </div>
                 </div>
 
@@ -4272,7 +4317,15 @@ function AdminDashboardContent() {
                       min="0"
                       max="100"
                       value={planDiscountPercent}
-                      onChange={(e) => setPlanDiscountPercent(e.target.value)}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPlanDiscountPercent(val);
+                        const dp = parseFloat(val) || 0;
+                        const bp = parseFloat(planPrice) || 0;
+                        if (bp > 0) {
+                          setPlanFirstTimePrice(String(Math.round(bp * (1 - dp / 100))));
+                        }
+                      }}
                       placeholder="e.g. 10"
                       className="w-full bg-slate-50 border border-slate-200 rounded-2xl py-3 px-4 text-sm font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                     />

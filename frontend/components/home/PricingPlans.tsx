@@ -1,10 +1,11 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Check, ArrowRight, AlertCircle, CheckCircle2 } from 'lucide-react'
 import KineticText from '@/components/ui/KineticText'
 import ScrollRevealBox from '@/components/ui/ScrollRevealBox'
+import { supabase } from '@/lib/supabaseClient'
 
 interface PlanTier {
   id: string
@@ -12,6 +13,7 @@ interface PlanTier {
   durationText: string
   regularPrice: number
   activePrice: number
+  isFirstTimeOffer?: boolean
   gstAmount: number
   totalWithGst: number
   savingsAmount: number
@@ -87,9 +89,69 @@ const PRICING_PLANS: PlanTier[] = [
 ]
 
 export default function PricingPlans() {
+  const [plans, setPlans] = useState<PlanTier[]>(PRICING_PLANS)
   // Interactive selection state: whichever plan is selected or hovered turns deep green!
   const [selectedPlanId, setSelectedPlanId] = useState<string>('seed-plan-3m')
   const [hoveredPlanId, setHoveredPlanId] = useState<string | null>(null)
+
+  useEffect(() => {
+    async function loadDynamicPricing() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const headers: Record<string, string> = {}
+        if (session?.access_token) {
+          headers['Authorization'] = `Bearer ${session.access_token}`
+        }
+        const res = await fetch('/api/subscriptions/pricing', { headers })
+        const data = await res.json()
+        const fetched = data.plans || data.tiers || []
+        if (Array.isArray(fetched) && fetched.length > 0) {
+          const mapped: PlanTier[] = fetched.map((p: any) => {
+            const duration = Number(p.durationMonths) || 1
+            const regularPrice = Number(p.originalPrice || p.basePrice || p.finalPrice)
+            const activePrice = Number(p.finalPrice)
+            const gstAmount = Math.round(activePrice * 0.18)
+            const totalWithGst = activePrice + gstAmount
+            const savingsAmount = regularPrice > activePrice ? regularPrice - activePrice : 0
+
+            const durationText = duration === 1
+              ? '1 Month Kickstart'
+              : duration === 3
+              ? '3 Months Continuous Care'
+              : `${duration} Months Complete Program`
+
+            return {
+              id: p.id,
+              name: p.name,
+              durationText,
+              regularPrice,
+              activePrice,
+              isFirstTimeOffer: p.isFirstTimeOffer !== undefined ? Boolean(p.isFirstTimeOffer) : true,
+              gstAmount,
+              totalWithGst,
+              savingsAmount,
+              features: Array.isArray(p.features) && p.features.length > 0 ? p.features : [
+                `${duration} Treatment Cycle(s) with doctor supervision`,
+                'Included doctor follow-ups (₹0)',
+                'Dedicated clinical dietitian support',
+                'Dedicated fitness coach movement roadmap',
+                'Official CDSCO digital e-prescriptions',
+                'Prescriptions fulfilled at your preferred pharmacy',
+              ],
+              ctaText: duration === 1 ? 'Start 1-Month Trial' : `Get ${duration}-Month Plan`,
+              ctaHref: `/assessment?plan=${p.id}&duration=${duration}`,
+            }
+          })
+          setPlans(mapped)
+          const def = mapped.find((m) => m.name.includes('3') || m.durationText.includes('3')) || mapped[0]
+          if (def) setSelectedPlanId(def.id)
+        }
+      } catch (err) {
+        console.warn('Failed to load dynamic pricing for home page:', err)
+      }
+    }
+    loadDynamicPricing()
+  }, [])
 
   const activePlanId = hoveredPlanId || selectedPlanId
 
@@ -118,7 +180,7 @@ export default function PricingPlans() {
 
         {/* 3 Interactive Pricing Cards Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-7 lg:gap-8 items-stretch">
-          {PRICING_PLANS.map((plan, idx) => {
+          {plans.map((plan, idx) => {
             const isSelected = activePlanId === plan.id
 
             return (
@@ -180,13 +242,13 @@ export default function PricingPlans() {
                     {/* Pricing Display */}
                     <div className="mb-5">
                       <div className="flex items-baseline gap-2.5">
-                        <span
-                          className={`text-sm font-semibold line-through ${
-                            isSelected ? 'text-slate-400' : 'text-slate-400'
-                          }`}
-                        >
-                          ₹{plan.regularPrice.toLocaleString('en-IN')}
-                        </span>
+                        {(plan.isFirstTimeOffer ?? true) && plan.regularPrice > plan.activePrice && (
+                          <span
+                            className="text-sm font-semibold line-through text-slate-400"
+                          >
+                            ₹{plan.regularPrice.toLocaleString('en-IN')}
+                          </span>
+                        )}
                         <span
                           className={`font-sans text-4xl sm:text-5xl font-extrabold tracking-tight tabular-nums ${
                             isSelected ? 'text-white' : 'text-slate-900'

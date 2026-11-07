@@ -6,6 +6,16 @@ import { getPublicStreamApiKey, getStreamConfig } from '@/lib/video/streamClient
 import { createStreamUserToken } from '@/services/video/token.service'
 import { consultationTypeForVideoRole, createStreamMeeting, terminalMeetingStatus } from '@/services/video/meeting.service'
 import { getUserConsentStatus } from '@/lib/consent/consentService'
+import { EmailService } from '@/lib/emailService'
+
+const notifiedCallsCache = new Map<string, number>()
+function shouldSendCallEmail(key: string, ttlMs = 5 * 60 * 1000): boolean {
+  const now = Date.now()
+  const last = notifiedCallsCache.get(key)
+  if (last && now - last < ttlMs) return false
+  notifiedCallsCache.set(key, now)
+  return true
+}
 
 type ConsultationRecord = {
   id: string
@@ -173,6 +183,80 @@ export async function POST(request: Request) {
       .from(consultation.table)
       .update(statusUpdate)
       .eq('id', consultation.id)
+
+    // Trigger video call email notifications
+    if (isPatient && shouldSendCallEmail(`patient-join:${consultation.id}`)) {
+      void (async () => {
+        try {
+          const origin = process.env.NEXT_PUBLIC_SITE_URL || 'https://8liv.in'
+          const [{ data: patientProfile }, { data: providerBaseProfile }] = await Promise.all([
+            supabaseAdmin.from('profiles').select('email, first_name, last_name, full_name').eq('id', consultation.patient_id).maybeSingle(),
+            supabaseAdmin.from('profiles').select('email, first_name, last_name, full_name').eq('id', consultation.provider_id).maybeSingle(),
+          ])
+
+          const patientName = patientProfile?.full_name || `${patientProfile?.first_name || ''} ${patientProfile?.last_name || ''}`.trim() || 'Patient'
+          const providerName = providerBaseProfile?.full_name || `${providerBaseProfile?.first_name || ''} ${providerBaseProfile?.last_name || ''}`.trim() || 'Provider'
+          const providerCallUrl = `${origin}/video/room?id=${consultation.id}`
+          const patientCallUrl = `${origin}/patient/consultation/room?id=${consultation.id}`
+
+          if (providerBaseProfile?.email) {
+            await EmailService.sendPatientJoinedCallToProvider({
+              email: providerBaseProfile.email,
+              name: providerName,
+              providerId: consultation.provider_id,
+              patientName,
+              callUrl: providerCallUrl,
+              bookingDate: consultation.booking_date,
+              bookingTime: consultation.booking_time,
+              role: consultation.provider_role,
+            }).catch(e => console.warn('Provider join email error:', e))
+          }
+
+          if (patientProfile?.email) {
+            await EmailService.sendPatientJoinedConfirmationToPatient({
+              email: patientProfile.email,
+              name: patientName,
+              patientId: consultation.patient_id,
+              providerName,
+              callUrl: patientCallUrl,
+            }).catch(e => console.warn('Patient confirmation email error:', e))
+          }
+        } catch (e) {
+          console.warn('[video/token] Patient join email notification failed:', e)
+        }
+      })()
+    }
+
+    if (isProvider && shouldSendCallEmail(`provider-start:${consultation.id}`)) {
+      void (async () => {
+        try {
+          const origin = process.env.NEXT_PUBLIC_SITE_URL || 'https://8liv.in'
+          const [{ data: patientProfile }, { data: providerBaseProfile }] = await Promise.all([
+            supabaseAdmin.from('profiles').select('email, first_name, last_name, full_name').eq('id', consultation.patient_id).maybeSingle(),
+            supabaseAdmin.from('profiles').select('email, first_name, last_name, full_name').eq('id', consultation.provider_id).maybeSingle(),
+          ])
+
+          const patientName = patientProfile?.full_name || `${patientProfile?.first_name || ''} ${patientProfile?.last_name || ''}`.trim() || 'Patient'
+          const providerName = providerBaseProfile?.full_name || `${providerBaseProfile?.first_name || ''} ${providerBaseProfile?.last_name || ''}`.trim() || 'Your Healthcare Specialist'
+          const patientCallUrl = `${origin}/patient/consultation/room?id=${consultation.id}`
+
+          if (patientProfile?.email) {
+            await EmailService.sendVideoCallStartingToPatient({
+              email: patientProfile.email,
+              name: patientName,
+              patientId: consultation.patient_id,
+              providerName,
+              providerRole: consultation.provider_role,
+              callUrl: patientCallUrl,
+              bookingDate: consultation.booking_date,
+              bookingTime: consultation.booking_time,
+            }).catch(e => console.warn('Patient call starting email error:', e))
+          }
+        } catch (e) {
+          console.warn('[video/token] Provider start email notification failed:', e)
+        }
+      })()
+    }
 
     return NextResponse.json({
       apiKey: getPublicStreamApiKey(),
