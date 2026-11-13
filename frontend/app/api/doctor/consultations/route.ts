@@ -54,6 +54,7 @@ type HealthAssessmentRow = {
   medication_proof?: string | null;
   patient_lab_preference?: string | null;
   patient_lab_report_url?: string | null;
+  patient_lab_reports?: Record<string, string> | null;
   [key: string]: unknown;
 };
 
@@ -431,6 +432,7 @@ export async function POST(req: Request) {
         patient_medication_proof_url: (assess?.medical_history as any)?.medication_proof_url || (assess?.medical_history as any)?.medication_proof || (assess as any)?.medication_proof_url || (assess as any)?.medication_proof || null,
         patient_lab_preference: labWork?.preference || (assess as any)?.lab_preference || null,
         patient_lab_report_url: labWork?.report_url || (assess as any)?.lab_report_url || (assess as any)?.lab_report || null,
+        patient_lab_reports: labWork?.reports && typeof labWork.reports === 'object' ? labWork.reports : null,
         patient_lab_report_date: labWork?.report_date || (assess as any)?.lab_report_date || null,
         patient_lab_within_7_days: labWork?.within_7_days ?? null,
         patient_lab_collection_address: labWork?.collection_address

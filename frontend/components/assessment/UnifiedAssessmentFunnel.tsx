@@ -91,6 +91,18 @@ export interface UnifiedAssessmentFunnelProps {
 
 const STORAGE_KEY = '8liv_assessment_draft_v2'
 const SUBMIT_TIMEOUT_MS = 45000
+const REQUIRED_LAB_REPORTS = [
+  { key: 'cbc', label: 'CBC' },
+  { key: 'lft', label: 'LFT' },
+  { key: 'rft', label: 'RFT' },
+  { key: 'hba1c', label: 'HbA1c' },
+  { key: 'thyroid', label: 'Free thyroid profile' },
+  { key: 'lipase', label: 'Lipase' },
+  { key: 'lipid_profile', label: 'Lipid profile' },
+  { key: 'urine_routine', label: 'Urine routine' },
+  { key: 'retinoscopy', label: 'Retinoscopy' },
+  { key: 'pregnancy_test', label: 'Pregnancy test' },
+] as const
 
 async function fetchJsonWithTimeout(url: string, options: RequestInit, timeoutMs = SUBMIT_TIMEOUT_MS) {
   const controller = new AbortController()
@@ -260,6 +272,7 @@ export default function UnifiedAssessmentFunnel({
     // Lab Work
     lab_preference: 'none' as 'none' | 'upload' | 'third_party' | 'skip',
     lab_report_url: '',
+    lab_report_urls: {} as Record<string, string>,
     lab_report_date: '',
     lab_report_within_7_days: false,
     lab_collection_address: '',
@@ -283,6 +296,7 @@ export default function UnifiedAssessmentFunnel({
   const [waistUnit, setWaistUnit] = useState<'in' | 'cm'>('in')
   const [waistRaw, setWaistRaw] = useState<string>('')
   const [isUploadingLab, setIsUploadingLab] = useState(false)
+  const [uploadingLabKey, setUploadingLabKey] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState('')
   const [labDateError, setLabDateError] = useState('')
 
@@ -624,11 +638,12 @@ export default function UnifiedAssessmentFunnel({
   }
 
   // Handle Lab Report Upload
-  const handleLabUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLabUpload = async (reportKey: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
     setIsUploadingLab(true)
+    setUploadingLabKey(reportKey)
     setUploadError('')
     try {
       const formPayload = new FormData()
@@ -643,12 +658,17 @@ export default function UnifiedAssessmentFunnel({
         throw new Error(data.error || 'Failed to upload file.')
       }
 
-      setFormData(prev => ({ ...prev, lab_report_url: data.url }))
+      setFormData(prev => ({
+        ...prev,
+        lab_report_url: prev.lab_report_url || data.url,
+        lab_report_urls: { ...prev.lab_report_urls, [reportKey]: data.url },
+      }))
     } catch (err: any) {
       console.error('Upload error:', err)
       setUploadError(err.message || 'Failed to upload file.')
     } finally {
       setIsUploadingLab(false)
+      setUploadingLabKey(null)
     }
   }
 
@@ -2491,47 +2511,32 @@ export default function UnifiedAssessmentFunnel({
                       )}
                     </div>
 
-                    {/* File Upload Box */}
-                    <div className={`border-2 border-dashed rounded-2xl p-6 text-center transition-all cursor-pointer relative ${
-                      formData.lab_report_url
-                        ? 'border-emerald-500 bg-emerald-50/50'
-                        : 'border-emerald-300 bg-white/80 hover:bg-emerald-50/30'
-                    }`}>
-                      <input 
-                        type="file" 
-                        accept=".pdf,.jpg,.jpeg,.png"
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                        onChange={handleLabUpload}
-                        disabled={isUploadingLab}
-                      />
-                      <div className="flex flex-col items-center justify-center pointer-events-none">
-                        {isUploadingLab ? (
-                          <>
-                            <div className="w-8 h-8 rounded-full border-2 border-slate-200 border-t-[#00A884] animate-spin mb-2" />
-                            <span className="text-sm font-semibold text-slate-700">Uploading to encrypted vault...</span>
-                          </>
-                        ) : formData.lab_report_url ? (
-                          <>
-                            <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 mb-2">
-                              <CheckCircle2 className="w-6 h-6" />
-                            </div>
-                            <span className="font-sans text-sm font-extrabold text-emerald-800 text-center px-4">
-                              Report uploaded successfully! ✅
-                            </span>
-                            <span className="text-xs text-emerald-600 font-semibold mt-1">
-                              File safely linked to your assessment. Tap to replace if needed.
-                            </span>
-                          </>
-                        ) : (
-                          <>
-                            <UploadCloud className="w-8 h-8 text-[#00A884] mb-2" />
-                            <span className="font-sans text-sm font-bold text-slate-800 text-center px-4">
-                              Tap to select PDF, JPG or PNG
-                            </span>
-                            <span className="text-xs text-slate-400 mt-1">Encrypted and strictly confidential</span>
-                          </>
-                        )}
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs font-bold text-slate-800">Required reports</p>
+                        <span className="text-[11px] font-semibold text-slate-500">
+                          {Object.keys(formData.lab_report_urls).length} of {REQUIRED_LAB_REPORTS.length} added
+                        </span>
                       </div>
+                      <div className="divide-y divide-slate-100 rounded-xl border border-slate-200 bg-white">
+                        {REQUIRED_LAB_REPORTS.map(({ key, label }) => {
+                          const uploaded = Boolean(formData.lab_report_urls[key])
+                          const uploading = uploadingLabKey === key
+                          return (
+                            <label key={key} className="flex min-h-12 items-center justify-between gap-3 px-3 py-2.5 cursor-pointer hover:bg-slate-50">
+                              <span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-slate-800">
+                                {uploaded ? <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" /> : <span className="h-4 w-4 shrink-0 rounded-full border border-slate-300" />}
+                                <span className="truncate">{label}<span className="ml-1 text-rose-600" aria-hidden="true">*</span></span>
+                              </span>
+                              <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] font-bold ${uploaded ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-700'}`}>
+                                {uploading ? <><RefreshCw className="h-3 w-3 animate-spin" />Uploading</> : uploaded ? 'Uploaded - Replace' : <><UploadCloud className="h-3 w-3" />Add file</>}
+                              </span>
+                              <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="sr-only" onChange={(event) => handleLabUpload(key, event)} disabled={isUploadingLab} aria-label={`Upload ${label} report`} />
+                            </label>
+                          )
+                        })}
+                      </div>
+                      <p className="text-[11px] text-slate-500">PDF, JPG or PNG. Each report is stored securely.</p>
                     </div>
                     {uploadError && <p className="text-red-500 text-xs mt-2 text-center">{uploadError}</p>}
 
@@ -2706,7 +2711,7 @@ export default function UnifiedAssessmentFunnel({
               type="button"
               disabled={
                 formData.lab_preference === 'none' ||
-                (formData.lab_preference === 'upload' && (!formData.lab_report_url || !formData.lab_report_within_7_days || Boolean(labDateError))) ||
+                (formData.lab_preference === 'upload' && (REQUIRED_LAB_REPORTS.some(({ key }) => !formData.lab_report_urls[key]) || !formData.lab_report_within_7_days || Boolean(labDateError) || isUploadingLab)) ||
                 (formData.lab_preference === 'third_party' &&
                   (!formData.lab_collection_address.trim() || formData.lab_collection_pincode.trim().length < 6))
               }
@@ -2716,7 +2721,7 @@ export default function UnifiedAssessmentFunnel({
               }}
               className={`w-full min-h-[50px] rounded-full font-sans font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${
                 formData.lab_preference === 'skip' ||
-                (formData.lab_preference === 'upload' && formData.lab_report_url && formData.lab_report_within_7_days && !labDateError) ||
+                (formData.lab_preference === 'upload' && REQUIRED_LAB_REPORTS.every(({ key }) => Boolean(formData.lab_report_urls[key])) && formData.lab_report_within_7_days && !labDateError && !isUploadingLab) ||
                 (formData.lab_preference === 'third_party' && formData.lab_collection_address.trim().length > 0 && formData.lab_collection_pincode.trim().length >= 6)
                   ? 'bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99]'
                   : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'

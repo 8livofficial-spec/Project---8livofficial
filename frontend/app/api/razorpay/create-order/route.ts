@@ -8,6 +8,8 @@ import { getMembershipValidity } from '@/lib/membershipServer'
 import { buildRazorpayOrderMetadata, getRazorpayClient, getRazorpayKeyId } from '@/lib/payments/razorpayServer'
 import { getCommercialRules } from '@/lib/commercialRulesServer'
 
+const INELIGIBLE_PACK_ID = '90000000-0000-4000-8000-000000000090'
+
 export async function POST(request: Request) {
   try {
     const ip = getClientIp(request)
@@ -85,6 +87,20 @@ export async function POST(request: Request) {
     const rawDuration = Number(body?.durationMonths)
     const lookupKey = planId || (rawDuration > 0 ? rawDuration : 1)
     const isStandardOrder = paymentType === 'standard'
+
+    if (paymentType === 'membership' && planId === INELIGIBLE_PACK_ID && isPatientAuth) {
+      const { data: consultation } = await supabaseAdmin
+        .from('doctor_consultations')
+        .select('id')
+        .eq('patient_id', patient.user.id)
+        .eq('status', 'rejected')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (!consultation) {
+        return NextResponse.json({ error: 'This 90-day coaching pack is only available after a doctor consultation when the standard program is not suitable.' }, { status: 403 })
+      }
+    }
 
     const commercialRules = await getCommercialRules()
     const dynamicConsultationFee = commercialRules.consultationFee || 350

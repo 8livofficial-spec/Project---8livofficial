@@ -373,6 +373,7 @@ export async function GET(request: Request) {
       onboardingCompleted,
       currentJourneyStep,
       appointmentType: latestAppointment?.appointment_type || null,
+      doctorDecision: rawConsultationStatus || null,
       assessmentProgress: persistedJourney?.assessment_progress || 1,
       appointmentBooked,
       bookingId: persistedJourney?.booking_id || latestAppointment?.id || null,

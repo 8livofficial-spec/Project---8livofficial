@@ -494,6 +494,7 @@ type Consultation = {
   patient_medication_proof_url?: string | null;
   patient_lab_preference?: string | null;
   patient_lab_report_url?: string | null;
+  patient_lab_reports?: Record<string, string> | null;
   patient_lab_report_date?: string | null;
   patient_lab_within_7_days?: boolean | null;
   patient_lab_collection_address?: string | null;
@@ -1972,70 +1973,51 @@ export default function DoctorDashboard() {
                         <FileText className="w-3.5 h-3.5 text-[#00A884]" />
                         <span>Diagnostic Blood Lab Report</span>
                       </div>
-                      {activeCallConsultation?.patient_lab_report_url ? (
+                      {(activeCallConsultation?.patient_lab_reports && Object.keys(activeCallConsultation.patient_lab_reports).length > 0) || activeCallConsultation?.patient_lab_report_url ? (
                         <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 font-bold text-[10px] flex items-center gap-1">
-                          <CheckCircle2 className="w-3 h-3" /> Report Uploaded
+                          <CheckCircle2 className="w-3 h-3" /> Reports Uploaded
                         </span>
                       ) : activeCallConsultation?.patient_lab_preference === 'doorstep' || activeCallConsultation?.patient_lab_preference === 'request_kit' ? (
-                        <span className="px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 font-bold text-[10px]">
-                          Doorstep Collection
-                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-300 font-bold text-[10px]">Doorstep Collection</span>
                       ) : activeCallConsultation?.patient_lab_preference === 'skip' ? (
-                        <span className="px-2 py-0.5 rounded-md bg-slate-700/80 text-slate-300 font-bold text-[10px]">
-                          Proceeded Without Report
-                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-slate-700/80 text-slate-300 font-bold text-[10px]">Proceeded Without Report</span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-bold text-[10px]">
-                          No Report Attached
-                        </span>
+                        <span className="px-2 py-0.5 rounded-md bg-slate-800 text-slate-400 font-bold text-[10px]">No Report Attached</span>
                       )}
                     </div>
 
-                    {activeCallConsultation?.patient_lab_report_url ? (
+                    {(activeCallConsultation?.patient_lab_reports && Object.keys(activeCallConsultation.patient_lab_reports).length > 0) ? (
+                      <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-2">
+                        <p className="font-bold text-emerald-200 text-xs">Patient diagnostic reports</p>
+                        {activeCallConsultation.patient_lab_report_date && <p className="text-[10px] text-slate-300">Date: <strong className="text-white">{activeCallConsultation.patient_lab_report_date}</strong> | Valid within 7 days</p>}
+                        {Object.entries(activeCallConsultation.patient_lab_reports).map(([key, url]) => (
+                          <a key={key} href={url} target="_blank" rel="noreferrer" className="flex items-center justify-between gap-3 rounded-lg bg-emerald-950/30 px-3 py-2 text-[11px] font-bold text-white hover:bg-emerald-950/50">
+                            <span>{key.replaceAll('_', ' ').toUpperCase()}</span><span className="inline-flex items-center gap-1.5">Open report <ExternalLink className="w-3 h-3" /></span>
+                          </a>
+                        ))}
+                      </div>
+                    ) : activeCallConsultation?.patient_lab_report_url ? (
                       <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 space-y-2">
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="font-bold text-emerald-200 text-xs">Patient Blood Work PDF</p>
-                            <div className="flex items-center gap-2 mt-0.5">
-                              {activeCallConsultation.patient_lab_report_date && (
-                                <span className="text-[10px] text-slate-300">
-                                  Date: <strong className="text-white">{activeCallConsultation.patient_lab_report_date}</strong>
-                                </span>
-                              )}
-                              <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-900/40 px-1.5 py-0.5 rounded border border-emerald-500/30">
-                                Valid ≤ 7 days
-                              </span>
-                            </div>
+                            {activeCallConsultation.patient_lab_report_date && <span className="text-[10px] text-slate-300">Date: <strong className="text-white">{activeCallConsultation.patient_lab_report_date}</strong></span>}
                           </div>
-                          <a
-                            href={activeCallConsultation.patient_lab_report_url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="px-3 py-1.5 rounded-lg bg-[#00A884] hover:bg-[#008f70] text-white font-bold text-[11px] shadow-sm transition-colors flex items-center gap-1.5 shrink-0"
-                          >
-                            <span>Open Report</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
+                          <a href={activeCallConsultation.patient_lab_report_url} target="_blank" rel="noreferrer" className="px-3 py-1.5 rounded-lg bg-[#00A884] hover:bg-[#008f70] text-white font-bold text-[11px] flex items-center gap-1.5 shrink-0">Open Report <ExternalLink className="w-3 h-3" /></a>
                         </div>
                       </div>
                     ) : activeCallConsultation?.patient_lab_preference === 'doorstep' || activeCallConsultation?.patient_lab_preference === 'request_kit' ? (
                       <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-[11px] text-sky-200 space-y-1">
-                        <p className="font-semibold text-white">🏠 Doorstep Sample Collection Requested</p>
-                        <p className="text-slate-300 text-[10px]">
-                          {activeCallConsultation.patient_lab_collection_address || 'Patient requested doorstep collection kit through 8live.'}
-                        </p>
+                        <p className="font-semibold text-white">Doorstep Sample Collection Requested</p>
+                        <p className="text-slate-300 text-[10px]">{activeCallConsultation.patient_lab_collection_address || 'Patient requested doorstep collection kit through 8live.'}</p>
                       </div>
                     ) : activeCallConsultation?.patient_lab_preference === 'skip' ? (
                       <div className="p-2.5 rounded-xl bg-black/20 border border-white/5 text-[11px] text-slate-300 space-y-1">
                         <p className="text-slate-300 font-semibold">No Lab Report Attached</p>
-                        <p className="text-slate-400 text-[10px]">
-                          Patient opted to proceed directly to clinical consultation without an attached lab report. You may recommend diagnostics during the session if clinically necessary.
-                        </p>
+                        <p className="text-slate-400 text-[10px]">Patient opted to proceed directly to clinical consultation without an attached lab report. You may recommend diagnostics during the session if clinically necessary.</p>
                       </div>
                     ) : (
-                      <div className="p-2.5 rounded-xl bg-black/20 border border-white/5 text-[11px] text-slate-400">
-                        No diagnostic report or lab work attached to this patient intake.
-                      </div>
+                      <div className="p-2.5 rounded-xl bg-black/20 border border-white/5 text-[11px] text-slate-400">No diagnostic report or lab work attached to this patient intake.</div>
                     )}
                   </div>
 

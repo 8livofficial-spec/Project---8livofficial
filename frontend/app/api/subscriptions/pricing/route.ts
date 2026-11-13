@@ -36,6 +36,8 @@ export async function GET(request: Request) {
         id: p.id,
         name: p.name,
         durationMonths: p.duration_months,
+        durationDays: Number(meta.duration_days) || undefined,
+        isIneligiblePatientPack: Boolean(meta.is_ineligible_patient_pack),
         basePrice: calc.basePrice,
         renewalPrice: calc.renewalPrice,
         firstTimePrice: calc.firstTimePrice,

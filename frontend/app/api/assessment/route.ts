@@ -299,6 +299,7 @@ export async function POST(request: Request) {
         lab_work: {
           preference: formData.lab_preference || 'none',
           report_url: formData.lab_report_url || null,
+          reports: formData.lab_report_urls || {},
           report_date: formData.lab_report_date || null,
           within_7_days: Boolean(formData.lab_report_within_7_days),
           collection_address: formData.lab_collection_address || null,

@@ -11,6 +11,7 @@ import { authedFetch } from '@/lib/apiClient'
 import { motion } from 'framer-motion'
 
 const ICONS = [Zap, Clock, Dumbbell, Star, Sparkles]
+const INELIGIBLE_PACK_ID = '90000000-0000-4000-8000-000000000090'
 
 const PLAN_ENRICHMENT: Record<number, {
   tagline: string
@@ -99,6 +100,7 @@ export default function PlanSelectionPage() {
   const [selectedPlanId, setSelectedPlanId] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [show90DayPack, setShow90DayPack] = useState(false)
 
   useEffect(() => {
     async function loadPricing() {
@@ -107,6 +109,13 @@ export default function PlanSelectionPage() {
         const headers: Record<string, string> = {}
         if (session?.access_token) {
           headers['Authorization'] = `Bearer ${session.access_token}`
+        }
+        if (session?.user?.id) {
+          const statusRes = await authedFetch(`/api/patient/status?patientId=${session.user.id}`)
+          if (statusRes.ok) {
+            const statusData = await statusRes.json()
+            setShow90DayPack(statusData.doctorDecision === 'rejected')
+          }
         }
         const res = await fetch('/api/subscriptions/pricing', { headers })
         const data = await res.json()
@@ -134,7 +143,8 @@ export default function PlanSelectionPage() {
     loadPricing()
   }, [durationParam])
 
-  const selectedPlan = plans.find(p => p.id === selectedPlanId) || plans[0]
+  const regularPlans = plans.filter((plan) => plan.id !== INELIGIBLE_PACK_ID)
+  const selectedPlan = plans.find(p => p.id === selectedPlanId) || regularPlans[0]
 
   const handleContinue = async () => {
     if (!selectedPlan) return
@@ -185,18 +195,19 @@ export default function PlanSelectionPage() {
             Choose your care program duration
           </h1>
           <p className="text-sm sm:text-base text-slate-600 leading-relaxed">
-            All programs are doctor-prescribed and include your dedicated care team (Physician, Clinical Dietitian, Fitness Coach) with included consultations and priority pharmacy dispatch.
+            Choose a doctor-led treatment program with nutrition and fitness support, or explore the separate coaching pack if it was recommended after your doctor consultation.
           </p>
         </div>
 
+
         {/* Dynamic Duration Cards Grid */}
         <div className={`grid gap-6 ${
-          plans.length === 1 ? 'grid-cols-1 max-w-md mx-auto' :
-          plans.length === 2 ? 'grid-cols-1 md:grid-cols-2 max-w-3xl mx-auto' :
-          plans.length === 3 ? 'grid-cols-1 md:grid-cols-3 max-w-5xl mx-auto' :
+          regularPlans.length === 1 ? 'grid-cols-1 max-w-md mx-auto' :
+          regularPlans.length === 2 ? 'grid-cols-1 md:grid-cols-2 max-w-3xl mx-auto' :
+          regularPlans.length === 3 ? 'grid-cols-1 md:grid-cols-3 max-w-5xl mx-auto' :
           'grid-cols-1 md:grid-cols-2 lg:grid-cols-4 max-w-7xl mx-auto'
         }`}>
-          {plans.map((prog, idx) => {
+          {regularPlans.map((prog, idx) => {
             const isSelected = selectedPlanId === prog.id
             const Icon = ICONS[idx % ICONS.length]
             const duration = Number(prog.durationMonths) || 1
@@ -321,15 +332,51 @@ export default function PlanSelectionPage() {
           })}
         </div>
 
+        {show90DayPack && (() => {
+          const pack = (plans as any[]).find((plan) => plan.id === INELIGIBLE_PACK_ID)
+          if (!pack) return null
+          const isSelected = selectedPlanId === pack.id
+          return (
+            <section className="border-t border-slate-200 pt-8" aria-labelledby="coaching-pack-title">
+              <div className="max-w-3xl mx-auto rounded-3xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50/70 p-6 sm:p-8 shadow-sm">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-5">
+                  <div className="max-w-xl">
+                    <h2 id="coaching-pack-title" className="text-xl sm:text-2xl font-bold text-slate-900">A supportive 90-day wellness path</h2>
+                    <p className="mt-2 text-sm leading-relaxed text-slate-600">Your doctor has recommended a coaching-focused option. Build steady habits with dedicated nutrition and fitness support.</p>
+                  </div>
+                  <div className="shrink-0 rounded-2xl bg-white px-5 py-3 border border-emerald-100">
+                    <p className="text-2xl font-black text-slate-900">₹6,200</p>
+                    <p className="text-xs font-semibold text-slate-500">90 days · GST included</p>
+                  </div>
+                </div>
+                <ul className="mt-5 grid sm:grid-cols-2 gap-3 text-sm text-slate-700">
+                  {['3 nutrition consultations', '3 fitness coach consultations'].map((feature) => (
+                    <li key={feature} className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />{feature}</li>
+                  ))}
+                </ul>
+                <p className="mt-4 text-xs text-slate-500">Doctor consultation is not included in this pack.</p>
+                <button
+                  type="button"
+                  onClick={() => setSelectedPlanId(pack.id)}
+                  className={`mt-6 min-h-11 rounded-xl px-5 text-sm font-bold transition ${isSelected ? 'bg-[#00A884] text-white' : 'border border-emerald-300 bg-white text-emerald-800 hover:bg-emerald-50'}`}
+                >
+                  {isSelected ? 'Selected · Continue below' : 'Choose the 90-day pack'}
+                </button>
+              </div>
+            </section>
+          )
+        })()}
+
+
         {/* Inclusions summary banner */}
         <div className="rounded-3xl bg-white p-6 sm:p-7 border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-5">
           <div className="space-y-1.5">
             <div className="flex items-center gap-2">
               <ShieldCheck className="w-5 h-5 text-[#00A884]" />
-              <h4 className="font-bold font-sora text-sm text-slate-900">Clinical Excellence Standard on All Plans</h4>
+              <h4 className="font-bold font-sora text-sm text-slate-900">Doctor-Led Care Programs</h4>
             </div>
             <p className="text-xs text-slate-500 leading-relaxed max-w-2xl">
-              Doctor-led clinical care • Free included follow-up consultations each cycle • Licensed partner pharmacy dispatch • Dedicated dietitian &amp; fitness coach support.
+              Standard care programs include doctor-led clinical care, follow-up options, pharmacy coordination, and nutrition and fitness support.
             </p>
           </div>
           <button

@@ -3,6 +3,8 @@ import { supabaseAdmin } from '@/lib/supabaseServer'
 import { updatePatientJourneyState } from '@/lib/patientJourneyServer'
 import { getAuthenticatedUser } from '@/lib/apiSecurity'
 
+const INELIGIBLE_PACK_ID = '90000000-0000-4000-8000-000000000090'
+
 export async function POST(request: Request) {
   try {
     const auth = await getAuthenticatedUser(request)
@@ -16,6 +18,24 @@ export async function POST(request: Request) {
     const body = await request.json()
     const { membershipTier, planId, durationMonths } = body
     const patientId = auth.user.id
+
+    if (planId === INELIGIBLE_PACK_ID) {
+      const { data: consultation } = await supabaseAdmin
+        .from('doctor_consultations')
+        .select('id, status')
+        .eq('patient_id', patientId)
+        .eq('status', 'rejected')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (!consultation) {
+        return NextResponse.json({ error: 'This coaching pack is available after your doctor consultation when the standard program is not suitable.' }, { status: 403 })
+      }
+      if (String(membershipTier) !== '90-Day Guided Wellness Pack' || Number(durationMonths) !== 3) {
+        return NextResponse.json({ error: 'Invalid 90-day pack selection.' }, { status: 400 })
+      }
+    }
 
     if (!membershipTier && !planId) {
       return NextResponse.json({ error: 'Missing membershipTier or planId' }, { status: 400 })

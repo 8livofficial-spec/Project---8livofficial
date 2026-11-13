@@ -22,6 +22,7 @@ const UPI_APPS: UpiApp[] = [
 ]
 
 const BANKS = ['State Bank of India', 'HDFC Bank', 'ICICI Bank', 'Axis Bank', 'Kotak Mahindra Bank', 'Yes Bank']
+const INELIGIBLE_PACK_ID = '90000000-0000-4000-8000-000000000090'
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 function generateTxnId() {
@@ -129,10 +130,12 @@ export default function OnboardingPaymentPage() {
 
   // ── Authoritative Database-Driven Pricing ───────────────────────────────────
   const durationMonths = selectedPlan ? Number(selectedPlan.durationMonths) : (assessment?.membership_tier ? parseInt(String(assessment.membership_tier)) : 1)
+  const is90DayPack = selectedPlan?.id === INELIGIBLE_PACK_ID
   const planPrice = selectedPlan ? Number(selectedPlan.finalPrice) : 1999
   const basePrice = selectedPlan ? Number(selectedPlan.basePrice) : 1999
   const discountAmount = selectedPlan ? Number(selectedPlan.discountAmount || 0) : 0
-  const total = planPrice
+  const packGst = is90DayPack ? Math.round(planPrice * 0.18) : 0
+  const total = planPrice + packGst
 
   // ── Real Razorpay Checkout ────────────────────────────────────────────────
   const loadRazorpayScript = () => {
@@ -323,15 +326,16 @@ export default function OnboardingPaymentPage() {
           <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
             <p className="text-white/40 text-[10px] font-black uppercase tracking-wider font-sora">Selected Treatment Program</p>
             <p className="mt-2 text-sm font-bold text-white font-sora">{selectedPlan?.name || assessment?.membership_tier}</p>
-            <p className="mt-1 text-xs font-semibold text-[#5EEAD4]">{durationMonths} {durationMonths === 1 ? 'cycle' : 'cycles'} included</p>
+            <p className="mt-1 text-xs font-semibold text-[#5EEAD4]">{is90DayPack ? '90 days' : `${durationMonths} ${durationMonths === 1 ? 'cycle' : 'cycles'} included`}</p>
           </div>
 
           {/* Order lines */}
           <div className="space-y-3">
             <p className="text-white/40 text-[10px] font-black uppercase tracking-wider border-b border-white/10 pb-2 font-sora">Order Summary</p>
             {[
-              { label: `${selectedPlan?.name || 'Care Program'} (${selectedPlan?.durationMonths || 1} Cycles)`, amount: basePrice },
+              { label: `${selectedPlan?.name || 'Care Program'} (${is90DayPack ? '90 days' : `${selectedPlan?.durationMonths || 1} Cycles`})`, amount: basePrice },
               ...(discountAmount > 0 ? [{ label: `${selectedPlan?.discountPercentage}% Bulk Discount Applied`, amount: -discountAmount }] : []),
+              ...(is90DayPack ? [{ label: 'GST (18%)', amount: packGst }] : []),
             ].map(line => (
               <div key={line.label} className="flex justify-between items-center">
                 <span className={`text-xs font-medium ${line.amount < 0 ? 'text-[#5EEAD4]' : 'text-white/70'}`}>{line.label}</span>
@@ -349,14 +353,19 @@ export default function OnboardingPaymentPage() {
           {/* Inclusions */}
           <div className="space-y-2">
             <p className="text-white/40 text-[10px] font-black uppercase tracking-wider font-sora">Included In Your Program</p>
-            {[
+            {(is90DayPack ? [
+              '90-day wellness coaching pack',
+              '3 nutrition consultations',
+              '3 fitness coach consultations',
+              'Doctor consultation is not included in this pack',
+            ] : [
               'Paid Initial doctor consultation booking',
               `${durationMonths} monthly treatment cycles provisioned`,
-              'Follow-up review consultations each cycle (₹0)',
+              'Follow-up review consultations each cycle',
               'Dedicated dietitian & fitness coach support',
               'Prescription & partner pharmacy fulfillment',
               'Encrypted medical health records',
-            ].map((item: any) => (
+            ]).map((item: any) => (
               <div key={item} className="flex items-start gap-2.5">
                 <CheckCircle2 size={14} className="text-[#5EEAD4] shrink-0 mt-0.5" />
                 <span className="text-white/75 text-xs font-medium">{item}</span>
@@ -394,7 +403,7 @@ export default function OnboardingPaymentPage() {
                 <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xl mb-6 space-y-3">
                   <div className="flex justify-between text-sm">
                     <span className="text-[#475569]">Selected Program</span>
-                    <span className="font-bold text-[#0F172A] font-sora">{durationMonths} Month Treatment Program</span>
+                    <span className="font-bold text-[#0F172A] font-sora">{is90DayPack ? '90-Day Wellness Pack' : `${durationMonths} Month Treatment Program`}</span>
                   </div>
                   {selectedPlan?.isFirstTimeOffer && discountAmount > 0 ? (
                     <>

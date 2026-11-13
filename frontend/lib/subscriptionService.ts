@@ -159,6 +159,37 @@ export const SEED_PLANS: TreatmentPlanRecord[] = [
       tag: 'Best Long-Term Value',
     },
   },
+  {
+    id: '90000000-0000-4000-8000-000000000090',
+    tenant_id: '8liv',
+    name: '90-Day Guided Wellness Pack',
+    duration_months: 3,
+    base_price: 5254,
+    renewal_price: 5254,
+    first_time_price: 5254,
+    discount_percentage: 0,
+    discount_amount: 0,
+    final_price: 5254,
+    currency: 'INR',
+    description: 'A supportive 90-day wellness plan with nutrition and fitness coaching after your doctor consultation.',
+    features: [
+      '3 nutrition consultations',
+      '3 fitness coach consultations',
+      'Doctor consultation is not included in this pack',
+    ],
+    status: 'ACTIVE',
+    display_order: 90,
+    valid_from: null,
+    valid_until: null,
+    metadata: {
+      is_ineligible_patient_pack: true,
+      display_price_includes_gst: true,
+      duration_days: 90,
+      max_consultations: { doctor: 0, dietitian: 3, fitness_coach: 3 },
+      total_consultations: 6,
+      tag: '90-Day Coaching Pack',
+    },
+  },
 ]
 
 export function computePlanPricing(
@@ -278,6 +309,8 @@ export async function getActiveTreatmentPlans(tenantId = '8liv'): Promise<Treatm
         if (plan.valid_until && new Date(plan.valid_until).toISOString() < now) return false
         return true
       })
+      const coachingPack = SEED_PLANS.find((plan) => plan.id === '90000000-0000-4000-8000-000000000090')
+      if (coachingPack && !filtered.some((plan) => plan.id === coachingPack.id)) filtered.push(coachingPack)
       activePlansCache = { data: filtered, expiresAt: nowMs + 60_000 }
       return filtered
     }
