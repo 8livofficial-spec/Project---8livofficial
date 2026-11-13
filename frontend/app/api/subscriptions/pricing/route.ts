@@ -1,13 +1,16 @@
 import { NextResponse } from 'next/server'
 import { getActiveTreatmentPlans, computePlanPricing, isFirstTimeSubscriber } from '@/lib/subscriptionService'
 import { getAuthenticatedPatient } from '@/lib/appointmentAvailability'
+import { supabaseAdmin } from '@/lib/supabaseServer'
 
 export async function GET(request: Request) {
   try {
     let isFirstTime = true
+    let patientId: string | undefined
     try {
       const patient = await getAuthenticatedPatient(request)
       if (!('error' in patient) && patient?.user?.id) {
+        patientId = patient.user.id
         isFirstTime = await isFirstTimeSubscriber(patient.user.id)
       }
     } catch (_) {
@@ -15,7 +18,20 @@ export async function GET(request: Request) {
     }
 
     const plans = await getActiveTreatmentPlans()
-    const tiers = plans.map(p => {
+    const requestedCoachingPack = new URL(request.url).searchParams.get('includeIneligiblePack') === 'true'
+    let canIncludeCoachingPack = false
+    if (requestedCoachingPack && patientId) {
+      const { data: rejectedConsultation } = await supabaseAdmin
+        .from('doctor_consultations')
+        .select('id')
+        .eq('patient_id', patientId)
+        .eq('status', 'rejected')
+        .limit(1)
+        .maybeSingle()
+      canIncludeCoachingPack = Boolean(rejectedConsultation)
+    }
+    const visiblePlans = plans.filter((plan) => !plan.metadata?.is_ineligible_patient_pack || canIncludeCoachingPack)
+    const tiers = visiblePlans.map(p => {
       const calc = computePlanPricing(
         p.base_price,
         p.discount_percentage,
@@ -66,7 +82,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(payload, {
       headers: {
-        'Cache-Control': isFirstTime ? 'public, s-maxage=60, stale-while-revalidate=120' : 'no-store, max-age=0',
+        'Cache-Control': requestedCoachingPack ? 'private, no-store, max-age=0' : isFirstTime ? 'public, s-maxage=60, stale-while-revalidate=120' : 'no-store, max-age=0',
       }
     })
   } catch (err: any) {

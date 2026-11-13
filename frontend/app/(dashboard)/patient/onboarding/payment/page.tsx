@@ -109,7 +109,10 @@ export default function OnboardingPaymentPage() {
         if (session?.access_token) {
           headers['Authorization'] = `Bearer ${session.access_token}`
         }
-        const res = await fetch('/api/subscriptions/pricing', { headers })
+        const pricingUrl = assessment.membership_tier === '90-Day Guided Wellness Pack'
+          ? '/api/subscriptions/pricing?includeIneligiblePack=true'
+          : '/api/subscriptions/pricing'
+        const res = await fetch(pricingUrl, { headers })
         const d = await res.json()
         if (d.plans && d.plans.length > 0) {
           const matched = d.plans.find((p: any) => p.name === assessment.membership_tier)

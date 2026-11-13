@@ -1846,11 +1846,10 @@ export default function DoctorDashboard() {
               <button
                 type="button"
                 onClick={() => setShowPatientHistoryOnCall(!showPatientHistoryOnCall)}
-                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer shadow-xs ${
-                  showPatientHistoryOnCall
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-medium transition-all cursor-pointer shadow-xs ${showPatientHistoryOnCall
                     ? 'bg-[#00A884] text-white shadow-emerald-500/20'
                     : 'bg-white/10 hover:bg-white/15 text-slate-200 border border-white/10'
-                }`}
+                  }`}
                 title={showPatientHistoryOnCall ? 'Hide Patient Medical History' : 'Show Patient Medical History'}
               >
                 <ClipboardList className="w-3.5 h-3.5" />
@@ -2009,7 +2008,7 @@ export default function DoctorDashboard() {
                     ) : activeCallConsultation?.patient_lab_preference === 'doorstep' || activeCallConsultation?.patient_lab_preference === 'request_kit' ? (
                       <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20 text-[11px] text-sky-200 space-y-1">
                         <p className="font-semibold text-white">Doorstep Sample Collection Requested</p>
-                        <p className="text-slate-300 text-[10px]">{activeCallConsultation.patient_lab_collection_address || 'Patient requested doorstep collection kit through 8live.'}</p>
+                        <p className="text-slate-300 text-[10px]">{activeCallConsultation.patient_lab_collection_address || 'Patient requested doorstep collection kit through 8liv.'}</p>
                       </div>
                     ) : activeCallConsultation?.patient_lab_preference === 'skip' ? (
                       <div className="p-2.5 rounded-xl bg-black/20 border border-white/5 text-[11px] text-slate-300 space-y-1">
@@ -2400,9 +2399,8 @@ export default function DoctorDashboard() {
                 <button
                   type="button"
                   onClick={() => { selectTab('profile'); setMobileSidebarOpen(false); }}
-                  className={`w-full bg-white/[0.04] hover:bg-white/[0.08] border rounded-2xl p-3 flex items-center justify-between gap-3 text-left cursor-pointer transition-all ${
-                    activeTab === 'profile' ? 'border-[#0D9488] ring-1 ring-[#0D9488]/40' : 'border-white/10'
-                  }`}
+                  className={`w-full bg-white/[0.04] hover:bg-white/[0.08] border rounded-2xl p-3 flex items-center justify-between gap-3 text-left cursor-pointer transition-all ${activeTab === 'profile' ? 'border-[#0D9488] ring-1 ring-[#0D9488]/40' : 'border-white/10'
+                    }`}
                   title="View & Edit Doctor Profile & Digital Signature"
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -2617,11 +2615,10 @@ export default function DoctorDashboard() {
               <button
                 type="button"
                 onClick={() => selectTab('profile')}
-                className={`text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 transition-all cursor-pointer ${
-                  activeTab === 'profile'
+                className={`text-xs font-bold px-3 py-1 rounded-full flex items-center gap-1.5 transition-all cursor-pointer ${activeTab === 'profile'
                     ? 'bg-[#0D9488] text-white shadow-xs'
                     : 'bg-white/10 hover:bg-white/20 text-slate-200'
-                }`}
+                  }`}
               >
                 <PenTool className="w-3 h-3 text-[#5EEAD4]" />
                 Profile
@@ -2841,8 +2838,8 @@ export default function DoctorDashboard() {
                           initial={{ opacity: 0, scale: 0.95 }}
                           animate={{ opacity: 1, scale: 1 }}
                           className={`border p-5 rounded-2xl flex flex-col justify-between gap-4 transition-transform duration-300 ${isLocked
-                              ? 'border-[#8896A4]/30 bg-[#8896A4]/10 opacity-70 grayscale'
-                              : 'border-[#1A1F36]/8 hover:border-[#C4622D]/50 bg-white hover:scale-[1.02] hover:shadow-[0_12px_32px_rgba(26,31,54,0.10)] shadow-sm'
+                            ? 'border-[#8896A4]/30 bg-[#8896A4]/10 opacity-70 grayscale'
+                            : 'border-[#1A1F36]/8 hover:border-[#C4622D]/50 bg-white hover:scale-[1.02] hover:shadow-[0_12px_32px_rgba(26,31,54,0.10)] shadow-sm'
                             }`}
                         >
                           <div>
@@ -2860,8 +2857,8 @@ export default function DoctorDashboard() {
                               <span>📅</span> {req.booking_date} at {req.booking_time}
                             </p>
                             <p className={`text-[10px] px-2 py-0.5 rounded-md w-fit font-bold mt-2 border ${isLocked
-                                ? 'text-[#40516A] bg-[#8896A4]/15 border-[#8896A4]/20'
-                                : 'text-[#C4622D] bg-[#C4622D]/10 border-[#C4622D]/15'
+                              ? 'text-[#40516A] bg-[#8896A4]/15 border-[#8896A4]/20'
+                              : 'text-[#C4622D] bg-[#C4622D]/10 border-[#C4622D]/15'
                               }`}>
                               💰 Escrow Paid: ₹350
                             </p>
@@ -3366,8 +3363,8 @@ export default function DoctorDashboard() {
                       key={filterTab.key}
                       onClick={() => setRxStatusFilter(filterTab.key)}
                       className={`px-4 py-2.5 rounded-xl text-xs font-black transition-all cursor-pointer whitespace-nowrap ${rxStatusFilter === filterTab.key
-                          ? 'bg-[#1A1F36] text-white shadow-sm'
-                          : 'bg-[#F5F0EB]/60 text-[#40516A] hover:bg-[#F5F0EB]'
+                        ? 'bg-[#1A1F36] text-white shadow-sm'
+                        : 'bg-[#F5F0EB]/60 text-[#40516A] hover:bg-[#F5F0EB]'
                         }`}
                     >
                       {filterTab.label}

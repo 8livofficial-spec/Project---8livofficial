@@ -105,6 +105,7 @@ export default function PlanSelectionPage() {
   useEffect(() => {
     async function loadPricing() {
       try {
+        let includeIneligiblePack = false
         const { data: { session } } = await supabase.auth.getSession()
         const headers: Record<string, string> = {}
         if (session?.access_token) {
@@ -114,10 +115,14 @@ export default function PlanSelectionPage() {
           const statusRes = await authedFetch(`/api/patient/status?patientId=${session.user.id}`)
           if (statusRes.ok) {
             const statusData = await statusRes.json()
-            setShow90DayPack(statusData.doctorDecision === 'rejected')
+            includeIneligiblePack = statusData.doctorDecision === 'rejected'
+            setShow90DayPack(includeIneligiblePack)
           }
         }
-        const res = await fetch('/api/subscriptions/pricing', { headers })
+        const pricingUrl = includeIneligiblePack
+          ? '/api/subscriptions/pricing?includeIneligiblePack=true'
+          : '/api/subscriptions/pricing'
+        const res = await fetch(pricingUrl, { headers })
         const data = await res.json()
         const fetched = data.plans || data.tiers || []
         setPlans(fetched)

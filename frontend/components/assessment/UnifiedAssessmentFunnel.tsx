@@ -150,13 +150,12 @@ function IntakeProgressBar({ currentStep, title }: { currentStep: number; title:
           return (
             <div
               key={s.step}
-              className={`flex flex-col items-center py-1.5 px-0.5 rounded-lg transition-all text-center ${
-                isCurrent
-                  ? 'bg-emerald-50/80 text-[#00A884] font-bold'
-                  : isPast
+              className={`flex flex-col items-center py-1.5 px-0.5 rounded-lg transition-all text-center ${isCurrent
+                ? 'bg-emerald-50/80 text-[#00A884] font-bold'
+                : isPast
                   ? 'bg-slate-50 text-slate-700'
                   : 'bg-transparent text-slate-300'
-              }`}
+                }`}
             >
               <div className="flex items-center gap-1">
                 {isPast ? (
@@ -165,9 +164,8 @@ function IntakeProgressBar({ currentStep, title }: { currentStep: number; title:
                   </span>
                 ) : (
                   <span
-                    className={`w-3 h-3 rounded-full flex items-center justify-center text-[9px] font-mono ${
-                      isCurrent ? 'bg-[#00A884] text-white' : 'bg-slate-200 text-slate-500'
-                    }`}
+                    className={`w-3 h-3 rounded-full flex items-center justify-center text-[9px] font-mono ${isCurrent ? 'bg-[#00A884] text-white' : 'bg-slate-200 text-slate-500'
+                      }`}
                   >
                     {s.step}
                   </span>
@@ -176,9 +174,8 @@ function IntakeProgressBar({ currentStep, title }: { currentStep: number; title:
               </div>
               <div className="w-full h-1 mt-1 rounded-full overflow-hidden bg-slate-200/70">
                 <div
-                  className={`h-full transition-all duration-300 ${
-                    isPast || isCurrent ? 'bg-[#00A884]' : 'bg-transparent'
-                  }`}
+                  className={`h-full transition-all duration-300 ${isPast || isCurrent ? 'bg-[#00A884]' : 'bg-transparent'
+                    }`}
                 />
               </div>
             </div>
@@ -291,7 +288,7 @@ export default function UnifiedAssessmentFunnel({
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [isMobile, setIsMobile] = useState(false)
   const [resultsRevealStep, setResultsRevealStep] = useState<number>(0)
-  
+
   // Waist unit toggle ('in' vs 'cm') with raw string tracking (starts empty to display placeholder)
   const [waistUnit, setWaistUnit] = useState<'in' | 'cm'>('in')
   const [waistRaw, setWaistRaw] = useState<string>('')
@@ -409,7 +406,7 @@ export default function UnifiedAssessmentFunnel({
       const data = await res.json()
       if (!res.ok) throw new Error(data.error || 'Invalid OTP code.')
       setPatientOtpVerified(true)
-      
+
       // Establish session
       if (data.session) {
         await supabase.auth.setSession({
@@ -855,14 +852,14 @@ export default function UnifiedAssessmentFunnel({
   return (
     <div ref={topAnchorRef} className={`w-full flex justify-center ${className}`}>
       <div className={`w-full ${stageContainerClass} transition-all duration-300 ease-out`}>
-        
+
         {/* ===================================================================
             SCREEN 1: SCREENER (Mobile 1-question view / Desktop 2-column grid)
             =================================================================== */}
         {stage === 'screener' && (
           <div className="bg-white/95 backdrop-blur-xl border border-stone-200/90 rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 md:p-12 text-slate-900 shadow-[0_30px_70px_rgba(0,0,0,0.04),0_10px_20px_rgba(0,0,0,0.02)] transition-all">
             <AssessmentBrandHeader />
-            
+
             {/* Interactive Clinical Biometric Step Navigator */}
             <div className="mb-8 select-none">
               {/* 5 Interactive Step Segments */}
@@ -875,13 +872,12 @@ export default function UnifiedAssessmentFunnel({
                       key={s.id}
                       type="button"
                       onClick={() => setScreenerStep(s.id)}
-                      className={`group flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all cursor-pointer relative ${
-                        isCurrent
-                          ? 'bg-emerald-50/90 text-[#00A884] ring-1 ring-[#00A884]/40 shadow-xs'
-                          : isPast
+                      className={`group flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all cursor-pointer relative ${isCurrent
+                        ? 'bg-emerald-50/90 text-[#00A884] ring-1 ring-[#00A884]/40 shadow-xs'
+                        : isPast
                           ? 'bg-slate-50 hover:bg-emerald-50/50 text-slate-700 hover:text-[#00A884] border border-slate-200/60'
                           : 'bg-stone-50/50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 border border-slate-100'
-                      }`}
+                        }`}
                       aria-label={`Jump to ${s.fullTitle}`}
                       title={`Click to jump to ${s.fullTitle}`}
                     >
@@ -892,11 +888,10 @@ export default function UnifiedAssessmentFunnel({
                           </span>
                         ) : (
                           <span
-                            className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center text-[10px] font-mono font-bold shrink-0 ${
-                              isCurrent
-                                ? 'bg-[#00A884] text-white shadow-xs'
-                                : 'bg-slate-200/80 text-slate-500 group-hover:bg-slate-300'
-                            }`}
+                            className={`w-3.5 h-3.5 sm:w-4 sm:h-4 rounded-full flex items-center justify-center text-[10px] font-mono font-bold shrink-0 ${isCurrent
+                              ? 'bg-[#00A884] text-white shadow-xs'
+                              : 'bg-slate-200/80 text-slate-500 group-hover:bg-slate-300'
+                              }`}
                           >
                             {s.id}
                           </span>
@@ -909,11 +904,10 @@ export default function UnifiedAssessmentFunnel({
                       {/* Interactive hairline segment track */}
                       <div className="w-full h-1 mt-1.5 rounded-full overflow-hidden bg-slate-200/70">
                         <div
-                          className={`h-full transition-all duration-300 ${
-                            isPast || isCurrent
-                              ? 'bg-gradient-to-r from-[#00A884] to-[#0A8F70]'
-                              : 'bg-transparent'
-                          }`}
+                          className={`h-full transition-all duration-300 ${isPast || isCurrent
+                            ? 'bg-gradient-to-r from-[#00A884] to-[#0A8F70]'
+                            : 'bg-transparent'
+                            }`}
                         />
                       </div>
                     </button>
@@ -940,7 +934,7 @@ export default function UnifiedAssessmentFunnel({
 
             {/* 1 Question Per View with Smooth Funnel Animations */}
             <div>
-                  {/* Step 1: Biological Gender */}
+              {/* Step 1: Biological Gender */}
               {screenerStep === 1 && (
                 <div key="step-1" className="animate-funnel-step">
                   <h1 className="font-sans text-2xl sm:text-3xl lg:text-4xl font-extrabold text-[#11241A] tracking-tight leading-tight mb-2">
@@ -954,11 +948,10 @@ export default function UnifiedAssessmentFunnel({
                     <button
                       type="button"
                       onClick={() => handleGenderSelect('female')}
-                      className={`p-6 sm:p-7 rounded-2xl border transition-all flex flex-col items-center text-center gap-3.5 cursor-pointer relative group ${
-                        screenerInputs.gender === 'female'
-                          ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-sm'
-                          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 hover:shadow-xs'
-                      }`}
+                      className={`p-6 sm:p-7 rounded-2xl border transition-all flex flex-col items-center text-center gap-3.5 cursor-pointer relative group ${screenerInputs.gender === 'female'
+                        ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-sm'
+                        : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 hover:shadow-xs'
+                        }`}
                     >
                       <div className="absolute top-4 right-4">
                         {screenerInputs.gender === 'female' ? (
@@ -981,11 +974,10 @@ export default function UnifiedAssessmentFunnel({
                     <button
                       type="button"
                       onClick={() => handleGenderSelect('male')}
-                      className={`p-6 sm:p-7 rounded-2xl border transition-all flex flex-col items-center text-center gap-3.5 cursor-pointer relative group ${
-                        screenerInputs.gender === 'male'
-                          ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-sm'
-                          : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 hover:shadow-xs'
-                      }`}
+                      className={`p-6 sm:p-7 rounded-2xl border transition-all flex flex-col items-center text-center gap-3.5 cursor-pointer relative group ${screenerInputs.gender === 'male'
+                        ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-sm'
+                        : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/50 hover:shadow-xs'
+                        }`}
                     >
                       <div className="absolute top-4 right-4">
                         {screenerInputs.gender === 'male' ? (
@@ -1408,11 +1400,10 @@ export default function UnifiedAssessmentFunnel({
                             setWaistRaw('')
                           }
                         }}
-                        className={`px-4 py-1.5 rounded-full transition-all cursor-pointer ${
-                          waistUnit === 'in'
-                            ? 'bg-white text-[#00A884] shadow-xs font-bold'
-                            : 'text-slate-500 hover:text-slate-800'
-                        }`}
+                        className={`px-4 py-1.5 rounded-full transition-all cursor-pointer ${waistUnit === 'in'
+                          ? 'bg-white text-[#00A884] shadow-xs font-bold'
+                          : 'text-slate-500 hover:text-slate-800'
+                          }`}
                       >
                         Inches (in)
                       </button>
@@ -1426,11 +1417,10 @@ export default function UnifiedAssessmentFunnel({
                             setWaistRaw('')
                           }
                         }}
-                        className={`px-4 py-1.5 rounded-full transition-all cursor-pointer ${
-                          waistUnit === 'cm'
-                            ? 'bg-white text-[#00A884] shadow-xs font-bold'
-                            : 'text-slate-500 hover:text-slate-800'
-                        }`}
+                        className={`px-4 py-1.5 rounded-full transition-all cursor-pointer ${waistUnit === 'cm'
+                          ? 'bg-white text-[#00A884] shadow-xs font-bold'
+                          : 'text-slate-500 hover:text-slate-800'
+                          }`}
                       >
                         Centimeters (cm)
                       </button>
@@ -1683,9 +1673,8 @@ export default function UnifiedAssessmentFunnel({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
               {/* 1. BMI Donut Card (Step 1 reveal) */}
               <div
-                className={`transition-all duration-500 ${
-                  resultsRevealStep >= 1 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
-                } ${results.bmi.cardBgClass} border ${results.bmi.cardBorderClass} rounded-2xl p-5 sm:p-6 flex items-center gap-4 sm:gap-6 shadow-xs h-full`}
+                className={`transition-all duration-500 ${resultsRevealStep >= 1 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
+                  } ${results.bmi.cardBgClass} border ${results.bmi.cardBorderClass} rounded-2xl p-5 sm:p-6 flex items-center gap-4 sm:gap-6 shadow-xs h-full`}
               >
                 {/* Donut Chart */}
                 <div className="relative w-[80px] h-[80px] shrink-0 flex items-center justify-center">
@@ -1725,9 +1714,8 @@ export default function UnifiedAssessmentFunnel({
 
               {/* 2. Waist Size Card with Color + Icon + Text badge (Step 2 reveal) */}
               <div
-                className={`transition-all duration-500 delay-100 ${
-                  resultsRevealStep >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
-                } bg-slate-50/80 border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-xs h-full flex flex-col justify-between`}
+                className={`transition-all duration-500 delay-100 ${resultsRevealStep >= 2 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
+                  } bg-slate-50/80 border border-slate-200/80 rounded-2xl p-5 sm:p-6 shadow-xs h-full flex flex-col justify-between`}
               >
                 <div>
                   <div className="flex items-center justify-between">
@@ -1756,9 +1744,8 @@ export default function UnifiedAssessmentFunnel({
 
             {/* 3. Healthy Reference Range & Disclaimer (Step 3 reveal) */}
             <div
-              className={`transition-all duration-500 delay-200 ${
-                resultsRevealStep >= 3 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
-              }`}
+              className={`transition-all duration-500 delay-200 ${resultsRevealStep >= 3 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
+                }`}
             >
               <div className="flex items-center justify-between text-sm py-4 border-t border-b border-slate-200/80 mb-4">
                 <span className="text-slate-500 text-xs sm:text-sm font-medium">Estimated reference range for height</span>
@@ -1778,9 +1765,8 @@ export default function UnifiedAssessmentFunnel({
 
             {/* 4. Primary CTA to Transition Screen (Step 4 reveal) */}
             <div
-              className={`transition-all duration-500 delay-300 ${
-                resultsRevealStep >= 4 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
-              }`}
+              className={`transition-all duration-500 delay-300 ${resultsRevealStep >= 4 ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-3'
+                }`}
             >
               <button
                 type="button"
@@ -2145,11 +2131,10 @@ export default function UnifiedAssessmentFunnel({
                         key={bp.value}
                         type="button"
                         onClick={() => setFormData((prev) => ({ ...prev, blood_pressure_range: bp.value }))}
-                        className={`min-h-[46px] p-2.5 rounded-xl text-xs font-medium border text-center transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-emerald-50/80 text-[#11241A] font-bold border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
-                            : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-50'
-                        }`}
+                        className={`min-h-[46px] p-2.5 rounded-xl text-xs font-medium border text-center transition-all cursor-pointer ${isSelected
+                          ? 'bg-emerald-50/80 text-[#11241A] font-bold border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
+                          : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-50'
+                          }`}
                       >
                         {bp.label}
                       </button>
@@ -2176,11 +2161,10 @@ export default function UnifiedAssessmentFunnel({
                         key={hr.value}
                         type="button"
                         onClick={() => setFormData((prev) => ({ ...prev, resting_heart_rate: hr.value }))}
-                        className={`min-h-[46px] p-2.5 rounded-xl text-xs font-medium border text-center transition-all cursor-pointer ${
-                          isSelected
-                            ? 'bg-emerald-50/80 text-[#11241A] font-bold border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
-                            : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-50'
-                        }`}
+                        className={`min-h-[46px] p-2.5 rounded-xl text-xs font-medium border text-center transition-all cursor-pointer ${isSelected
+                          ? 'bg-emerald-50/80 text-[#11241A] font-bold border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
+                          : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-50'
+                          }`}
                       >
                         {hr.label}
                       </button>
@@ -2252,22 +2236,20 @@ export default function UnifiedAssessmentFunnel({
                       <button
                         type="button"
                         onClick={() => setFormData((prev) => ({ ...prev, [q.id]: 'no' }))}
-                        className={`min-h-[44px] rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                          currentVal === 'no'
-                            ? 'bg-[#11241A] text-white shadow-xs'
-                            : 'bg-white text-slate-700 border border-slate-200/90 hover:bg-slate-50'
-                        }`}
+                        className={`min-h-[44px] rounded-xl text-xs font-bold transition-all cursor-pointer ${currentVal === 'no'
+                          ? 'bg-[#11241A] text-white shadow-xs'
+                          : 'bg-white text-slate-700 border border-slate-200/90 hover:bg-slate-50'
+                          }`}
                       >
                         No
                       </button>
                       <button
                         type="button"
                         onClick={() => setFormData((prev) => ({ ...prev, [q.id]: 'yes' }))}
-                        className={`min-h-[44px] rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                          currentVal === 'yes'
-                            ? 'bg-amber-600 text-white shadow-xs'
-                            : 'bg-white text-slate-700 border border-slate-200/90 hover:bg-slate-50'
-                        }`}
+                        className={`min-h-[44px] rounded-xl text-xs font-bold transition-all cursor-pointer ${currentVal === 'yes'
+                          ? 'bg-amber-600 text-white shadow-xs'
+                          : 'bg-white text-slate-700 border border-slate-200/90 hover:bg-slate-50'
+                          }`}
                       >
                         Yes
                       </button>
@@ -2328,11 +2310,10 @@ export default function UnifiedAssessmentFunnel({
                     key={item}
                     type="button"
                     onClick={() => toggleComorbidity(item)}
-                    className={`min-h-[46px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium border transition-all flex items-center gap-2 cursor-pointer ${
-                      isSelected
-                        ? 'bg-emerald-50/80 text-[#11241A] font-bold border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
-                        : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-50 hover:border-slate-300'
-                    }`}
+                    className={`min-h-[46px] px-4 py-2.5 rounded-xl text-xs sm:text-sm font-medium border transition-all flex items-center gap-2 cursor-pointer ${isSelected
+                      ? 'bg-emerald-50/80 text-[#11241A] font-bold border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
+                      : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-50 hover:border-slate-300'
+                      }`}
                   >
                     {isSelected && <Check className="w-4 h-4 shrink-0 text-[#00A884]" />}
                     <span>{item}</span>
@@ -2386,11 +2367,10 @@ export default function UnifiedAssessmentFunnel({
                     key={opt.value}
                     type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, medication_history_choice: opt.value }))}
-                    className={`w-full min-h-[52px] p-4 rounded-2xl text-left text-xs sm:text-sm font-medium border transition-all flex items-center justify-between cursor-pointer ${
-                      isSelected
-                        ? 'bg-emerald-50/80 text-[#11241A] font-bold border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
-                        : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-50'
-                    }`}
+                    className={`w-full min-h-[52px] p-4 rounded-2xl text-left text-xs sm:text-sm font-medium border transition-all flex items-center justify-between cursor-pointer ${isSelected
+                      ? 'bg-emerald-50/80 text-[#11241A] font-bold border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
+                      : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-50'
+                      }`}
                   >
                     <span>{opt.label}</span>
                     {isSelected && <Check className="w-4 h-4 shrink-0 text-[#00A884]" />}
@@ -2441,10 +2421,9 @@ export default function UnifiedAssessmentFunnel({
 
             <div className="space-y-4 mb-8">
               {/* Option 1: I have a lab report (Max 7 days validity condition) */}
-              <div 
-                className={`p-5 rounded-2xl border transition-all ${
-                  formData.lab_preference === 'upload' ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs' : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-50'
-                }`}
+              <div
+                className={`p-5 rounded-2xl border transition-all ${formData.lab_preference === 'upload' ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs' : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-50'
+                  }`}
               >
                 <button
                   type="button"
@@ -2464,7 +2443,7 @@ export default function UnifiedAssessmentFunnel({
                     {formData.lab_preference === 'upload' && <div className="w-2 h-2 rounded-full bg-white" />}
                   </div>
                 </button>
-                
+
                 {formData.lab_preference === 'upload' && (
                   <div className="mt-4 pt-4 border-t border-slate-200/60 space-y-3.5">
                     {/* Clinical Rule Notice */}
@@ -2556,11 +2535,10 @@ export default function UnifiedAssessmentFunnel({
                 )}
               </div>
 
-              {/* Option 2: I don't have a report, get a lab report from 8live */}
-              <div 
-                className={`p-5 rounded-2xl border transition-all ${
-                  formData.lab_preference === 'third_party' ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs' : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-50'
-                }`}
+              {/* Option 2: I don't have a report, get a lab report from 8liv */}
+              <div
+                className={`p-5 rounded-2xl border transition-all ${formData.lab_preference === 'third_party' ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs' : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-50'
+                  }`}
               >
                 <button
                   type="button"
@@ -2569,7 +2547,7 @@ export default function UnifiedAssessmentFunnel({
                 >
                   <div>
                     <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                      <span className="font-sans text-sm sm:text-base font-bold text-slate-900 block">I don&apos;t have a report — Get a lab report from 8live</span>
+                      <span className="font-sans text-sm sm:text-base font-bold text-slate-900 block">I don&apos;t have a report — Get a lab report from 8liv</span>
                       <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-300/80 inline-flex items-center gap-1 shrink-0">
                         <MapPin className="w-2.5 h-2.5 text-amber-700" /> Bangalore Only
                       </span>
@@ -2654,11 +2632,11 @@ export default function UnifiedAssessmentFunnel({
                           {formData.lab_collection_city &&
                             !formData.lab_collection_city.toLowerCase().includes('bangalore') &&
                             !formData.lab_collection_city.toLowerCase().includes('bengaluru') && (
-                            <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-1.5 mt-1 font-semibold flex items-center gap-1">
-                              <AlertCircle className="w-3 h-3 shrink-0 text-amber-600" />
-                              <span>Notice: Service is available only in Bangalore.</span>
-                            </p>
-                          )}
+                              <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-1.5 mt-1 font-semibold flex items-center gap-1">
+                                <AlertCircle className="w-3 h-3 shrink-0 text-amber-600" />
+                                <span>Notice: Service is available only in Bangalore.</span>
+                              </p>
+                            )}
                         </div>
                         <div>
                           <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -2686,10 +2664,9 @@ export default function UnifiedAssessmentFunnel({
               </div>
 
               {/* Option 3: Proceed without a lab report (Not needed right now) */}
-              <div 
-                className={`p-5 rounded-2xl border transition-all ${
-                  formData.lab_preference === 'skip' ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs' : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-50'
-                }`}
+              <div
+                className={`p-5 rounded-2xl border transition-all ${formData.lab_preference === 'skip' ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs' : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-50'
+                  }`}
               >
                 <button
                   type="button"
@@ -2719,13 +2696,12 @@ export default function UnifiedAssessmentFunnel({
                 syncProgressSilent('intake_account', 6)
                 setStage('intake_account')
               }}
-              className={`w-full min-h-[50px] rounded-full font-sans font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${
-                formData.lab_preference === 'skip' ||
+              className={`w-full min-h-[50px] rounded-full font-sans font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${formData.lab_preference === 'skip' ||
                 (formData.lab_preference === 'upload' && REQUIRED_LAB_REPORTS.every(({ key }) => Boolean(formData.lab_report_urls[key])) && formData.lab_report_within_7_days && !labDateError && !isUploadingLab) ||
                 (formData.lab_preference === 'third_party' && formData.lab_collection_address.trim().length > 0 && formData.lab_collection_pincode.trim().length >= 6)
-                  ? 'bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99]'
-                  : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
-              }`}
+                ? 'bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99]'
+                : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                }`}
             >
               <span>Continue to Account Setup</span>
               <ChevronRight className="w-4 h-4" />
@@ -2832,7 +2808,7 @@ export default function UnifiedAssessmentFunnel({
                         setPatientOtp(val)
                         if (val.length === 6) {
                           setTimeout(() => {
-                            handleVerifyPatientOtp().catch(() => {})
+                            handleVerifyPatientOtp().catch(() => { })
                           }, 100)
                         }
                       }}
@@ -2840,7 +2816,7 @@ export default function UnifiedAssessmentFunnel({
                     />
                     <button
                       type="button"
-                      onClick={() => handleVerifyPatientOtp().catch(() => {})}
+                      onClick={() => handleVerifyPatientOtp().catch(() => { })}
                       disabled={isVerifyingPatientOtp || patientOtp.length !== 6}
                       className="min-h-[46px] px-5 bg-[#00A884] hover:bg-[#009977] disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
                     >
@@ -2985,11 +2961,10 @@ export default function UnifiedAssessmentFunnel({
 
                 {/* Consolidated Primary Consent Checkbox */}
                 <div className="pt-1">
-                  <label className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer ${
-                    gate1Consents.health_data && gate1Consents.care_team_sharing
-                      ? 'bg-emerald-50/50 border-[#00A884]/60 shadow-xs'
-                      : 'bg-white border-slate-200/90 hover:border-slate-300'
-                  }`}>
+                  <label className={`flex items-start gap-3 p-3.5 rounded-xl border transition-all cursor-pointer ${gate1Consents.health_data && gate1Consents.care_team_sharing
+                    ? 'bg-emerald-50/50 border-[#00A884]/60 shadow-xs'
+                    : 'bg-white border-slate-200/90 hover:border-slate-300'
+                    }`}>
                     <input
                       type="checkbox"
                       checked={gate1Consents.health_data && gate1Consents.care_team_sharing}

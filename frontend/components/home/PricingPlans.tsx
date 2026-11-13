@@ -117,8 +117,8 @@ export default function PricingPlans() {
             const durationText = duration === 1
               ? '1 Month Kickstart'
               : duration === 3
-              ? '3 Months Continuous Care'
-              : `${duration} Months Complete Program`
+                ? '3 Months Continuous Care'
+                : `${duration} Months Complete Program`
 
             return {
               id: p.id,
@@ -162,7 +162,7 @@ export default function PricingPlans() {
       className="py-20 sm:py-24 lg:py-28 bg-[#FAFBF9] border-b border-slate-200/80 scroll-mt-20"
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        
+
         {/* Section Header */}
         <div className="text-center max-w-3xl mx-auto mb-14 sm:mb-18">
           <KineticText
@@ -179,7 +179,7 @@ export default function PricingPlans() {
         </div>
 
         {/* 3 Interactive Pricing Cards Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-7 lg:gap-8 items-stretch">
+        <div className={`grid grid-cols-1 ${plans.length === 1 ? 'max-w-2xl mx-auto' : plans.length === 2 ? 'md:grid-cols-2 max-w-5xl mx-auto' : 'lg:grid-cols-3'} gap-7 lg:gap-8 items-stretch`}>
           {plans.map((plan, idx) => {
             const isSelected = activePlanId === plan.id
 
@@ -202,19 +202,17 @@ export default function PricingPlans() {
                       setSelectedPlanId(plan.id)
                     }
                   }}
-                  className={`h-full cursor-pointer relative rounded-[2.25rem] p-7 sm:p-8 flex flex-col justify-between transition-all duration-300 text-left outline-none ${
-                    isSelected
+                  className={`h-full cursor-pointer relative rounded-[2.25rem] p-7 sm:p-8 flex flex-col justify-between transition-all duration-300 text-left outline-none ${isSelected
                       ? 'bg-[#163824] text-white shadow-2xl ring-2 ring-[#00A884] -translate-y-2'
                       : 'bg-white text-slate-900 border border-slate-200/90 shadow-xs hover:border-slate-300 hover:shadow-lg'
-                  }`}
+                    }`}
                 >
                   <div>
                     {/* Header: Duration & Selection Indicator */}
                     <div className="flex items-center justify-between gap-2 mb-4">
                       <span
-                        className={`text-xs font-bold uppercase tracking-wider ${
-                          isSelected ? 'text-emerald-400' : 'text-slate-500'
-                        }`}
+                        className={`text-xs font-bold uppercase tracking-wider ${isSelected ? 'text-emerald-400' : 'text-slate-500'
+                          }`}
                       >
                         {plan.durationText}
                       </span>
@@ -232,9 +230,8 @@ export default function PricingPlans() {
 
                     {/* Plan Name */}
                     <h3
-                      className={`font-sans text-2xl font-extrabold mb-3 tracking-tight ${
-                        isSelected ? 'text-white' : 'text-slate-900'
-                      }`}
+                      className={`font-sans text-2xl font-extrabold mb-3 tracking-tight ${isSelected ? 'text-white' : 'text-slate-900'
+                        }`}
                     >
                       {plan.name}
                     </h3>
@@ -250,9 +247,8 @@ export default function PricingPlans() {
                           </span>
                         )}
                         <span
-                          className={`font-sans text-4xl sm:text-5xl font-extrabold tracking-tight tabular-nums ${
-                            isSelected ? 'text-white' : 'text-slate-900'
-                          }`}
+                          className={`font-sans text-4xl sm:text-5xl font-extrabold tracking-tight tabular-nums ${isSelected ? 'text-white' : 'text-slate-900'
+                            }`}
                         >
                           ₹{plan.activePrice.toLocaleString('en-IN')}
                         </span>
@@ -261,9 +257,8 @@ export default function PricingPlans() {
 
                     {/* Features Divider */}
                     <div
-                      className={`border-t my-6 ${
-                        isSelected ? 'border-white/15' : 'border-slate-100'
-                      }`}
+                      className={`border-t my-6 ${isSelected ? 'border-white/15' : 'border-slate-100'
+                        }`}
                     />
 
                     {/* Features List */}
@@ -271,11 +266,10 @@ export default function PricingPlans() {
                       {plan.features.map((feat) => (
                         <li key={feat} className="flex items-start gap-2.5 text-xs sm:text-sm">
                           <div
-                            className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
-                              isSelected
+                            className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${isSelected
                                 ? 'bg-[#00A884] text-white'
                                 : 'bg-emerald-100 text-[#00A884]'
-                            }`}
+                              }`}
                           >
                             <Check className="w-2.5 h-2.5 stroke-[3]" />
                           </div>
@@ -292,11 +286,10 @@ export default function PricingPlans() {
                     <Link
                       href={plan.ctaHref}
                       onClick={(e) => e.stopPropagation()}
-                      className={`w-full py-4 px-6 rounded-full font-sans font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all shadow-md ${
-                        isSelected
+                      className={`w-full py-4 px-6 rounded-full font-sans font-bold text-sm sm:text-base flex items-center justify-center gap-2 transition-all shadow-md ${isSelected
                           ? 'bg-[#00A884] hover:bg-[#009272] text-white hover:scale-[1.02] active:scale-[0.98]'
                           : 'bg-slate-900 hover:bg-[#163824] text-white hover:scale-[1.02] active:scale-[0.98]'
-                      }`}
+                        }`}
                     >
                       <span>{plan.ctaText}</span>
                       <ArrowRight className="w-4 h-4" />
@@ -307,6 +300,42 @@ export default function PricingPlans() {
             )
           })}
         </div>
+
+        <section className="mt-10 sm:mt-12 max-w-5xl mx-auto rounded-[2rem] border border-emerald-200 bg-white p-6 sm:p-8 lg:p-9 shadow-sm" aria-labelledby="90-day-pack-title">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-7">
+            <div className="max-w-2xl">
+              <p className="text-xs font-bold uppercase tracking-[0.16em] text-[#0F766E]"></p>
+              <h3 id="90-day-pack-title" className="mt-2 text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+                90-Day Guided Wellness Pack
+              </h3>
+              <p className="mt-3 text-sm sm:text-base leading-relaxed text-slate-600">
+                If your doctor recommends a coaching-focused path after consultation, you can continue with structured nutrition and fitness support.
+              </p>
+              <ul className="mt-5 flex flex-col sm:flex-row sm:flex-wrap gap-x-6 gap-y-3 text-sm text-slate-700">
+                {['3 nutrition consultations', '3 fitness coach consultations'].map((feature) => (
+                  <li key={feature} className="inline-flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-[#00A884]" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-xs text-slate-500">Doctor consultation is not included in this pack.</p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row lg:flex-col items-start sm:items-center lg:items-end gap-4 lg:min-w-[220px]">
+              <div className="sm:mr-auto lg:mr-0 lg:text-right">
+                <p className="text-3xl sm:text-4xl font-extrabold tracking-tight tabular-nums text-slate-900">₹6,200</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">90 days · GST included</p>
+              </div>
+              <Link
+                href="/assessment"
+                className="inline-flex min-h-12 w-full sm:w-auto items-center justify-center gap-2 rounded-full bg-[#0F172A] px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1E293B] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0F766E] focus-visible:ring-offset-2"
+              >
+                Check eligibility <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </section>
 
         {/* ========================================================= */}
         {/* STATUTORY PHARMACY & MEDICINE FULFILLMENT NOTICE           */}
@@ -326,7 +355,7 @@ export default function PricingPlans() {
         {/* GST Tax Note */}
         <div className="mt-6 text-center max-w-2xl mx-auto">
           <p className="text-xs text-slate-500 font-sans leading-relaxed">
-            *18% GST will be calculated and added during checkout payment in compliance with statutory regulations.
+            Standard plan prices exclude 18% GST, which is added during checkout. The 90-day pack price includes GST.
           </p>
         </div>
 

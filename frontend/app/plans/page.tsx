@@ -7,7 +7,7 @@ import JsonLd from '@/components/seo/JsonLd'
 import { absoluteUrl } from '@/lib/seo/site'
 import { webPageSchema } from '@/lib/seo/schema'
 
-import { getActiveTreatmentPlans, computePlanPricing } from '@/lib/subscriptionService'
+import { getActiveTreatmentPlans, computePlanPricing, SEED_PLANS } from '@/lib/subscriptionService'
 
 const title = '8liv Care & Treatment Programs'
 const description = 'Choose an 8liv doctor-led treatment program. Duration-based care programs with included consultations, personal nutrition, fitness support, and monthly treatment cycles.'
@@ -53,7 +53,11 @@ export const metadata: Metadata = {
 }
 
 export default async function PlansPage() {
-  const dbPlans = await getActiveTreatmentPlans()
+  const activePlans = await getActiveTreatmentPlans()
+  const publicPlans = activePlans.filter((plan) => !plan.metadata?.is_ineligible_patient_pack)
+  const dbPlans = publicPlans.length > 0
+    ? publicPlans
+    : SEED_PLANS.filter((plan) => !plan.metadata?.is_ineligible_patient_pack)
   const durationPrograms = dbPlans.map((p) => {
     const calc = computePlanPricing(p.base_price, p.discount_percentage, p.duration_months, true, p.first_time_price)
     return {

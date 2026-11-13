@@ -38,7 +38,7 @@ Unlike disconnected fitness tracking apps or impersonal pill-subscription servic
 
 ## Brand Commitments
 
-- **Brand Identity:** 8Liv (8Live) — A modern telemedicine and metabolic longevity brand.
+- **Brand Identity:** 8Liv (8Liv) — A modern telemedicine and metabolic longevity brand.
 - **Aesthetic Direction:** Modern Clinical Wellness — Calming, trustworthy medical authority with serene accents, crisp typography, and spacious clarity.
 - **Voice & Tone:** Empathetic, scientifically grounded, encouraging, and clear. Zero shame or sensationalism; high clinical clarity.
 
