@@ -311,15 +311,7 @@ export default function PricingPlans() {
               <p className="mt-3 text-sm sm:text-base leading-relaxed text-slate-600">
                 If your doctor recommends a coaching-focused path after consultation, you can continue with structured nutrition and fitness support.
               </p>
-              <ul className="mt-5 flex flex-col sm:flex-row sm:flex-wrap gap-x-6 gap-y-3 text-sm text-slate-700">
-                {['3 nutrition consultations', '3 fitness coach consultations'].map((feature) => (
-                  <li key={feature} className="inline-flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-[#00A884]" />
-                    {feature}
-                  </li>
-                ))}
-              </ul>
-              <p className="mt-3 text-xs text-slate-500">Doctor consultation is not included in this pack.</p>
+              <p className="mt-4 text-xs text-slate-500">Doctor consultation is not included in this pack.</p>
             </div>
 
             <div className="flex flex-col sm:flex-row lg:flex-col items-start sm:items-center lg:items-end gap-4 lg:min-w-[220px]">

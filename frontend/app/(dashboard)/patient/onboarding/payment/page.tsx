@@ -358,8 +358,6 @@ export default function OnboardingPaymentPage() {
             <p className="text-white/40 text-[10px] font-black uppercase tracking-wider font-sora">Included In Your Program</p>
             {(is90DayPack ? [
               '90-day wellness coaching pack',
-              '3 nutrition consultations',
-              '3 fitness coach consultations',
               'Doctor consultation is not included in this pack',
             ] : [
               'Paid Initial doctor consultation booking',

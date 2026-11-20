@@ -354,11 +354,6 @@ export default function PlanSelectionPage() {
                     <p className="text-xs font-semibold text-slate-500">90 days · GST included</p>
                   </div>
                 </div>
-                <ul className="mt-5 grid sm:grid-cols-2 gap-3 text-sm text-slate-700">
-                  {['3 nutrition consultations', '3 fitness coach consultations'].map((feature) => (
-                    <li key={feature} className="flex items-center gap-2"><CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />{feature}</li>
-                  ))}
-                </ul>
                 <p className="mt-4 text-xs text-slate-500">Doctor consultation is not included in this pack.</p>
                 <button
                   type="button"

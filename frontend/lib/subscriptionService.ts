@@ -173,8 +173,6 @@ export const SEED_PLANS: TreatmentPlanRecord[] = [
     currency: 'INR',
     description: 'A supportive 90-day wellness plan with nutrition and fitness coaching after your doctor consultation.',
     features: [
-      '3 nutrition consultations',
-      '3 fitness coach consultations',
       'Doctor consultation is not included in this pack',
     ],
     status: 'ACTIVE',

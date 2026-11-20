@@ -29,8 +29,6 @@ VALUES (
   'INR',
   'A supportive 90-day wellness plan with nutrition and fitness coaching after your doctor consultation.',
   ARRAY[
-    '3 nutrition consultations',
-    '3 fitness coach consultations',
     'Doctor consultation is not included in this pack'
   ],
   'ACTIVE',
