@@ -78,8 +78,9 @@ export type FunnelStage =
   | 'intake_vitals'
   | 'intake_safety'
   | 'intake_history'
-  | 'intake_lab'
   | 'intake_medication'
+  | 'intake_lab'
+  | 'intake_address'
   | 'intake_account'
 
 export interface UnifiedAssessmentFunnelProps {
@@ -137,13 +138,14 @@ const INTAKE_STEPS = [
   { step: 4, label: 'History' },
   { step: 5, label: 'Meds' },
   { step: 6, label: 'Lab' },
-  { step: 7, label: 'Account' },
+  { step: 7, label: 'Address' },
+  { step: 8, label: 'Account' },
 ]
 
 function IntakeProgressBar({ currentStep, title }: { currentStep: number; title: string }) {
   return (
     <div className="mb-7 pb-4 border-b border-slate-100 select-none">
-      <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-2.5">
+      <div className="grid grid-cols-8 gap-1 sm:gap-1.5 mb-2.5">
         {INTAKE_STEPS.map((s) => {
           const isPast = s.step < currentStep
           const isCurrent = s.step === currentStep
@@ -838,6 +840,7 @@ export default function UnifiedAssessmentFunnel({
       case 'intake_history':
       case 'intake_lab':
       case 'intake_medication':
+      case 'intake_address':
       case 'intake_account':
         return 'max-w-[580px] md:max-w-[760px]'
       default:
@@ -2535,135 +2538,7 @@ export default function UnifiedAssessmentFunnel({
                 )}
               </div>
 
-              {/* Option 2: I don't have a report, get a lab report from 8liv */}
-              <div
-                className={`p-5 rounded-2xl border transition-all ${formData.lab_preference === 'third_party' ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs' : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-50'
-                  }`}
-              >
-                <button
-                  type="button"
-                  onClick={() => setFormData(prev => ({ ...prev, lab_preference: 'third_party' }))}
-                  className="w-full flex items-center justify-between text-left cursor-pointer focus:outline-none"
-                >
-                  <div>
-                    <div className="flex flex-wrap items-center gap-2 mb-0.5">
-                      <span className="font-sans text-sm sm:text-base font-bold text-slate-900 block">I don&apos;t have a report — Get a lab report from 8liv</span>
-                      <span className="text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-900 px-2.5 py-0.5 rounded-full border border-amber-300/80 inline-flex items-center gap-1 shrink-0">
-                        <MapPin className="w-2.5 h-2.5 text-amber-700" /> Bangalore Only
-                      </span>
-                    </div>
-                    <span className="font-sans text-xs text-slate-500">We&apos;ll arrange a certified home/doorstep collection via authorized lab partners.</span>
-                  </div>
-                  <div className={`w-5 h-5 rounded-full border flex items-center justify-center shrink-0 ${formData.lab_preference === 'third_party' ? 'border-[#00A884] bg-[#00A884]' : 'border-slate-300'}`}>
-                    {formData.lab_preference === 'third_party' && <div className="w-2 h-2 rounded-full bg-white" />}
-                  </div>
-                </button>
-
-                {formData.lab_preference === 'third_party' && (
-                  <div className="mt-4 pt-4 border-t border-slate-200/60 space-y-3.5">
-                    {/* Notice: Available Exclusively in Bangalore */}
-                    <div className="bg-amber-50/90 border-2 border-amber-300/80 p-3.5 sm:p-4 rounded-2xl flex items-start gap-3 text-amber-950 shadow-xs">
-                      <div className="w-7 h-7 rounded-xl bg-amber-200/80 text-amber-900 flex items-center justify-center shrink-0 mt-0.5 font-bold">
-                        <AlertCircle className="w-4 h-4 text-amber-800" />
-                      </div>
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <h5 className="font-bold text-xs sm:text-sm text-amber-950 font-sora">
-                            Available Exclusively in Bangalore
-                          </h5>
-                          <span className="text-[9px] font-black uppercase tracking-wider bg-amber-200/90 text-amber-900 px-1.5 py-0.5 rounded">
-                            Notice
-                          </span>
-                        </div>
-                        <p className="text-xs text-amber-900 leading-relaxed font-sans">
-                          Doorstep blood sample collection is currently serviced <strong>only within Bangalore (Bengaluru)</strong>. If your pickup location is outside Bangalore, you can proceed by uploading an existing report or simply selecting <strong>&ldquo;Proceed without a lab report&rdquo;</strong> below.
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="bg-emerald-50/70 p-3.5 rounded-xl flex items-start gap-3 border border-emerald-200/60">
-                      <CheckCircle className="w-4 h-4 text-[#00A884] shrink-0 mt-0.5" />
-                      <p className="text-xs text-slate-700 leading-relaxed font-sans">
-                        <strong className="text-slate-900">Doorstep sample collection:</strong> A certified phlebotomist from our partner lab will visit your Bangalore address for morning fasting blood collection.
-                      </p>
-                    </div>
-
-                    {/* Collection Address Fields */}
-                    <div className="space-y-3 pt-1">
-                      <div>
-                        <div className="flex items-center justify-between mb-1.5">
-                          <label className="block text-xs font-bold text-slate-700">
-                            Home / Pickup Address (Bangalore) <span className="text-[#00A884]">*</span>
-                          </label>
-                          <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[#00A884] bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200/50">
-                            <Sparkles className="w-2.5 h-2.5" /> Google Auto-fill
-                          </span>
-                        </div>
-                        <div className="relative">
-                          <input
-                            ref={addressInputRef}
-                            type="text"
-                            required
-                            value={formData.lab_collection_address}
-                            onChange={(e) => setFormData((p) => ({ ...p, lab_collection_address: e.target.value }))}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') e.preventDefault()
-                            }}
-                            placeholder="Start typing your apartment, building, or street in Bangalore..."
-                            className="w-full pl-9 pr-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 transition-all shadow-xs"
-                          />
-                          <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3 pointer-events-none" />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-xs font-bold text-slate-700 mb-1">
-                            City <span className="text-[#00A884]">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            value={formData.lab_collection_city}
-                            onChange={(e) => setFormData((p) => ({ ...p, lab_collection_city: e.target.value }))}
-                            placeholder="Bangalore"
-                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 transition-all"
-                          />
-                          {formData.lab_collection_city &&
-                            !formData.lab_collection_city.toLowerCase().includes('bangalore') &&
-                            !formData.lab_collection_city.toLowerCase().includes('bengaluru') && (
-                              <p className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-1.5 mt-1 font-semibold flex items-center gap-1">
-                                <AlertCircle className="w-3 h-3 shrink-0 text-amber-600" />
-                                <span>Notice: Service is available only in Bangalore.</span>
-                              </p>
-                            )}
-                        </div>
-                        <div>
-                          <label className="block text-xs font-bold text-slate-700 mb-1">
-                            PIN Code <span className="text-[#00A884]">*</span>
-                          </label>
-                          <input
-                            type="text"
-                            required
-                            maxLength={6}
-                            value={formData.lab_collection_pincode}
-                            onChange={(e) => setFormData((p) => ({ ...p, lab_collection_pincode: e.target.value.replace(/\D/g, '') }))}
-                            placeholder="6-digit PIN (e.g. 560001)"
-                            className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 transition-all font-mono"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="pt-1 flex items-center gap-2 text-[11px] sm:text-xs text-slate-500 font-medium bg-white/70 rounded-xl p-2.5 border border-slate-200/60">
-                        <span className="flex h-2 w-2 rounded-full bg-[#00A884] shrink-0" />
-                        <span>Our clinical team will call you directly to schedule your doorstep sample collection.</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Option 3: Proceed without a lab report (Not needed right now) */}
+              {/* Option 2: Proceed without a lab report (Not needed right now) */}
               <div
                 className={`p-5 rounded-2xl border transition-all ${formData.lab_preference === 'skip' ? 'bg-emerald-50/60 border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs' : 'bg-slate-50/70 border-slate-200/80 hover:bg-slate-50'
                   }`}
@@ -2688,37 +2563,147 @@ export default function UnifiedAssessmentFunnel({
               type="button"
               disabled={
                 formData.lab_preference === 'none' ||
-                (formData.lab_preference === 'upload' && (REQUIRED_LAB_REPORTS.some(({ key }) => !formData.lab_report_urls[key]) || !formData.lab_report_within_7_days || Boolean(labDateError) || isUploadingLab)) ||
-                (formData.lab_preference === 'third_party' &&
-                  (!formData.lab_collection_address.trim() || formData.lab_collection_pincode.trim().length < 6))
+                (formData.lab_preference === 'upload' && (REQUIRED_LAB_REPORTS.some(({ key }) => !formData.lab_report_urls[key]) || !formData.lab_report_within_7_days || Boolean(labDateError) || isUploadingLab))
               }
               onClick={() => {
-                syncProgressSilent('intake_account', 6)
-                setStage('intake_account')
+                syncProgressSilent('intake_address', 6)
+                setStage('intake_address')
               }}
               className={`w-full min-h-[50px] rounded-full font-sans font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${formData.lab_preference === 'skip' ||
-                (formData.lab_preference === 'upload' && REQUIRED_LAB_REPORTS.every(({ key }) => Boolean(formData.lab_report_urls[key])) && formData.lab_report_within_7_days && !labDateError && !isUploadingLab) ||
-                (formData.lab_preference === 'third_party' && formData.lab_collection_address.trim().length > 0 && formData.lab_collection_pincode.trim().length >= 6)
+                (formData.lab_preference === 'upload' && REQUIRED_LAB_REPORTS.every(({ key }) => Boolean(formData.lab_report_urls[key])) && formData.lab_report_within_7_days && !labDateError && !isUploadingLab)
                 ? 'bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99]'
                 : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
                 }`}
             >
-              <span>Continue to Account Setup</span>
+              <span>Continue to Address Details</span>
               <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         )}
 
         {/* ===================================================================
-            SCREEN 7: ACCOUNT CREATION & WHATSAPP OTP VERIFICATION
+            SCREEN 7: PATIENT RESIDENTIAL ADDRESS
+            =================================================================== */}
+        {stage === 'intake_address' && (
+          <div className="bg-white/95 backdrop-blur-xl border border-stone-200/90 rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 md:p-12 text-slate-900 shadow-[0_30px_70px_rgba(0,0,0,0.04),0_10px_20px_rgba(0,0,0,0.02)] transition-all animate-funnel-step">
+            <AssessmentBrandHeader />
+            <IntakeProgressBar currentStep={7} title="Residential Address" />
+            <button
+              type="button"
+              onClick={() => setStage('intake_lab')}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-[#11241A] mb-5 transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Back
+            </button>
+
+            <div className="flex items-start justify-between gap-4 mb-6">
+              <div>
+                <h1 className="font-sans text-2xl sm:text-3xl font-extrabold text-[#11241A] tracking-tight leading-snug mb-2">
+                  Patient Residential Address
+                </h1>
+                <p className="text-sm text-slate-500">
+                  Required for clinical verification, doctor consultation documentation, and official medical e-prescriptions accepted across India.
+                </p>
+              </div>
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 border border-emerald-200/60 flex items-center justify-center shrink-0 text-[#00A884]">
+                <MapPin className="w-6 h-6" />
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                  Street / House Address <span className="text-[#00A884]">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.street_address}
+                  onChange={(e) => setFormData((p) => ({ ...p, street_address: e.target.value }))}
+                  placeholder="Flat / House No., Apartment, Building, Street, Locality"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 transition-all shadow-xs"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    City <span className="text-[#00A884]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.city}
+                    onChange={(e) => setFormData((p) => ({ ...p, city: e.target.value }))}
+                    placeholder="e.g. Bengaluru, Mumbai"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 transition-all shadow-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    State <span className="text-[#00A884]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={formData.state}
+                    onChange={(e) => setFormData((p) => ({ ...p, state: e.target.value }))}
+                    placeholder="e.g. Karnataka"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 transition-all shadow-xs"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    PIN Code <span className="text-[#00A884]">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={6}
+                    value={formData.pincode}
+                    onChange={(e) => setFormData((p) => ({ ...p, pincode: e.target.value.replace(/\D/g, '') }))}
+                    placeholder="6-digit PIN"
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-[#00A884] focus:ring-2 focus:ring-[#00A884]/20 transition-all shadow-xs font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-600 flex items-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-[#00A884] shrink-0" />
+                <span>This address will appear on your official e-prescription as required by statutory Telemedicine Practice Guidelines.</span>
+              </div>
+
+              <button
+                type="button"
+                disabled={!formData.street_address.trim() || !formData.city.trim() || !formData.state.trim() || formData.pincode.trim().length < 6}
+                onClick={() => {
+                  syncProgressSilent('intake_account', 7)
+                  setStage('intake_account')
+                }}
+                className={`w-full min-h-[50px] rounded-full font-sans font-bold text-sm sm:text-base transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md ${
+                  formData.street_address.trim() && formData.city.trim() && formData.state.trim() && formData.pincode.trim().length >= 6
+                    ? 'bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white shadow-[#00A884]/25 hover:shadow-lg active:scale-[0.99]'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                }`}
+              >
+                <span>Continue to Account Setup</span>
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ===================================================================
+            SCREEN 8: ACCOUNT CREATION & WHATSAPP OTP VERIFICATION
             =================================================================== */}
         {stage === 'intake_account' && (
           <div className="bg-white/95 backdrop-blur-xl border border-stone-200/90 rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 md:p-12 text-slate-900 shadow-[0_30px_70px_rgba(0,0,0,0.04),0_10px_20px_rgba(0,0,0,0.02)] transition-all animate-funnel-step">
             <AssessmentBrandHeader />
-            <IntakeProgressBar currentStep={7} title="Confidential Health Profile" />
+            <IntakeProgressBar currentStep={8} title="Confidential Health Profile" />
             <button
               type="button"
-              onClick={() => setStage('intake_lab')}
+              onClick={() => setStage('intake_address')}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-slate-400 hover:text-[#11241A] mb-5 transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />

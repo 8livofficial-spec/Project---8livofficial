@@ -23,6 +23,11 @@ export type PrescriptionItemInput = {
 export type PrescriptionInput = {
   diagnosis: string
   valid_until: string
+  prescription_mode?: 'PRESCRIPTION' | 'INFORMATION_ONLY'
+  chief_complaints?: string[] | string | null
+  clinical_findings?: string[] | string | null
+  follow_up_date?: string | null
+  advice_notes?: string | null
   items: PrescriptionItemInput[]
 }
 
@@ -34,10 +39,16 @@ function requireText(value: unknown, field: string) {
 
 export function validatePrescriptionInput(body: any): PrescriptionInput {
   const items = Array.isArray(body?.items) ? body.items : []
-  if (!items.length) throw new Error('At least one prescription item is required.')
+  const isInformationOnly = body?.prescription_mode === 'INFORMATION_ONLY' || body?.prescriptionMode === 'INFORMATION_ONLY'
+  if (!items.length && !isInformationOnly) throw new Error('At least one prescription item is required for a prescription order.')
   return {
     diagnosis: requireText(body?.diagnosis, 'Diagnosis'),
-    valid_until: requireText(body?.valid_until, 'Prescription validity date'),
+    valid_until: requireText(body?.valid_until || body?.validUntil, 'Prescription validity date'),
+    prescription_mode: isInformationOnly ? 'INFORMATION_ONLY' : 'PRESCRIPTION',
+    chief_complaints: body?.chief_complaints || body?.chiefComplaints || null,
+    clinical_findings: body?.clinical_findings || body?.clinicalFindings || null,
+    follow_up_date: body?.follow_up_date || body?.followUpDate || null,
+    advice_notes: body?.advice_notes || body?.adviceNotes || null,
     items: items.map((item: any) => ({
       medicine_name: requireText(item.medicine_name, 'Medicine name'),
       generic_name: item.generic_name ? String(item.generic_name).trim() : null,
@@ -76,7 +87,9 @@ export async function createPrescription(
   input: PrescriptionInput,
   options?: { patientId?: string }
 ) {
-  validateItems(input.items)
+  if (input.items && input.items.length > 0) {
+    validateItems(input.items)
+  }
   let consultation: any = null
 
   if (consultationId && consultationId !== 'direct') {
@@ -137,6 +150,14 @@ export async function createPrescription(
     console.warn('[prescriptionService] Could not lookup active cycle:', cycleErr)
   }
 
+  const initialCanonical = {
+    prescription_mode: input.prescription_mode || (input.items.length > 0 ? 'PRESCRIPTION' : 'INFORMATION_ONLY'),
+    chief_complaints: input.chief_complaints || null,
+    clinical_findings: input.clinical_findings || null,
+    follow_up_date: input.follow_up_date || null,
+    advice_notes: input.advice_notes || null,
+  }
+
   const { data: prescription, error } = await supabaseAdmin
     .from('prescriptions')
     .insert({
@@ -148,25 +169,30 @@ export async function createPrescription(
       status: 'DRAFT',
       valid_until: input.valid_until,
       treatment_cycle_id: cycleId,
+      canonical_data: initialCanonical,
     })
     .select('*')
     .single()
   if (error) throw error
 
-  const { error: itemError } = await supabaseAdmin
-    .from('prescription_items')
-    .insert(input.items.map((item) => ({ ...item, prescription_id: prescription.id })))
-  if (itemError) throw itemError
+  if (input.items && input.items.length > 0) {
+    const { error: itemError } = await supabaseAdmin
+      .from('prescription_items')
+      .insert(input.items.map((item) => ({ ...item, prescription_id: prescription.id })))
+    if (itemError) throw itemError
+  }
 
   await audit({ prescriptionId: prescription.id, actorId: doctorId, actorRole: 'doctor', action: 'PRESCRIPTION_CREATED', newValues: { consultationId, cycleId } })
   return prescription
 }
 
 export async function updateDraftPrescription(prescriptionId: string, doctorId: string, input: PrescriptionInput) {
-  validateItems(input.items)
+  if (input.items && input.items.length > 0) {
+    validateItems(input.items)
+  }
   const { data: existing, error: lookupError } = await supabaseAdmin
     .from('prescriptions')
-    .select('id, status')
+    .select('id, status, canonical_data')
     .eq('id', prescriptionId)
     .eq('doctor_id', doctorId)
     .maybeSingle()
@@ -174,20 +200,37 @@ export async function updateDraftPrescription(prescriptionId: string, doctorId: 
   if (!existing) throw new Error('Prescription not found for this doctor.')
   if (existing.status !== 'DRAFT') throw new Error('Only DRAFT prescriptions may be edited.')
 
+  const updatedCanonical = {
+    ...(existing.canonical_data || {}),
+    prescription_mode: input.prescription_mode || (input.items.length > 0 ? 'PRESCRIPTION' : 'INFORMATION_ONLY'),
+    chief_complaints: input.chief_complaints || null,
+    clinical_findings: input.clinical_findings || null,
+    follow_up_date: input.follow_up_date || null,
+    advice_notes: input.advice_notes || null,
+  }
+
   const { error } = await supabaseAdmin
     .from('prescriptions')
-    .update({ diagnosis: input.diagnosis, valid_until: input.valid_until, updated_at: new Date().toISOString() })
+    .update({
+      diagnosis: input.diagnosis,
+      valid_until: input.valid_until,
+      canonical_data: updatedCanonical,
+      updated_at: new Date().toISOString()
+    })
     .eq('id', prescriptionId)
     .eq('doctor_id', doctorId)
     .eq('status', 'DRAFT')
   if (error) throw error
 
-  const { error: deleteError } = await supabaseAdmin.from('prescription_items').delete().eq('prescription_id', prescriptionId)
-  if (deleteError) throw deleteError
-  const { error: itemError } = await supabaseAdmin.from('prescription_items').insert(input.items.map((item) => ({ ...item, prescription_id: prescriptionId })))
-  if (itemError) throw itemError
-
+  await supabaseAdmin.from('prescription_items').delete().eq('prescription_id', prescriptionId)
+  if (input.items && input.items.length > 0) {
+    const { error: itemError } = await supabaseAdmin
+      .from('prescription_items')
+      .insert(input.items.map((item) => ({ ...item, prescription_id: prescriptionId })))
+    if (itemError) throw itemError
+  }
   await audit({ prescriptionId, actorId: doctorId, actorRole: 'doctor', action: 'PRESCRIPTION_UPDATED' })
+  return { id: prescriptionId, ...input }
 }
 
 export type DoctorDeclarations = {
@@ -229,7 +272,12 @@ export async function signPrescription(
   if (!['DRAFT', 'READY_FOR_REVIEW'].includes(prescription.status)) throw new Error('Prescription cannot be signed in its current status.')
 
   const items = prescription.prescription_items || []
-  if (!items.length) throw new Error('At least one medicine is required before signing.')
+  const isInformationOnly =
+    prescription.canonical_data?.prescription_mode === 'INFORMATION_ONLY' ||
+    prescription.canonical_data?.prescription_mode === 'INFORMATION'
+  if (!isInformationOnly && !items.length) {
+    throw new Error('At least one medicine is required before signing.')
+  }
 
   const consultation = await assertConsultationDoctorOwnership(prescription.consultation_id, doctorId)
   const consultationStatus = String(consultation.status || '').toLowerCase()
@@ -259,12 +307,12 @@ export async function signPrescription(
     console.warn('[prescriptionService] Could not fetch doctor metadata:', dErr)
   }
 
-  // Retrieve Patient Metadata from profiles
+  // Retrieve Patient Metadata from profiles and health_assessments
   let patientMeta: any = {}
   try {
     const { data: pat } = await supabaseAdmin
       .from('profiles')
-      .select('first_name, last_name, gender, dob')
+      .select('first_name, last_name, gender, dob, phone_number, phone')
       .eq('id', prescription.patient_id)
       .maybeSingle()
     if (pat) {
@@ -279,7 +327,38 @@ export async function signPrescription(
         full_name: fullName,
         gender: pat.gender,
         age,
+        phone: pat.phone_number || pat.phone || '',
       }
+    }
+
+    const { data: assessment } = await supabaseAdmin
+      .from('health_assessments')
+      .select('weight, height, bmi, blood_pressure, medical_history')
+      .eq('user_id', prescription.patient_id)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (assessment) {
+      const medHist = (assessment.medical_history as any) || {}
+      const addrObj = medHist.address || medHist.lab_work?.collection_address
+      let formattedAddress = ''
+      if (addrObj) {
+        if (typeof addrObj === 'string') {
+          formattedAddress = addrObj
+        } else {
+          formattedAddress =
+            addrObj.full_address ||
+            [addrObj.street, addrObj.city, addrObj.state, addrObj.pincode].filter(Boolean).join(', ')
+        }
+      }
+      if (formattedAddress) {
+        patientMeta.address = formattedAddress
+      }
+      patientMeta.weight_kg = assessment.weight
+      patientMeta.height_cm = assessment.height
+      patientMeta.bmi = assessment.bmi
+      patientMeta.bp = assessment.blood_pressure
     }
   } catch (pErr) {
     console.warn('[prescriptionService] Could not fetch patient metadata:', pErr)
@@ -304,7 +383,18 @@ export async function signPrescription(
       full_name: patientMeta.full_name || 'Patient',
       gender: patientMeta.gender || 'Not Specified',
       age: patientMeta.age || '-',
+      phone: patientMeta.phone || prescription.canonical_data?.patient_phone || '',
+      address: patientMeta.address || prescription.canonical_data?.patient_address || '',
+      weight_kg: patientMeta.weight_kg || prescription.canonical_data?.vitals?.weight_kg,
+      height_cm: patientMeta.height_cm || prescription.canonical_data?.vitals?.height_cm,
+      bmi: patientMeta.bmi || prescription.canonical_data?.vitals?.bmi,
+      bp: patientMeta.bp || prescription.canonical_data?.vitals?.bp,
     },
+    chief_complaints: prescription.canonical_data?.chief_complaints,
+    clinical_findings: prescription.canonical_data?.clinical_findings,
+    prescription_mode: prescription.canonical_data?.prescription_mode || (items.length > 0 ? 'PRESCRIPTION' : 'INFORMATION_ONLY'),
+    advice_notes: prescription.canonical_data?.advice_notes,
+    follow_up_date: prescription.canonical_data?.follow_up_date,
   })
 
   const canonicalJson = JSON.stringify(canonical)
@@ -391,9 +481,11 @@ export async function signPrescription(
   // Also sync the consultation record so it stays permanently completed and prescribed
   if (prescription.consultation_id) {
     try {
-      const itemsSummary = items
-        .map((i: any) => `${i.medicine_name} ${i.strength || ''} - ${i.dose || ''} ${i.frequency || ''}`)
-        .join(', ')
+      const itemsSummary = items.length > 0
+        ? items
+            .map((i: any) => `${i.medicine_name} ${i.strength || ''} - ${i.dose || ''} ${i.frequency || ''}`)
+            .join(', ')
+        : 'Information & Clinical Advice Only (No prescription medications issued)'
       await supabaseAdmin
         .from('doctor_consultations')
         .update({
@@ -401,7 +493,7 @@ export async function signPrescription(
           status: 'completed',
           completed_at: nowIso,
           prescription_text: itemsSummary,
-          prescription_type: items[0]?.dosage_form || 'INJECTABLE',
+          prescription_type: items[0]?.dosage_form || 'CLINICAL_ADVICE',
           updated_at: nowIso,
         })
         .eq('id', prescription.consultation_id)
@@ -426,8 +518,10 @@ export async function signPrescription(
   await supabaseAdmin.from('patient_notifications').insert({
     patient_id: prescription.patient_id,
     type: 'prescription_issued',
-    title: 'Prescription issued',
-    message: 'Your doctor has issued a signed prescription. You can view your clinical protocol and active medication details in your patient portal.',
+    title: isInformationOnly ? 'Clinical advice & consultation summary issued' : 'Prescription issued',
+    message: isInformationOnly
+      ? 'Your doctor has issued an official consultation summary and clinical advice note. You can view it in your patient portal.'
+      : 'Your doctor has issued a signed prescription. You can view your clinical protocol and active medication details in your patient portal.',
     is_read: false,
   })
 

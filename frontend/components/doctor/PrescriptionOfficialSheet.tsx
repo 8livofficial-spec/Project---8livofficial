@@ -18,8 +18,25 @@ export interface PrescriptionItemDisplay {
   special_instruction?: string
 }
 
+export interface PrescriptionVitals {
+  weight_kg?: number | string
+  height_cm?: number | string
+  bmi?: number | string
+  bp?: string
+}
+
 export interface PrescriptionOfficialSheetProps {
   patientName?: string
+  patientId?: string
+  patientAge?: string | number
+  patientGender?: string
+  patientPhone?: string
+  patientAddress?: string
+  vitals?: PrescriptionVitals
+  chiefComplaints?: string | string[]
+  clinicalFindings?: string | string[]
+  prescriptionMode?: 'PRESCRIPTION' | 'INFORMATION_ONLY'
+  followUpDate?: string
   prescriptionNumber?: string
   dateIssued?: string
   validUntil?: string
@@ -28,7 +45,9 @@ export interface PrescriptionOfficialSheetProps {
   adviceNotes?: string
   doctorName?: string
   specialty?: string
+  qualification?: string
   registrationNumber?: string
+  registrationCouncil?: string
   signatureUrl?: string | null
   signatureHash?: string | null
   isDraftPreview?: boolean
@@ -37,54 +56,106 @@ export interface PrescriptionOfficialSheetProps {
 
 export default function PrescriptionOfficialSheet({
   patientName = 'Patient',
-  prescriptionNumber = '8LTV-RX-DRAFT',
+  patientId,
+  patientAge,
+  patientGender,
+  patientPhone,
+  patientAddress,
+  vitals,
+  chiefComplaints,
+  clinicalFindings,
+  prescriptionMode = 'PRESCRIPTION',
+  followUpDate,
+  prescriptionNumber = '8LIV-RX-DRAFT',
   dateIssued,
   validUntil,
-  diagnosis = 'Medical Weight Management Protocol — Overweight with Metabolic Risk Factors (BMI ≥ 27)',
+  diagnosis = 'Medical Weight Management Protocol — Overweight with Metabolic Risk Factors (BMI >= 27)',
   items = [],
   adviceNotes,
-  doctorName = 'Dr. S',
+  doctorName = 'Dr. SJ',
   specialty = 'Physician',
-  registrationNumber = 'MCI-RMP-78942',
+  qualification = 'MBBS, MD',
+  registrationNumber = 'MMC 2018',
+  registrationCouncil = 'State Medical Council',
   signatureUrl = null,
-  signatureHash = null,
   isDraftPreview = false,
   className = '',
 }: PrescriptionOfficialSheetProps) {
   const formattedDateIssued = dateIssued
     ? new Date(dateIssued).toLocaleDateString('en-IN', {
-        day: 'numeric',
+        day: '2-digit',
         month: 'short',
         year: 'numeric',
       })
     : new Date().toLocaleDateString('en-IN', {
-        day: 'numeric',
+        day: '2-digit',
         month: 'short',
         year: 'numeric',
       })
 
-  const formattedValidUntil = validUntil
-    ? new Date(validUntil).toLocaleDateString('en-IN', {
-        day: 'numeric',
+  const formattedFollowUpDate = followUpDate
+    ? new Date(followUpDate).toLocaleDateString('en-IN', {
+        day: '2-digit',
         month: 'short',
         year: 'numeric',
       })
     : (() => {
         const d = new Date()
-        d.setDate(d.getDate() + 30)
+        d.setDate(d.getDate() + 28)
         return d.toLocaleDateString('en-IN', {
-          day: 'numeric',
+          day: '2-digit',
           month: 'short',
           year: 'numeric',
         })
       })()
 
+  // Format complaints & findings into string arrays
+  const parsedComplaints: string[] = Array.isArray(chiefComplaints)
+    ? chiefComplaints
+    : chiefComplaints
+      ? chiefComplaints.split(/\n|;/).map((s) => s.trim().replace(/^[-*•]\s*/, '')).filter(Boolean)
+      : ['Weight management evaluation & metabolic review', 'Sluggish metabolic rate & daytime fatigue']
+
+  const parsedFindings: string[] = Array.isArray(clinicalFindings)
+    ? clinicalFindings
+    : clinicalFindings
+      ? clinicalFindings.split(/\n|;/).map((s) => s.trim().replace(/^[-*•]\s*/, '')).filter(Boolean)
+      : ['Elevated BMI (>= 27) with central adiposity', 'Target candidate for supervised clinical metabolic care']
+
+  // Format advice into list items
+  const parsedAdvice: string[] = adviceNotes
+    ? adviceNotes
+        .split('\n')
+        .map((s) => s.trim().replace(/^\d+[\.\)]\s*|^[-*•]\s*/, ''))
+        .filter(Boolean)
+    : [
+        'Maintain minimum 2.5 to 3.0 Litres of water daily.',
+        'Follow tailored Indian high-protein meal progression (Roti, Dal, Sabzi).',
+        'Avoid high-glycemic ultra-processed snacks and refined sugars.',
+        'Report any persistent nausea, vomiting, or abdominal discomfort immediately.',
+        'Schedule follow-up review for metabolic calibration.',
+      ]
+
+  const resolvedDocName = doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`
+  const resolvedPatientId = patientId || (prescriptionNumber.startsWith('8LIV-') ? `PAT-${prescriptionNumber.slice(-8)}` : 'PAT-8LIV')
+  const resolvedAge = patientAge && patientAge !== '-' ? patientAge : 'Adult'
+  const resolvedGender = patientGender ? (patientGender.toLowerCase().startsWith('m') ? 'M' : patientGender.toLowerCase().startsWith('f') ? 'F' : patientGender) : 'M'
+  const resolvedPhone = patientPhone || 'Registered Mobile'
+  const resolvedAddress = patientAddress && patientAddress.trim() ? patientAddress : 'Address on verified patient record'
+
+  const resolvedWeight = vitals?.weight_kg || '78'
+  const resolvedHeight = vitals?.height_cm || '168'
+  const resolvedBmi = vitals?.bmi || (vitals?.weight_kg && vitals?.height_cm ? (Number(vitals.weight_kg) / Math.pow(Number(vitals.height_cm) / 100, 2)).toFixed(2) : '27.60')
+  const resolvedBp = vitals?.bp || '120/80 mmHg'
+
+  const isInfoOnly = prescriptionMode === 'INFORMATION_ONLY' || (!items.length && prescriptionMode !== 'PRESCRIPTION')
+
   return (
     <div
-      className={`relative bg-white text-black font-sans shadow-lg border border-slate-300 p-6 sm:p-10 max-w-[800px] mx-auto select-none print:shadow-none print:border-none print:p-0 ${className}`}
+      className={`relative bg-white text-black font-sans shadow-lg border border-slate-300 p-6 sm:p-10 max-w-[850px] mx-auto select-none print:shadow-none print:border-none print:p-0 ${className}`}
       style={{ minHeight: '1050px' }}
     >
-      {/* Optional Live Preview indicator */}
+      {/* Live Preview Indicator */}
       {isDraftPreview && (
         <div className="mb-4 flex items-center justify-between rounded-lg border border-amber-300 bg-amber-50/80 px-3 py-1.5 text-xs text-amber-900 print:hidden">
           <span className="flex items-center gap-1.5 font-bold">
@@ -92,278 +163,273 @@ export default function PrescriptionOfficialSheet({
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
             </span>
-            Interactive Live Sheet Preview
+            Standard OPD E-Prescription (Clean B&amp;W Medical Format)
           </span>
-          <span className="text-[11px] font-medium text-amber-800">
-            Auto-updating as you type
-          </span>
-        </div>
-      )}
-
-      {/* Optional Draft Watermark */}
-      {isDraftPreview && (
-        <div className="absolute inset-0 pointer-events-none flex items-center justify-center opacity-[0.03] select-none">
-          <span className="text-8xl font-black rotate-[-30deg] tracking-widest text-slate-900 uppercase">
-            LIVE PREVIEW
+          <span className="text-[11px] font-semibold text-amber-800">
+            {isInfoOnly ? 'Mode: Information Only' : 'Mode: Medication Prescription'}
           </span>
         </div>
       )}
 
-      {/* ── 1. HEADER ── */}
-      <div className="pb-4">
+      {/* ── 1. HEADER (Doctor Credentials Left, Colored Logo + Clinic Right) ── */}
+      <div className="pb-3">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-          {/* Left: Organization Branding */}
-          <div className="flex items-start gap-3.5">
-            {/* Authentic Official 8Liv Logo */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/brand-logo-official.png"
-              alt="8Liv Health Official Logo"
-              className="h-10 sm:h-12 w-auto object-contain block shrink-0 mt-0.5 drop-shadow-2xs"
-            />
-            <div>
-              <h1 className="text-xl sm:text-2xl font-black tracking-tight text-black leading-tight uppercase">
-                8LIV HEALTH NETWORK
-              </h1>
-              <p className="text-[11px] font-bold uppercase tracking-wider text-black mt-0.5">
-                SPECIALTY TELEMEDICINE &amp; METABOLIC ENDOCRINOLOGY
-              </p>
-              <p className="text-[10px] text-slate-600 font-medium mt-0.5">
-                Ministry of Health &amp; Family Welfare (MoHFW) Registered Care Facility
-              </p>
-            </div>
-          </div>
-
-          {/* Right: Prescribing Doctor Profile */}
-          <div className="sm:text-right text-xs shrink-0">
-            <h2 className="text-lg font-black text-black leading-tight">
-              {doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`}
-            </h2>
-            <p className="text-xs font-semibold text-black mt-0.5">{specialty}</p>
-            <p className="text-[11px] text-slate-700 font-medium mt-0.5">
+          {/* Top Left: Doctor Information */}
+          <div className="text-left">
+            <h1 className="text-lg sm:text-xl font-black text-black tracking-tight leading-tight">
+              {resolvedDocName}
+            </h1>
+            <p className="text-xs font-bold text-black mt-0.5">{qualification}</p>
+            <p className="text-xs font-bold text-black mt-0.5">
               Reg. No: <span className="font-semibold">{registrationNumber}</span>
             </p>
-            <p className="text-[10px] text-slate-500 mt-0.5">
-              Telemedicine Practice Guidelines, 2020
+            <p className="text-[11px] text-slate-700 font-medium mt-0.5">
+              Council: {registrationCouncil}
+            </p>
+          </div>
+
+          {/* Top Right: Authentic 8Liv Logo (IN COLOR) + Hospital Details */}
+          <div className="sm:text-right text-xs shrink-0 flex flex-col sm:items-end">
+            <div className="flex items-center gap-2 mb-1 sm:justify-end">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/brand-logo-official.png"
+                alt="8Liv Health"
+                className="h-9 w-auto object-contain block drop-shadow-2xs"
+              />
+              <span className="text-base sm:text-lg font-black tracking-tight text-black leading-tight uppercase">
+                8LIV HEALTH NETWORK
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-700 font-medium leading-tight">
+              Ground Floor, Embassy TechVillage, Outer Ring Road, Bengaluru - 560103
+            </p>
+            <p className="text-[10px] text-slate-600 font-medium mt-0.5 leading-tight">
+              Ph: +91 80 6900 8548 | Timing: 08:00 AM - 08:00 PM | Closed: Sunday
             </p>
           </div>
         </div>
 
-        {/* Thick Divider Line */}
-        <div className="w-full border-b-2 border-black mt-4" />
+        {/* Solid Black Divider Line */}
+        <div className="w-full border-b-2 border-black mt-3.5" />
       </div>
 
-      {/* ── 2. FOUR-COLUMN METADATA BAR ── */}
-      <div className="py-2">
-        <div className="grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-300 py-1 text-xs">
-          <div className="px-2 sm:px-3 py-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-              PATIENT NAME
+      {/* ── 2. DATE (Right Aligned) ── */}
+      <div className="text-right text-xs font-bold text-black py-1">
+        Date: <span className="font-mono">{formattedDateIssued}</span>
+      </div>
+
+      {/* ── 3. PATIENT DEMOGRAPHICS & CLINICAL VITALS ── */}
+      <div className="py-1 text-xs text-black leading-relaxed font-medium">
+        <div>
+          <span className="font-black">ID: {resolvedPatientId}</span>
+          <span className="mx-1.5">-</span>
+          <span className="font-black">{patientName.toUpperCase()}</span>
+          <span className="mx-1">({resolvedGender})</span>
+          <span className="mx-1">/</span>
+          <span className="font-bold">{resolvedAge} Y</span>
+          <span className="ml-4 font-bold">Mob. No.:</span>{' '}
+          <span className="font-mono">{resolvedPhone}</span>
+        </div>
+        <div className="mt-0.5">
+          <span className="font-bold">Address:</span> {resolvedAddress}
+        </div>
+        <div className="mt-0.5 font-bold">
+          Weight (Kg): <span className="font-normal">{resolvedWeight}</span>, Height (Cm):{' '}
+          <span className="font-normal">{resolvedHeight}</span> (B.M.I. ={' '}
+          <span className="font-normal">{resolvedBmi}</span>), BP:{' '}
+          <span className="font-normal">{resolvedBp}</span>
+        </div>
+
+        {/* Divider */}
+        <div className="w-full border-b border-black mt-2.5 mb-2.5" />
+      </div>
+
+      {/* ── 4. CHIEF COMPLAINTS & CLINICAL FINDINGS (Two Columns) ── */}
+      <div className="py-1">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+          <div>
+            <p className="font-black text-black uppercase tracking-wider mb-1.5 underline decoration-1 underline-offset-2">
+              Chief Complaints
             </p>
-            <p className="text-sm font-black text-black mt-1 truncate">
-              {patientName || 'Patient'}
-            </p>
+            <ul className="space-y-1 text-black font-medium leading-relaxed pl-3">
+              {parsedComplaints.map((c, i) => (
+                <li key={i} className="flex items-start gap-1.5">
+                  <span className="font-black">*</span>
+                  <span>{c}</span>
+                </li>
+              ))}
+            </ul>
           </div>
 
-          <div className="px-2 sm:px-3 py-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-              PRESCRIPTION NUMBER
+          <div>
+            <p className="font-black text-black uppercase tracking-wider mb-1.5 underline decoration-1 underline-offset-2">
+              Clinical Findings
             </p>
-            <p className="font-mono text-xs font-black text-black mt-1 break-all">
-              {prescriptionNumber || '8LTV-RX-DRAFT'}
-            </p>
-          </div>
-
-          <div className="px-2 sm:px-3 py-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-              DATE ISSUED
-            </p>
-            <p className="text-sm font-black text-black mt-1">
-              {formattedDateIssued}
-            </p>
-          </div>
-
-          <div className="px-2 sm:px-3 py-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-600">
-              VALID UNTIL
-            </p>
-            <p className="text-sm font-black text-black mt-1">
-              {formattedValidUntil}
-            </p>
+            <ul className="space-y-1 text-black font-medium leading-relaxed pl-3">
+              {parsedFindings.map((f, i) => (
+                <li key={i} className="flex items-start gap-1.5">
+                  <span className="font-black">*</span>
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
 
-        {/* Thick Divider Line */}
-        <div className="w-full border-b-2 border-black mt-2" />
+        {/* Divider */}
+        <div className="w-full border-b border-black mt-3 mb-3" />
       </div>
 
-      {/* ── 3. CLINICAL DIAGNOSIS & INDICATION ── */}
-      <div className="mt-4">
-        <p className="text-[11px] font-black uppercase tracking-wider text-black mb-1.5">
-          CLINICAL DIAGNOSIS &amp; INDICATION
+      {/* ── 5. DIAGNOSIS ── */}
+      <div className="text-xs mb-3">
+        <p className="font-black text-black mb-1">Diagnosis:</p>
+        <p className="pl-3 font-bold text-black flex items-start gap-1.5">
+          <span>*</span>
+          <span>{diagnosis}</span>
         </p>
-        <div className="border border-black rounded-lg p-3 bg-white">
-          <p className="text-xs sm:text-sm font-black text-black leading-relaxed">
-            {diagnosis || 'Medical Weight Management Protocol — Overweight with Metabolic Risk Factors (BMI ≥ 27)'}
-          </p>
-        </div>
       </div>
 
-      {/* ── 4. PRESCRIBED THERAPY & DISPENSATION ORDER ── */}
-      <div className="mt-6">
-        <div className="flex items-center gap-2 pb-2">
-          <span className="text-3xl font-black font-serif text-black leading-none">℞</span>
-          <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-black">
-            PRESCRIBED THERAPY &amp; DISPENSATION ORDER
-          </h3>
-        </div>
-
-        {/* Prescription Table */}
-        <div className="w-full border-t border-b border-black">
-          <table className="w-full text-left text-xs border-collapse">
-            <thead>
-              <tr className="border-b border-black text-[10px] font-black uppercase tracking-wider text-black">
-                <th className="py-2 px-1 w-6 text-center">#</th>
-                <th className="py-2 px-2">MEDICINE &amp; STRENGTH</th>
-                <th className="py-2 px-2 w-28">DOSAGE &amp; ROUTE</th>
-                <th className="py-2 px-2 w-32">SCHEDULE</th>
-                <th className="py-2 px-2 w-20">DURATION</th>
-                <th className="py-2 px-1 w-16 text-right">QUANTITY</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items && items.length > 0 ? (
-                items.map((item, idx) => {
-                  const itemSpec = (item.special_instruction || '').trim()
-                  const hasAdviceInItem = itemSpec.toLowerCase().includes('advice:')
-                  const advicePart = (!hasAdviceInItem && adviceNotes && adviceNotes.trim())
-                    ? `Advice: ${adviceNotes.trim().replace(/\r?\n+/g, ' ')}`
-                    : ''
-                  const combinedInstruction = [itemSpec, advicePart]
-                    .filter(Boolean)
-                    .join(' | ')
-
-                  return (
+      {/* ── 6. RX / MEDICATION ORDER OR INFORMATION ONLY ── */}
+      <div className="mt-2 mb-4">
+        {!isInfoOnly ? (
+          <div>
+            <div className="text-2xl font-black font-serif text-black leading-none mb-1 select-none">
+              ℞
+            </div>
+            {/* Table */}
+            <div className="w-full border-t border-b border-black">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-black text-[11px] font-black uppercase text-black">
+                    <th className="py-2 px-1 w-8">#</th>
+                    <th className="py-2 px-2 w-[48%]">Medicine Name</th>
+                    <th className="py-2 px-2 w-[32%]">Dosage</th>
+                    <th className="py-2 px-1 w-[16%]">Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {items.map((item, idx) => (
                     <tr key={idx} className="border-b border-slate-200 align-top">
-                      <td className="py-3 px-1 font-bold text-center text-sm">{idx + 1}</td>
-                      
-                      <td className="py-3 px-2">
-                        <p className="font-black text-sm text-black">{item.medicine_name}</p>
+                      <td className="py-2.5 px-1 font-bold text-black">{idx + 1})</td>
+                      <td className="py-2.5 px-2">
+                        <p className="font-black text-sm text-black uppercase">
+                          {item.dosage_form?.toLowerCase().includes('tablet')
+                            ? `TAB. ${item.medicine_name}`
+                            : item.dosage_form?.toLowerCase().includes('pen') || item.route?.toLowerCase().includes('subcutaneous')
+                            ? `INJ. ${item.medicine_name}`
+                            : item.medicine_name}
+                        </p>
                         {item.generic_name && (
-                          <p className="text-[11px] text-slate-700 font-medium">
-                            ({item.generic_name})
+                          <p className="text-[10px] text-slate-700 font-semibold mt-0.5">
+                            {item.generic_name.toUpperCase()}
                           </p>
                         )}
-                        {(item.dosage_form || item.strength) && (
-                          <p className="text-[10px] text-slate-600 mt-0.5">
-                            (Form: {item.dosage_form || 'Pen / Tablet'} - Strength: {item.strength || 'Standard'})
+                        {item.special_instruction && (
+                          <p className="text-[10px] text-slate-600 italic mt-0.5">
+                            {item.special_instruction}
                           </p>
                         )}
-
-                        {combinedInstruction && (
-                          <div className="mt-2 rounded-lg border border-slate-300 bg-slate-50/70 p-2 text-[10px] text-slate-800 leading-relaxed max-w-md">
-                            <span className="font-bold mr-1">⚠️</span>
-                            {combinedInstruction}
-                          </div>
-                        )}
                       </td>
-
-                      <td className="py-3 px-2">
-                        <p className="font-black text-xs text-black">{item.dose || '—'}</p>
-                        <p className="text-[11px] text-slate-700 mt-0.5">{item.route || 'Oral'}</p>
-                      </td>
-
-                      <td className="py-3 px-2">
-                        <p className="font-black text-xs text-black">{item.frequency || 'Once daily'}</p>
+                      <td className="py-2.5 px-2 font-medium text-black">
+                        <p className="font-bold">{item.dose || '1 Unit'}</p>
+                        <p className="text-[11px] text-slate-800">{item.frequency || 'Once weekly'}</p>
                         {item.food_instruction && (
-                          <p className="text-[10px] text-slate-600 mt-0.5">{item.food_instruction}</p>
+                          <p className="text-[10px] text-slate-600">({item.food_instruction})</p>
                         )}
                       </td>
-
-                      <td className="py-3 px-2">
-                        <p className="font-black text-xs text-black">
+                      <td className="py-2.5 px-1 font-bold text-black">
+                        <p>
                           {item.duration_value} {String(item.duration_unit || 'WEEKS').toLowerCase()}
                         </p>
-                      </td>
-
-                      <td className="py-3 px-1 text-right">
-                        <p className="font-black text-xs text-black">
-                          {item.quantity} {Number(item.quantity) === 1 ? 'Unit' : 'Units'}
+                        <p className="text-[10px] text-slate-600 font-normal">
+                          (Tot: {item.quantity} {Number(item.quantity) === 1 ? 'Unit' : 'Units'})
                         </p>
                       </td>
                     </tr>
-                  )
-                })
-              ) : (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-xs text-slate-400 font-bold">
-                    No medications added yet. Add medications or pick a clinical preset.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="border border-black rounded-lg p-3.5 bg-slate-50/50">
+            <p className="text-xs font-black uppercase tracking-wider text-black mb-1.5 underline decoration-1 underline-offset-2">
+              Clinical Telehealth Advice &amp; Lifestyle Consultation Notes
+            </p>
+            <ul className="text-xs text-black space-y-1 font-medium pl-3">
+              <li className="flex items-start gap-1.5">
+                <span>*</span>
+                <span>Patient assessed via comprehensive clinical telehealth evaluation.</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span>*</span>
+                <span>No pharmacological prescription issued at this stage. Focus on dietary calibration, physical activity, and metabolic tracking.</span>
+              </li>
+              <li className="flex items-start gap-1.5">
+                <span>*</span>
+                <span>Review progress and biomarkers prior to deciding on pharmacological GLP-1 initiation.</span>
+              </li>
+            </ul>
+          </div>
+        )}
       </div>
 
-      {/* ── 5. MANDATORY CLINICAL DIRECTIVES & PATIENT SAFETY ADVICE ── */}
-      <div className="mt-6 border border-black rounded-lg p-4 bg-white">
-        <p className="text-[11px] font-black uppercase tracking-wider text-black mb-2">
-          MANDATORY CLINICAL DIRECTIVES &amp; PATIENT SAFETY ADVICE:
-        </p>
-        <ul className="text-xs text-black space-y-1.5 pl-4 list-disc font-medium leading-relaxed">
-          <li>Ensure minimum 2.5 - 3.0 Litres of daily hydration.</li>
-          <li>Rotate injection sites each week across abdomen or thigh; do not inject into muscle.</li>
-          <li>Report any severe persistent abdominal pain, intractable nausea, or symptoms of pancreatitis immediately.</li>
-          <li>Schedule routine telemedicine review at week 4 prior to initiating dose escalation.</li>
+      {/* ── 7. ADVICE ── */}
+      <div className="mt-3 text-xs">
+        <p className="font-black text-black uppercase tracking-wider mb-1">Advice:</p>
+        <ul className="space-y-1 text-black font-medium leading-relaxed pl-3">
+          {parsedAdvice.map((a, i) => (
+            <li key={i} className="flex items-start gap-1.5">
+              <span className="font-black">*</span>
+              <span>{a}</span>
+            </li>
+          ))}
         </ul>
       </div>
 
-      {/* ── 6. SIGNATURE & ISSUANCE FOOTER ── */}
-      <div className="mt-8 pt-4 flex flex-col sm:flex-row items-start sm:items-end justify-between gap-6">
-        {/* Left: Issued by metadata */}
-        <div className="text-xs text-black space-y-0.5">
-          <p className="text-[11px] text-slate-500 font-medium">Issued by:</p>
-          <p className="font-black text-base text-black">
-            {doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`}
-          </p>
-          <p className="font-semibold text-slate-800 text-xs">{specialty}</p>
-          <p className="font-medium text-slate-600 text-[11px]">Reg. No: {registrationNumber}</p>
-          <p className="font-bold text-black text-xs mt-1">8LIV Health Network</p>
+      {/* ── 8. FOLLOW UP ── */}
+      <div className="mt-4 text-xs font-black text-black">
+        Follow Up: <span className="font-mono">{formattedFollowUpDate}</span>
+      </div>
 
-          {signatureHash && (
-            <p className="font-mono text-[9px] text-slate-400 mt-2 break-all max-w-xs">
-              SHA-256 Auth: {signatureHash}
-            </p>
-          )}
+      {/* ── 9. SIGNATURE & STAMP FOOTER ── */}
+      <div className="mt-8 pt-4 flex flex-col sm:flex-row items-end justify-between gap-4">
+        {/* Left: Standard Pharmacy Dispensation Notice */}
+        <div className="text-left">
+          <p className="text-[11px] text-slate-700 italic font-medium">
+            Substitute with equivalent Generics as required.
+          </p>
+          <p className="text-[10px] text-slate-400 font-mono mt-1">
+            Ref: {prescriptionNumber}
+          </p>
         </div>
 
-        {/* Right: Signature & Doctor credentials */}
-        <div className="sm:text-right text-xs shrink-0 flex flex-col items-start sm:items-end">
-          {/* Signature Rendering */}
-          <div className="min-h-[50px] flex items-end justify-center sm:justify-end pb-1 border-b border-black w-48">
+        {/* Right: Prescribing Doctor Digital Signature */}
+        <div className="text-right shrink-0">
+          <div className="min-h-[48px] flex items-end justify-end pb-1 border-b border-black w-48">
             {signatureUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={signatureUrl}
                 alt="Doctor Digital Signature"
-                className="h-12 max-w-[160px] object-contain"
+                className="h-10 max-w-[150px] object-contain"
               />
             ) : (
-              <span className="font-serif italic font-black text-2xl text-slate-900 tracking-wide select-none">
+              <span className="font-serif italic font-black text-xl text-black select-none">
                 {doctorName.replace(/^Dr\.\s*/i, '')}
               </span>
             )}
           </div>
-
-          <p className="font-black text-sm text-black mt-1">
-            {doctorName.startsWith('Dr.') ? doctorName : `Dr. ${doctorName}`}
-          </p>
-          <p className="text-xs text-slate-800 font-semibold">{specialty}</p>
-          <p className="text-[11px] text-slate-600 font-medium">
-            MCI Reg. No: {registrationNumber.replace(/^MCI-RMP-/i, '')}
-          </p>
+          <p className="font-black text-xs text-black mt-1">{resolvedDocName}</p>
+          <p className="text-[11px] text-slate-700 font-medium">Reg. No: {registrationNumber}</p>
         </div>
+      </div>
+
+      {/* Clean Bottom Rule */}
+      <div className="mt-8 pt-2 border-t border-slate-300 flex items-center justify-between text-[10px] text-slate-500">
+        <span>8LIV Healthcare Pvt Ltd * support@8liv.in * www.8liv.in</span>
+        <span>Valid Across Licensed Pharmacies in India</span>
       </div>
     </div>
   )

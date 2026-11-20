@@ -141,15 +141,27 @@ export default function OfficialPrescriptionModal({
         <div ref={printRef} className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-100 print:bg-white print:p-0 print:overflow-visible flex justify-center">
           <PrescriptionOfficialSheet
             patientName={patientName}
+            patientId={prescription.patient_id?.slice(0, 8)?.toUpperCase()}
+            patientAge={prescription.canonical_data?.patient_age}
+            patientGender={prescription.canonical_data?.patient_gender}
+            patientPhone={prescription.canonical_data?.patient_phone || prescription.patient_phone}
+            patientAddress={prescription.canonical_data?.patient_address || prescription.patient_address}
+            vitals={prescription.canonical_data?.vitals}
+            chiefComplaints={prescription.canonical_data?.chief_complaints}
+            clinicalFindings={prescription.canonical_data?.clinical_findings}
+            prescriptionMode={prescription.canonical_data?.prescription_mode || (items.length > 0 ? 'PRESCRIPTION' : 'INFORMATION_ONLY')}
+            followUpDate={prescription.canonical_data?.follow_up_date}
             prescriptionNumber={prescription.prescription_number || prescription.id}
             dateIssued={prescription.issued_at || prescription.created_at}
             validUntil={prescription.valid_until}
             diagnosis={prescription.diagnosis}
             items={items}
-            adviceNotes={prescription.advice_notes}
+            adviceNotes={prescription.advice_notes || prescription.canonical_data?.advice_notes}
             doctorName={doctorName}
             specialty={specialty}
+            qualification={prescription.canonical_data?.doctor_qualification || prescription.doctor_qualification}
             registrationNumber={registrationNumber}
+            registrationCouncil={prescription.canonical_data?.doctor_registration_council}
             signatureUrl={prescription.doctor_signature_url || prescription.signature_url}
             signatureHash={prescription.signature_hash}
             isDraftPreview={false}

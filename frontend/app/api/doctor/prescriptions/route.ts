@@ -129,6 +129,11 @@ export async function POST(request: Request) {
       diagnosis: body.diagnosis,
       valid_until: body.valid_until || body.validUntil,
       items: body.items,
+      prescription_mode: body.prescription_mode || body.prescriptionMode,
+      chief_complaints: body.chief_complaints || body.chiefComplaints,
+      clinical_findings: body.clinical_findings || body.clinicalFindings,
+      follow_up_date: body.follow_up_date || body.followUpDate,
+      advice_notes: body.advice_notes || body.adviceNotes,
     })
 
     // 1. Create prescription draft

@@ -282,6 +282,13 @@ export async function POST(request: Request) {
         review_conditions: formData.review_conditions || [],
         has_severe_conditions: eligibility.status === 'NOT_ELIGIBLE',
         comorbidities: formData.comorbidities,
+        address: {
+          street: formData.street_address || null,
+          city: formData.city || null,
+          state: formData.state || null,
+          pincode: formData.pincode || null,
+          full_address: [formData.street_address, formData.city, formData.state, formData.pincode].filter(Boolean).join(', ') || null,
+        },
         vitals: {
           bp: formData.blood_pressure_range || null,
           hr: formData.resting_heart_rate || null,
@@ -302,9 +309,9 @@ export async function POST(request: Request) {
           reports: formData.lab_report_urls || {},
           report_date: formData.lab_report_date || null,
           within_7_days: Boolean(formData.lab_report_within_7_days),
-          collection_address: formData.lab_collection_address || null,
-          collection_city: formData.lab_collection_city || null,
-          collection_pincode: formData.lab_collection_pincode || null,
+          collection_address: [formData.street_address, formData.city, formData.state, formData.pincode].filter(Boolean).join(', ') || formData.lab_collection_address || null,
+          collection_city: formData.city || formData.lab_collection_city || null,
+          collection_pincode: formData.pincode || formData.lab_collection_pincode || null,
         }
       },
       is_eligible: eligibility.status !== 'NOT_ELIGIBLE',

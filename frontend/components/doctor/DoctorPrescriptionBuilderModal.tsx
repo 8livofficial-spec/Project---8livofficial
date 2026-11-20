@@ -20,6 +20,8 @@ import {
   Eye,
   FileEdit,
   Maximize2,
+  FileText,
+  Info,
 } from 'lucide-react'
 import { authedFetch } from '@/lib/apiClient'
 import PrescriptionOfficialSheet from './PrescriptionOfficialSheet'
@@ -221,6 +223,18 @@ export default function DoctorPrescriptionBuilderModal({
 }: DoctorPrescriptionBuilderModalProps) {
   const [selectedPatientId, setSelectedPatientId] = useState<string>('')
   const [consultationId, setConsultationId] = useState<string>('')
+  const [prescriptionMode, setPrescriptionMode] = useState<'PRESCRIPTION' | 'INFORMATION_ONLY'>('PRESCRIPTION')
+  const [chiefComplaints, setChiefComplaints] = useState<string>(
+    '* Progressive weight gain over 6 months\n* Sluggish daytime energy and increased evening hunger'
+  )
+  const [clinicalFindings, setClinicalFindings] = useState<string>(
+    '* Elevated visceral adiposity, BMI >= 27.5\n* Normal resting vital parameters, clinically fit for supervised protocol'
+  )
+  const [followUpDate, setFollowUpDate] = useState<string>(() => {
+    const d = new Date()
+    d.setDate(d.getDate() + 28) // 4 weeks
+    return d.toISOString().split('T')[0]
+  })
   const [diagnosis, setDiagnosis] = useState<string>(
     'Medical Weight Management Protocol — Overweight with Metabolic Risk Factors (BMI ≥ 27)'
   )
@@ -352,36 +366,38 @@ export default function DoctorPrescriptionBuilderModal({
       return
     }
 
-    if (items.length === 0) {
-      setError('At least one medication item is required.')
-      return
-    }
+    if (prescriptionMode === 'PRESCRIPTION') {
+      if (items.length === 0) {
+        setError('At least one medication item is required when prescribing medicines.')
+        return
+      }
 
-    for (let i = 0; i < items.length; i++) {
-      const it = items[i]
-      if (!it.medicine_name.trim()) {
-        setError(`Medicine #${i + 1} requires a valid medicine name.`)
-        return
-      }
-      if (!it.strength.trim()) {
-        setError(`Medicine #${i + 1} requires a strength specification.`)
-        return
-      }
-      if (!it.dose.trim()) {
-        setError(`Medicine #${i + 1} requires dosage directions (e.g. 0.25 mg, 1 tablet).`)
-        return
-      }
-      if (!it.frequency.trim()) {
-        setError(`Medicine #${i + 1} requires an administration frequency.`)
-        return
-      }
-      if (!it.duration_value || it.duration_value <= 0) {
-        setError(`Medicine #${i + 1} requires a duration value greater than zero.`)
-        return
-      }
-      if (!it.quantity || it.quantity <= 0) {
-        setError(`Medicine #${i + 1} requires a dispense quantity greater than zero.`)
-        return
+      for (let i = 0; i < items.length; i++) {
+        const it = items[i]
+        if (!it.medicine_name.trim()) {
+          setError(`Medicine #${i + 1} requires a valid medicine name.`)
+          return
+        }
+        if (!it.strength.trim()) {
+          setError(`Medicine #${i + 1} requires a strength specification.`)
+          return
+        }
+        if (!it.dose.trim()) {
+          setError(`Medicine #${i + 1} requires dosage directions (e.g. 0.25 mg, 1 tablet).`)
+          return
+        }
+        if (!it.frequency.trim()) {
+          setError(`Medicine #${i + 1} requires an administration frequency.`)
+          return
+        }
+        if (!it.duration_value || it.duration_value <= 0) {
+          setError(`Medicine #${i + 1} requires a duration value greater than zero.`)
+          return
+        }
+        if (!it.quantity || it.quantity <= 0) {
+          setError(`Medicine #${i + 1} requires a dispense quantity greater than zero.`)
+          return
+        }
       }
     }
 
@@ -397,18 +413,25 @@ export default function DoctorPrescriptionBuilderModal({
     setIsSubmitting(true)
     try {
       // Append advice notes into items special_instructions if present
-      const formattedItems = items.map((it) => ({
-        ...it,
-        special_instruction: [it.special_instruction, adviceNotes.trim() ? `Advice: ${adviceNotes.trim()}` : '']
-          .filter(Boolean)
-          .join(' | '),
-      }))
+      const formattedItems = prescriptionMode === 'PRESCRIPTION'
+        ? items.map((it) => ({
+            ...it,
+            special_instruction: [it.special_instruction, adviceNotes.trim() ? `Advice: ${adviceNotes.trim()}` : '']
+              .filter(Boolean)
+              .join(' | '),
+          }))
+        : []
 
       const payload = {
         consultationId: consultationId || consultation?.id || '',
         patientId: targetPatientId,
         diagnosis: diagnosis.trim(),
         valid_until: validUntil,
+        prescription_mode: prescriptionMode,
+        chief_complaints: chiefComplaints.trim() || undefined,
+        clinical_findings: clinicalFindings.trim() || undefined,
+        follow_up_date: followUpDate || undefined,
+        advice_notes: adviceNotes.trim() || undefined,
         items: formattedItems,
         autoSign: signNow,
         declarations: signNow
@@ -485,7 +508,9 @@ export default function DoctorPrescriptionBuilderModal({
               </div>
               <div>
                 <p className="font-bold text-[#8896A4] uppercase tracking-wider text-[10px]">Prescription Mode</p>
-                <p className="font-black text-[#C4622D] text-sm mt-0.5">Encrypted Telemedicine ℞</p>
+                <p className="font-black text-[#C4622D] text-sm mt-0.5">
+                  {prescriptionMode === 'PRESCRIPTION' ? 'Telemedicine ℞ (Medicines)' : 'Clinical Information / Advice'}
+                </p>
               </div>
               {resolvedLabReportUrl && (
                 <div className="col-span-full pt-3 mt-1 border-t border-[#1A1F36]/8 flex items-center justify-between bg-teal-50/70 p-3 rounded-xl border border-teal-200/70">
@@ -503,6 +528,81 @@ export default function DoctorPrescriptionBuilderModal({
                   </a>
                 </div>
               )}
+            </div>
+          </div>
+
+          {/* Mode Selector Card: Prescribe Medicines vs Information Only */}
+          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-wider text-[#8896A4]">Consultation Output Type</p>
+                <h4 className="text-sm font-black text-[#1A1F36]">Select Mode: Prescribe Medicines or Information Only</h4>
+              </div>
+              <div className="inline-flex rounded-xl bg-slate-100 p-1 border border-slate-200 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setPrescriptionMode('PRESCRIPTION')}
+                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-black transition-all ${
+                    prescriptionMode === 'PRESCRIPTION'
+                      ? 'bg-[#1A1F36] text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <Pill className="h-3.5 w-3.5 text-[#C4622D]" />
+                  <span>Prescribe Medicines</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrescriptionMode('INFORMATION_ONLY')}
+                  className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-black transition-all ${
+                    prescriptionMode === 'INFORMATION_ONLY'
+                      ? 'bg-[#0D9488] text-white shadow-sm'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  <FileText className="h-3.5 w-3.5 text-white" />
+                  <span>Information / Advice Only</span>
+                </button>
+              </div>
+            </div>
+            {prescriptionMode === 'INFORMATION_ONLY' && (
+              <div className="mt-3 rounded-xl bg-teal-50 border border-teal-200 p-3 text-xs text-teal-800 flex items-start gap-2.5">
+                <Info className="h-4 w-4 text-teal-600 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-bold">Information &amp; Clinical Advice Mode Active</p>
+                  <p className="text-[11px] text-teal-700 mt-0.5">
+                    No medications will appear on the document. The resulting record will display only clinical findings, diagnosis, dietary/lifestyle guidelines, and follow-up timing.
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Chief Complaints & Clinical Findings (2 Columns) */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <label className="text-xs font-black uppercase tracking-wider text-[#1A1F36]">
+                Chief Complaints
+              </label>
+              <textarea
+                value={chiefComplaints}
+                onChange={(e) => setChiefComplaints(e.target.value)}
+                rows={2}
+                className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-semibold text-[#1A1F36] outline-none focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/20 transition-all"
+                placeholder="e.g. * Excessive weight gain&#10;* Fatigue after meals"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-xs font-black uppercase tracking-wider text-[#1A1F36]">
+                Clinical Findings / Observations
+              </label>
+              <textarea
+                value={clinicalFindings}
+                onChange={(e) => setClinicalFindings(e.target.value)}
+                rows={2}
+                className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-semibold text-[#1A1F36] outline-none focus:border-[#0D9488] focus:ring-2 focus:ring-[#0D9488]/20 transition-all"
+                placeholder="e.g. * Elevated BMI, normal resting BP&#10;* Fit for supervised metabolic protocol"
+              />
             </div>
           </div>
 
@@ -540,7 +640,10 @@ export default function DoctorPrescriptionBuilderModal({
             </div>
           </div>
 
-          {/* Section 2: Clinical GLP-1 & Metabolic Presets Bar */}
+          {/* Section 2 & 3: Prescribed Medications or Information Only */}
+          {prescriptionMode === 'PRESCRIPTION' ? (
+            <>
+              {/* Section 2: Clinical GLP-1 & Metabolic Presets Bar */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <label className="text-xs font-black uppercase tracking-wider text-[#1A1F36] flex items-center gap-1.5">
@@ -777,53 +880,88 @@ export default function DoctorPrescriptionBuilderModal({
               </div>
             ))}
           </div>
+            </>
+          ) : (
+            <div className="rounded-3xl border-2 border-dashed border-[#0D9488]/30 bg-teal-50/40 p-8 text-center space-y-3">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-[#0D9488]/10 text-[#0D9488]">
+                <FileText className="h-6 w-6" />
+              </div>
+              <div>
+                <h4 className="text-sm font-black text-[#1A1F36]">Information / Clinical Advice Mode Active</h4>
+                <p className="text-xs text-[#8896A4] max-w-md mx-auto mt-1">
+                  No medicines will be prescribed or dispensed. This document will serve as an official clinical summary with observations, diagnosis, dietary/lifestyle recommendations, and follow-up guidance.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPrescriptionMode('PRESCRIPTION')}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-[#0D9488] bg-white px-3.5 py-1.5 text-xs font-black text-[#0D9488] hover:bg-teal-50 transition-all shadow-xs"
+              >
+                <Plus className="h-3.5 w-3.5" /> Prescribe Medications Instead
+              </button>
+            </div>
+          )}
 
           {/* Section 4: Validity & Follow-up */}
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <label className="text-xs font-black uppercase tracking-wider text-[#1A1F36]">
-                Prescription Validity Date <span className="text-red-500">*</span>
-              </label>
-              <div className="flex gap-2">
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-wider text-[#1A1F36]">
+                  Prescription Validity Date <span className="text-red-500">*</span>
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="date"
+                    value={validUntil}
+                    onChange={(e) => setValidUntil(e.target.value)}
+                    className="flex-1 rounded-2xl border border-slate-200 bg-white p-3 font-bold text-xs text-[#1A1F36] outline-none focus:border-[#0D9488]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setValidityDays(30)}
+                    className={`px-3 py-2 rounded-xl text-xs font-black border transition-all ${validityPreset === 30 ? 'bg-[#1A1F36] text-white border-[#1A1F36]' : 'bg-white text-[#40516A] border-slate-200'}`}
+                  >
+                    30D
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setValidityDays(60)}
+                    className={`px-3 py-2 rounded-xl text-xs font-black border transition-all ${validityPreset === 60 ? 'bg-[#1A1F36] text-white border-[#1A1F36]' : 'bg-white text-[#40516A] border-slate-200'}`}
+                  >
+                    60D
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setValidityDays(90)}
+                    className={`px-3 py-2 rounded-xl text-xs font-black border transition-all ${validityPreset === 90 ? 'bg-[#1A1F36] text-white border-[#1A1F36]' : 'bg-white text-[#40516A] border-slate-200'}`}
+                  >
+                    90D
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs font-black uppercase tracking-wider text-[#1A1F36]">
+                  Clinical Follow-Up Date
+                </label>
                 <input
                   type="date"
-                  value={validUntil}
-                  onChange={(e) => setValidUntil(e.target.value)}
-                  className="flex-1 rounded-2xl border border-slate-200 bg-white p-3 font-bold text-xs text-[#1A1F36] outline-none focus:border-[#0D9488]"
+                  value={followUpDate}
+                  onChange={(e) => setFollowUpDate(e.target.value)}
+                  className="w-full rounded-2xl border border-slate-200 bg-white p-3 font-bold text-xs text-[#1A1F36] outline-none focus:border-[#0D9488]"
                 />
-                <button
-                  type="button"
-                  onClick={() => setValidityDays(30)}
-                  className={`px-3 py-2 rounded-xl text-xs font-black border transition-all ${validityPreset === 30 ? 'bg-[#1A1F36] text-white border-[#1A1F36]' : 'bg-white text-[#40516A] border-slate-200'}`}
-                >
-                  30D
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setValidityDays(60)}
-                  className={`px-3 py-2 rounded-xl text-xs font-black border transition-all ${validityPreset === 60 ? 'bg-[#1A1F36] text-white border-[#1A1F36]' : 'bg-white text-[#40516A] border-slate-200'}`}
-                >
-                  60D
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setValidityDays(90)}
-                  className={`px-3 py-2 rounded-xl text-xs font-black border transition-all ${validityPreset === 90 ? 'bg-[#1A1F36] text-white border-[#1A1F36]' : 'bg-white text-[#40516A] border-slate-200'}`}
-                >
-                  90D
-                </button>
               </div>
             </div>
 
             <div className="space-y-2">
               <label className="text-xs font-black uppercase tracking-wider text-[#1A1F36]">
-                Clinical Follow-up &amp; Safety Guidelines
+                Clinical Follow-up &amp; Safety Guidelines / Diet Advice
               </label>
               <textarea
                 value={adviceNotes}
                 onChange={(e) => setAdviceNotes(e.target.value)}
                 rows={3}
-                placeholder="Follow-up advice, hydration instructions, red flags..."
+                placeholder="Follow-up advice, hydration instructions, dietary instructions, red flags..."
                 className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-xs font-semibold text-[#1A1F36] outline-none focus:border-[#0D9488]"
               />
             </div>
@@ -1053,15 +1191,32 @@ export default function DoctorPrescriptionBuilderModal({
                 <div className="w-full max-w-[800px] bg-white rounded-sm shadow-2xl transition-all duration-150 border border-slate-300">
                   <PrescriptionOfficialSheet
                     patientName={resolvedPatientName}
+                    patientId={consultation?.patient_id ? consultation.patient_id.slice(0, 8).toUpperCase() : patient?.id ? patient.id.slice(0, 8).toUpperCase() : undefined}
+                    patientAge={(consultation?.patient as any)?.age || patient?.age}
+                    patientGender={(consultation?.patient as any)?.gender || patient?.gender}
+                    patientPhone={(consultation?.patient as any)?.phone_number || (consultation?.patient as any)?.phone || patient?.phone_number || patient?.phone}
+                    patientAddress={(consultation?.patient as any)?.address || patient?.address || (patient?.medical_history?.address ? (typeof patient.medical_history.address === 'string' ? patient.medical_history.address : patient.medical_history.address.full_address || [patient.medical_history.address.street, patient.medical_history.address.city, patient.medical_history.address.state, patient.medical_history.address.pincode].filter(Boolean).join(', ')) : '')}
+                    vitals={{
+                      weight_kg: (consultation?.patient as any)?.weight || patient?.weight || '78',
+                      height_cm: (consultation?.patient as any)?.height || patient?.height || '168',
+                      bmi: (consultation?.patient as any)?.bmi || patient?.bmi || '27.6',
+                      bp: (consultation?.patient as any)?.blood_pressure || patient?.blood_pressure || '120/80',
+                    }}
                     prescriptionNumber={consultation ? `8LTV-RX-${consultation.id.slice(0, 8).toUpperCase()}` : '8LTV-RX-DRAFT'}
                     dateIssued={new Date().toISOString()}
                     validUntil={validUntil}
                     diagnosis={diagnosis}
-                    items={items}
+                    prescriptionMode={prescriptionMode}
+                    chiefComplaints={chiefComplaints}
+                    clinicalFindings={clinicalFindings}
+                    followUpDate={followUpDate}
+                    items={prescriptionMode === 'PRESCRIPTION' ? items : []}
                     adviceNotes={adviceNotes}
-                    doctorName={doctorProfile?.full_name || 'Dr. S'}
+                    doctorName={doctorProfile?.full_name || 'Dr. 8LIV Physician'}
                     specialty={doctorProfile?.specialty || 'Physician'}
+                    qualification={doctorProfile?.qualification || 'MBBS, MD'}
                     registrationNumber={doctorProfile?.mci_number || doctorProfile?.registration_number || 'MCI-RMP-78942'}
+                    registrationCouncil={doctorProfile?.registration_council || 'State Medical Council'}
                     signatureUrl={doctorSigUrl}
                     isDraftPreview={true}
                   />
@@ -1113,15 +1268,32 @@ export default function DoctorPrescriptionBuilderModal({
               <div className="w-full max-w-[800px] bg-white rounded-sm shadow-2xl border border-slate-300">
                 <PrescriptionOfficialSheet
                   patientName={resolvedPatientName}
+                  patientId={consultation?.patient_id ? consultation.patient_id.slice(0, 8).toUpperCase() : patient?.id ? patient.id.slice(0, 8).toUpperCase() : undefined}
+                  patientAge={(consultation?.patient as any)?.age || patient?.age}
+                  patientGender={(consultation?.patient as any)?.gender || patient?.gender}
+                  patientPhone={(consultation?.patient as any)?.phone_number || (consultation?.patient as any)?.phone || patient?.phone_number || patient?.phone}
+                  patientAddress={(consultation?.patient as any)?.address || patient?.address || (patient?.medical_history?.address ? (typeof patient.medical_history.address === 'string' ? patient.medical_history.address : patient.medical_history.address.full_address || [patient.medical_history.address.street, patient.medical_history.address.city, patient.medical_history.address.state, patient.medical_history.address.pincode].filter(Boolean).join(', ')) : '')}
+                  vitals={{
+                    weight_kg: (consultation?.patient as any)?.weight || patient?.weight || '78',
+                    height_cm: (consultation?.patient as any)?.height || patient?.height || '168',
+                    bmi: (consultation?.patient as any)?.bmi || patient?.bmi || '27.6',
+                    bp: (consultation?.patient as any)?.blood_pressure || patient?.blood_pressure || '120/80',
+                  }}
                   prescriptionNumber={consultation ? `8LTV-RX-${consultation.id.slice(0, 8).toUpperCase()}` : '8LTV-RX-DRAFT'}
                   dateIssued={new Date().toISOString()}
                   validUntil={validUntil}
                   diagnosis={diagnosis}
-                  items={items}
+                  prescriptionMode={prescriptionMode}
+                  chiefComplaints={chiefComplaints}
+                  clinicalFindings={clinicalFindings}
+                  followUpDate={followUpDate}
+                  items={prescriptionMode === 'PRESCRIPTION' ? items : []}
                   adviceNotes={adviceNotes}
-                  doctorName={doctorProfile?.full_name || 'Dr. S'}
+                  doctorName={doctorProfile?.full_name || 'Dr. 8LIV Physician'}
                   specialty={doctorProfile?.specialty || 'Physician'}
+                  qualification={doctorProfile?.qualification || 'MBBS, MD'}
                   registrationNumber={doctorProfile?.mci_number || doctorProfile?.registration_number || 'MCI-RMP-78942'}
+                  registrationCouncil={doctorProfile?.registration_council || 'State Medical Council'}
                   signatureUrl={doctorSigUrl}
                   isDraftPreview={true}
                 />
