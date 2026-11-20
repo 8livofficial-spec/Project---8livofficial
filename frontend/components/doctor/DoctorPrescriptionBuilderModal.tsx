@@ -22,6 +22,7 @@ import {
   Maximize2,
   FileText,
   Info,
+  AlertTriangle,
 } from 'lucide-react'
 import { authedFetch } from '@/lib/apiClient'
 import PrescriptionOfficialSheet from './PrescriptionOfficialSheet'
@@ -478,6 +479,13 @@ export default function DoctorPrescriptionBuilderModal({
     (patient as any)?.medical_history?.lab_work?.report_url ||
     null
 
+  const resolvedAllergies =
+    (consultation?.patient as any)?.medical_history?.allergies ||
+    (patient as any)?.medical_history?.allergies ||
+    (consultation?.patient as any)?.allergies ||
+    (patient as any)?.allergies ||
+    null
+
   const renderFormContent = () => (
     <div className="space-y-6">
       {error && (
@@ -511,6 +519,27 @@ export default function DoctorPrescriptionBuilderModal({
                 <p className="font-black text-[#C4622D] text-sm mt-0.5">
                   {prescriptionMode === 'PRESCRIPTION' ? 'Telemedicine ℞ (Medicines)' : 'Clinical Information / Advice'}
                 </p>
+              </div>
+
+              {/* Patient Allergy Clinical Safety Banner */}
+              <div className="col-span-full pt-3 mt-1 border-t border-[#1A1F36]/8">
+                {resolvedAllergies?.has_allergies === 'yes' ? (
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 bg-rose-50 border border-rose-200 p-2.5 rounded-xl text-xs">
+                    <span className="font-bold text-rose-800 flex items-center gap-1.5">
+                      <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                      Allergies Disclosed: {resolvedAllergies.categories?.join(', ') || 'Known allergies reported'}
+                      {resolvedAllergies.details ? ` (${resolvedAllergies.details})` : ''}
+                    </span>
+                    <span className="text-[10px] font-black uppercase tracking-wider bg-rose-200 text-rose-900 px-2 py-0.5 rounded-md shrink-0 self-start sm:self-auto">
+                      Verify Rx Safety
+                    </span>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 text-[11px] font-bold text-emerald-700 bg-emerald-50/70 border border-emerald-200/70 p-2 rounded-xl">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>NKDA: No known drug, food, or medical allergies on verified file.</span>
+                  </div>
+                )}
               </div>
               {resolvedLabReportUrl && (
                 <div className="col-span-full pt-3 mt-1 border-t border-[#1A1F36]/8 flex items-center justify-between bg-teal-50/70 p-3 rounded-xl border border-teal-200/70">

@@ -303,6 +303,11 @@ export async function POST(request: Request) {
         medication_history: {
           type: formData.medication_history_choice
         },
+        allergies: {
+          has_allergies: formData.has_allergies || 'no',
+          categories: Array.isArray(formData.allergy_categories) ? formData.allergy_categories : [],
+          details: formData.allergy_details || null,
+        },
         lab_work: {
           preference: formData.lab_preference || 'none',
           report_url: formData.lab_report_url || null,

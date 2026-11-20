@@ -131,12 +131,23 @@ const SCREENER_STEPS = [
 
 
 
+const COMMON_ALLERGY_OPTIONS = [
+  'Penicillin / Antibiotics',
+  'Sulfa Drugs',
+  'Aspirin / NSAIDs (Painkillers)',
+  'Peanuts / Tree Nuts',
+  'Dairy / Lactose',
+  'Gluten / Wheat',
+  'Latex / Medical Supplies',
+  'Other',
+] as const
+
 const INTAKE_STEPS = [
   { step: 1, label: 'Profile' },
   { step: 2, label: 'Vitals' },
   { step: 3, label: 'Safety' },
   { step: 4, label: 'History' },
-  { step: 5, label: 'Meds' },
+  { step: 5, label: 'Meds & Allergies' },
   { step: 6, label: 'Lab' },
   { step: 7, label: 'Address' },
   { step: 8, label: 'Account' },
@@ -265,8 +276,11 @@ export default function UnifiedAssessmentFunnel({
     comorbidities: [] as string[],
     review_conditions: [] as string[],
 
-    // Medication
+    // Medication & Allergies
     medication_history_choice: 'never_used',
+    has_allergies: 'no' as 'no' | 'yes',
+    allergy_categories: [] as string[],
+    allergy_details: '',
 
     // Lab Work
     lab_preference: 'none' as 'none' | 'upload' | 'third_party' | 'skip',
@@ -703,6 +717,19 @@ export default function UnifiedAssessmentFunnel({
         return { ...prev, comorbidities: filtered.filter((c) => c !== condition) }
       }
       return { ...prev, comorbidities: [...filtered, condition] }
+    })
+  }
+
+  // Allergy categories chips toggle
+  const toggleAllergyCategory = (category: string) => {
+    setFormData((prev) => {
+      const exists = prev.allergy_categories.includes(category)
+      return {
+        ...prev,
+        allergy_categories: exists
+          ? prev.allergy_categories.filter((c) => c !== category)
+          : [...prev.allergy_categories, category],
+      }
     })
   }
 
@@ -2340,12 +2367,12 @@ export default function UnifiedAssessmentFunnel({
         )}
 
         {/* ===================================================================
-            SCREEN 5: PRIOR MEDICATION HISTORY
+            SCREEN 5: PRIOR MEDICATION & ALLERGY PROFILE
             =================================================================== */}
         {stage === 'intake_medication' && (
           <div className="bg-white/95 backdrop-blur-xl border border-stone-200/90 rounded-[28px] sm:rounded-[36px] p-6 sm:p-10 md:p-12 text-slate-900 shadow-[0_30px_70px_rgba(0,0,0,0.04),0_10px_20px_rgba(0,0,0,0.02)] transition-all animate-funnel-step">
             <AssessmentBrandHeader />
-            <IntakeProgressBar currentStep={5} title="Medication History" />
+            <IntakeProgressBar currentStep={5} title="Medications & Allergies" />
             <button
               type="button"
               onClick={() => setStage('intake_history')}
@@ -2355,31 +2382,126 @@ export default function UnifiedAssessmentFunnel({
               Back
             </button>
 
-            <h1 className="font-sans text-2xl sm:text-3xl font-extrabold text-[#11241A] tracking-tight leading-snug mb-2">
-              Prior weight loss medication
-            </h1>
-            <p className="text-sm text-slate-500 mb-6">
-              Have you tried GLP-1 or other metabolic medications before?
-            </p>
+            {/* Part 1: Prior Medication History */}
+            <div className="mb-8">
+              <h1 className="font-sans text-2xl sm:text-3xl font-extrabold text-[#11241A] tracking-tight leading-snug mb-2">
+                Prior weight loss medication
+              </h1>
+              <p className="text-sm text-slate-500 mb-4">
+                Have you tried GLP-1 or other metabolic medications before?
+              </p>
 
-            <div className="space-y-3 mb-8">
-              {PRIOR_MEDICATION_OPTIONS.map((opt) => {
-                const isSelected = formData.medication_history_choice === opt.value
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setFormData((prev) => ({ ...prev, medication_history_choice: opt.value }))}
-                    className={`w-full min-h-[52px] p-4 rounded-2xl text-left text-xs sm:text-sm font-medium border transition-all flex items-center justify-between cursor-pointer ${isSelected
-                      ? 'bg-emerald-50/80 text-[#11241A] font-bold border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
-                      : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-50'
-                      }`}
-                  >
-                    <span>{opt.label}</span>
-                    {isSelected && <Check className="w-4 h-4 shrink-0 text-[#00A884]" />}
-                  </button>
-                )
-              })}
+              <div className="space-y-2.5">
+                {PRIOR_MEDICATION_OPTIONS.map((opt) => {
+                  const isSelected = formData.medication_history_choice === opt.value
+                  return (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, medication_history_choice: opt.value }))}
+                      className={`w-full min-h-[50px] p-3.5 rounded-2xl text-left text-xs sm:text-sm font-medium border transition-all flex items-center justify-between cursor-pointer ${isSelected
+                        ? 'bg-emerald-50/80 text-[#11241A] font-bold border-[#00A884] ring-2 ring-[#00A884]/20 shadow-xs'
+                        : 'bg-slate-50/70 text-slate-700 border-slate-200/80 hover:bg-slate-50'
+                        }`}
+                    >
+                      <span>{opt.label}</span>
+                      {isSelected && <Check className="w-4 h-4 shrink-0 text-[#00A884]" />}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Part 2: Allergies & Sensitivities */}
+            <div className="border-t border-slate-200/80 pt-6 mb-8">
+              <div className="mb-3">
+                <h2 className="font-sans text-xl sm:text-2xl font-extrabold text-[#11241A] tracking-tight leading-snug">
+                  Do you have any known allergies?
+                </h2>
+                <p className="text-sm text-slate-500 mt-1">
+                  Disclose any drug, food, or medical allergies to help your doctor prescribe safe treatments.
+                </p>
+              </div>
+
+              {/* Yes / No Selection */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      has_allergies: 'no',
+                      allergy_categories: [],
+                      allergy_details: '',
+                    }))
+                  }
+                  className={`min-h-[48px] rounded-2xl text-xs sm:text-sm font-bold border transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    formData.has_allergies === 'no'
+                      ? 'bg-[#11241A] text-white border-[#11241A] shadow-xs'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  {formData.has_allergies === 'no' && <Check className="w-4 h-4 text-emerald-400" />}
+                  <span>No known allergies</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setFormData((prev) => ({ ...prev, has_allergies: 'yes' }))}
+                  className={`min-h-[48px] rounded-2xl text-xs sm:text-sm font-bold border transition-all cursor-pointer flex items-center justify-center gap-2 ${
+                    formData.has_allergies === 'yes'
+                      ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                      : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                  }`}
+                >
+                  {formData.has_allergies === 'yes' && <Check className="w-4 h-4 text-white" />}
+                  <span>Yes, I have allergies</span>
+                </button>
+              </div>
+
+              {/* Detailed Allergy Inputs when Yes is selected */}
+              {formData.has_allergies === 'yes' && (
+                <div className="space-y-4 rounded-2xl bg-amber-50/60 border border-amber-200/90 p-4 sm:p-5 animate-in fade-in duration-200">
+                  <div>
+                    <label className="text-xs font-bold text-amber-950 block mb-2">
+                      Select all allergens that apply:
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {COMMON_ALLERGY_OPTIONS.map((item) => {
+                        const isSelected = formData.allergy_categories.includes(item)
+                        return (
+                          <button
+                            key={item}
+                            type="button"
+                            onClick={() => toggleAllergyCategory(item)}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold border transition-all flex items-center gap-1.5 cursor-pointer ${
+                              isSelected
+                                ? 'bg-amber-600 text-white border-amber-600 shadow-xs'
+                                : 'bg-white text-slate-700 border-slate-200 hover:bg-amber-100/50'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3.5 h-3.5" />}
+                            <span>{item}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-amber-950 block mb-1.5">
+                      Specific allergy details &amp; reaction:
+                    </label>
+                    <textarea
+                      value={formData.allergy_details}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, allergy_details: e.target.value }))}
+                      rows={2}
+                      placeholder="e.g. Penicillin causes severe hives; peanut anaphylaxis"
+                      className="w-full rounded-xl border border-amber-300 bg-white p-3 text-xs sm:text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
 
             <button
