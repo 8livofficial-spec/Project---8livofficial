@@ -7,6 +7,8 @@ import { createStreamUserToken } from '@/services/video/token.service'
 import { consultationTypeForVideoRole, createStreamMeeting, terminalMeetingStatus } from '@/services/video/meeting.service'
 import { getUserConsentStatus } from '@/lib/consent/consentService'
 import { EmailService } from '@/lib/emailService'
+import { getMembershipValidity, hasPaidPreMembershipSession } from '@/lib/membershipServer'
+import { isInitialConsultationType } from '@/lib/providerConsultations'
 
 const notifiedCallsCache = new Map<string, number>()
 function shouldSendCallEmail(key: string, ttlMs = 5 * 60 * 1000): boolean {
@@ -166,6 +168,32 @@ export async function POST(request: Request) {
     const joinBlockedReason = assertJoinWindow(consultation)
     if (joinBlockedReason) {
       return NextResponse.json({ error: joinBlockedReason }, { status: 403 })
+    }
+
+    // Membership / pre-membership initial session guard for patient callers
+    if (isPatient && !isAdmin) {
+      const isLiveOrCalling = consultation.status === 'calling' || consultation.meeting_status === 'LIVE'
+      const isInitialType =
+        consultation.table === 'doctor_consultations' &&
+        isInitialConsultationType((consultation as any).appointment_type)
+
+      if (!isLiveOrCalling && !isInitialType) {
+        const [membershipValidity, paidPreMembership] = await Promise.all([
+          getMembershipValidity(consultation.patient_id),
+          hasPaidPreMembershipSession(consultation.patient_id),
+        ])
+        if (!membershipValidity.active && !paidPreMembership) {
+          return NextResponse.json(
+            {
+              error: membershipValidity.expiresAt
+                ? 'Your plan has expired. Please upgrade or continue with the same pack to join sessions.'
+                : 'An active plan or paid initial session is required to join.',
+              code: membershipValidity.expiresAt ? 'PLAN_EXPIRED' : 'NO_ACTIVE_PLAN',
+            },
+            { status: 403 }
+          )
+        }
+      }
     }
 
     const meeting = await ensureStreamMeeting(consultation, auth.user.id)

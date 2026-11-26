@@ -20,18 +20,6 @@ export async function POST(request: Request) {
     const patientId = auth.user.id
 
     if (planId === INELIGIBLE_PACK_ID) {
-      const { data: consultation } = await supabaseAdmin
-        .from('doctor_consultations')
-        .select('id, status')
-        .eq('patient_id', patientId)
-        .eq('status', 'rejected')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-
-      if (!consultation) {
-        return NextResponse.json({ error: 'This coaching pack is available after your doctor consultation when the standard program is not suitable.' }, { status: 403 })
-      }
       if (String(membershipTier) !== '90-Day Guided Wellness Pack' || Number(durationMonths) !== 3) {
         return NextResponse.json({ error: 'Invalid 90-day pack selection.' }, { status: 400 })
       }

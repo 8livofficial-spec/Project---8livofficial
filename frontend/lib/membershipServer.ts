@@ -1,4 +1,9 @@
 import { supabaseAdmin } from '@/lib/supabaseServer'
+import {
+  computeLocalEndOfDayUtc,
+  DEFAULT_USER_TIMEZONE,
+  resolveSubscriptionBounds,
+} from '@/lib/subscriptionExpiry'
 
 export type MembershipValidity = {
   active: boolean
@@ -6,39 +11,94 @@ export type MembershipValidity = {
   expiresAt: string | null
 }
 
-const MEMBERSHIP_EXPIRY_WARNING_DAYS = 7
+const MEMBERSHIP_EXPIRY_WARNING_DAYS = 14
 
-function addOneCalendarMonth(value: string) {
-  const start = new Date(value)
-  if (Number.isNaN(start.getTime())) return null
+/**
+ * Checks whether a patient has a valid, paid pre-membership initial consultation
+ * that has not yet been completed (preserving the 1st-session-before-plan flow).
+ */
+export async function hasPaidPreMembershipSession(patientId: string): Promise<boolean> {
+  const [assessRes, txnRes, journeyRes, completedDocRes] = await Promise.all([
+    supabaseAdmin
+      .from('health_assessments')
+      .select('consultation_fee_paid, first_consultation_completed')
+      .eq('patient_id', patientId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('payment_transactions')
+      .select('id')
+      .eq('patient_id', patientId)
+      .eq('payment_type', 'consultation')
+      .in('status', ['success', 'paid'])
+      .limit(1)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('patient_journey_state')
+      .select('first_consultation_completed')
+      .eq('patient_id', patientId)
+      .maybeSingle(),
+    supabaseAdmin
+      .from('doctor_consultations')
+      .select('id, appointment_type')
+      .eq('patient_id', patientId)
+      .in('status', ['approved', 'rejected', 'completed'])
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+  ])
 
-  const expiry = new Date(start)
-  const originalDay = expiry.getUTCDate()
-  expiry.setUTCDate(1)
-  expiry.setUTCMonth(expiry.getUTCMonth() + 1)
-  const lastDayOfTargetMonth = new Date(Date.UTC(expiry.getUTCFullYear(), expiry.getUTCMonth() + 1, 0)).getUTCDate()
-  expiry.setUTCDate(Math.min(originalDay, lastDayOfTargetMonth))
-  return expiry
+  const feePaid = Boolean(assessRes.data?.consultation_fee_paid || txnRes.data?.id)
+  if (!feePaid) return false
+
+  const completedInitial = Boolean(
+    assessRes.data?.first_consultation_completed === true
+    || journeyRes.data?.first_consultation_completed === true
+    || (completedDocRes.data?.id && !String(completedDocRes.data.appointment_type || '').toUpperCase().includes('FOLLOW_UP'))
+  )
+
+  return !completedInitial
 }
 
 export async function getMembershipValidity(patientId: string): Promise<MembershipValidity> {
   try {
-    const { data: subscription } = await supabaseAdmin
+    const { data: subscription, error: subErr } = await supabaseAdmin
       .from('subscriptions')
-      .select('start_date, end_date, status')
+      .select('starts_at, ends_at, start_date, end_date, timezone, status')
       .eq('patient_id', patientId)
-      .eq('status', 'ACTIVE')
+      .in('status', ['ACTIVE', 'EXPIRED'])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 
-    if (subscription) {
-      const endTimestamp = new Date(subscription.end_date).getTime()
-      const isActive = Date.now() <= (endTimestamp + 24 * 60 * 60 * 1000)
+    if (subErr && subErr.code === 'PGRST204') {
+      // Fallback if starts_at/ends_at migration is pending
+      const { data: legacySub } = await supabaseAdmin
+        .from('subscriptions')
+        .select('start_date, end_date, status')
+        .eq('patient_id', patientId)
+        .in('status', ['ACTIVE', 'EXPIRED'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (legacySub) {
+        const bounds = resolveSubscriptionBounds(legacySub)
+        const active = legacySub.status === 'ACTIVE' && bounds.isActive
+        return {
+          active,
+          startedAt: bounds.startsAt?.toISOString() || legacySub.start_date,
+          expiresAt: bounds.endsAt?.toISOString() || legacySub.end_date,
+        }
+      }
+    } else if (subscription) {
+      const bounds = resolveSubscriptionBounds(subscription)
+      const active = subscription.status === 'ACTIVE' && bounds.isActive
       return {
-        active: isActive,
-        startedAt: subscription.start_date,
-        expiresAt: subscription.end_date,
+        active,
+        startedAt: bounds.startsAt?.toISOString() || subscription.start_date,
+        expiresAt: bounds.endsAt?.toISOString() || subscription.end_date,
       }
     }
   } catch (subErr) {
@@ -47,7 +107,7 @@ export async function getMembershipValidity(patientId: string): Promise<Membersh
 
   const { data, error } = await supabaseAdmin
     .from('payment_transactions')
-    .select('created_at')
+    .select('created_at, metadata')
     .eq('patient_id', patientId)
     .in('payment_type', ['membership', 'combined'])
     .in('status', ['success', 'paid'])
@@ -58,11 +118,16 @@ export async function getMembershipValidity(patientId: string): Promise<Membersh
   if (error) throw new Error(`Unable to verify membership validity: ${error.message}`)
   if (!data?.created_at) return { active: false, startedAt: null, expiresAt: null }
 
-  const expiry = addOneCalendarMonth(data.created_at)
-  if (!expiry) throw new Error('Membership payment has an invalid creation date.')
+  const created = new Date(data.created_at)
+  if (Number.isNaN(created.getTime())) throw new Error('Membership payment has an invalid creation date.')
+
+  const meta = (data.metadata || {}) as Record<string, any>
+  const durationMonths = Number(meta.durationMonths || meta.duration_months || 1)
+  const durationDays = Number(meta.duration_days || (durationMonths > 0 ? durationMonths * 30 : 30))
+  const expiry = computeLocalEndOfDayUtc(created, durationDays, DEFAULT_USER_TIMEZONE)
 
   return {
-    active: Date.now() < expiry.getTime(),
+    active: Date.now() <= expiry.getTime(),
     startedAt: data.created_at,
     expiresAt: expiry.toISOString(),
   }

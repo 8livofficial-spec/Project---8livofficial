@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
+import CoachSessionScheduler from '@/components/coaching/CoachSessionScheduler'
 import {
   Activity,
   Apple,
@@ -3144,12 +3145,26 @@ function DietitianPortalInner({ defaultSection = 'dashboard' }: { defaultSection
               </button>
             </div>
 
-            {/* Scheduler Component */}
-            <ProviderAvailabilityScheduler
-              providerLabel="dietitian"
-              onGenerate={handleGenerateAvailability}
-              isSaving={savingAvailability}
-            />
+            {/* Masked Coaching Session Scheduler (90-Day Pack) */}
+            {(providerUser?.coachingScope || 'BOTH') !== 'REGULAR' && (
+              <CoachSessionScheduler
+                patients={patients.map((p: any) => ({
+                  id: p.id || p.patientId || p.patient_id,
+                  name: p.name || p.full_name || p.email || 'Assigned Patient',
+                  planEndsAt: p.planExpiresAt || null,
+                }))}
+                defaultTitle="90-Day Nutrition Coaching Session"
+              />
+            )}
+
+            {/* Scheduler Component (Regular Plans) */}
+            {(providerUser?.coachingScope || 'BOTH') !== 'PACK_90_DAY' && (
+              <ProviderAvailabilityScheduler
+                providerLabel="dietitian"
+                onGenerate={handleGenerateAvailability}
+                isSaving={savingAvailability}
+              />
+            )}
 
             {/* Slots Overview: Available Slots vs Booked Slots */}
             <div className="grid gap-6 xl:grid-cols-2">

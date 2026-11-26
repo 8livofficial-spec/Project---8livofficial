@@ -1,6 +1,12 @@
 import { supabaseAdmin } from './supabaseServer'
 import { randomUUID } from 'crypto'
 import { emitNotificationEvent } from './notificationDispatcher'
+import {
+  computeLocalEndOfDayUtc,
+  DEFAULT_USER_TIMEZONE,
+  formatDateInTimeZone,
+  resolveSubscriptionBounds,
+} from './subscriptionExpiry'
 
 export interface TreatmentPlanRecord {
   id: string
@@ -352,16 +358,17 @@ export async function getTreatmentPlanByDuration(durationMonths: number, tenantI
       .eq('tenant_id', tenantId)
       .eq('duration_months', durationMonths)
       .eq('status', 'ACTIVE')
+      .neq('id', '90000000-0000-4000-8000-000000000090')
       .order('display_order', { ascending: true })
       .limit(1)
       .maybeSingle()
 
-    if (!error && data) return data
+    if (!error && data && !data.metadata?.is_ineligible_patient_pack) return data
   } catch (err) {
     console.warn('[subscriptionService] Error fetching plan by duration:', err)
   }
 
-  return SEED_PLANS.find(p => p.duration_months === durationMonths) || null
+  return SEED_PLANS.find(p => p.duration_months === durationMonths && !p.metadata?.is_ineligible_patient_pack) || null
 }
 
 /**
@@ -532,7 +539,29 @@ export async function checkPatientConsultationQuota(
 
     const sub = subRes.data
     const txn = txnRes.data
-    const membershipStartDate = sub?.start_date || txn?.created_at
+
+    // Real-time expiry check: if a subscription row exists, verify it has not lapsed past ends_at/end_date
+    if (sub) {
+      const bounds = resolveSubscriptionBounds(sub)
+      if (!bounds.isActive) {
+        const expiredPlanName = sub.treatment_plans?.name || sub.program_name || 'Treatment Plan'
+        const expiredDuration = Number(sub.treatment_plans?.duration_months || sub.duration_months || 1)
+        const result = {
+          allowed: false,
+          maxAllowed: 0,
+          usedCount: 0,
+          remaining: 0,
+          durationMonths: expiredDuration,
+          isTrial: expiredDuration === 1,
+          planName: expiredPlanName,
+          reason: `Your ${expiredPlanName} has expired. Please upgrade or continue with the same pack to schedule additional sessions.`,
+        }
+        quotaCache.set(cacheKey, { data: result, expiresAt: now + 10_000 })
+        return result
+      }
+    }
+
+    const membershipStartDate = sub?.starts_at || sub?.start_date || txn?.created_at
     const membershipStartMs = membershipStartDate ? new Date(membershipStartDate).getTime() : 0
 
     let usedCount = 0
@@ -557,9 +586,24 @@ export async function checkPatientConsultationQuota(
       usedCount = validStaffConsults.length
     }
 
-    const planMetadata = (sub?.treatment_plans?.metadata || txn?.metadata || {}) as Record<string, any>
-    const planName = sub?.treatment_plans?.name || txn?.membership_tier || txn?.plan_name_snapshot || '1 Month'
-    const durationMonths = Number(sub?.treatment_plans?.duration_months || txn?.metadata?.durationMonths || txn?.metadata?.duration_months || 1)
+    const subPlanName = sub?.treatment_plans?.name || sub?.program_name || txn?.membership_tier || txn?.plan_name_snapshot || ''
+    const matchedSeedPlan = SEED_PLANS.find(
+      (p) =>
+        (sub?.plan_id && p.id === sub.plan_id) ||
+        (subPlanName && p.name.toLowerCase() === String(subPlanName).toLowerCase()) ||
+        (/90-day|guided wellness/i.test(String(subPlanName)) && p.id === '90000000-0000-4000-8000-000000000090')
+    )
+
+    const planMetadata = (sub?.treatment_plans?.metadata || matchedSeedPlan?.metadata || txn?.metadata || {}) as Record<string, any>
+    const planName = subPlanName || matchedSeedPlan?.name || '1 Month'
+    const durationMonths = Number(
+      sub?.treatment_plans?.duration_months ||
+      sub?.duration_months ||
+      matchedSeedPlan?.duration_months ||
+      txn?.metadata?.durationMonths ||
+      txn?.metadata?.duration_months ||
+      1
+    )
 
     const isTrial = Boolean(planMetadata?.is_trial || durationMonths === 1 || /trial/i.test(planName))
 
@@ -568,7 +612,7 @@ export async function checkPatientConsultationQuota(
     let maxConsultationsForRole = 1
 
     if (configuredRoleQuotas && typeof configuredRoleQuotas[normalizedRole] === 'number') {
-      maxConsultationsForRole = Math.max(1, configuredRoleQuotas[normalizedRole])
+      maxConsultationsForRole = Math.max(0, configuredRoleQuotas[normalizedRole])
     } else {
       // Default: 1 for trial / 1M, otherwise equal to durationMonths (e.g. 3 for 3M, 5 for 5M)
       maxConsultationsForRole = isTrial ? 1 : Math.max(1, durationMonths)
@@ -653,7 +697,22 @@ export async function getActivePatientSubscription(patientId: string) {
       .limit(1)
       .maybeSingle()
 
-    if (!error && sub) return sub
+    if (!error && sub) {
+      const bounds = resolveSubscriptionBounds(sub)
+      if (!bounds.isActive) {
+        return {
+          ...sub,
+          status: 'EXPIRED',
+          starts_at: bounds.startsAt?.toISOString() || sub.starts_at || null,
+          ends_at: bounds.endsAt?.toISOString() || sub.ends_at || null,
+        }
+      }
+      return {
+        ...sub,
+        starts_at: bounds.startsAt?.toISOString() || sub.starts_at || null,
+        ends_at: bounds.endsAt?.toISOString() || sub.ends_at || null,
+      }
+    }
 
     // Fallback: check if legacy payment exists
     const { data: legacyTxn } = await supabaseAdmin
@@ -728,7 +787,7 @@ export async function activateSubscriptionForPatient(params: {
   // 3. Prevent duplicate concurrent ACTIVE subscriptions for the same patient
   const { data: currentActiveSub } = await supabaseAdmin
     .from('subscriptions')
-    .select('id, start_date, end_date, duration_months, program_name, status, created_at')
+    .select('id, start_date, end_date, starts_at, ends_at, timezone, duration_months, program_name, status, created_at')
     .eq('patient_id', params.patientId)
     .eq('status', 'ACTIVE')
     .order('created_at', { ascending: false })
@@ -743,21 +802,30 @@ export async function activateSubscriptionForPatient(params: {
     }
   }
 
-  let startDate = new Date()
-  if (currentActiveSub) {
-    const existingEndTime = new Date(currentActiveSub.end_date).getTime()
-    // If current subscription still has remaining time, seamlessly extend from that end date
-    if (existingEndTime > Date.now()) {
-      startDate = new Date(currentActiveSub.end_date)
-    }
-    // Archive previous active subscription so there is only ever one ACTIVE subscription
-    await supabaseAdmin
-      .from('subscriptions')
-      .update({ status: 'UPGRADED', updated_at: new Date().toISOString() })
-      .eq('id', currentActiveSub.id)
-  }
+  const userTimezone = String(params.metadata?.timezone || currentActiveSub?.timezone || DEFAULT_USER_TIMEZONE)
+  const durationDays = Number(params.metadata?.duration_days || pricing.durationMonths * 30)
 
-  const endDate = new Date(startDate.getTime() + pricing.durationMonths * 30 * 86400000)
+  let startDate = new Date()
+  let endDate = computeLocalEndOfDayUtc(startDate, durationDays, userTimezone)
+
+  if (currentActiveSub) {
+    const bounds = resolveSubscriptionBounds(currentActiveSub)
+    if (bounds.isActive && bounds.endsAt) {
+      // Early renewal: stack +durationDays onto existing ends_at
+      startDate = bounds.startsAt || new Date()
+      endDate = computeLocalEndOfDayUtc(bounds.endsAt, durationDays, userTimezone)
+      await supabaseAdmin
+        .from('subscriptions')
+        .update({ status: 'UPGRADED', updated_at: new Date().toISOString() })
+        .eq('id', currentActiveSub.id)
+    } else {
+      // Post-expiry renewal: start fresh from NOW() and mark old row EXPIRED
+      await supabaseAdmin
+        .from('subscriptions')
+        .update({ status: 'EXPIRED', updated_at: new Date().toISOString() })
+        .eq('id', currentActiveSub.id)
+    }
+  }
 
   // 3. Create Subscription record with complete commercial terms snapshot
   const subscriptionId = randomUUID()
@@ -772,8 +840,11 @@ export async function activateSubscriptionForPatient(params: {
     discount_percentage: pricing.discountPercentage,
     discount_amount: pricing.discountAmount,
     final_price: pricing.finalPrice,
-    start_date: startDate.toISOString().split('T')[0],
-    end_date: endDate.toISOString().split('T')[0],
+    start_date: formatDateInTimeZone(startDate, userTimezone),
+    end_date: formatDateInTimeZone(endDate, userTimezone),
+    starts_at: startDate.toISOString(),
+    ends_at: endDate.toISOString(),
+    timezone: userTimezone,
     status: 'ACTIVE',
     payment_status: 'PAID',
     payment_transaction_id: params.paymentTransactionId,

@@ -11,6 +11,7 @@ import ProviderProfileEditor from './ProviderProfileEditor'
 import DietitianPortal from '@/components/dietitian/DietitianPortal'
 import ProviderProtocolBuilderModal from '@/components/protocol/ProviderProtocolBuilderModal'
 import OfficialProtocolModal from '@/components/protocol/OfficialProtocolModal'
+import CoachSessionScheduler from '@/components/coaching/CoachSessionScheduler'
 import { authedFetch } from '@/lib/apiClient'
 
 
@@ -25,6 +26,7 @@ type Provider = {
   qualification?: string | null
   status?: string | null
   photoUrl?: string | null
+  coachingScope?: 'REGULAR' | 'PACK_90_DAY' | 'BOTH'
 }
 
 export interface ProviderDataContextValue {
@@ -1078,15 +1080,29 @@ function GenericProviderPortal({ section }: { section: 'dashboard' | 'patients' 
               />
             )}
             {section === 'schedule' && !sectionLoading && (
-              <Schedule
-                availability={availability}
-                consultations={consultations}
-                providerLabel={copy.label}
-                saving={saving}
-                onGenerate={generateAvailability}
-                onDelete={deleteAvailability}
-                isSessionJoinable={isSessionJoinable}
-              />
+              <div className="space-y-6">
+                {(provider?.coachingScope || 'BOTH') !== 'REGULAR' && (
+                  <CoachSessionScheduler
+                    patients={patients.map((p: any) => ({
+                      id: p.id || p.patientId,
+                      name: p.name || p.email || 'Assigned Patient',
+                      planEndsAt: p.planExpiresAt || null,
+                    }))}
+                    defaultTitle="90-Day Fitness Coaching Session"
+                  />
+                )}
+                {(provider?.coachingScope || 'BOTH') !== 'PACK_90_DAY' && (
+                  <Schedule
+                    availability={availability}
+                    consultations={consultations}
+                    providerLabel={copy.label}
+                    saving={saving}
+                    onGenerate={generateAvailability}
+                    onDelete={deleteAvailability}
+                    isSessionJoinable={isSessionJoinable}
+                  />
+                )}
+              </div>
             )}
             {section === 'consultations' && !sectionLoading && (
               <Consultations

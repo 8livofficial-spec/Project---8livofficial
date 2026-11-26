@@ -214,25 +214,45 @@ export default function ConsultationSchedulingPage() {
   const { reloadData, user, profile, assessment, careTeam, onboardingState, loading: patientDataLoading } = usePatientData()
   const reusePaymentFromBookingId = searchParams.get('rescheduleFrom') || ''
   const isPatientDataReady = !patientDataLoading
+  const is90DayCoachingPack = /90-day|guided wellness/i.test(String(assessment?.membership_tier || ''))
   const isActiveMemberFollowUp = isPatientDataReady && onboardingState.membershipStatus === 'ACTIVE' && onboardingState.firstConsultationCompleted === true
+  const canAccessCoachingTabs = isPatientDataReady && (
+    isActiveMemberFollowUp || (is90DayCoachingPack && onboardingState.membershipStatus === 'ACTIVE')
+  )
   const isBookingPending = onboardingState.appointmentStatus === 'BOOKING_PENDING' || onboardingState.consultationPaymentStatus === 'PAID'
   const appointmentType = isActiveMemberFollowUp ? DOCTOR_FOLLOW_UP : INITIAL_DOCTOR_CONSULTATION
 
   const requestedRole = searchParams.get('role') || searchParams.get('tab')
-  const initialTab: ProviderRoleTab = (isActiveMemberFollowUp && (requestedRole === 'dietitian' || requestedRole === 'nutritionist'))
+  const initialTab: ProviderRoleTab = (canAccessCoachingTabs && (requestedRole === 'dietitian' || requestedRole === 'nutritionist'))
     ? 'dietitian'
-    : (isActiveMemberFollowUp && (requestedRole === 'fitness_coach' || requestedRole === 'trainer'))
+    : (canAccessCoachingTabs && (requestedRole === 'fitness_coach' || requestedRole === 'trainer'))
       ? 'trainer'
-      : 'doctor'
+      : is90DayCoachingPack
+        ? 'dietitian'
+        : 'doctor'
 
   const [activeProviderTab, setActiveProviderTab] = useState<ProviderRoleTab>(initialTab)
 
-  // Strict clinical rule: First consultation must always and exclusively be with a Doctor
+  // Keep 90-day coaching pack users on coaching tabs; enforce Doctor-first only for standard GLP-1 users
   useEffect(() => {
-    if (isPatientDataReady && !isActiveMemberFollowUp && activeProviderTab !== 'doctor') {
-      setActiveProviderTab('doctor')
+    if (!isPatientDataReady) return
+    if (is90DayCoachingPack) {
+      if (activeProviderTab === 'doctor') {
+        const nextTab: ProviderRoleTab = (requestedRole === 'fitness_coach' || requestedRole === 'trainer') ? 'trainer' : 'dietitian'
+        setActiveProviderTab(nextTab)
+      }
+      return
     }
-  }, [isPatientDataReady, isActiveMemberFollowUp, activeProviderTab])
+    if (!canAccessCoachingTabs && activeProviderTab !== 'doctor') {
+      setActiveProviderTab('doctor')
+    } else if (canAccessCoachingTabs && requestedRole) {
+      if ((requestedRole === 'dietitian' || requestedRole === 'nutritionist') && activeProviderTab === 'doctor') {
+        setActiveProviderTab('dietitian')
+      } else if ((requestedRole === 'fitness_coach' || requestedRole === 'trainer') && activeProviderTab === 'doctor') {
+        setActiveProviderTab('trainer')
+      }
+    }
+  }, [isPatientDataReady, is90DayCoachingPack, canAccessCoachingTabs, activeProviderTab, requestedRole])
 
   const [consultationFee, setConsultationFee] = useState<number>(DEFAULT_CONSULTATION_FEE)
 
@@ -1150,7 +1170,7 @@ export default function ConsultationSchedulingPage() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {PROVIDER_TABS.map((tab) => {
+                {(is90DayCoachingPack ? PROVIDER_TABS.filter((t) => t.id !== 'doctor') : PROVIDER_TABS).map((tab) => {
                   const Icon = tab.icon
                   const isActive = activeProviderTab === tab.id
                   return (

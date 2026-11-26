@@ -19,18 +19,7 @@ export async function GET(request: Request) {
 
     const plans = await getActiveTreatmentPlans()
     const requestedCoachingPack = new URL(request.url).searchParams.get('includeIneligiblePack') === 'true'
-    let canIncludeCoachingPack = false
-    if (requestedCoachingPack && patientId) {
-      const { data: rejectedConsultation } = await supabaseAdmin
-        .from('doctor_consultations')
-        .select('id')
-        .eq('patient_id', patientId)
-        .eq('status', 'rejected')
-        .limit(1)
-        .maybeSingle()
-      canIncludeCoachingPack = Boolean(rejectedConsultation)
-    }
-    const visiblePlans = plans.filter((plan) => !plan.metadata?.is_ineligible_patient_pack || canIncludeCoachingPack)
+    const visiblePlans = plans.filter((plan) => !plan.metadata?.is_ineligible_patient_pack || requestedCoachingPack)
     const tiers = visiblePlans.map(p => {
       const calc = computePlanPricing(
         p.base_price,

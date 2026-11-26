@@ -9,11 +9,12 @@ import {
   ShieldCheck, Stethoscope, Clock, Check, Sparkles, FileText,
   UserCheck, Activity, HeartPulse, ExternalLink, Download, Share2,
   Trash2, Edit3, Eye, PhoneCall, HelpCircle, AlertCircle, CheckCircle2,
-  Salad, Dumbbell, UploadCloud, File, Image as ImageIcon
+  Salad, Dumbbell, UploadCloud, File, Image as ImageIcon, Lock, AlertTriangle
 } from 'lucide-react'
 import { usePatientData, PatientUploadRecord } from '@/hooks/usePatientData'
 import { authedFetch } from '@/lib/apiClient'
 import DashboardOverviewSkeleton from '@/components/patient/DashboardOverviewSkeleton'
+import MaskedCoachingSessionsList from '@/components/coaching/MaskedCoachingSessionsList'
 
 export default function PatientDashboardHome() {
   const { 
@@ -37,15 +38,24 @@ export default function PatientDashboardHome() {
   } = usePatientData()
 
   const router = useRouter()
+  const isPlanExpired = onboardingState.membershipStatus === 'EXPIRED'
+  const [showExpiredModal, setShowExpiredModal] = useState(false)
+
+  useEffect(() => {
+    if (isPlanExpired) {
+      setShowExpiredModal(true)
+    }
+  }, [isPlanExpired])
 
   useEffect(() => {
     if (loading) return
+    if (isPlanExpired) return // Soft-Lock: keep expired plan users on read-only dashboard
     if (flowStep === 'needs_plan' || (onboardingState.membershipStatus === 'NOT_SELECTED' && !onboardingState.dashboardAccess)) {
       router.replace('/patient/onboarding/plan')
     } else if (flowStep === 'needs_payment' || onboardingState.membershipStatus === 'SELECTED') {
       router.replace('/patient/onboarding/payment')
     }
-  }, [loading, flowStep, onboardingState, router])
+  }, [loading, flowStep, onboardingState, isPlanExpired, router])
 
   // Weight Modals
   const [showWeightModal, setShowWeightModal] = useState(false)
@@ -122,7 +132,24 @@ export default function PatientDashboardHome() {
   }, [profile, assessment, user])
 
   // Membership & Plan Duration Calculations
+  const is90DayCoachingPack = useMemo(() => {
+    const tier = String(assessment?.membership_tier || '').toLowerCase()
+    const quotaPlan = String(
+      (consultationQuota as any)?.planName ||
+      consultationQuota?.dietitian?.planName ||
+      consultationQuota?.doctor?.planName ||
+      ''
+    ).toLowerCase()
+    return (
+      tier.includes('90-day') ||
+      tier.includes('guided wellness') ||
+      quotaPlan.includes('90-day') ||
+      quotaPlan.includes('guided wellness')
+    )
+  }, [assessment?.membership_tier, consultationQuota])
+
   const durationMonths = useMemo(() => {
+    if (is90DayCoachingPack) return 3
     // 1. Authoritative duration from active subscription / quota summary
     if (typeof (consultationQuota as any)?.durationMonths === 'number' && (consultationQuota as any).durationMonths > 0) {
       return (consultationQuota as any).durationMonths
@@ -142,9 +169,11 @@ export default function PatientDashboardHome() {
     }
     // 3. Fallback to 1 (starter duration)
     return 1
-  }, [assessment?.membership_tier, consultationQuota])
+  }, [assessment?.membership_tier, consultationQuota, is90DayCoachingPack])
 
-  const membershipLabel = `${durationMonths} Month Treatment Program`
+  const membershipLabel = is90DayCoachingPack
+    ? '90-Day Guided Wellness Pack'
+    : `${durationMonths} Month Treatment Program`
 
   const expiresAt = useMemo(() => {
     if (onboardingState.membershipExpiresAt) {
@@ -183,15 +212,15 @@ export default function PatientDashboardHome() {
 
   // Consultation Quotas
   const quotas = useMemo(() => {
-    const docMax = consultationQuota?.doctor?.maxAllowed ?? durationMonths
+    const docMax = is90DayCoachingPack ? 0 : (consultationQuota?.doctor?.maxAllowed ?? durationMonths)
     const docUsed = consultationQuota?.doctor?.usedCount ?? 0
-    const docRemaining = consultationQuota?.doctor?.remaining ?? Math.max(0, docMax - docUsed)
+    const docRemaining = is90DayCoachingPack ? 0 : (consultationQuota?.doctor?.remaining ?? Math.max(0, docMax - docUsed))
 
-    const dietMax = consultationQuota?.dietitian?.maxAllowed ?? durationMonths
+    const dietMax = consultationQuota?.dietitian?.maxAllowed ?? (is90DayCoachingPack ? 3 : durationMonths)
     const dietUsed = consultationQuota?.dietitian?.usedCount ?? 0
     const dietRemaining = consultationQuota?.dietitian?.remaining ?? Math.max(0, dietMax - dietUsed)
 
-    const fitMax = consultationQuota?.fitness_coach?.maxAllowed ?? durationMonths
+    const fitMax = consultationQuota?.fitness_coach?.maxAllowed ?? (is90DayCoachingPack ? 3 : durationMonths)
     const fitUsed = consultationQuota?.fitness_coach?.usedCount ?? 0
     const fitRemaining = consultationQuota?.fitness_coach?.remaining ?? Math.max(0, fitMax - fitUsed)
 
@@ -430,7 +459,110 @@ export default function PatientDashboardHome() {
 
   return (
     <div className="space-y-6 pb-20 max-w-7xl mx-auto font-sans text-[#11241A]">
-      
+
+      {/* ========================================================================= */}
+      {/* DAY-90 EXPIRY PERSISTENT SOFT-LOCK BANNER                                */}
+      {/* ========================================================================= */}
+      {isPlanExpired && (
+        <div className="rounded-3xl border-2 border-amber-300 bg-amber-50 p-5 sm:p-6 shadow-sm flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <p className="text-[11px] font-black uppercase tracking-wider text-amber-800">
+                Plan Expired · Read-Only Mode
+              </p>
+              <p className="text-sm font-bold text-slate-900 mt-0.5">
+                Your 90-day coaching plan has expired. Please upgrade or continue with the same pack to keep working with your fitness coach.
+              </p>
+              <p className="text-xs text-slate-600 mt-1">
+                Your past health logs, weight progress charts, and session history remain available below.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <Link
+              href="/patient/billing?action=renew"
+              className="rounded-xl bg-[#00A884] hover:bg-[#009272] text-white px-4 py-2.5 text-xs font-black transition shadow-xs"
+            >
+              Continue Same Pack (90 Days)
+            </Link>
+            <Link
+              href="/patient/billing"
+              className="rounded-xl bg-slate-900 hover:bg-black text-white px-4 py-2.5 text-xs font-black transition"
+            >
+              Upgrade Plan
+            </Link>
+            <Link
+              href="/assessment"
+              className="rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 px-4 py-2.5 text-xs font-bold transition"
+            >
+              Re-check GLP-1 Eligibility
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* DAY-90 EXPIRY SOFT-LOCK MODAL                                             */}
+      {/* ========================================================================= */}
+      {isPlanExpired && showExpiredModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/55 backdrop-blur-xs p-4">
+          <div className="w-full max-w-lg rounded-3xl bg-white p-6 sm:p-8 shadow-2xl border border-amber-200 space-y-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                  <Lock size={20} />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-amber-700">
+                    90-Day Plan Expired
+                  </span>
+                  <h3 className="text-lg font-black text-slate-900">Continue Your Wellness Journey</h3>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowExpiredModal(false)}
+                className="rounded-xl p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 cursor-pointer"
+                aria-label="Close modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <p className="text-sm font-medium text-slate-700 leading-relaxed">
+              Your 90-day coaching plan has expired. Please upgrade or continue with the same pack to keep working with your fitness coach.
+            </p>
+            <p className="text-xs text-slate-500">
+              You can still review your past 90-day health logs, weight progress charts, and session history in read-only mode.
+            </p>
+
+            <div className="flex flex-col gap-2.5 pt-1">
+              <Link
+                href="/patient/billing?action=renew"
+                className="w-full rounded-xl bg-[#00A884] hover:bg-[#009272] text-white py-3 px-4 text-xs font-black text-center transition shadow-sm"
+              >
+                Continue Same Pack (90 Days)
+              </Link>
+              <Link
+                href="/patient/billing"
+                className="w-full rounded-xl bg-slate-900 hover:bg-black text-white py-3 px-4 text-xs font-black text-center transition"
+              >
+                Upgrade Plan
+              </Link>
+              <Link
+                href="/assessment"
+                className="w-full rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 py-2.5 px-4 text-xs font-bold text-center transition"
+              >
+                Re-check GLP-1 Eligibility
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ========================================================================= */}
       {/* 1. HERO & MEMBERSHIP PLAN DURATION COUNTDOWN                              */}
       {/* ========================================================================= */}
@@ -464,7 +596,9 @@ export default function PatientDashboardHome() {
             </h1>
 
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed max-w-xl">
-              Your personalized medical care program is active. Track your consultation quotas, review prescriptions and diet plans, and access concierge support below.
+              {is90DayCoachingPack
+                ? 'Your 90-day nutrition and fitness coaching pack is active. Book your dietitian and exercise coach slots, view your meal & workout plans, and track your progress below.'
+                : 'Your personalized medical care program is active. Track your consultation quotas, review prescriptions and diet plans, and access concierge support below.'}
             </p>
 
             {/* Program Duration Progress Track */}
@@ -482,46 +616,71 @@ export default function PatientDashboardHome() {
             </div>
           </div>
 
-          {/* Quick Telehealth Card */}
-          <div className="shrink-0 w-full lg:w-80 bg-white/10 border border-white/15 backdrop-blur-md rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-3">
-            {upcomingAppointment ? (
+          {/* Quick Telehealth Card (Locked when Plan Expired) */}
+          {!isPlanExpired ? (
+            <div className="shrink-0 w-full lg:w-80 bg-white/10 border border-white/15 backdrop-blur-md rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-3">
+              {upcomingAppointment ? (
+                <div>
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-teal-300 bg-teal-500/20 px-2 py-0.5 rounded">
+                    Upcoming Call
+                  </span>
+                  <p className="text-sm font-bold text-white mt-1.5 leading-tight">
+                    {upcomingAppointment.title}
+                  </p>
+                  <p className="text-xs text-slate-300 mt-1 flex items-center gap-1.5">
+                    <Clock size={12} className="text-teal-300 shrink-0" />
+                    <span>{upcomingAppointment.month} {upcomingAppointment.day} · {upcomingAppointment.time}</span>
+                  </p>
+                  <p className="text-[11px] text-teal-300 font-medium mt-0.5 truncate">
+                    With {upcomingAppointment.doctor}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded">
+                    Telehealth Ready
+                  </span>
+                  <p className="text-sm font-bold text-white mt-1.5 leading-tight">
+                    Book Provider Video Consultation
+                  </p>
+                  <p className="text-xs text-slate-300 mt-1">
+                    {is90DayCoachingPack
+                      ? 'Connect with your assigned dietitian or fitness coach for nutrition and exercise guidance.'
+                      : 'Connect with your assigned doctor, dietitian, or fitness coach anytime.'}
+                  </p>
+                </div>
+              )}
+
+              <Link
+                href={upcomingAppointment ? '/patient/appointments' : (is90DayCoachingPack ? '/patient/consultation?role=dietitian' : '/patient/consultation')}
+                className="w-full min-h-[40px] px-4 rounded-xl bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-md shadow-[#00A884]/25 active:scale-[0.99] cursor-pointer"
+              >
+                <span>{upcomingAppointment ? 'View Consultation Room' : 'Book a Consultation'}</span>
+                <ArrowRight size={13} />
+              </Link>
+            </div>
+          ) : (
+            <div className="shrink-0 w-full lg:w-80 bg-white/10 border border-amber-400/30 backdrop-blur-md rounded-2xl p-4 sm:p-5 flex flex-col justify-between space-y-3">
               <div>
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-teal-300 bg-teal-500/20 px-2 py-0.5 rounded">
-                  Upcoming Call
+                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded inline-flex items-center gap-1">
+                  <Lock size={10} /> Sessions Locked
                 </span>
                 <p className="text-sm font-bold text-white mt-1.5 leading-tight">
-                  {upcomingAppointment.title}
-                </p>
-                <p className="text-xs text-slate-300 mt-1 flex items-center gap-1.5">
-                  <Clock size={12} className="text-teal-300 shrink-0" />
-                  <span>{upcomingAppointment.month} {upcomingAppointment.day} · {upcomingAppointment.time}</span>
-                </p>
-                <p className="text-[11px] text-teal-300 font-medium mt-0.5 truncate">
-                  With {upcomingAppointment.doctor}
-                </p>
-              </div>
-            ) : (
-              <div>
-                <span className="text-[10px] font-mono font-bold uppercase tracking-wider text-emerald-300 bg-emerald-500/20 px-2 py-0.5 rounded">
-                  Telehealth Ready
-                </span>
-                <p className="text-sm font-bold text-white mt-1.5 leading-tight">
-                  Book Provider Video Consultation
+                  Renew to Resume Coaching Calls
                 </p>
                 <p className="text-xs text-slate-300 mt-1">
-                  Connect with your assigned doctor, dietitian, or fitness coach anytime.
+                  Upcoming video sessions and coach chat are paused until you renew or upgrade your plan.
                 </p>
               </div>
-            )}
-
-            <Link
-              href={upcomingAppointment ? '/patient/appointments' : '/patient/consultation'}
-              className="w-full min-h-[40px] px-4 rounded-xl bg-gradient-to-r from-[#00A884] to-[#0A8F70] hover:from-[#009977] hover:to-[#087F63] text-white font-bold text-xs transition-all flex items-center justify-center gap-2 shadow-md shadow-[#00A884]/25 active:scale-[0.99] cursor-pointer"
-            >
-              <span>{upcomingAppointment ? 'View Consultation Room' : 'Book a Consultation'}</span>
-              <ArrowRight size={13} />
-            </Link>
-          </div>
+              <Link
+                href="/patient/billing?action=renew"
+                className="w-full min-h-[40px] px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-slate-950 font-black text-xs transition-all flex items-center justify-center gap-2"
+              >
+                <span>Renew 90-Day Pack</span>
+                <ArrowRight size={13} />
+              </Link>
+            </div>
+          )}
         </div>
       </div>
 
@@ -540,9 +699,10 @@ export default function PatientDashboardHome() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className={`grid grid-cols-1 ${is90DayCoachingPack ? 'md:grid-cols-2' : 'md:grid-cols-3'} gap-4`}>
           
-          {/* Card 1: Doctor Consultations */}
+          {/* Card 1: Doctor Consultations (Hidden for 90-Day Guided Wellness Pack) */}
+          {!is90DayCoachingPack && (
           <div className="bg-white rounded-3xl p-5 sm:p-6 border border-stone-200/90 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between space-y-4">
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-stone-100">
@@ -580,14 +740,22 @@ export default function PatientDashboardHome() {
               </p>
             </div>
 
-            <Link
-              href="/patient/consultation?role=doctor"
-              className="w-full py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold text-center transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              <Video size={13} />
-              <span>{quotas.doctor.remaining > 0 ? 'Book Doctor Call' : 'Review History'}</span>
-            </Link>
+            {isPlanExpired ? (
+              <span className="w-full py-2.5 px-3 rounded-xl bg-slate-100 text-slate-400 text-xs font-bold text-center flex items-center justify-center gap-1.5 cursor-not-allowed">
+                <Lock size={13} />
+                <span>Plan Expired · Renew to Book</span>
+              </span>
+            ) : (
+              <Link
+                href="/patient/consultation?role=doctor"
+                className="w-full py-2.5 px-3 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold text-center transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Video size={13} />
+                <span>{quotas.doctor.remaining > 0 ? 'Book Doctor Call' : 'Review History'}</span>
+              </Link>
+            )}
           </div>
+          )}
 
           {/* Card 2: Dietitian Consultations */}
           <div className="bg-white rounded-3xl p-5 sm:p-6 border border-stone-200/90 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between space-y-4">
@@ -627,13 +795,20 @@ export default function PatientDashboardHome() {
               </p>
             </div>
 
-            <Link
-              href="/patient/consultation?role=dietitian"
-              className="w-full py-2.5 px-3 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold text-center transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              <Video size={13} />
-              <span>{quotas.dietitian.remaining > 0 ? 'Book Dietitian Call' : 'Review Diet Plan'}</span>
-            </Link>
+            {isPlanExpired ? (
+              <span className="w-full py-2.5 px-3 rounded-xl bg-slate-100 text-slate-400 text-xs font-bold text-center flex items-center justify-center gap-1.5 cursor-not-allowed">
+                <Lock size={13} />
+                <span>Plan Expired · Renew to Book</span>
+              </span>
+            ) : (
+              <Link
+                href="/patient/consultation?role=dietitian"
+                className="w-full py-2.5 px-3 rounded-xl bg-[#0D9488] hover:bg-[#0F766E] text-white text-xs font-bold text-center transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Video size={13} />
+                <span>{quotas.dietitian.remaining > 0 ? 'Book Dietitian Call' : 'Review Diet Plan'}</span>
+              </Link>
+            )}
           </div>
 
           {/* Card 3: Fitness Coach Consultations */}
@@ -674,17 +849,29 @@ export default function PatientDashboardHome() {
               </p>
             </div>
 
-            <Link
-              href="/patient/consultation?role=trainer"
-              className="w-full py-2.5 px-3 rounded-xl bg-[#0369A1] hover:bg-[#075985] text-white text-xs font-bold text-center transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
-            >
-              <Video size={13} />
-              <span>{quotas.fitness_coach.remaining > 0 ? 'Book Fitness Call' : 'Review Workouts'}</span>
-            </Link>
+            {isPlanExpired ? (
+              <span className="w-full py-2.5 px-3 rounded-xl bg-slate-100 text-slate-400 text-xs font-bold text-center flex items-center justify-center gap-1.5 cursor-not-allowed">
+                <Lock size={13} />
+                <span>Plan Expired · Renew to Book</span>
+              </span>
+            ) : (
+              <Link
+                href="/patient/consultation?role=trainer"
+                className="w-full py-2.5 px-3 rounded-xl bg-[#0369A1] hover:bg-[#075985] text-white text-xs font-bold text-center transition flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Video size={13} />
+                <span>{quotas.fitness_coach.remaining > 0 ? 'Book Fitness Call' : 'Review Workouts'}</span>
+              </Link>
+            )}
           </div>
 
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* 2B. MASKED & TIME-GATED COACHING SESSIONS (90-Day Pack + Soft-Lock)       */}
+      {/* ========================================================================= */}
+      <MaskedCoachingSessionsList isPlanExpired={isPlanExpired} />
 
       {/* ========================================================================= */}
       {/* 3. COMPACT WEIGHT TRACKER STRIP                                           */}
@@ -742,17 +929,20 @@ export default function PatientDashboardHome() {
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-base sm:text-lg font-extrabold text-[#11241A] tracking-tight">
-              Clinical Regimens & Care Plans
+              {is90DayCoachingPack ? 'Nutrition & Exercise Plans' : 'Clinical Regimens & Care Plans'}
             </h2>
             <p className="text-xs text-slate-500">
-              Prescriptions, diet charts, and workout protocols published by your healthcare providers
+              {is90DayCoachingPack
+                ? 'Customized diet charts and exercise protocols published by your dietitian and fitness coach'
+                : 'Prescriptions, diet charts, and workout protocols published by your healthcare providers'}
             </p>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+        <div className={`grid grid-cols-1 ${is90DayCoachingPack ? 'lg:grid-cols-2' : 'lg:grid-cols-3'} gap-5`}>
           
-          {/* Card 1: Doctor's E-Prescription */}
+          {/* Card 1: Doctor's E-Prescription (Hidden for 90-Day Guided Wellness Pack) */}
+          {!is90DayCoachingPack && (
           <div className="bg-white rounded-3xl p-5 sm:p-6 border border-stone-200/90 shadow-2xs flex flex-col justify-between space-y-4">
             <div>
               <div className="flex items-center justify-between pb-3.5 border-b border-stone-100">
@@ -817,6 +1007,7 @@ export default function PatientDashboardHome() {
               </button>
             </div>
           </div>
+          )}
 
           {/* Card 2: Dietitian's Nutrition Plan */}
           <div className="bg-white rounded-3xl p-5 sm:p-6 border border-stone-200/90 shadow-2xs flex flex-col justify-between space-y-4">

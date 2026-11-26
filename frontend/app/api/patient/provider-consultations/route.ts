@@ -5,6 +5,8 @@ import { appointmentTypeForRole, getAssignedProviderForRole, labelForRole, norma
 import { getAuthenticatedPatient, isFutureIndiaSlot, invalidateSlotsCache } from '@/lib/appointmentAvailability'
 import { createStreamMeeting } from '@/services/video/meeting.service'
 import { checkPatientConsultationQuota, invalidatePatientQuotaCache } from '@/lib/subscriptionService'
+import { getMembershipValidity, hasPaidPreMembershipSession } from '@/lib/membershipServer'
+import { DEFAULT_USER_TIMEZONE, formatDateInTimeZone } from '@/lib/subscriptionExpiry'
 
 type ProviderAvailability = {
   id: string
@@ -77,8 +79,24 @@ async function getAssignedProviderId(patientId: string, role: string) {
 }
 
 async function getAvailableProviderSlots(patientId: string, role: string, selectedDate?: string) {
-  const today = new Date().toISOString().split('T')[0]
+  const [membershipValidity, paidPreMembership] = await Promise.all([
+    getMembershipValidity(patientId),
+    hasPaidPreMembershipSession(patientId),
+  ])
+  if (!membershipValidity.active && !paidPreMembership) {
+    return { providerId: null, slots: [] as ProviderSlot[] }
+  }
+
+  const maxAllowedDate = membershipValidity.active && membershipValidity.expiresAt
+    ? formatDateInTimeZone(new Date(membershipValidity.expiresAt), DEFAULT_USER_TIMEZONE)
+    : null
+
+  const today = formatDateInTimeZone(new Date(), DEFAULT_USER_TIMEZONE)
   const dateFilter = selectedDate && isDate(selectedDate) ? selectedDate : ''
+  if (dateFilter && maxAllowedDate && dateFilter > maxAllowedDate) {
+    return { providerId: null, slots: [] as ProviderSlot[] }
+  }
+
   const normalizedRole = normalizeProviderRole(role)
   const roles = normalizedRole === 'fitness_coach' ? ['fitness_coach', 'trainer'] : (normalizedRole === 'dietitian' ? ['dietitian', 'nutritionist'] : [normalizedRole])
 
@@ -93,6 +111,9 @@ async function getAvailableProviderSlots(patientId: string, role: string, select
     query = query.eq('available_date', dateFilter)
   } else {
     query = query.gte('available_date', today)
+    if (maxAllowedDate) {
+      query = query.lte('available_date', maxAllowedDate)
+    }
   }
 
   let { data: availability, error: availabilityError } = await query
@@ -240,6 +261,33 @@ export async function POST(request: Request) {
 
     if (!isFutureSlot(bookingDate, bookingTime)) {
       return NextResponse.json({ error: 'Please select a future consultation time.' }, { status: 409 })
+    }
+
+    const [membershipValidity, paidPreMembership] = await Promise.all([
+      getMembershipValidity(patientId),
+      hasPaidPreMembershipSession(patientId),
+    ])
+
+    if (!membershipValidity.active && !paidPreMembership) {
+      return NextResponse.json(
+        {
+          error: membershipValidity.expiresAt
+            ? 'Your plan has expired. Please upgrade or continue with the same pack to book sessions.'
+            : 'An active plan or paid initial consultation is required to book sessions.',
+          planExpired: Boolean(membershipValidity.expiresAt),
+        },
+        { status: 403 }
+      )
+    }
+
+    if (membershipValidity.active && membershipValidity.expiresAt) {
+      const maxDate = formatDateInTimeZone(new Date(membershipValidity.expiresAt), DEFAULT_USER_TIMEZONE)
+      if (bookingDate > maxDate) {
+        return NextResponse.json(
+          { error: `Cannot schedule a session past your plan expiry date (${maxDate}).` },
+          { status: 400 }
+        )
+      }
     }
 
     // Prevent duplicate booking for this role: check if patient already has an active scheduled session

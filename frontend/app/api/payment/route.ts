@@ -73,9 +73,9 @@ export async function POST(request: Request) {
       const membership = await getMembershipValidity(patientId)
       if (membership.active && membership.expiresAt) {
         const daysRemaining = Math.ceil((new Date(membership.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
-        if (daysRemaining > 7) {
+        if (daysRemaining > 14) {
           return NextResponse.json({
-            error: `You already have an active treatment program (${daysRemaining} days remaining). Duplicate payment is not allowed.`,
+            error: `You already have an active treatment program (${daysRemaining} days remaining). Renewal is unlocked within 14 days of expiry.`,
             alreadyActive: true,
             daysRemaining,
           }, { status: 409 })

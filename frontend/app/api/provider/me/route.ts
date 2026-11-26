@@ -25,6 +25,7 @@ export async function GET(request: Request) {
         clinicalVerificationStatus: provider.clinical_verification_status || null,
         bankVerificationStatus: provider.bank_verification_status || null,
         payoutStatus: provider.payout_status || null,
+        coachingScope: auth.user.user_metadata?.coaching_scope || 'BOTH',
       },
       redirectTo,
     })
@@ -61,6 +62,7 @@ export async function GET(request: Request) {
       clinicalVerificationStatus: v2Profile?.clinical_verification_status || null,
       bankVerificationStatus: v2Profile?.bank_verification_status || null,
       payoutStatus: v2Profile?.payout_status || null,
+      coachingScope: provider.user.user_metadata?.coaching_scope || 'BOTH',
     },
     redirectTo,
   })

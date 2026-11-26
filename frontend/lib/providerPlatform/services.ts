@@ -62,10 +62,16 @@ export const ProviderInvitationService = {
     await ensureNoProviderDuplicates(email, phoneNumber)
 
     let userId: string
+    const coachingScope = body.role === 'DOCTOR' ? 'REGULAR' : (body.coachingScope || 'BOTH')
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email,
       email_confirm: false,
-      user_metadata: { role: body.role, display_id: body.fullName, onboarding_required: true },
+      user_metadata: {
+        role: body.role,
+        display_id: body.fullName,
+        onboarding_required: true,
+        coaching_scope: coachingScope,
+      },
     })
 
     if (authError || !authData?.user) {
@@ -113,7 +119,12 @@ export const ProviderInvitationService = {
 
           userId = existingAuthUser.id
           await supabaseAdmin.auth.admin.updateUserById(userId, {
-            user_metadata: { role: body.role, display_id: body.fullName, onboarding_required: true },
+            user_metadata: {
+              role: body.role,
+              display_id: body.fullName,
+              onboarding_required: true,
+              coaching_scope: coachingScope,
+            },
           })
         } else {
           throw new ProviderPlatformError(

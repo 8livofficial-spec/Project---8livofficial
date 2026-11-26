@@ -31,6 +31,7 @@ export default function Sidebar({
   const pathname = usePathname()
   const router = useRouter()
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const is90DayCoachingPack = /90-day|guided wellness/i.test(String(membershipTier || ''))
 
   type NavLink = {
     icon: React.ComponentType<{ size?: number; className?: string; strokeWidth?: number }>
@@ -151,20 +152,24 @@ export default function Sidebar({
               <div className="w-6 h-6 rounded-lg bg-[#00A884]/20 text-teal-300 flex items-center justify-center shrink-0">
                 <ShieldCheck size={14} />
               </div>
-              <p className="text-xs font-bold leading-tight text-white">Physician Supervised</p>
+              <p className="text-xs font-bold leading-tight text-white">
+                {is90DayCoachingPack ? 'Guided Wellness Pack' : 'Physician Supervised'}
+              </p>
             </div>
             <p className="text-[11px] text-slate-400 leading-snug mt-1 mb-2.5">
-              Dedicated Medical Board & Care Team on call.
+              {is90DayCoachingPack
+                ? 'Dedicated Dietitian & Fitness Coach support.'
+                : 'Dedicated Medical Board & Care Team on call.'}
             </p>
             <button
               onClick={() => {
                 onCloseMobile?.()
-                router.push('/patient/consultation')
+                router.push(is90DayCoachingPack ? '/patient/consultation?role=dietitian' : '/patient/consultation')
               }}
               className="w-full py-1.5 px-3 rounded-xl bg-[#00A884]/20 hover:bg-[#00A884]/30 text-teal-300 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-[#00A884]/30"
             >
               <Stethoscope size={12} />
-              <span>Contact Doctor</span>
+              <span>{is90DayCoachingPack ? 'Book Coach Slot' : 'Contact Doctor'}</span>
               <ArrowRight size={11} />
             </button>
           </div>

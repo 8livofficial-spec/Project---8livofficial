@@ -73,9 +73,9 @@ export async function POST(request: Request) {
       const membership = await getMembershipValidity(patient.user.id)
       if (membership.active && membership.expiresAt) {
         const daysRemaining = Math.ceil((new Date(membership.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
-        if (daysRemaining > 7) {
+        if (daysRemaining > 14) {
           return NextResponse.json({
-            error: `You already have an active treatment program (valid for ${daysRemaining} more days). Duplicate payment is not permitted.`,
+            error: `You already have an active treatment program (valid for ${daysRemaining} more days). Renewal is unlocked within 14 days of expiry.`,
             alreadyActive: true,
             daysRemaining,
           }, { status: 409 })
@@ -87,20 +87,6 @@ export async function POST(request: Request) {
     const rawDuration = Number(body?.durationMonths)
     const lookupKey = planId || (rawDuration > 0 ? rawDuration : 1)
     const isStandardOrder = paymentType === 'standard'
-
-    if (paymentType === 'membership' && planId === INELIGIBLE_PACK_ID && isPatientAuth) {
-      const { data: consultation } = await supabaseAdmin
-        .from('doctor_consultations')
-        .select('id')
-        .eq('patient_id', patient.user.id)
-        .eq('status', 'rejected')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle()
-      if (!consultation) {
-        return NextResponse.json({ error: 'This 90-day coaching pack is only available after a doctor consultation when the standard program is not suitable.' }, { status: 403 })
-      }
-    }
 
     const commercialRules = await getCommercialRules()
     const dynamicConsultationFee = commercialRules.consultationFee || 350

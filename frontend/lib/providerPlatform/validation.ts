@@ -19,6 +19,7 @@ export const createProviderSchema = z.object({
   consultationLanguages: z.union([z.string(), z.array(z.string())]).optional(),
   payoutAmount: z.union([z.number(), z.string()]).optional(),
   consultationType: z.string().trim().optional().or(z.literal('')),
+  coachingScope: z.enum(['REGULAR', 'PACK_90_DAY', 'BOTH']).optional().default('BOTH'),
   internalReference: z.string().trim().optional().or(z.literal('')),
   joiningDate: z.string().trim().optional().or(z.literal('')),
   compensationModelPlaceholder: z.string().trim().optional().or(z.literal('')),

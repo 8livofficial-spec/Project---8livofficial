@@ -395,7 +395,7 @@ export async function GET(request: Request) {
       notifications = [membershipExpiryNotification, ...notifications].slice(0, 10)
     }
     const effectiveDashboardAccess = Boolean(
-      membershipActive && (
+      (membershipActive || membershipStatus === 'EXPIRED') && (
         firstConsultationCompleted ||
         persistedJourney?.dashboard_access ||
         onboardingCompleted

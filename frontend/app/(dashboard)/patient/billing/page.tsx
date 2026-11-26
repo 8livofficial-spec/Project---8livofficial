@@ -27,7 +27,7 @@ export default function BillingPage() {
 
   useEffect(() => {
     // 1. Load active commercial plans with patient authentication context
-    authedFetch('/api/subscriptions/pricing')
+    authedFetch('/api/subscriptions/pricing?includeIneligiblePack=true')
       .then(r => r.json())
       .then(d => {
         if (d.plans && d.plans.length > 0) {
@@ -63,16 +63,19 @@ export default function BillingPage() {
     })
   }
 
-  const daysRemaining = activeSub?.end_date ? Math.max(0, Math.ceil((new Date(activeSub.end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24))) : 0
+  const daysRemaining = activeSub?.ends_at || activeSub?.end_date
+    ? Math.max(0, Math.ceil((new Date(activeSub.ends_at || `${activeSub.end_date}T23:59:59+05:30`).getTime() - Date.now()) / (1000 * 60 * 60 * 24)))
+    : 0
 
   const handlePlanSelect = async (plan: any) => {
+    const activeIs90Day = /90-day|guided wellness/i.test(String(activeSub?.program_name || ''))
+    const planIs90Day = Boolean(plan.isIneligiblePatientPack || /90-day|guided wellness/i.test(String(plan.name || '')))
     const isCurrentActivePlan = activeSub && (
       activeSub.plan_id === plan.id ||
-      Number(activeSub.duration_months) === Number(plan.durationMonths) ||
-      String(activeSub.program_name).toLowerCase().includes(String(plan.durationMonths) + ' month')
+      (activeIs90Day === planIs90Day && Number(activeSub.duration_months) === Number(plan.durationMonths))
     )
 
-    if (isCurrentActivePlan && daysRemaining > 7) {
+    if (isCurrentActivePlan && daysRemaining > 14) {
       setStatusMsg({
         type: 'error',
         message: `You are already enrolled in ${plan.name} with ${daysRemaining} days remaining. Duplicate payments are disabled.`
@@ -211,9 +214,14 @@ export default function BillingPage() {
   }
 
   const rawTier = String(activeSub?.program_name || assessment?.membership_tier || '').trim()
+  const is90DaySub = /90-day|guided wellness/i.test(rawTier)
+  const isCoachingOnlyUser = is90DaySub || assessment?.is_eligible === false
   const activeProgram = rawTier || '1 Month Treatment Program'
   const monthlyRate = activeSub?.base_monthly_price || 1999
   const cycleCount = activeSub?.treatment_cycles?.length || activeSub?.duration_months || 1
+  const displayedPlans = plans.filter((prog) =>
+    isCoachingOnlyUser ? Boolean(prog.isIneligiblePatientPack) : !prog.isIneligiblePatientPack
+  )
 
   return (
     <div className="space-y-6 text-[#1A1F36]">
@@ -270,33 +278,56 @@ export default function BillingPage() {
             </div>
 
             <div className="border-t border-white/10 pt-4 space-y-2.5">
-              <p className="text-xs font-bold text-white/70">All Treatment Programs Include:</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-white/80">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
-                  <span>Monthly Treatment Cycle Provisioning</span>
+              <p className="text-xs font-bold text-white/70">
+                {is90DaySub ? '90-Day Guided Wellness Pack Includes:' : 'All Treatment Programs Include:'}
+              </p>
+              {is90DaySub ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-white/80">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
+                    <span>90-Day Nutrition &amp; Dietitian Guidance</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
+                    <span>90-Day Fitness &amp; Exercise Coaching</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
+                    <span>Customized Indian Meal &amp; Workout Plans</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
+                    <span>Protected 1-on-1 Coaching Sessions</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
-                  <span>Doctor Follow-up Consultations (₹0)</span>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-white/80">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
+                    <span>Monthly Treatment Cycle Provisioning</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
+                    <span>Doctor Follow-up Consultations (₹0)</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
+                    <span>Dedicated Dietitian &amp; Nutrition Guidance</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
+                    <span>Dedicated Fitness Movement Check-ins</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
+                    <span>Partner Pharmacy Fulfillment &amp; Tracking</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
+                    <span>Direct Medication Review Requests</span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
-                  <span>Dedicated Dietitian & Nutrition Guidance</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
-                  <span>Dedicated Fitness Movement Check-ins</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
-                  <span>Partner Pharmacy Fulfillment & Tracking</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-[#5EEAD4] shrink-0" />
-                  <span>Direct Medication Review Requests</span>
-                </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -332,15 +363,27 @@ export default function BillingPage() {
 
       {/* Available Program Durations */}
       <div className="space-y-3">
-        <h3 className="text-base font-bold font-sora">Extend or Select Treatment Program</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {plans.map((prog) => {
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <h3 className="text-base font-bold font-sora">
+            {isCoachingOnlyUser ? '90-Day Guided Wellness Coaching Pack' : 'Extend or Select Treatment Program'}
+          </h3>
+          {isCoachingOnlyUser && (
+            <a
+              href="/assessment"
+              className="text-xs font-bold text-[#0D9488] hover:underline"
+            >
+              Re-check GLP-1 Eligibility →
+            </a>
+          )}
+        </div>
+        <div className={`grid grid-cols-1 ${isCoachingOnlyUser ? 'sm:grid-cols-1 max-w-md' : 'sm:grid-cols-2 lg:grid-cols-3'} gap-4`}>
+          {displayedPlans.map((prog) => {
             const discountPct = Number(prog.discountPercentage || 0)
             const discountAmt = Number(prog.discountAmount || 0)
+            const progIs90Day = Boolean(prog.isIneligiblePatientPack || /90-day|guided wellness/i.test(String(prog.name || '')))
             const isCurrentPlan = activeSub && (
               activeSub.plan_id === prog.id ||
-              Number(activeSub.duration_months) === Number(prog.durationMonths) ||
-              String(activeSub.program_name).toLowerCase().includes(String(prog.durationMonths) + ' month')
+              (is90DaySub === progIs90Day && Number(activeSub.duration_months) === Number(prog.durationMonths))
             )
             const isActivelyEnrolled = isCurrentPlan && daysRemaining > 0
 
@@ -375,9 +418,9 @@ export default function BillingPage() {
                 <button
                   type="button"
                   onClick={() => handlePlanSelect(prog)}
-                  disabled={upgrading || (isActivelyEnrolled && daysRemaining > 7)}
+                  disabled={upgrading || (isActivelyEnrolled && daysRemaining > 14)}
                   className={`mt-5 w-full rounded-xl py-2.5 text-xs font-bold transition flex items-center justify-center gap-2 ${
-                    isActivelyEnrolled && daysRemaining > 7
+                    isActivelyEnrolled && daysRemaining > 14
                       ? 'bg-[#0D9488]/15 text-[#0D9488] cursor-not-allowed border border-[#0D9488]/30 font-extrabold'
                       : 'bg-[#1A1F36] text-white hover:bg-[#C4622D] disabled:opacity-50 cursor-pointer'
                   }`}
@@ -387,7 +430,7 @@ export default function BillingPage() {
                       <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                       <span>Processing...</span>
                     </>
-                  ) : isActivelyEnrolled && daysRemaining > 7 ? (
+                  ) : isActivelyEnrolled && daysRemaining > 14 ? (
                     <span>Current Active Program ✓</span>
                   ) : isActivelyEnrolled ? (
                     <span>Extend Plan (+{prog.durationMonths} Mo)</span>

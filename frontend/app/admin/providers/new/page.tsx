@@ -47,6 +47,7 @@ export default function AdminNewProviderPage() {
   const [consultationLanguages, setConsultationLanguages] = useState('English, Hindi')
   const [payoutAmount, setPayoutAmount] = useState<number | string>(400)
   const [consultationType, setConsultationType] = useState('Video Consultation')
+  const [coachingScope, setCoachingScope] = useState<'REGULAR' | 'PACK_90_DAY' | 'BOTH'>('BOTH')
   const [internalReference, setInternalReference] = useState('')
   const [joiningDate, setJoiningDate] = useState(new Date().toISOString().split('T')[0])
   const [internalNotes, setInternalNotes] = useState('')
@@ -118,6 +119,7 @@ export default function AdminNewProviderPage() {
       consultationLanguages: consultationLanguages.trim(),
       payoutAmount: Number(payoutAmount) || 0,
       consultationType: consultationType.trim(),
+      coachingScope: role === 'DOCTOR' ? 'REGULAR' : coachingScope,
       internalReference: internalReference.trim(),
       joiningDate,
       compensationModelPlaceholder: `INR ${payoutAmount} per consultation`,
@@ -321,6 +323,53 @@ export default function AdminNewProviderPage() {
                   )
                 })}
               </div>
+
+              {role !== 'DOCTOR' && (
+                <div className="mt-5 border-t border-[#E8DED4] pt-5">
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-[#0D9488]">
+                    Program Assignment Scope
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    Choose whether this {role.toLowerCase().replace('_', ' ')} handles 90-Day Pack (pastable Google Meet link), Regular plans (Stream Video slots), or Both.
+                  </p>
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    {[
+                      {
+                        key: 'PACK_90_DAY' as const,
+                        title: '90-Day Pack Only',
+                        desc: 'Paste Google Meet links & schedule directly (no recurring slots).',
+                      },
+                      {
+                        key: 'REGULAR' as const,
+                        title: 'Regular Plan Only',
+                        desc: 'Recurring availability slots & in-app Stream Video.',
+                      },
+                      {
+                        key: 'BOTH' as const,
+                        title: 'Both (90-Day + Regular)',
+                        desc: 'Supports both pasted Google Meet links and Stream Video slots.',
+                      },
+                    ].map((opt) => {
+                      const active = coachingScope === opt.key
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => setCoachingScope(opt.key)}
+                          className={`rounded-2xl border p-3.5 text-left transition-all ${
+                            active
+                              ? 'border-[#0D9488] bg-[#0D9488]/5 ring-2 ring-[#0D9488]/25'
+                              : 'border-[#E8DED4] bg-[#FAF8F5] hover:border-slate-300'
+                          }`}
+                        >
+                          <p className="text-xs font-black text-[#1A1F36]">{opt.title}</p>
+                          <p className="mt-1 text-[11px] font-medium text-slate-500">{opt.desc}</p>
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Step 2: Study Experience & Degrees (User Request Highlight) */}
