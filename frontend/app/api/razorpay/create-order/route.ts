@@ -73,7 +73,22 @@ export async function POST(request: Request) {
       const membership = await getMembershipValidity(patient.user.id)
       if (membership.active && membership.expiresAt) {
         const daysRemaining = Math.ceil((new Date(membership.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
-        if (daysRemaining > 14) {
+        const requestedPlanId = body?.planId ? String(body.planId).trim() : ''
+        const { data: activeSub } = await supabaseAdmin
+          .from('subscriptions')
+          .select('plan_id, program_name')
+          .eq('patient_id', patient.user.id)
+          .eq('status', 'ACTIVE')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        const isSwitchingPlan = Boolean(
+          requestedPlanId && (
+            (activeSub?.plan_id && activeSub.plan_id !== requestedPlanId) ||
+            (!activeSub?.plan_id && requestedPlanId === '90000000-0000-4000-8000-000000000090' && activeSub?.program_name !== '90-Day Guided Wellness Pack')
+          )
+        )
+        if (daysRemaining > 14 && !isSwitchingPlan) {
           return NextResponse.json({
             error: `You already have an active treatment program (valid for ${daysRemaining} more days). Renewal is unlocked within 14 days of expiry.`,
             alreadyActive: true,

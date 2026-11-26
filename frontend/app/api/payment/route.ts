@@ -5,7 +5,7 @@ import { updatePatientJourneyState } from '@/lib/patientJourneyServer'
 import { assignMembershipCareTeam } from '@/lib/smartAssignmentEngine'
 import { assertPatientOrAssignedProvider } from '@/lib/apiSecurity'
 import { APP_CONFIG } from '@/lib/appConfig'
-import { activateSubscriptionForPatient } from '@/lib/subscriptionService'
+import { activateSubscriptionForPatient, getAuthoritativeSubscriptionPricing } from '@/lib/subscriptionService'
 import { getMembershipValidity } from '@/lib/membershipServer'
 
 function generateTxnId(): string {
@@ -37,9 +37,11 @@ export async function POST(request: Request) {
 
     const txnId = generateTxnId()
 
+    const planId = body?.planId || (metadata as any)?.planId || undefined
     const rawDuration = Number(body?.durationMonths || (metadata as any)?.durationMonths || (membershipTier ? parseInt(String(membershipTier)) : 1) || 1)
-    const durationMonths = [1, 3, 6, 10].includes(rawDuration) ? rawDuration : 1
-    const programName = `${durationMonths} Month Treatment Program`
+    const durationMonths = [1, 3, 5, 6, 10].includes(rawDuration) ? rawDuration : 1
+    const pricing = await getAuthoritativeSubscriptionPricing(planId || durationMonths, '8liv', patientId)
+    const programName = pricing.programName
 
     if (paymentType === 'consultation') {
       const membership = await getMembershipValidity(patientId)
@@ -73,7 +75,21 @@ export async function POST(request: Request) {
       const membership = await getMembershipValidity(patientId)
       if (membership.active && membership.expiresAt) {
         const daysRemaining = Math.ceil((new Date(membership.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000))
-        if (daysRemaining > 14) {
+        const { data: activeSub } = await supabaseAdmin
+          .from('subscriptions')
+          .select('plan_id, program_name')
+          .eq('patient_id', patientId)
+          .eq('status', 'ACTIVE')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        const isSwitchingPlan = Boolean(
+          pricing.planId && (
+            (activeSub?.plan_id && activeSub.plan_id !== pricing.planId) ||
+            (!activeSub?.plan_id && pricing.planId === '90000000-0000-4000-8000-000000000090' && activeSub?.program_name !== programName)
+          )
+        )
+        if (daysRemaining > 14 && !isSwitchingPlan) {
           return NextResponse.json({
             error: `You already have an active treatment program (${daysRemaining} days remaining). Renewal is unlocked within 14 days of expiry.`,
             alreadyActive: true,
@@ -97,10 +113,15 @@ export async function POST(request: Request) {
 
       await activateSubscriptionForPatient({
         patientId,
-        durationMonths,
+        planId: pricing.planId,
+        durationMonths: pricing.durationMonths,
         paymentTransactionId: txnId,
-        paidAmount: amount || 0,
-        metadata,
+        paidAmount: amount || pricing.finalPrice,
+        metadata: {
+          ...metadata,
+          planId: pricing.planId,
+          planName: pricing.programName,
+        },
       })
     }
 
