@@ -1,6 +1,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { getMembershipValidity, hasPaidPreMembershipSession } from '@/lib/membershipServer'
+import { resolveSubscriptionBounds } from '@/lib/subscriptionExpiry'
 
 export const JOIN_WINDOW_BEFORE_MS = 10 * 60 * 1000 // 10 minutes before scheduled_start
 export const JOIN_TOKEN_TTL_MS = 2 * 60 * 1000 // 2 minutes single-use token
@@ -157,6 +158,148 @@ export async function scheduleCoachingSession(params: {
   }
 
   return created
+}
+
+export async function getActive90DayPackUsers(): Promise<
+  Array<{ id: string; name: string; planEndsAt: string | null }>
+> {
+  const { data: subs, error } = await supabaseAdmin
+    .from('subscriptions')
+    .select('patient_id, plan_id, program_name, start_date, end_date, starts_at, ends_at, timezone, status')
+    .eq('status', 'ACTIVE')
+    .order('created_at', { ascending: false })
+
+  if (error) {
+    console.warn('[coachingSessionService] getActive90DayPackUsers query notice:', error.message)
+    return []
+  }
+
+  const active90DaySubs = (subs || []).filter((s: any) => {
+    const is90Day =
+      s.plan_id === '90000000-0000-4000-8000-000000000090' ||
+      /90-day|guided wellness/i.test(String(s.program_name || ''))
+    if (!is90Day) return false
+    return resolveSubscriptionBounds(s).isActive
+  })
+
+  if (active90DaySubs.length === 0) return []
+
+  const uniqueMap = new Map<string, string | null>()
+  for (const s of active90DaySubs) {
+    if (!uniqueMap.has(s.patient_id)) {
+      const bounds = resolveSubscriptionBounds(s)
+      uniqueMap.set(s.patient_id, bounds.endsAt?.toISOString() || null)
+    }
+  }
+
+  const patientIds = Array.from(uniqueMap.keys())
+  const { data: profiles } = await supabaseAdmin
+    .from('profiles')
+    .select('id, first_name, last_name, email')
+    .in('id', patientIds)
+
+  const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]))
+  return patientIds.map((pid) => {
+    const prof = profileMap.get(pid)
+    const fullName = prof
+      ? `${prof.first_name || ''} ${prof.last_name || ''}`.trim() || prof.email || '90-Day Member'
+      : '90-Day Member'
+    return {
+      id: pid,
+      name: fullName,
+      planEndsAt: uniqueMap.get(pid) || null,
+    }
+  })
+}
+
+export async function scheduleCoachingSessionForAll90DayUsers(params: {
+  coachId: string
+  coachRole: string
+  title: string
+  scheduledStart: string
+  scheduledEnd: string
+  meetingUrl: string
+}) {
+  const start = new Date(params.scheduledStart)
+  const end = new Date(params.scheduledEnd)
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime()) || end <= start) {
+    throw new Error('INVALID_TIME_WINDOW: scheduled_end must be after scheduled_start.')
+  }
+
+  let parsedUrl: URL
+  try {
+    parsedUrl = new URL(params.meetingUrl)
+    if (parsedUrl.protocol !== 'https:' && parsedUrl.protocol !== 'http:') {
+      throw new Error('Invalid protocol')
+    }
+  } catch {
+    throw new Error('INVALID_MEETING_URL: Please provide a valid Google Meet or Zoom URL.')
+  }
+
+  const members = await getActive90DayPackUsers()
+  if (members.length === 0) {
+    throw new Error('NO_ACTIVE_90_DAY_MEMBERS: No active 90-Day Guided Wellness Pack members found.')
+  }
+
+  const eligibleMembers = members.filter((m) => {
+    if (!m.planEndsAt) return true
+    return start.getTime() <= new Date(m.planEndsAt).getTime()
+  })
+
+  if (eligibleMembers.length === 0) {
+    throw new Error('EXCEEDS_PLAN_END_DATE: Session start exceeds all active 90-day members plan end dates.')
+  }
+
+  const normalizedRole =
+    params.coachRole === 'trainer'
+      ? 'fitness_coach'
+      : params.coachRole === 'nutritionist'
+        ? 'dietitian'
+        : params.coachRole
+  const dbRole = ['fitness_coach', 'dietitian', 'nutritionist', 'trainer'].includes(normalizedRole)
+    ? normalizedRole
+    : 'fitness_coach'
+
+  const rowsToInsert = eligibleMembers.map((m) => ({
+    user_id: m.id,
+    coach_id: params.coachId,
+    coach_role: dbRole,
+    title: params.title.trim(),
+    scheduled_start: start.toISOString(),
+    scheduled_end: end.toISOString(),
+    meeting_url: parsedUrl.toString(),
+    status: 'SCHEDULED',
+  }))
+
+  const { data: createdRows, error } = await supabaseAdmin
+    .from('coaching_sessions')
+    .insert(rowsToInsert)
+    .select('id, user_id, coach_id, coach_role, title, scheduled_start, scheduled_end, status, created_at')
+
+  if (error) throw error
+
+  const roleLabel = normalizedRole === 'dietitian' ? 'Dietitian' : 'Fitness Coach'
+  const localTimeStr = start.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata',
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  })
+
+  try {
+    await supabaseAdmin.from('patient_notifications').insert(
+      eligibleMembers.map((m) => ({
+        patient_id: m.id,
+        type: 'appointment',
+        title: `New ${roleLabel} Session Scheduled`,
+        message: `Your ${roleLabel} scheduled "${params.title.trim()}" for ${localTimeStr} IST. You can join from your dashboard 10 minutes before start.`,
+        is_read: false,
+      }))
+    )
+  } catch (notifErr) {
+    console.warn('[coachingSessionService] Batch notification insert warning:', notifErr)
+  }
+
+  return createdRows || []
 }
 
 export async function listUserCoachingSessions(userId: string): Promise<{

@@ -27,7 +27,8 @@ export default function CoachSessionScheduler({
   patients: AssignedPatientOption[]
   defaultTitle?: string
 }) {
-  const [selectedPatientId, setSelectedPatientId] = useState<string>(patients[0]?.id || '')
+  const [selectedPatientId, setSelectedPatientId] = useState<string>('ALL_90_DAY')
+  const [active90DayMembers, setActive90DayMembers] = useState<AssignedPatientOption[]>([])
   const [title, setTitle] = useState<string>(defaultTitle)
   const [date, setDate] = useState<string>('')
   const [startTime, setStartTime] = useState<string>('10:00')
@@ -38,15 +39,20 @@ export default function CoachSessionScheduler({
   const [successMsg, setSuccessMsg] = useState('')
   const [sessions, setSessions] = useState<ScheduledSessionRow[]>([])
 
-  useEffect(() => {
-    if (!selectedPatientId && patients.length > 0) {
-      setSelectedPatientId(patients[0].id)
+  const mergedPatients = useMemo(() => {
+    const map = new Map<string, AssignedPatientOption>()
+    for (const p of active90DayMembers) {
+      if (p.id) map.set(p.id, p)
     }
-  }, [patients, selectedPatientId])
+    for (const p of patients) {
+      if (p.id && !map.has(p.id)) map.set(p.id, p)
+    }
+    return Array.from(map.values())
+  }, [active90DayMembers, patients])
 
   const selectedPatient = useMemo(
-    () => patients.find((p) => p.id === selectedPatientId) || null,
-    [patients, selectedPatientId]
+    () => (selectedPatientId === 'ALL_90_DAY' ? null : mergedPatients.find((p) => p.id === selectedPatientId) || null),
+    [mergedPatients, selectedPatientId]
   )
 
   // Local YYYY-MM-DD bounds: today min, patient's plan end_date max
@@ -60,11 +66,14 @@ export default function CoachSessionScheduler({
 
   const loadSessions = async (pid?: string) => {
     try {
-      const qs = pid ? `?patientId=${encodeURIComponent(pid)}` : ''
+      const qs = pid && pid !== 'ALL_90_DAY' ? `?patientId=${encodeURIComponent(pid)}` : ''
       const res = await authedFetch(`/api/sessions${qs}`)
       if (res.ok) {
         const json = await res.json()
         setSessions(json.sessions || [])
+        if (Array.isArray(json.active90DayPatients)) {
+          setActive90DayMembers(json.active90DayPatients)
+        }
       }
     } catch {
       // Non-blocking
@@ -72,9 +81,7 @@ export default function CoachSessionScheduler({
   }
 
   useEffect(() => {
-    if (selectedPatientId) {
-      loadSessions(selectedPatientId)
-    }
+    loadSessions(selectedPatientId)
   }, [selectedPatientId])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -116,7 +123,11 @@ export default function CoachSessionScheduler({
       if (!res.ok) {
         throw new Error(json.error || 'Failed to schedule coaching session.')
       }
-      setSuccessMsg('Session scheduled! The meeting link is masked and gated for the patient.')
+      setSuccessMsg(
+        json.scheduledCount > 1
+          ? `Session scheduled & notified for ${json.scheduledCount} active 90-Day Pack members!`
+          : 'Session scheduled! The meeting link is masked and gated for the patient(s).'
+      )
       setMeetingUrl('')
       await loadSessions(selectedPatientId)
     } catch (err: any) {
@@ -165,15 +176,17 @@ export default function CoachSessionScheduler({
       <form onSubmit={handleSubmit} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         <div>
           <label className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-1.5">
-            Assigned Patient *
+            90-Day Pack Members *
           </label>
           <select
             value={selectedPatientId}
             onChange={(e) => setSelectedPatientId(e.target.value)}
             className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-800 outline-none focus:border-teal-600"
           >
-            {patients.length === 0 && <option value="">No assigned patients</option>}
-            {patients.map((p) => (
+            <option value="ALL_90_DAY">
+              All Active 90-Day Pack Members ({active90DayMembers.length})
+            </option>
+            {mergedPatients.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
@@ -249,7 +262,7 @@ export default function CoachSessionScheduler({
         <div className="sm:col-span-2 lg:col-span-3 flex justify-end pt-1">
           <button
             type="submit"
-            disabled={submitting || patients.length === 0}
+            disabled={submitting}
             className="rounded-xl bg-slate-900 hover:bg-teal-700 text-white px-5 py-2.5 text-xs font-black transition-all disabled:opacity-50 cursor-pointer"
           >
             {submitting ? 'Scheduling...' : 'Schedule Masked Session'}
