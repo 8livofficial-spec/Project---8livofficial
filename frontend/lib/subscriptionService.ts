@@ -727,11 +727,19 @@ export async function getActivePatientSubscription(patientId: string) {
 
     if (legacyTxn) {
       const duration = Number(legacyTxn.metadata?.durationMonths || 1)
+      const legacyPlanId = legacyTxn.metadata?.planId || legacyTxn.metadata?.plan_id || null
+      const legacyProgramName =
+        legacyTxn.membership_tier ||
+        legacyTxn.plan_name_snapshot ||
+        legacyTxn.metadata?.planName ||
+        legacyTxn.metadata?.plan_name ||
+        (legacyPlanId === '90000000-0000-4000-8000-000000000090' ? '90-Day Guided Wellness Pack' : `${duration} Month Treatment Program`)
       return {
         id: legacyTxn.id,
         patient_id: patientId,
+        plan_id: legacyPlanId,
         duration_months: duration,
-        program_name: `${duration} Month Treatment Program`,
+        program_name: legacyProgramName,
         base_monthly_price: Number(legacyTxn.amount || DEFAULT_BASE_MONTHLY_RATE),
         original_price: Number(legacyTxn.amount || DEFAULT_BASE_MONTHLY_RATE),
         discount_percentage: 0,
@@ -861,11 +869,22 @@ export async function activateSubscriptionForPatient(params: {
     metadata: params.metadata || {},
   }
 
-  const { data: subscription, error: subError } = await supabaseAdmin
+  let { data: subscription, error: subError } = await supabaseAdmin
     .from('subscriptions')
     .insert(subscriptionPayload)
     .select('*')
     .single()
+
+  if (subError && subscriptionPayload.plan_id) {
+    console.warn('Retrying subscription insert with plan_id=null after error:', subError.message)
+    const retry = await supabaseAdmin
+      .from('subscriptions')
+      .insert({ ...subscriptionPayload, plan_id: null })
+      .select('*')
+      .single()
+    subscription = retry.data
+    subError = retry.error
+  }
 
   if (subError) {
     console.error('Failed to create subscription record in database:', subError.message)

@@ -129,11 +129,9 @@ function DashboardLayoutContent({
 
     if (flowStep === 'needs_assessment') {
       targetPath = '/assessment'
-    } else if (flowStep === 'not_eligible') {
-      targetPath = consultationPaymentStatus === 'PAID' ? '/appointments/select-slot' : '/consultation-payment'
-    } else if (flowStep === 'needs_consultation') {
+    } else if (flowStep === 'not_eligible' || flowStep === 'needs_consultation') {
       if (!isConsultationBookingPage && !isAppointmentDetailsPage && !isConsultationRoomPage) {
-        targetPath = consultationPaymentStatus === 'PAID' ? '/patient/consultation' : '/consultation-payment'
+        targetPath = '/patient/consultation'
       }
     } else if (flowStep === 'appointment_scheduled') {
       const canAccessRescheduleBooking = isConsultationBookingPage && ['MISSED_BY_PATIENT', 'CANCELLED_BY_DOCTOR', 'CANCELLED_BY_PATIENT'].includes(appointmentStatus)
@@ -260,7 +258,7 @@ function DashboardLayoutContent({
       flowStep === 'needs_consultation' ||
       (isOnboardingPlanPage && flowStep === 'needs_plan') ||
       (isOnboardingPaymentPage && flowStep === 'needs_payment') ||
-      (isConsultationBookingPage && flowStep === 'appointment_scheduled')
+      (isConsultationBookingPage && (flowStep === 'appointment_scheduled' || flowStep === 'not_eligible'))
 
     if (error && !loading) {
       return (

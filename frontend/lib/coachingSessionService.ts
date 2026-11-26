@@ -182,8 +182,6 @@ export async function getActive90DayPackUsers(): Promise<
     return resolveSubscriptionBounds(s).isActive
   })
 
-  if (active90DaySubs.length === 0) return []
-
   const uniqueMap = new Map<string, string | null>()
   for (const s of active90DaySubs) {
     if (!uniqueMap.has(s.patient_id)) {
@@ -191,6 +189,29 @@ export async function getActive90DayPackUsers(): Promise<
       uniqueMap.set(s.patient_id, bounds.endsAt?.toISOString() || null)
     }
   }
+
+  // Fallback for patients whose 90-day payment succeeded when subscriptions.plan_id FK failed
+  const ninetyDaysAgoIso = new Date(Date.now() - 90 * 86400000).toISOString()
+  const { data: paidTxns } = await supabaseAdmin
+    .from('payment_transactions')
+    .select('patient_id, membership_tier, metadata, created_at')
+    .in('payment_type', ['membership', 'combined'])
+    .in('status', ['success', 'paid'])
+    .gte('created_at', ninetyDaysAgoIso)
+    .order('created_at', { ascending: false })
+
+  for (const txn of paidTxns || []) {
+    if (uniqueMap.has(txn.patient_id)) continue
+    const meta = (txn.metadata || {}) as Record<string, unknown>
+    const is90DayTxn =
+      meta.planId === '90000000-0000-4000-8000-000000000090' ||
+      /90-day|guided wellness/i.test(String(txn.membership_tier || meta.planName || ''))
+    if (!is90DayTxn) continue
+    const endsAt = new Date(new Date(txn.created_at).getTime() + 90 * 86400000).toISOString()
+    uniqueMap.set(txn.patient_id, endsAt)
+  }
+
+  if (uniqueMap.size === 0) return []
 
   const patientIds = Array.from(uniqueMap.keys())
   const { data: profiles } = await supabaseAdmin

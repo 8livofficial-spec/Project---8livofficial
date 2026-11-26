@@ -253,6 +253,46 @@ export interface PatientOnboardingState {
  */
 export type FlowStep = 'loading' | 'needs_assessment' | 'not_eligible' | 'needs_consultation' | 'appointment_scheduled' | 'needs_plan' | 'needs_payment' | 'ready'
 
+function resolvePatientFlowStep(data: {
+  assessment?: { is_eligible?: boolean | null } | null
+  assessmentStatus?: string
+  eligibilityStatus?: string
+  consultationPaymentStatus?: string
+  appointmentStatus?: string
+  consultationStatus?: string
+  membershipStatus?: string
+  dashboardAccess?: boolean
+  firstConsultationCompleted?: boolean
+}): FlowStep {
+  const assessRow = data.assessment
+  const assessmentStatus = data.assessmentStatus
+  const eligibilityStatus = data.eligibilityStatus
+  const consultationPaymentStatus = data.consultationPaymentStatus
+  const appointmentStatus = data.appointmentStatus
+  const consultationStatus = data.consultationStatus
+  const membershipStatus = data.membershipStatus
+  const dashboardAccess = data.dashboardAccess === true
+  const firstConsultationCompleted = data.firstConsultationCompleted === true
+
+  const isUserEligible = eligibilityStatus === 'ELIGIBLE' || eligibilityStatus === 'REVIEW_REQUIRED' || Boolean(assessRow?.is_eligible)
+  const isUserNotEligible = eligibilityStatus === 'NOT_ELIGIBLE' || (Boolean(assessRow) && assessRow?.is_eligible === false && !isUserEligible)
+
+  if (assessmentStatus !== 'COMPLETED') return 'needs_assessment'
+  if (membershipStatus === 'ACTIVE' || (dashboardAccess && membershipStatus !== 'NOT_SELECTED' && membershipStatus !== 'SELECTED')) {
+    return 'ready'
+  }
+  if (consultationPaymentStatus !== 'PAID') {
+    return isUserNotEligible ? 'not_eligible' : 'needs_consultation'
+  }
+  if (appointmentStatus === 'SCHEDULED' && consultationStatus !== 'COMPLETED' && !firstConsultationCompleted) {
+    return 'appointment_scheduled'
+  }
+  if (consultationStatus === 'COMPLETED' || firstConsultationCompleted) {
+    return membershipStatus === 'SELECTED' ? 'needs_payment' : 'needs_plan'
+  }
+  return isUserNotEligible ? 'not_eligible' : 'needs_consultation'
+}
+
 export interface ConsultationQuotaSummary {
   doctor: { allowed: boolean; usedCount: number; maxAllowed: number; remaining: number; planName: string; role: string }
   dietitian: { allowed: boolean; usedCount: number; maxAllowed: number; remaining: number; planName: string; role: string }
@@ -428,39 +468,7 @@ function usePatientDataInternal() {
         setPatientUploads(dashboardData.patientUploads || [])
 
         // Set Flow Step
-        const assessRow = dashboardData.assessment
-        const assessmentStatus = dashboardData.assessmentStatus
-        const eligibilityStatus = dashboardData.eligibilityStatus
-        const consultationPaymentStatus = dashboardData.consultationPaymentStatus
-        const appointmentStatus = dashboardData.appointmentStatus
-        const consultationStatus = dashboardData.consultationStatus
-        const membershipStatus = dashboardData.membershipStatus
-        const dashboardAccess = dashboardData.dashboardAccess === true
-        const firstConsultationCompleted = dashboardData.firstConsultationCompleted === true
-
-        const isUserEligible = eligibilityStatus === 'ELIGIBLE' || eligibilityStatus === 'REVIEW_REQUIRED' || Boolean(assessRow?.is_eligible)
-        const isUserNotEligible = eligibilityStatus === 'NOT_ELIGIBLE' || (assessRow && assessRow.is_eligible === false && !isUserEligible)
-
-        const isEligible = isUserEligible && !isUserNotEligible
-        let journeyFlowStep: FlowStep = 'needs_consultation'
-
-        if (!isEligible) {
-          journeyFlowStep = isUserNotEligible ? 'not_eligible' : 'needs_assessment'
-        } else if (assessmentStatus !== 'COMPLETED') {
-          journeyFlowStep = 'needs_assessment'
-        } else if (membershipStatus === 'ACTIVE' || (dashboardAccess && membershipStatus !== 'NOT_SELECTED' && membershipStatus !== 'SELECTED')) {
-          journeyFlowStep = 'ready'
-        } else if (consultationPaymentStatus !== 'PAID') {
-          journeyFlowStep = 'needs_consultation'
-        } else if (appointmentStatus === 'SCHEDULED' && consultationStatus !== 'COMPLETED') {
-          journeyFlowStep = 'appointment_scheduled'
-        } else if (consultationStatus === 'COMPLETED' || firstConsultationCompleted) {
-          journeyFlowStep = membershipStatus === 'SELECTED' ? 'needs_payment' : 'needs_plan'
-        } else {
-          journeyFlowStep = 'needs_consultation'
-        }
-
-        setFlowStep(journeyFlowStep)
+        setFlowStep(resolvePatientFlowStep(dashboardData))
       } else {
         // Lightweight status call (bypasses large collections queries)
         const statusData = await fetchPatientStatus(
@@ -505,39 +513,7 @@ function usePatientDataInternal() {
         }
 
         // Set Flow Step
-        const assessRow = statusData.assessment
-        const assessmentStatus = statusData.assessmentStatus
-        const eligibilityStatus = statusData.eligibilityStatus
-        const consultationPaymentStatus = statusData.consultationPaymentStatus
-        const appointmentStatus = statusData.appointmentStatus
-        const consultationStatus = statusData.consultationStatus
-        const membershipStatus = statusData.membershipStatus
-        const dashboardAccess = statusData.dashboardAccess === true
-        const firstConsultationCompleted = statusData.firstConsultationCompleted === true
-
-        const isUserEligible = eligibilityStatus === 'ELIGIBLE' || eligibilityStatus === 'REVIEW_REQUIRED' || Boolean(assessRow?.is_eligible)
-        const isUserNotEligible = eligibilityStatus === 'NOT_ELIGIBLE' || (assessRow && assessRow.is_eligible === false && !isUserEligible)
-
-        const isEligible = isUserEligible && !isUserNotEligible
-        let journeyFlowStep: FlowStep = 'needs_consultation'
-
-        if (!isEligible) {
-          journeyFlowStep = isUserNotEligible ? 'not_eligible' : 'needs_assessment'
-        } else if (assessmentStatus !== 'COMPLETED') {
-          journeyFlowStep = 'needs_assessment'
-        } else if (membershipStatus === 'ACTIVE' || (dashboardAccess && membershipStatus !== 'NOT_SELECTED' && membershipStatus !== 'SELECTED')) {
-          journeyFlowStep = 'ready'
-        } else if (consultationPaymentStatus !== 'PAID') {
-          journeyFlowStep = 'needs_consultation'
-        } else if (appointmentStatus === 'SCHEDULED' && consultationStatus !== 'COMPLETED') {
-          journeyFlowStep = 'appointment_scheduled'
-        } else if (consultationStatus === 'COMPLETED' || firstConsultationCompleted) {
-          journeyFlowStep = membershipStatus === 'SELECTED' ? 'needs_payment' : 'needs_plan'
-        } else {
-          journeyFlowStep = 'needs_consultation'
-        }
-
-        setFlowStep(journeyFlowStep)
+        setFlowStep(resolvePatientFlowStep(statusData))
 
         // Lazy load notifications independently so older notifications still show
         // even when the user does not currently have a health assessment row.
@@ -547,7 +523,7 @@ function usePatientDataInternal() {
         }
 
         // Lazy load module-specific collections only when matching pages are opened
-        if (assessRow) {
+        if (statusData.assessment) {
           if (pathname === '/patient/progress') {
             const [logsRes, consultsRes] = await Promise.all([
               fetch('/api/patient/progress-logs?page=1&limit=50', {
