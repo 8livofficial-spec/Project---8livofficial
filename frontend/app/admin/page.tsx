@@ -20,6 +20,7 @@ type AdminTab =
   | 'nutritionists'
   | 'appointments'
   | 'video-consultations'
+  | 'coaching-sessions'
   | 'memberships'
   | 'analytics'
   | 'payments'
@@ -510,6 +511,10 @@ function AdminDashboardContent() {
   const openAdminTab = (tab: AdminTab) => {
     if (tab === 'prescription-fulfilment') {
       router.push('/admin/prescriptions');
+      return;
+    }
+    if (tab === 'coaching-sessions') {
+      router.push('/admin/coaching-sessions');
       return;
     }
     setAdminTab(tab);
@@ -1759,6 +1764,7 @@ function AdminDashboardContent() {
       items: [
         { id: 'appointments', label: 'Appointments', icon: Calendar },
         { id: 'video-consultations', label: 'Video Consultations', icon: Video },
+        { id: 'coaching-sessions', label: 'Coaching Attendance', icon: Users },
         { id: 'payments', label: 'Payments', icon: DollarSign },
         { id: 'provider-wallets', label: 'Provider Wallets', icon: Wallet },
       ],

@@ -39,9 +39,16 @@ export async function POST(request: Request, context: RouteContext) {
 }
 
 export async function GET(request: Request, context: RouteContext) {
+  const acceptHeader = request.headers.get('accept') || ''
+  const wantsJson = acceptHeader.includes('application/json') && !acceptHeader.includes('text/html')
+  const origin = new URL(request.url).origin
+
   try {
     const auth = await getAuthenticatedUser(request)
     if (!auth) {
+      if (!wantsJson) {
+        return NextResponse.redirect(`${origin}/login?redirect=/patient`, 302)
+      }
       return NextResponse.json({ error: 'Unauthorized', code: 'UNAUTHORIZED' }, { status: 401 })
     }
 
@@ -52,6 +59,9 @@ export async function GET(request: Request, context: RouteContext) {
     const result = await redeemSessionJoin(id, auth.user.id, token)
 
     if (!result.ok) {
+      if (!wantsJson) {
+        return NextResponse.redirect(`${origin}/patient?sessionStatus=${encodeURIComponent(result.code)}`, 302)
+      }
       return NextResponse.json({ error: result.message, code: result.code }, { status: result.status })
     }
 
@@ -60,6 +70,9 @@ export async function GET(request: Request, context: RouteContext) {
     response.headers.set('Referrer-Policy', 'no-referrer')
     return response
   } catch (err: any) {
+    if (!wantsJson) {
+      return NextResponse.redirect(`${origin}/patient`, 302)
+    }
     return NextResponse.json(
       { error: err?.message || 'Unable to join coaching session.', code: 'SERVER_ERROR' },
       { status: 500 }

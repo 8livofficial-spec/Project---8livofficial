@@ -23,12 +23,14 @@ import { supabaseAdmin } from '../supabaseServer'
 export type AppointmentNotificationData = {
   patientName: string
   doctorName?: string
+  providerLabel?: string
   date: string
   time: string
   bookingId?: string
   appointmentType?: string
   scheduledStart?: string | Date
   callUrl?: string
+  buttonPath?: string
 }
 
 export type PaymentNotificationData = {
@@ -189,8 +191,13 @@ export class WhatsAppNotificationService {
 
       const bookingId = data.bookingId || 'latest'
       const patientName = data.patientName || 'Patient'
-      const doctorName = data.doctorName ? `Dr. ${data.doctorName.replace(/^Dr\.\s*/i, '')}` : '8LIV Medical Team'
+      const doctorName = data.providerLabel
+        ? data.providerLabel
+        : data.doctorName
+          ? `Dr. ${data.doctorName.replace(/^Dr\.\s*/i, '')}`
+          : '8LIV Medical Team'
       const apptType = data.appointmentType || 'Doctor Video Consultation'
+      const buttonPath = data.buttonPath || 'patient/appointments'
 
       // Enqueue immediate confirmation
       const enqueued = await WhatsAppOutbox.enqueue({
@@ -215,7 +222,7 @@ export class WhatsAppNotificationService {
               type: 'button',
               sub_type: 'url',
               index: 0,
-              parameters: [{ type: 'text', text: 'patient/appointments' }],
+              parameters: [{ type: 'text', text: buttonPath }],
             },
           ],
           metadata: {
@@ -279,7 +286,11 @@ export class WhatsAppNotificationService {
       const normalized = normalizePhoneNumber(phone)
       if (!normalized.e164 || !data.bookingId) return false
 
-      const doctorName = data.doctorName ? `Dr. ${data.doctorName.replace(/^Dr\.\s*/i, '')}` : 'your physician specialist'
+      const doctorName = data.providerLabel
+        ? data.providerLabel
+        : data.doctorName
+          ? `Dr. ${data.doctorName.replace(/^Dr\.\s*/i, '')}`
+          : 'your physician specialist'
       const templateConfig = minutesBefore === 10
         ? WHATSAPP_CONFIG.templates.consultationReminder10m
         : WHATSAPP_CONFIG.templates.consultationReminder30m

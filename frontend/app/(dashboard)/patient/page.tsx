@@ -687,6 +687,7 @@ export default function PatientDashboardHome() {
       {/* ========================================================================= */}
       {/* 2. PROVIDER CONSULTATION QUOTAS HUB (Doctor, Dietitian, Fitness Coach)     */}
       {/* ========================================================================= */}
+      {!is90DayCoachingPack && (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <div>
@@ -867,6 +868,7 @@ export default function PatientDashboardHome() {
 
         </div>
       </div>
+      )}
 
       {/* ========================================================================= */}
       {/* 2B. MASKED & TIME-GATED COACHING SESSIONS (90-Day Pack + Soft-Lock)       */}

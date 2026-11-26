@@ -2,6 +2,78 @@ import { createHmac, randomUUID, timingSafeEqual } from 'crypto'
 import { supabaseAdmin } from '@/lib/supabaseServer'
 import { getMembershipValidity, hasPaidPreMembershipSession } from '@/lib/membershipServer'
 import { resolveSubscriptionBounds } from '@/lib/subscriptionExpiry'
+import { WhatsAppNotificationService } from '@/lib/whatsapp/whatsappNotificationService'
+
+async function notifyCoachingSessionViaWhatsApp(params: {
+  coachId: string
+  roleLabel: string
+  title: string
+  start: Date
+  sessions: Array<{ id: string; user_id: string }>
+}) {
+  if (params.sessions.length === 0) return
+  try {
+    const patientIds = Array.from(new Set(params.sessions.map((s) => s.user_id).filter(Boolean)))
+    const [profilesRes, assessmentsRes] = await Promise.all([
+      supabaseAdmin
+        .from('profiles')
+        .select('id, first_name, last_name, phone_number')
+        .in('id', [params.coachId, ...patientIds]),
+      supabaseAdmin
+        .from('health_assessments')
+        .select('patient_id, phone_number, first_name, last_name')
+        .in('patient_id', patientIds)
+        .order('created_at', { ascending: false }),
+    ])
+
+    const profileMap = new Map((profilesRes.data || []).map((p: any) => [p.id, p]))
+    const assessmentMap = new Map<string, any>()
+    for (const a of assessmentsRes.data || []) {
+      if (!assessmentMap.has(a.patient_id)) assessmentMap.set(a.patient_id, a)
+    }
+
+    const coachProf = profileMap.get(params.coachId)
+    const coachName = coachProf
+      ? `${coachProf.first_name || ''} ${coachProf.last_name || ''}`.trim()
+      : ''
+    const providerLabel = coachName ? `${coachName} (${params.roleLabel})` : `8LIV ${params.roleLabel}`
+
+    const dateStr = params.start.toLocaleDateString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      dateStyle: 'medium',
+    })
+    const timeStr = `${params.start.toLocaleTimeString('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      hour: '2-digit',
+      minute: '2-digit',
+    })} IST`
+
+    await Promise.allSettled(
+      params.sessions.map(async (session) => {
+        const prof = profileMap.get(session.user_id)
+        const assess = assessmentMap.get(session.user_id)
+        const phone = prof?.phone_number || assess?.phone_number
+        if (!phone) return
+        const patientName =
+          `${prof?.first_name || assess?.first_name || ''} ${prof?.last_name || assess?.last_name || ''}`.trim() ||
+          'Patient'
+
+        await WhatsAppNotificationService.sendAppointmentConfirmation(phone, {
+          patientName,
+          providerLabel,
+          date: dateStr,
+          time: timeStr,
+          bookingId: session.id,
+          appointmentType: params.title,
+          scheduledStart: params.start,
+          buttonPath: 'patient',
+        })
+      })
+    )
+  } catch (err) {
+    console.warn('[coachingSessionService] Non-blocking WhatsApp notification warning:', err)
+  }
+}
 
 export const JOIN_WINDOW_BEFORE_MS = 10 * 60 * 1000 // 10 minutes before scheduled_start
 export const JOIN_TOKEN_TTL_MS = 2 * 60 * 1000 // 2 minutes single-use token
@@ -156,6 +228,14 @@ export async function scheduleCoachingSession(params: {
   } catch (notifErr) {
     console.warn('[coachingSessionService] Non-blocking notification insert error:', notifErr)
   }
+
+  await notifyCoachingSessionViaWhatsApp({
+    coachId: params.coachId,
+    roleLabel,
+    title: params.title.trim(),
+    start,
+    sessions: created ? [{ id: created.id, user_id: created.user_id }] : [],
+  })
 
   return created
 }
@@ -319,6 +399,14 @@ export async function scheduleCoachingSessionForAll90DayUsers(params: {
   } catch (notifErr) {
     console.warn('[coachingSessionService] Batch notification insert warning:', notifErr)
   }
+
+  await notifyCoachingSessionViaWhatsApp({
+    coachId: params.coachId,
+    roleLabel,
+    title: params.title.trim(),
+    start,
+    sessions: (createdRows || []).map((r: any) => ({ id: r.id, user_id: r.user_id })),
+  })
 
   return createdRows || []
 }
